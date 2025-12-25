@@ -159,16 +159,57 @@ class MemberController extends Controller
     /**
      * Update the specified family member.
      * Only Super Admin can update members.
+     * Includes role change handling and last Financial Secretary warning (FR-019).
      */
     public function update(UpdateMemberRequest $request, User $member): RedirectResponse
     {
         $validated = $request->validated();
 
+        /** @var User $currentUser */
+        $currentUser = Auth::user();
+        $newRole = Role::from($validated['role']);
+        $oldRole = $member->role;
+        $roleChanged = $oldRole !== $newRole;
+
+        // Prevent super admin from demoting themselves
+        if ($member->id === $currentUser->id && $oldRole === Role::SuperAdmin && $newRole !== Role::SuperAdmin) {
+            $member->update([
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'category' => MemberCategory::from($validated['category']),
+                // Keep the same role
+            ]);
+
+            if (! empty($validated['password'])) {
+                $member->update([
+                    'password' => Hash::make($validated['password']),
+                ]);
+            }
+
+            return redirect()
+                ->route('members.show', $member)
+                ->with('success', 'Member updated successfully.');
+        }
+
+        // Check if removing last Financial Secretary (FR-019)
+        $warning = null;
+        if ($roleChanged && $oldRole === Role::FinancialSecretary && $newRole !== Role::FinancialSecretary) {
+            $activeFinancialSecretaryCount = User::query()
+                ->active()
+                ->financialSecretaries()
+                ->where('id', '!=', $member->id)
+                ->count();
+
+            if ($activeFinancialSecretaryCount === 0) {
+                $warning = 'This was the last Financial Secretary. Only Super Admins can now record payments.';
+            }
+        }
+
         $member->update([
             'name' => $validated['name'],
             'email' => $validated['email'],
             'category' => MemberCategory::from($validated['category']),
-            'role' => Role::from($validated['role']),
+            'role' => $newRole,
         ]);
 
         // Update password only if provided
@@ -178,9 +219,15 @@ class MemberController extends Controller
             ]);
         }
 
-        return redirect()
-            ->route('members.show', $member)
-            ->with('success', 'Member updated successfully.');
+        $redirect = redirect()->route('members.show', $member);
+
+        if ($warning) {
+            return $redirect
+                ->with('success', 'Member updated successfully.')
+                ->with('warning', $warning);
+        }
+
+        return $redirect->with('success', 'Member updated successfully.');
     }
 
     /**

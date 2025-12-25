@@ -195,21 +195,21 @@
 
 ### Tests for User Story 4
 
-- [ ] T069 [P] [US4] Feature test for assigning Financial Secretary role in tests/Feature/Members/AssignRoleTest.php
-- [ ] T070 [P] [US4] Feature test for revoking Financial Secretary role in tests/Feature/Members/RevokeRoleTest.php
-- [ ] T071 [P] [US4] Feature test for verifying role-based access after assignment in tests/Feature/Authorization/RoleAccessTest.php
-- [ ] T071a [P] [US4] Feature test for warning when removing last Financial Secretary (FR-019) in tests/Feature/Members/LastFinancialSecretaryWarningTest.php
+- [X] T069 [P] [US4] Feature test for assigning Financial Secretary role in tests/Feature/Members/AssignRoleTest.php
+- [X] T070 [P] [US4] Feature test for revoking Financial Secretary role in tests/Feature/Members/RevokeRoleTest.php
+- [X] T071 [P] [US4] Feature test for verifying role-based access after assignment in tests/Feature/Authorization/RoleAccessTest.php
+- [X] T071a [P] [US4] Feature test for warning when removing last Financial Secretary (FR-019) in tests/Feature/Members/LastFinancialSecretaryWarningTest.php
 
 ### Implementation for User Story 4
 
-- [ ] T072 [US4] Add role selection to Members/Edit.vue with confirmation dialog in resources/js/pages/Members/Edit.vue
-- [ ] T073 [US4] Update UpdateMemberRequest to handle role changes in app/Http/Requests/UpdateMemberRequest.php
-- [ ] T074 [US4] Add role change flash message in MemberController@update in app/Http/Controllers/MemberController.php
-- [ ] T074a [US4] Add last Financial Secretary warning check in MemberController@update (FR-019) in app/Http/Controllers/MemberController.php
+- [X] T072 [US4] Add role selection to Members/Edit.vue with confirmation dialog in resources/js/pages/Members/Edit.vue
+- [X] T073 [US4] Update UpdateMemberRequest to handle role changes in app/Http/Requests/UpdateMemberRequest.php
+- [X] T074 [US4] Add role change flash message in MemberController@update in app/Http/Controllers/MemberController.php
+- [X] T074a [US4] Add last Financial Secretary warning check in MemberController@update (FR-019) in app/Http/Controllers/MemberController.php
 
 ### Run Tests for User Story 4
 
-- [ ] T075 [US4] Run `php artisan test --filter=Role` and verify all tests pass
+- [X] T075 [US4] Run `php artisan test --filter=Role` and verify all tests pass
 
 **Checkpoint**: Role management complete. User Stories 1-4 complete.
 

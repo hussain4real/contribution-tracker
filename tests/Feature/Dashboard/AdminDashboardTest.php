@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\PaymentStatus;
 use App\Models\Contribution;
 use App\Models\Payment;
 use App\Models\User;

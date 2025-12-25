@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { contributions, payments } from '@/routes';
+import { show as showContribution } from '@/actions/App/Http/Controllers/ContributionController';
+import { create as createPayment } from '@/actions/App/Http/Controllers/PaymentController';
 import StatusBadge from '@/components/contributions/StatusBadge.vue';
 
 interface Member {
@@ -38,7 +39,7 @@ function formatCategory(category: string): string {
     <tr class="border-b border-neutral-100 transition hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-800/50">
         <td class="px-4 py-3">
             <Link
-                :href="contributions.show(member.contribution_id).url"
+                :href="showContribution(member.contribution_id).url"
                 class="font-medium text-neutral-900 hover:text-blue-600 dark:text-neutral-100 dark:hover:text-blue-400"
             >
                 {{ member.name }}
@@ -68,7 +69,7 @@ function formatCategory(category: string): string {
             </span>
             <Link
                 v-if="canRecordPayments && member.current_month_balance > 0"
-                :href="payments.create({ member_id: member.id }).url"
+                :href="createPayment(member.id).url"
                 class="ml-2 text-xs text-blue-600 hover:underline dark:text-blue-400"
             >
                 Pay

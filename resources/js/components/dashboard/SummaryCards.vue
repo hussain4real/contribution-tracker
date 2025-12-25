@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { payments } from '@/routes';
+import { index as paymentsIndex } from '@/actions/App/Http/Controllers/PaymentController';
 
 defineProps<{
     totalMembers: number;
@@ -94,7 +94,7 @@ function formatCurrency(kobo: number): string {
             </div>
             <Link
                 v-if="canRecordPayments"
-                :href="payments.create().url"
+                :href="paymentsIndex().url"
                 class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
             >
                 Record Payment
