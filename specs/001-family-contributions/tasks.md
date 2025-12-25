@@ -90,7 +90,7 @@
 - [X] T029 [P] [US1] Feature test for recording partial payment with assertInertia->where('contribution.status', 'partial') in tests/Feature/Payments/RecordPartialPaymentTest.php
 - [X] T029a [P] [US1] Feature test for balance-first rule: new payment completes oldest incomplete month before future months (FR-020) in tests/Feature/Payments/BalanceFirstRuleTest.php
 - [X] T030 [P] [US1] Feature test for authorization (only FS/SA can record) with assertForbidden in tests/Feature/Payments/PaymentAuthorizationTest.php
-- [ ] T031 [US1] Browser test for payment recording flow in tests/Browser/PaymentRecordingFlowTest.php
+- [X] T031 [US1] Browser test for payment recording flow in tests/Browser/PaymentRecordingFlowTest.php (requires pest-plugin-browser)
 - [X] T031a [P] [US1] Feature test for advance payments up to 6 months ahead (FR-018) in tests/Feature/Payments/AdvancePaymentTest.php
 - [X] T031b [P] [US1] Feature test for rejecting advance payments beyond 6 months in tests/Feature/Payments/AdvancePaymentLimitTest.php
 
