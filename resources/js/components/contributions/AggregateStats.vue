@@ -4,6 +4,7 @@ defineProps<{
     totalCollected: number;
     totalOutstanding: number;
     collectionRate: number;
+    periodLabel?: string;
 }>();
 
 // Format currency from kobo to naira
@@ -18,9 +19,14 @@ function formatCurrency(kobo: number): string {
 
 <template>
     <div class="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border dark:bg-neutral-900">
-        <h2 class="mb-4 text-lg font-semibold text-neutral-900 dark:text-neutral-100">
-            Family Contribution Overview
-        </h2>
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+                Family Total
+            </h2>
+            <span v-if="periodLabel" class="text-sm text-neutral-600 dark:text-neutral-400">
+                {{ periodLabel }}
+            </span>
+        </div>
 
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div class="rounded-lg bg-neutral-50 p-4 dark:bg-neutral-800">

@@ -225,21 +225,21 @@
 
 > **Use Inertia endpoint testing**: Verify props with `assertInertia`, test FR-015/FR-016 visibility rules
 
-- [ ] T076 [P] [US5] Feature test using assertInertia->has('contributions')->has('family_aggregate') in tests/Feature/Contributions/MyContributionsTest.php
-- [ ] T077 [P] [US5] Feature test using assertInertia->where('contributions.0.status', 'partial')->has('contributions.0.balance') in tests/Feature/Contributions/PartialPaymentDetailsTest.php
-- [ ] T078 [US5] Browser test for member contribution history navigation in tests/Browser/MemberHistoryFlowTest.php
+- [X] T076 [P] [US5] Feature test using assertInertia->has('contributions')->has('family_aggregate') in tests/Feature/Contributions/MyContributionsTest.php
+- [X] T077 [P] [US5] Feature test using assertInertia->where('contributions.0.status', 'partial')->has('contributions.0.balance') in tests/Feature/Contributions/PartialPaymentDetailsTest.php
+- [X] T078 [US5] Browser test for member contribution history navigation in tests/Browser/MemberHistoryFlowTest.php
 
 ### Implementation for User Story 5
 
-- [ ] T079 [US5] Implement ContributionController@my for personal history in app/Http/Controllers/ContributionController.php
-- [ ] T080 [US5] Create Contributions/My.vue with payment history list in resources/js/pages/Contributions/My.vue
-- [ ] T081 [P] [US5] Create ContributionCard.vue component in resources/js/components/contributions/ContributionCard.vue
-- [ ] T082 [P] [US5] Create PaymentHistory.vue component in resources/js/components/contributions/PaymentHistory.vue
-- [ ] T083 [US5] Add family aggregate stats to my contributions page (FR-015) in resources/js/pages/Contributions/My.vue
+- [X] T079 [US5] Implement ContributionController@my for personal history in app/Http/Controllers/ContributionController.php
+- [X] T080 [US5] Create Contributions/My.vue with payment history list in resources/js/pages/Contributions/My.vue
+- [X] T081 [P] [US5] Create ContributionCard.vue component in resources/js/components/contributions/ContributionCard.vue
+- [X] T082 [P] [US5] Create PaymentHistory.vue component in resources/js/components/contributions/PaymentHistory.vue
+- [X] T083 [US5] Add family aggregate stats to my contributions page (FR-015) in resources/js/pages/Contributions/My.vue
 
 ### Run Tests for User Story 5
 
-- [ ] T084 [US5] Run `php artisan test --filter=MyContributions` and verify all tests pass
+- [X] T084 [US5] Run `php artisan test --filter=MyContributions` and verify all tests pass
 
 **Checkpoint**: Members can view own history. User Stories 1-5 complete.
 
