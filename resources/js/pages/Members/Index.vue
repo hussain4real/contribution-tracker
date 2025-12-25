@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
 import { type BreadcrumbItem } from '@/types';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { index, create, show, destroy, restore } from '@/actions/App/Http/Controllers/MemberController';
-import { Archive, Eye, Pencil, Plus, RotateCcw, Users } from 'lucide-vue-next';
+import MemberListItem from '@/components/contributions/MemberListItem.vue';
+import { index, create } from '@/actions/App/Http/Controllers/MemberController';
+import { Archive, Plus, Users } from 'lucide-vue-next';
 import { ref, computed } from 'vue';
 
 interface Member {
@@ -41,37 +41,6 @@ const showArchived = ref(false);
 const displayedMembers = computed(() => {
     return showArchived.value ? props.archivedMembers : props.members;
 });
-
-function formatCurrency(kobo: number): string {
-    const naira = kobo / 100;
-    return new Intl.NumberFormat('en-NG', {
-        style: 'currency',
-        currency: 'NGN',
-    }).format(naira);
-}
-
-function getRoleBadgeVariant(role: string) {
-    switch (role) {
-        case 'super_admin':
-            return 'default';
-        case 'financial_secretary':
-            return 'secondary';
-        default:
-            return 'outline';
-    }
-}
-
-function archiveMember(member: Member) {
-    if (confirm(`Are you sure you want to archive ${member.name}?`)) {
-        router.delete(destroy(member.id).url);
-    }
-}
-
-function restoreMember(member: Member) {
-    if (confirm(`Are you sure you want to restore ${member.name}?`)) {
-        router.post(restore(member.id).url);
-    }
-}
 </script>
 
 <template>
@@ -135,70 +104,12 @@ function restoreMember(member: Member) {
                             </tr>
                         </thead>
                         <tbody>
-                            <tr
+                            <MemberListItem
                                 v-for="member in displayedMembers"
                                 :key="member.id"
-                                class="border-b border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
-                            >
-                                <td class="px-6 py-4">
-                                    <div class="font-medium text-neutral-900 dark:text-neutral-100">
-                                        {{ member.name }}
-                                    </div>
-                                    <div v-if="member.archived_at" class="text-xs text-red-500 dark:text-red-400">
-                                        Archived {{ member.archived_at }}
-                                    </div>
-                                </td>
-                                <td class="px-6 py-4 text-neutral-600 dark:text-neutral-400">
-                                    {{ member.email }}
-                                </td>
-                                <td class="px-6 py-4">
-                                    <Badge :variant="getRoleBadgeVariant(member.role)">
-                                        {{ member.role_label }}
-                                    </Badge>
-                                </td>
-                                <td class="px-6 py-4 text-neutral-600 dark:text-neutral-400">
-                                    {{ member.category_label ?? '—' }}
-                                </td>
-                                <td class="px-6 py-4 text-right font-medium text-neutral-900 dark:text-neutral-100">
-                                    {{ formatCurrency(member.monthly_amount) }}
-                                </td>
-                                <td class="px-6 py-4">
-                                    <div class="flex items-center justify-end gap-2">
-                                        <Link :href="show(member.id).url">
-                                            <Button variant="ghost" size="icon" title="View">
-                                                <Eye class="h-4 w-4" />
-                                            </Button>
-                                        </Link>
-                                        <template v-if="canManageMembers">
-                                            <template v-if="!member.is_archived">
-                                                <Link :href="`/members/${member.id}/edit`">
-                                                    <Button variant="ghost" size="icon" title="Edit">
-                                                        <Pencil class="h-4 w-4" />
-                                                    </Button>
-                                                </Link>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    title="Archive"
-                                                    @click="archiveMember(member)"
-                                                >
-                                                    <Archive class="h-4 w-4 text-amber-600" />
-                                                </Button>
-                                            </template>
-                                            <template v-else>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    title="Restore"
-                                                    @click="restoreMember(member)"
-                                                >
-                                                    <RotateCcw class="h-4 w-4 text-green-600" />
-                                                </Button>
-                                            </template>
-                                        </template>
-                                    </div>
-                                </td>
-                            </tr>
+                                :member="member"
+                                :can-manage-members="canManageMembers"
+                            />
                             <tr v-if="displayedMembers.length === 0">
                                 <td colspan="6" class="px-6 py-8 text-center text-neutral-500 dark:text-neutral-400">
                                     {{ showArchived ? 'No archived members' : 'No active members' }}

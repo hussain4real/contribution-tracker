@@ -163,7 +163,7 @@
 - [X] T056 [P] [US3] Feature test for archiving member (soft delete) with assertSoftDeleted in tests/Feature/Members/ArchiveMemberTest.php
 - [X] T057 [P] [US3] Feature test for restoring archived member in tests/Feature/Members/RestoreMemberTest.php
 - [X] T058 [P] [US3] Feature test for authorization using assertForbidden for non-Super Admin in tests/Feature/Members/MemberAuthorizationTest.php
-- [ ] T059 [US3] Browser test for member management flow in tests/Browser/MemberManagementFlowTest.php
+- [X] T059 [US3] Browser test for member management flow in tests/Browser/MemberManagementFlowTest.php
 - [X] T059a [P] [US3] Feature test for category change taking effect next month (FR-017) in tests/Feature/Members/CategoryChangeNextMonthTest.php
 
 ### Implementation for User Story 3
@@ -175,7 +175,7 @@
 - [X] T064 [P] [US3] Create Members/Create.vue with Inertia Form component in resources/js/pages/Members/Create.vue
 - [X] T065 [P] [US3] Create Members/Edit.vue with Inertia Form component in resources/js/pages/Members/Edit.vue
 - [X] T066 [US3] Create Members/Show.vue with contribution history in resources/js/pages/Members/Show.vue
-- [ ] T067 [P] [US3] Create MemberListItem.vue component in resources/js/components/contributions/MemberListItem.vue
+- [X] T067 [P] [US3] Create MemberListItem.vue component in resources/js/components/contributions/MemberListItem.vue
 
 ### Run Tests for User Story 3
 
