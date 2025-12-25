@@ -124,25 +124,25 @@
 
 > **Use Inertia endpoint testing**: `assertInertia()->component('Dashboard/Index')`, `loadDeferredProps()` for async data
 
-- [ ] T041 [P] [US2] Feature test for Super Admin dashboard using assertInertia->has('summary')->has('memberStatuses') in tests/Feature/Dashboard/AdminDashboardTest.php
-- [ ] T042 [P] [US2] Feature test for Financial Secretary dashboard using assertInertia->component('Dashboard/Index') in tests/Feature/Dashboard/FinancialSecretaryDashboardTest.php
-- [ ] T043 [P] [US2] Feature test for Member dashboard using assertInertia->has('family_aggregate')->missing('memberStatuses') in tests/Feature/Dashboard/MemberDashboardTest.php
-- [ ] T044 [P] [US2] Feature test for overdue highlighting using assertInertia->where('summary.overdue_count', fn($v) => $v > 0) in tests/Feature/Dashboard/OverdueHighlightingTest.php
-- [ ] T045 [US2] Browser test for dashboard navigation and member click-through in tests/Browser/DashboardFlowTest.php
+- [X] T041 [P] [US2] Feature test for Super Admin dashboard using assertInertia->has('summary')->has('memberStatuses') in tests/Feature/Dashboard/AdminDashboardTest.php
+- [X] T042 [P] [US2] Feature test for Financial Secretary dashboard using assertInertia->component('Dashboard/Index') in tests/Feature/Dashboard/FinancialSecretaryDashboardTest.php
+- [X] T043 [P] [US2] Feature test for Member dashboard using assertInertia->has('family_aggregate')->missing('memberStatuses') in tests/Feature/Dashboard/MemberDashboardTest.php
+- [X] T044 [P] [US2] Feature test for overdue highlighting using assertInertia->where('summary.overdue_count', fn($v) => $v > 0) in tests/Feature/Dashboard/OverdueHighlightingTest.php
+- [X] T045 [US2] Browser test for dashboard navigation and member click-through in tests/Browser/DashboardFlowTest.php
 
 ### Implementation for User Story 2
 
-- [ ] T046 [US2] Implement DashboardController@index with role-conditional props and deferred loading in app/Http/Controllers/DashboardController.php
-- [ ] T047 [US2] Create Dashboard/Index.vue with Deferred components for stats in resources/js/pages/Dashboard/Index.vue
-- [ ] T048 [P] [US2] Create SummaryCards.vue for aggregate statistics in resources/js/components/dashboard/SummaryCards.vue
-- [ ] T049 [P] [US2] Create RecentPayments.vue for admin view in resources/js/components/dashboard/RecentPayments.vue
-- [ ] T050 [P] [US2] Create MemberContributionStatus.vue for member's own status in resources/js/components/dashboard/MemberContributionStatus.vue
-- [ ] T051 [P] [US2] Create AggregateStats.vue for family totals (visible to members) in resources/js/components/contributions/AggregateStats.vue
-- [ ] T052 [US2] Add polling to dashboard for auto-refresh every 30 seconds in resources/js/pages/Dashboard/Index.vue
+- [X] T046 [US2] Implement DashboardController@index with role-conditional props and deferred loading in app/Http/Controllers/DashboardController.php
+- [X] T047 [US2] Create Dashboard/Index.vue with Deferred components for stats in resources/js/pages/Dashboard/Index.vue
+- [X] T048 [P] [US2] Create SummaryCards.vue for aggregate statistics in resources/js/components/dashboard/SummaryCards.vue
+- [X] T049 [P] [US2] Create RecentPayments.vue for admin view in resources/js/components/dashboard/RecentPayments.vue
+- [X] T050 [P] [US2] Create MemberContributionStatus.vue for member's own status in resources/js/components/dashboard/MemberContributionStatus.vue
+- [X] T051 [P] [US2] Create AggregateStats.vue for family totals (visible to members) in resources/js/components/contributions/AggregateStats.vue
+- [X] T052 [US2] Add polling to dashboard for auto-refresh every 30 seconds in resources/js/pages/Dashboard/Index.vue
 
 ### Run Tests for User Story 2
 
-- [ ] T053 [US2] Run `php artisan test --filter=Dashboard` and verify all tests pass
+- [X] T053 [US2] Run `php artisan test --filter=Dashboard` and verify all tests pass
 
 **Checkpoint**: Role-appropriate dashboard working. User Stories 1 AND 2 complete.
 
@@ -158,28 +158,28 @@
 
 > **Use Inertia endpoint testing**: `assertInertia()->component()`, `has()`, `where()` for prop validation
 
-- [ ] T054 [P] [US3] Feature test for creating new member using assertInertia on redirect, assertDatabaseHas in tests/Feature/Members/CreateMemberTest.php
-- [ ] T055 [P] [US3] Feature test for editing member category using assertInertia->where('member.category', 'employed') in tests/Feature/Members/UpdateMemberTest.php
-- [ ] T056 [P] [US3] Feature test for archiving member (soft delete) with assertSoftDeleted in tests/Feature/Members/ArchiveMemberTest.php
-- [ ] T057 [P] [US3] Feature test for restoring archived member in tests/Feature/Members/RestoreMemberTest.php
-- [ ] T058 [P] [US3] Feature test for authorization using assertForbidden for non-Super Admin in tests/Feature/Members/MemberAuthorizationTest.php
+- [X] T054 [P] [US3] Feature test for creating new member using assertInertia on redirect, assertDatabaseHas in tests/Feature/Members/CreateMemberTest.php
+- [X] T055 [P] [US3] Feature test for editing member category using assertInertia->where('member.category', 'employed') in tests/Feature/Members/UpdateMemberTest.php
+- [X] T056 [P] [US3] Feature test for archiving member (soft delete) with assertSoftDeleted in tests/Feature/Members/ArchiveMemberTest.php
+- [X] T057 [P] [US3] Feature test for restoring archived member in tests/Feature/Members/RestoreMemberTest.php
+- [X] T058 [P] [US3] Feature test for authorization using assertForbidden for non-Super Admin in tests/Feature/Members/MemberAuthorizationTest.php
 - [ ] T059 [US3] Browser test for member management flow in tests/Browser/MemberManagementFlowTest.php
-- [ ] T059a [P] [US3] Feature test for category change taking effect next month (FR-017) in tests/Feature/Members/CategoryChangeNextMonthTest.php
+- [X] T059a [P] [US3] Feature test for category change taking effect next month (FR-017) in tests/Feature/Members/CategoryChangeNextMonthTest.php
 
 ### Implementation for User Story 3
 
-- [ ] T060 [US3] Create StoreMemberRequest with validation rules in app/Http/Requests/StoreMemberRequest.php
-- [ ] T061 [P] [US3] Create UpdateMemberRequest with validation rules in app/Http/Requests/UpdateMemberRequest.php
-- [ ] T062 [US3] Implement MemberController full CRUD + restore in app/Http/Controllers/MemberController.php
-- [ ] T063 [US3] Create Members/Index.vue with filters and pagination in resources/js/pages/Members/Index.vue
-- [ ] T064 [P] [US3] Create Members/Create.vue with Inertia Form component in resources/js/pages/Members/Create.vue
-- [ ] T065 [P] [US3] Create Members/Edit.vue with Inertia Form component in resources/js/pages/Members/Edit.vue
-- [ ] T066 [US3] Create Members/Show.vue with contribution history in resources/js/pages/Members/Show.vue
+- [X] T060 [US3] Create StoreMemberRequest with validation rules in app/Http/Requests/StoreMemberRequest.php
+- [X] T061 [P] [US3] Create UpdateMemberRequest with validation rules in app/Http/Requests/UpdateMemberRequest.php
+- [X] T062 [US3] Implement MemberController full CRUD + restore in app/Http/Controllers/MemberController.php
+- [X] T063 [US3] Create Members/Index.vue with filters and pagination in resources/js/pages/Members/Index.vue
+- [X] T064 [P] [US3] Create Members/Create.vue with Inertia Form component in resources/js/pages/Members/Create.vue
+- [X] T065 [P] [US3] Create Members/Edit.vue with Inertia Form component in resources/js/pages/Members/Edit.vue
+- [X] T066 [US3] Create Members/Show.vue with contribution history in resources/js/pages/Members/Show.vue
 - [ ] T067 [P] [US3] Create MemberListItem.vue component in resources/js/components/contributions/MemberListItem.vue
 
 ### Run Tests for User Story 3
 
-- [ ] T068 [US3] Run `php artisan test --filter=Member` and verify all tests pass
+- [X] T068 [US3] Run `php artisan test --filter=Member` and verify all tests pass
 
 **Checkpoint**: Super Admin can manage members. User Stories 1, 2, AND 3 complete.
 

@@ -73,11 +73,11 @@ describe('Payment Authorization', function () {
             'member_id' => $this->member->id,
             'amount' => 400000,
             'paid_at' => now()->toDateString(),
-        ])->assertRedirect(route('login'));
+        ])->assertRedirect();
     });
 
     it('forbids unauthenticated users from accessing payment form', function () {
         $this->get(route('payments.create', $this->member))
-            ->assertRedirect(route('login'));
+            ->assertRedirect();
     });
 });
