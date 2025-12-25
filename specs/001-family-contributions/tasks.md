@@ -16,13 +16,13 @@
 
 **Purpose**: Project initialization, enums, and database schema
 
-- [ ] T001 Create Role enum with permission methods in app/Enums/Role.php
-- [ ] T002 [P] Create MemberCategory enum with amount methods in app/Enums/MemberCategory.php
-- [ ] T003 [P] Create PaymentStatus enum with color/label methods in app/Enums/PaymentStatus.php
-- [ ] T004 Create migration to add role, category, archived_at columns to users table in database/migrations/
-- [ ] T005 Create contributions table migration in database/migrations/
-- [ ] T006 Create payments table migration in database/migrations/
-- [ ] T007 Run migrations and verify schema with `php artisan migrate`
+- [X] T001 Create Role enum with permission methods in app/Enums/Role.php
+- [X] T002 [P] Create MemberCategory enum with amount methods in app/Enums/MemberCategory.php
+- [X] T003 [P] Create PaymentStatus enum with color/label methods in app/Enums/PaymentStatus.php
+- [X] T004 Create migration to add role, category, archived_at columns to users table in database/migrations/
+- [X] T005 Create contributions table migration in database/migrations/
+- [X] T006 Create payments table migration in database/migrations/
+- [X] T007 Run migrations and verify schema with `php artisan migrate`
 
 ---
 
@@ -34,39 +34,39 @@
 
 ### Models & Relationships
 
-- [ ] T008 Extend User model with role/category casts, relationships, scopes in app/Models/User.php
-- [ ] T009 [P] Create Contribution model with relationships, scopes, status accessor in app/Models/Contribution.php
-- [ ] T010 [P] Create Payment model with relationships, scopes in app/Models/Payment.php
+- [X] T008 Extend User model with role/category casts, relationships, scopes in app/Models/User.php
+- [X] T009 [P] Create Contribution model with relationships, scopes, status accessor in app/Models/Contribution.php
+- [X] T010 [P] Create Payment model with relationships, scopes in app/Models/Payment.php
 
 ### Factories
 
-- [ ] T011 Extend UserFactory with superAdmin, financialSecretary, member, employed, student states in database/factories/UserFactory.php
-- [ ] T012 [P] Create ContributionFactory with currentMonth, forMonth states in database/factories/ContributionFactory.php
-- [ ] T013 [P] Create PaymentFactory with partial state in database/factories/PaymentFactory.php
+- [X] T011 Extend UserFactory with superAdmin, financialSecretary, member, employed, student states in database/factories/UserFactory.php
+- [X] T012 [P] Create ContributionFactory with currentMonth, forMonth states in database/factories/ContributionFactory.php
+- [X] T013 [P] Create PaymentFactory with partial state in database/factories/PaymentFactory.php
 
 ### Authorization
 
-- [ ] T014 Create ContributionPolicy with view, viewAny, create methods in app/Policies/ContributionPolicy.php
-- [ ] T015 [P] Create PaymentPolicy with view, create, delete methods in app/Policies/PaymentPolicy.php
-- [ ] T016 Register policies in bootstrap/app.php or AppServiceProvider
+- [X] T014 Create ContributionPolicy with view, viewAny, create methods in app/Policies/ContributionPolicy.php
+- [X] T015 [P] Create PaymentPolicy with view, create, delete methods in app/Policies/PaymentPolicy.php
+- [X] T016 Register policies in bootstrap/app.php or AppServiceProvider
 
 ### Routes & Controllers (Stubs)
 
-- [ ] T017 Create route groups for /dashboard, /members, /contributions, /payments, /reports in routes/web.php
-- [ ] T018 [P] Create DashboardController stub with index method in app/Http/Controllers/DashboardController.php
-- [ ] T019 [P] Create MemberController stub with CRUD + restore methods in app/Http/Controllers/MemberController.php
-- [ ] T020 [P] Create ContributionController stub with index, my, show methods in app/Http/Controllers/ContributionController.php
-- [ ] T021 [P] Create PaymentController stub with index, create, store, destroy methods in app/Http/Controllers/PaymentController.php
-- [ ] T022 [P] Create ReportController stub with index, monthly, annual methods in app/Http/Controllers/ReportController.php
+- [X] T017 Create route groups for /dashboard, /members, /contributions, /payments, /reports in routes/web.php
+- [X] T018 [P] Create DashboardController stub with index method in app/Http/Controllers/DashboardController.php
+- [X] T019 [P] Create MemberController stub with CRUD + restore methods in app/Http/Controllers/MemberController.php
+- [X] T020 [P] Create ContributionController stub with index, my, show methods in app/Http/Controllers/ContributionController.php
+- [X] T021 [P] Create PaymentController stub with index, create, store, destroy methods in app/Http/Controllers/PaymentController.php
+- [X] T022 [P] Create ReportController stub with index, monthly, annual methods in app/Http/Controllers/ReportController.php
 
 ### Seeders
 
-- [ ] T023 Create FamilyMemberSeeder with test users (admin, financial_secretary, member) in database/seeders/FamilyMemberSeeder.php
-- [ ] T024 Register seeder in DatabaseSeeder and run with `php artisan db:seed`
+- [X] T023 Create FamilyMemberSeeder with test users (admin, financial_secretary, member) in database/seeders/FamilyMemberSeeder.php
+- [X] T024 Register seeder in DatabaseSeeder and run with `php artisan db:seed`
 
 ### Generate Wayfinder Routes
 
-- [ ] T025 Run `php artisan wayfinder:generate` to create TypeScript route functions
+- [X] T025 Run `php artisan wayfinder:generate` to create TypeScript route functions
 
 **Checkpoint**: Foundation ready - user story implementation can now begin
 
@@ -83,32 +83,32 @@
 > **TDD: Write these tests FIRST, ensure they FAIL before implementation**
 > **Use Inertia endpoint testing**: `assertInertia()` with `has()`, `where()`, `missing()`, `etc()` assertions
 
-- [ ] T026 [P] [US1] Unit test for Contribution status calculation (Paid/Partial/Unpaid/Overdue) in tests/Unit/ContributionStatusTest.php
-- [ ] T026a [P] [US1] Unit test for Contribution.due_date accessor always returns 28th of month in tests/Unit/ContributionDueDateTest.php
-- [ ] T027 [P] [US1] Unit test for MemberCategory monthly amounts in tests/Unit/MemberCategoryAmountTest.php
-- [ ] T028 [P] [US1] Feature test for recording full payment using assertInertia to verify contribution props in tests/Feature/Payments/RecordPaymentTest.php
-- [ ] T029 [P] [US1] Feature test for recording partial payment with assertInertia->where('contribution.status', 'partial') in tests/Feature/Payments/RecordPartialPaymentTest.php
-- [ ] T029a [P] [US1] Feature test for balance-first rule: new payment completes oldest incomplete month before future months (FR-020) in tests/Feature/Payments/BalanceFirstRuleTest.php
-- [ ] T030 [P] [US1] Feature test for authorization (only FS/SA can record) with assertForbidden in tests/Feature/Payments/PaymentAuthorizationTest.php
+- [X] T026 [P] [US1] Unit test for Contribution status calculation (Paid/Partial/Unpaid/Overdue) in tests/Unit/ContributionStatusTest.php
+- [X] T026a [P] [US1] Unit test for Contribution.due_date accessor always returns 28th of month in tests/Unit/ContributionDueDateTest.php
+- [X] T027 [P] [US1] Unit test for MemberCategory monthly amounts in tests/Unit/MemberCategoryAmountTest.php
+- [X] T028 [P] [US1] Feature test for recording full payment using assertInertia to verify contribution props in tests/Feature/Payments/RecordPaymentTest.php
+- [X] T029 [P] [US1] Feature test for recording partial payment with assertInertia->where('contribution.status', 'partial') in tests/Feature/Payments/RecordPartialPaymentTest.php
+- [X] T029a [P] [US1] Feature test for balance-first rule: new payment completes oldest incomplete month before future months (FR-020) in tests/Feature/Payments/BalanceFirstRuleTest.php
+- [X] T030 [P] [US1] Feature test for authorization (only FS/SA can record) with assertForbidden in tests/Feature/Payments/PaymentAuthorizationTest.php
 - [ ] T031 [US1] Browser test for payment recording flow in tests/Browser/PaymentRecordingFlowTest.php
-- [ ] T031a [P] [US1] Feature test for advance payments up to 6 months ahead (FR-018) in tests/Feature/Payments/AdvancePaymentTest.php
-- [ ] T031b [P] [US1] Feature test for rejecting advance payments beyond 6 months in tests/Feature/Payments/AdvancePaymentLimitTest.php
+- [X] T031a [P] [US1] Feature test for advance payments up to 6 months ahead (FR-018) in tests/Feature/Payments/AdvancePaymentTest.php
+- [X] T031b [P] [US1] Feature test for rejecting advance payments beyond 6 months in tests/Feature/Payments/AdvancePaymentLimitTest.php
 
 ### Implementation for User Story 1
 
-- [ ] T032 [US1] Create StorePaymentRequest with validation rules (including target_month for advance payments up to 6 months) in app/Http/Requests/StorePaymentRequest.php
-- [ ] T033 [US1] Implement PaymentController@create to show payment form with month selector (current + next 6 months) in app/Http/Controllers/PaymentController.php
-- [ ] T034 [US1] Implement PaymentController@store with balance-first logic: auto-apply to oldest incomplete month before target month (FR-020, FR-018) in app/Http/Controllers/PaymentController.php
-- [ ] T034a [US1] Create PaymentAllocationService to handle balance-first distribution logic in app/Services/PaymentAllocationService.php
-- [ ] T035 [US1] Create Payments/Create.vue page with Inertia Form component and month selector dropdown in resources/js/pages/Payments/Create.vue
-- [ ] T036 [P] [US1] Create StatusBadge.vue component for payment status display in resources/js/components/contributions/StatusBadge.vue
-- [ ] T037 [US1] Implement ContributionController@show with payment recording link in app/Http/Controllers/ContributionController.php
-- [ ] T038 [US1] Create Contributions/Show.vue page with payment history in resources/js/pages/Contributions/Show.vue
+- [X] T032 [US1] Create StorePaymentRequest with validation rules (including target_month for advance payments up to 6 months) in app/Http/Requests/StorePaymentRequest.php
+- [X] T033 [US1] Implement PaymentController@create to show payment form with month selector (current + next 6 months) in app/Http/Controllers/PaymentController.php
+- [X] T034 [US1] Implement PaymentController@store with balance-first logic: auto-apply to oldest incomplete month before target month (FR-020, FR-018) in app/Http/Controllers/PaymentController.php
+- [X] T034a [US1] Create PaymentAllocationService to handle balance-first distribution logic in app/Services/PaymentAllocationService.php
+- [X] T035 [US1] Create Payments/Create.vue page with Inertia Form component and month selector dropdown in resources/js/pages/Payments/Create.vue
+- [X] T036 [P] [US1] Create StatusBadge.vue component for payment status display in resources/js/components/contributions/StatusBadge.vue
+- [X] T037 [US1] Implement ContributionController@show with payment recording link in app/Http/Controllers/ContributionController.php
+- [X] T038 [US1] Create Contributions/Show.vue page with payment history in resources/js/pages/Contributions/Show.vue
 
 ### Run Tests for User Story 1
 
-- [ ] T039 [US1] Run `php artisan test --filter=Payment` and verify all tests pass
-- [ ] T040 [US1] Run `vendor/bin/pint --dirty` to format PHP code
+- [X] T039 [US1] Run `php artisan test --filter=Payment` and verify all tests pass
+- [X] T040 [US1] Run `vendor/bin/pint --dirty` to format PHP code
 
 **Checkpoint**: Financial Secretary can record payments. User Story 1 complete and testable.
 

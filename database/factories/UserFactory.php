@@ -2,6 +2,8 @@
 
 namespace Database\Factories;
 
+use App\Enums\MemberCategory;
+use App\Enums\Role;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -32,6 +34,8 @@ class UserFactory extends Factory
             'two_factor_secret' => Str::random(10),
             'two_factor_recovery_codes' => Str::random(10),
             'two_factor_confirmed_at' => now(),
+            'role' => Role::Member,
+            'category' => MemberCategory::Employed,
         ];
     }
 
@@ -54,6 +58,99 @@ class UserFactory extends Factory
             'two_factor_secret' => null,
             'two_factor_recovery_codes' => null,
             'two_factor_confirmed_at' => null,
+        ]);
+    }
+
+    // =========================================================================
+    // Role States
+    // =========================================================================
+
+    /**
+     * Create a Super Admin user.
+     */
+    public function superAdmin(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => Role::SuperAdmin,
+            'category' => null, // Super Admin doesn't pay contributions
+        ]);
+    }
+
+    /**
+     * Create a Financial Secretary user.
+     */
+    public function financialSecretary(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => Role::FinancialSecretary,
+        ]);
+    }
+
+    /**
+     * Create a regular Member user.
+     */
+    public function member(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => Role::Member,
+        ]);
+    }
+
+    // =========================================================================
+    // Category States
+    // =========================================================================
+
+    /**
+     * Create an Employed member (₦4,000/month).
+     */
+    public function employed(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'category' => MemberCategory::Employed,
+        ]);
+    }
+
+    /**
+     * Create an Unemployed member (₦2,000/month).
+     */
+    public function unemployed(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'category' => MemberCategory::Unemployed,
+        ]);
+    }
+
+    /**
+     * Create a Student member (₦1,000/month).
+     */
+    public function student(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'category' => MemberCategory::Student,
+        ]);
+    }
+
+    // =========================================================================
+    // Status States
+    // =========================================================================
+
+    /**
+     * Create an archived (soft-deleted) user.
+     */
+    public function archived(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'archived_at' => now(),
+        ]);
+    }
+
+    /**
+     * Create a user without a category (non-paying).
+     */
+    public function nonPaying(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'category' => null,
         ]);
     }
 }
