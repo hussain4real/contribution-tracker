@@ -39,7 +39,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('payments/{payment}', [PaymentController::class, 'destroy'])->name('payments.destroy');
 
     // Reports (Financial Secretary and Super Admin only)
-    Route::prefix('reports')->name('reports.')->group(function () {
+    Route::prefix('reports')->name('reports.')->middleware('can:generate-reports')->group(function () {
         Route::get('/', [ReportController::class, 'index'])->name('index');
         Route::get('monthly', [ReportController::class, 'monthly'])->name('monthly');
         Route::get('annual', [ReportController::class, 'annual'])->name('annual');
