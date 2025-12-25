@@ -1,10 +1,8 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head } from '@inertiajs/vue3';
 import { type BreadcrumbItem } from '@/types';
-import { show as showContribution } from '@/actions/App/Http/Controllers/ContributionController';
 import { dashboard } from '@/routes';
-import StatusBadge from '@/components/contributions/StatusBadge.vue';
 import AggregateStats from '@/components/contributions/AggregateStats.vue';
 import ContributionCard from '@/components/contributions/ContributionCard.vue';
 

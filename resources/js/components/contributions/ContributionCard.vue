@@ -35,7 +35,7 @@ interface Props {
     contribution: Contribution;
 }
 
-const props = defineProps<Props>();
+defineProps<Props>();
 
 const showPayments = ref(false);
 

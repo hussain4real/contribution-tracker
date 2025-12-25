@@ -2,7 +2,14 @@ import { InertiaLinkProps } from '@inertiajs/vue3';
 import type { LucideIcon } from 'lucide-vue-next';
 
 export interface Auth {
-    user: User;
+    user: User | null;
+    can: Permissions | null;
+}
+
+export interface Permissions {
+    manage_members: boolean;
+    record_payments: boolean;
+    generate_reports: boolean;
 }
 
 export interface BreadcrumbItem {
@@ -32,8 +39,12 @@ export interface User {
     email: string;
     avatar?: string;
     email_verified_at: string | null;
-    created_at: string;
-    updated_at: string;
+    role: string;
+    role_label: string;
+    category: string | null;
+    category_label: string | null;
+    created_at?: string;
+    updated_at?: string;
 }
 
 export type BreadcrumbItemType = BreadcrumbItem;

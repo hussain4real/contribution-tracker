@@ -415,8 +415,9 @@ function getStatusColor(status: string): string {
                                 :class="link.active
                                     ? 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900'
                                     : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'"
-                                v-html="link.label"
-                            />
+                            >
+                                <span v-html="link.label" />
+                            </Link>
                             <span
                                 v-else
                                 class="rounded-md px-3 py-1 text-sm text-neutral-400 dark:text-neutral-600"
