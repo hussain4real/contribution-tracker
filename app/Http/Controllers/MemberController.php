@@ -108,42 +108,57 @@ class MemberController extends Controller
 
     /**
      * Display the specified family member.
-     * All authenticated users can view member details.
+     * All authenticated users can view basic member info.
+     * Contribution history is only visible to the member themselves,
+     * Super Admin, or Financial Secretary.
      */
     public function show(User $member): Response
     {
-        // Load contributions with payments, ordered by most recent first
-        $contributions = $member->contributions()
-            ->with('payments.recorder')
-            ->orderByDesc('year')
-            ->orderByDesc('month')
-            ->take(12) // Last 12 months
-            ->get()
-            ->map(fn ($contribution) => [
-                'id' => $contribution->id,
-                'year' => $contribution->year,
-                'month' => $contribution->month,
-                'period_label' => $contribution->period_label,
-                'expected_amount' => $contribution->expected_amount,
-                'total_paid' => $contribution->total_paid,
-                'balance' => $contribution->balance,
-                'status' => $contribution->status->value,
-                'status_label' => $contribution->status->label(),
-                'due_date' => $contribution->due_date->toDateString(),
-                'payments' => $contribution->payments->map(fn ($payment) => [
-                    'id' => $payment->id,
-                    'amount' => $payment->amount,
-                    'paid_at' => $payment->paid_at->toDateString(),
-                    'notes' => $payment->notes,
-                    'recorder' => [
-                        'name' => $payment->recorder->name,
-                    ],
-                ]),
-            ]);
+        /** @var User $currentUser */
+        $currentUser = Auth::user();
 
-        // Calculate summary statistics
-        $totalExpected = $contributions->sum('expected_amount');
-        $totalPaid = $contributions->sum('total_paid');
+        // Determine if user can view contribution history
+        // (own profile OR has elevated permissions)
+        $canViewContributions = $currentUser->canViewAllMembers() || $currentUser->id === $member->id;
+
+        // Only load contributions if user has permission
+        $contributions = collect();
+        $totalExpected = 0;
+        $totalPaid = 0;
+
+        if ($canViewContributions) {
+            $contributions = $member->contributions()
+                ->with('payments.recorder')
+                ->orderByDesc('year')
+                ->orderByDesc('month')
+                ->take(12) // Last 12 months
+                ->get()
+                ->map(fn ($contribution) => [
+                    'id' => $contribution->id,
+                    'year' => $contribution->year,
+                    'month' => $contribution->month,
+                    'period_label' => $contribution->period_label,
+                    'expected_amount' => $contribution->expected_amount,
+                    'total_paid' => $contribution->total_paid,
+                    'balance' => $contribution->balance,
+                    'status' => $contribution->status->value,
+                    'status_label' => $contribution->status->label(),
+                    'due_date' => $contribution->due_date->toDateString(),
+                    'payments' => $contribution->payments->map(fn ($payment) => [
+                        'id' => $payment->id,
+                        'amount' => $payment->amount,
+                        'paid_at' => $payment->paid_at->toDateString(),
+                        'notes' => $payment->notes,
+                        'recorder' => [
+                            'name' => $payment->recorder->name,
+                        ],
+                    ]),
+                ]);
+
+            // Calculate summary statistics
+            $totalExpected = $contributions->sum('expected_amount');
+            $totalPaid = $contributions->sum('total_paid');
+        }
 
         return Inertia::render('Members/Show', [
             'member' => [
@@ -167,6 +182,7 @@ class MemberController extends Controller
                 'contribution_count' => $contributions->count(),
             ],
             'canManageMembers' => Auth::user()?->canManageMembers() ?? false,
+            'canViewContributions' => $canViewContributions,
         ]);
     }
 

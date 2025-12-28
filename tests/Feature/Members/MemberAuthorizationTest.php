@@ -36,6 +36,48 @@ describe('Member Authorization', function () {
             ->assertOk();
     });
 
+    // Show - Super Admin and Financial Secretary can view any member, regular members can only view their own
+    it('super admin can view any member profile', function () {
+        $this->actingAs($this->superAdmin)
+            ->get("/members/{$this->targetMember->id}")
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Members/Show')
+                ->has('contributions')
+            );
+    });
+
+    it('financial secretary can view any member profile', function () {
+        $this->actingAs($this->financialSecretary)
+            ->get("/members/{$this->targetMember->id}")
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Members/Show')
+                ->has('contributions')
+            );
+    });
+
+    it('member can view their own profile with contributions', function () {
+        $this->actingAs($this->member)
+            ->get("/members/{$this->member->id}")
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Members/Show')
+                ->where('canViewContributions', true)
+            );
+    });
+
+    it('member can view other member basic info but not contributions', function () {
+        $this->actingAs($this->member)
+            ->get("/members/{$this->targetMember->id}")
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Members/Show')
+                ->where('canViewContributions', false)
+                ->where('contributions', [])
+            );
+    });
+
     // Create - Only Super Admin
     it('super admin can access create form', function () {
         $this->actingAs($this->superAdmin)

@@ -59,6 +59,7 @@ interface Props {
     contributions: Contribution[];
     summary: Summary;
     canManageMembers: boolean;
+    canViewContributions: boolean;
 }
 
 const props = defineProps<Props>();
@@ -248,7 +249,7 @@ function restoreMember() {
                     </div>
 
                     <!-- Contribution History Section -->
-                    <div class="mt-8 border-t border-neutral-200 pt-6 dark:border-neutral-700">
+                    <div v-if="canViewContributions" class="mt-8 border-t border-neutral-200 pt-6 dark:border-neutral-700">
                         <div class="flex items-center justify-between">
                             <h2 class="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
                                 Contribution History
