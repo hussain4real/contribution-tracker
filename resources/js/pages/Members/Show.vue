@@ -5,7 +5,40 @@ import { type BreadcrumbItem } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { index, show, destroy, restore } from '@/actions/App/Http/Controllers/MemberController';
-import { Archive, Pencil, RotateCcw, User } from 'lucide-vue-next';
+import { show as showContribution } from '@/actions/App/Http/Controllers/ContributionController';
+import { Archive, Pencil, RotateCcw, User, TrendingUp, Wallet, AlertCircle, CheckCircle2, Clock, ChevronRight, Receipt } from 'lucide-vue-next';
+import { ref } from 'vue';
+
+interface Payment {
+    id: number;
+    amount: number;
+    paid_at: string;
+    notes: string | null;
+    recorder: {
+        name: string;
+    };
+}
+
+interface Contribution {
+    id: number;
+    year: number;
+    month: number;
+    period_label: string;
+    expected_amount: number;
+    total_paid: number;
+    balance: number;
+    status: 'paid' | 'partial' | 'unpaid' | 'overdue';
+    status_label: string;
+    due_date: string;
+    payments: Payment[];
+}
+
+interface Summary {
+    total_expected: number;
+    total_paid: number;
+    total_outstanding: number;
+    contribution_count: number;
+}
 
 interface Member {
     id: number;
@@ -23,10 +56,14 @@ interface Member {
 
 interface Props {
     member: Member;
+    contributions: Contribution[];
+    summary: Summary;
     canManageMembers: boolean;
 }
 
 const props = defineProps<Props>();
+
+const expandedContribution = ref<number | null>(null);
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -44,6 +81,49 @@ function formatCurrency(amount: number): string {
         style: 'currency',
         currency: 'NGN',
     }).format(amount);
+}
+
+function formatDate(dateStr: string): string {
+    return new Date(dateStr).toLocaleDateString('en-NG', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+    });
+}
+
+function getStatusColor(status: string) {
+    switch (status) {
+        case 'paid':
+            return 'text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-900/30';
+        case 'partial':
+            return 'text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-900/30';
+        case 'overdue':
+            return 'text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-900/30';
+        default:
+            return 'text-neutral-600 bg-neutral-50 dark:text-neutral-400 dark:bg-neutral-800';
+    }
+}
+
+function getStatusIcon(status: string) {
+    switch (status) {
+        case 'paid':
+            return CheckCircle2;
+        case 'partial':
+            return Clock;
+        case 'overdue':
+            return AlertCircle;
+        default:
+            return Wallet;
+    }
+}
+
+function getProgressPercentage(contribution: Contribution): number {
+    if (contribution.expected_amount === 0) return 0;
+    return Math.min(100, (contribution.total_paid / contribution.expected_amount) * 100);
+}
+
+function toggleExpand(id: number) {
+    expandedContribution.value = expandedContribution.value === id ? null : id;
 }
 
 function getRoleBadgeVariant(role: string) {
@@ -167,14 +247,167 @@ function restoreMember() {
                         </div>
                     </div>
 
-                    <!-- Contribution History Placeholder -->
+                    <!-- Contribution History Section -->
                     <div class="mt-8 border-t border-neutral-200 pt-6 dark:border-neutral-700">
-                        <h2 class="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
-                            Contribution History
-                        </h2>
-                        <p class="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
-                            Contribution history will be displayed here once payments are recorded.
-                        </p>
+                        <div class="flex items-center justify-between">
+                            <h2 class="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+                                Contribution History
+                            </h2>
+                            <span class="text-sm text-neutral-500 dark:text-neutral-400">
+                                Last {{ summary.contribution_count }} months
+                            </span>
+                        </div>
+
+                        <!-- Summary Stats -->
+                        <div v-if="contributions.length > 0" class="mt-4 grid grid-cols-3 gap-3">
+                            <div class="rounded-lg bg-emerald-50 p-3 dark:bg-emerald-900/20">
+                                <div class="flex items-center gap-2">
+                                    <TrendingUp class="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                                    <span class="text-xs font-medium text-emerald-700 dark:text-emerald-300">Total Paid</span>
+                                </div>
+                                <p class="mt-1 text-lg font-bold text-emerald-700 dark:text-emerald-300">
+                                    {{ formatCurrency(summary.total_paid) }}
+                                </p>
+                            </div>
+                            <div class="rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
+                                <div class="flex items-center gap-2">
+                                    <Wallet class="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                    <span class="text-xs font-medium text-blue-700 dark:text-blue-300">Expected</span>
+                                </div>
+                                <p class="mt-1 text-lg font-bold text-blue-700 dark:text-blue-300">
+                                    {{ formatCurrency(summary.total_expected) }}
+                                </p>
+                            </div>
+                            <div class="rounded-lg p-3" :class="summary.total_outstanding > 0 ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-neutral-50 dark:bg-neutral-800'">
+                                <div class="flex items-center gap-2">
+                                    <AlertCircle class="h-4 w-4" :class="summary.total_outstanding > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-neutral-500'" />
+                                    <span class="text-xs font-medium" :class="summary.total_outstanding > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-neutral-600 dark:text-neutral-400'">Outstanding</span>
+                                </div>
+                                <p class="mt-1 text-lg font-bold" :class="summary.total_outstanding > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-neutral-600 dark:text-neutral-400'">
+                                    {{ formatCurrency(summary.total_outstanding) }}
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Contributions List -->
+                        <div v-if="contributions.length > 0" class="mt-4 space-y-2">
+                            <div
+                                v-for="contribution in contributions"
+                                :key="contribution.id"
+                                class="overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700"
+                            >
+                                <!-- Contribution Row -->
+                                <div
+                                    class="flex cursor-pointer items-center justify-between p-3 transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
+                                    @click="toggleExpand(contribution.id)"
+                                >
+                                    <div class="flex items-center gap-3">
+                                        <div
+                                            class="flex h-9 w-9 items-center justify-center rounded-full"
+                                            :class="getStatusColor(contribution.status)"
+                                        >
+                                            <component :is="getStatusIcon(contribution.status)" class="h-4 w-4" />
+                                        </div>
+                                        <div>
+                                            <p class="font-medium text-neutral-900 dark:text-neutral-100">
+                                                {{ contribution.period_label }}
+                                            </p>
+                                            <p class="text-xs text-neutral-500 dark:text-neutral-400">
+                                                Due {{ formatDate(contribution.due_date) }}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-4">
+                                        <div class="text-right">
+                                            <p class="font-semibold text-neutral-900 dark:text-neutral-100">
+                                                {{ formatCurrency(contribution.total_paid) }}
+                                            </p>
+                                            <p class="text-xs text-neutral-500 dark:text-neutral-400">
+                                                of {{ formatCurrency(contribution.expected_amount) }}
+                                            </p>
+                                        </div>
+                                        <Badge
+                                            :variant="contribution.status === 'paid' ? 'default' : contribution.status === 'overdue' ? 'destructive' : 'secondary'"
+                                            class="text-xs"
+                                        >
+                                            {{ contribution.status_label }}
+                                        </Badge>
+                                        <ChevronRight
+                                            class="h-4 w-4 text-neutral-400 transition-transform"
+                                            :class="{ 'rotate-90': expandedContribution === contribution.id }"
+                                        />
+                                    </div>
+                                </div>
+
+                                <!-- Progress Bar -->
+                                <div class="h-1 bg-neutral-100 dark:bg-neutral-800">
+                                    <div
+                                        class="h-full transition-all duration-300"
+                                        :class="{
+                                            'bg-emerald-500': contribution.status === 'paid',
+                                            'bg-amber-500': contribution.status === 'partial',
+                                            'bg-red-500': contribution.status === 'overdue',
+                                            'bg-neutral-300 dark:bg-neutral-600': contribution.status === 'unpaid',
+                                        }"
+                                        :style="{ width: `${getProgressPercentage(contribution)}%` }"
+                                    />
+                                </div>
+
+                                <!-- Expanded Payments -->
+                                <div
+                                    v-if="expandedContribution === contribution.id && contribution.payments.length > 0"
+                                    class="border-t border-neutral-200 bg-neutral-50/50 p-3 dark:border-neutral-700 dark:bg-neutral-800/30"
+                                >
+                                    <p class="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                                        Payment History
+                                    </p>
+                                    <div class="space-y-2">
+                                        <div
+                                            v-for="payment in contribution.payments"
+                                            :key="payment.id"
+                                            class="flex items-center justify-between rounded-md bg-white p-2 shadow-sm dark:bg-neutral-800"
+                                        >
+                                            <div class="flex items-center gap-2">
+                                                <Receipt class="h-4 w-4 text-neutral-400" />
+                                                <div>
+                                                    <p class="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                                                        {{ formatCurrency(payment.amount) }}
+                                                    </p>
+                                                    <p class="text-xs text-neutral-500 dark:text-neutral-400">
+                                                        {{ formatDate(payment.paid_at) }}
+                                                        <span v-if="payment.notes" class="ml-1">• {{ payment.notes }}</span>
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <span class="text-xs text-neutral-400">
+                                                by {{ payment.recorder.name }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- No Payments Message -->
+                                <div
+                                    v-else-if="expandedContribution === contribution.id && contribution.payments.length === 0"
+                                    class="border-t border-neutral-200 bg-neutral-50/50 p-4 text-center dark:border-neutral-700 dark:bg-neutral-800/30"
+                                >
+                                    <p class="text-sm text-neutral-500 dark:text-neutral-400">
+                                        No payments recorded yet
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Empty State -->
+                        <div v-else class="mt-4 rounded-lg border-2 border-dashed border-neutral-200 p-8 text-center dark:border-neutral-700">
+                            <Wallet class="mx-auto h-10 w-10 text-neutral-300 dark:text-neutral-600" />
+                            <p class="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
+                                No contribution history yet
+                            </p>
+                            <p class="text-xs text-neutral-400 dark:text-neutral-500">
+                                Contributions will appear here once payments are recorded
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
