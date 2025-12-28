@@ -163,7 +163,7 @@ const targetMonth = computed(() => {
             <Form
                 :action="store()"
                 class="space-y-6"
-                #default="{ errors, invalid, validate, validating, processing, recentlySuccessful }"
+                #default="{ errors, validate, validating, processing, recentlySuccessful }"
             >
                 <input type="hidden" name="member_id" :value="member.id" />
                 <input
@@ -191,6 +191,7 @@ const targetMonth = computed(() => {
                         required
                         min="0.01"
                         step="0.01"
+                        @change="validate('amount')"
                     />
                     <InputError :message="errors.amount" />
                     <p class="text-xs text-muted-foreground">
@@ -268,9 +269,7 @@ const targetMonth = computed(() => {
                         maxlength="500"
                         @change="validate('notes')"
                     />
-                    <p v-if="invalid('notes')" class="text-xs text-red-600">
-                        {{ errors.notes }}
-                    </p>
+
                     <p v-if="validating" class="text-xs text-muted-foreground">
                         Validating...
                     </p>
