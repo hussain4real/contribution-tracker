@@ -38,7 +38,7 @@ describe('Super Admin Dashboard', function () {
         Payment::factory()
             ->forContribution($this->employedContribution)
             ->recordedBy($this->superAdmin)
-            ->create(['amount' => 400000]);
+            ->create(['amount' => 4000]);
 
         // Student has no payment (unpaid)
     });
@@ -100,9 +100,9 @@ describe('Super Admin Dashboard', function () {
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('summary.total_members', 2)
-                ->where('summary.total_expected', 500000) // 400000 + 100000
-                ->where('summary.total_collected', 400000) // Only employed paid
-                ->where('summary.total_outstanding', 100000) // Student outstanding
+                ->where('summary.total_expected', 5000) // 4000 + 1000
+                ->where('summary.total_collected', 4000) // Only employed paid
+                ->where('summary.total_outstanding', 1000) // Student outstanding
             );
     });
 });

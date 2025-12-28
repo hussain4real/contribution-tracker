@@ -48,16 +48,16 @@ describe('Balance-First Rule (FR-020)', function () {
         Payment::factory()
             ->forContribution($first)
             ->recordedBy($this->financialSecretary)
-            ->create(['amount' => 200000]);
+            ->create(['amount' => 2000]);
 
-        expect($first->fresh()->balance)->toBe(200000); // ₦2,000 remaining
+        expect($first->fresh()->balance)->toBe(2000); // ₦2,000 remaining
 
         // Member pays ₦4,000 targeting third month
         // Balance-first rule: should complete first month first, then apply rest to second
         $this->actingAs($this->financialSecretary)
             ->post(route('payments.store'), [
                 'member_id' => $this->member->id,
-                'amount' => 400000, // ₦4,000
+                'amount' => 4000, // ₦4,000
                 'paid_at' => now()->toDateString(),
                 'target_year' => $month3->year,
                 'target_month' => $month3->month,
@@ -69,7 +69,7 @@ describe('Balance-First Rule (FR-020)', function () {
         expect($first->fresh()->balance)->toBe(0);
 
         // Second month should have ₦2,000 applied (remainder after completing first)
-        expect($second->fresh()->total_paid)->toBe(200000);
+        expect($second->fresh()->total_paid)->toBe(2000);
         expect($second->fresh()->status)->toBe(PaymentStatus::Partial);
 
         // Third month should have nothing yet
@@ -104,7 +104,7 @@ describe('Balance-First Rule (FR-020)', function () {
         $this->actingAs($this->financialSecretary)
             ->post(route('payments.store'), [
                 'member_id' => $this->member->id,
-                'amount' => 1000000, // ₦10,000
+                'amount' => 10000, // ₦10,000
                 'paid_at' => now()->toDateString(),
                 'target_year' => $month3->year,
                 'target_month' => $month3->month,
@@ -118,7 +118,7 @@ describe('Balance-First Rule (FR-020)', function () {
         expect($second->fresh()->status)->toBe(PaymentStatus::Paid);
 
         // Third: ₦2,000 of ₦4,000 - PARTIAL
-        expect($third->fresh()->total_paid)->toBe(200000);
+        expect($third->fresh()->total_paid)->toBe(2000);
         expect($third->fresh()->status)->toBe(PaymentStatus::Partial);
     });
 
@@ -143,7 +143,7 @@ describe('Balance-First Rule (FR-020)', function () {
         Payment::factory()
             ->forContribution($first)
             ->recordedBy($this->financialSecretary)
-            ->create(['amount' => 400000]);
+            ->create(['amount' => 4000]);
 
         expect($first->fresh()->isPaid())->toBeTrue();
 
@@ -151,7 +151,7 @@ describe('Balance-First Rule (FR-020)', function () {
         $this->actingAs($this->financialSecretary)
             ->post(route('payments.store'), [
                 'member_id' => $this->member->id,
-                'amount' => 400000,
+                'amount' => 4000,
                 'paid_at' => now()->toDateString(),
                 'target_year' => $month2->year,
                 'target_month' => $month2->month,
@@ -159,7 +159,7 @@ describe('Balance-First Rule (FR-020)', function () {
             ->assertRedirect();
 
         // First month unchanged
-        expect($first->fresh()->total_paid)->toBe(400000);
+        expect($first->fresh()->total_paid)->toBe(4000);
 
         // Second month fully paid
         expect($second->fresh()->status)->toBe(PaymentStatus::Paid);
@@ -177,7 +177,7 @@ describe('Balance-First Rule (FR-020)', function () {
         $this->actingAs($this->financialSecretary)
             ->post(route('payments.store'), [
                 'member_id' => $this->member->id,
-                'amount' => 400000,
+                'amount' => 4000,
                 'paid_at' => now()->toDateString(),
                 'target_year' => $nextMonth->year,
                 'target_month' => $nextMonth->month,

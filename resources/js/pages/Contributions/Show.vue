@@ -77,8 +77,8 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 // Helper to format amount in Naira
-const formatAmount = (kobo: number): string => {
-    return `₦${(kobo / 100).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
+const formatAmount = (amount: number): string => {
+    return `₦${amount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
 };
 
 // Helper to format date

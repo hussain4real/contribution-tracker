@@ -57,7 +57,7 @@ describe('Update Member', function () {
 
     it('category change affects expected amount', function () {
         // Initially employed (₦4,000)
-        expect($this->member->getMonthlyAmountInKobo())->toBe(400000);
+        expect($this->member->getMonthlyAmount())->toBe(4000);
 
         $this->actingAs($this->superAdmin)
             ->put("/members/{$this->member->id}", [
@@ -70,7 +70,7 @@ describe('Update Member', function () {
 
         $this->member->refresh();
         // Now unemployed (₦2,000)
-        expect($this->member->getMonthlyAmountInKobo())->toBe(200000);
+        expect($this->member->getMonthlyAmount())->toBe(2000);
     });
 
     it('validates required fields on update', function () {

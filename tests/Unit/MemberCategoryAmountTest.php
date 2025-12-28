@@ -3,16 +3,16 @@
 use App\Enums\MemberCategory;
 
 describe('MemberCategory Monthly Amounts', function () {
-    it('employed category returns 400000 kobo (₦4,000)', function () {
-        expect(MemberCategory::Employed->monthlyAmountInKobo())->toBe(400000);
+    it('employed category returns ₦4,000', function () {
+        expect(MemberCategory::Employed->monthlyAmount())->toBe(4000);
     });
 
-    it('unemployed category returns 200000 kobo (₦2,000)', function () {
-        expect(MemberCategory::Unemployed->monthlyAmountInKobo())->toBe(200000);
+    it('unemployed category returns ₦2,000', function () {
+        expect(MemberCategory::Unemployed->monthlyAmount())->toBe(2000);
     });
 
-    it('student category returns 100000 kobo (₦1,000)', function () {
-        expect(MemberCategory::Student->monthlyAmountInKobo())->toBe(100000);
+    it('student category returns ₦1,000', function () {
+        expect(MemberCategory::Student->monthlyAmount())->toBe(1000);
     });
 
     it('formattedAmount returns correctly formatted currency string', function () {

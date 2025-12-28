@@ -27,7 +27,7 @@ describe('Record Partial Payment', function () {
         $this->actingAs($this->financialSecretary)
             ->post(route('payments.store'), [
                 'member_id' => $this->member->id,
-                'amount' => 200000, // ₦2,000 of ₦4,000
+                'amount' => 2000, // ₦2,000 of ₦4,000
                 'paid_at' => now()->toDateString(),
                 'target_year' => $futureMonth->year,
                 'target_month' => $futureMonth->month,
@@ -37,8 +37,8 @@ describe('Record Partial Payment', function () {
         $contribution->refresh();
 
         expect($contribution->status)->toBe(PaymentStatus::Partial);
-        expect($contribution->total_paid)->toBe(200000);
-        expect($contribution->balance)->toBe(200000);
+        expect($contribution->total_paid)->toBe(2000);
+        expect($contribution->balance)->toBe(2000);
     });
 
     it('multiple partial payments accumulate correctly', function () {
@@ -54,40 +54,40 @@ describe('Record Partial Payment', function () {
         $this->actingAs($this->financialSecretary)
             ->post(route('payments.store'), [
                 'member_id' => $this->member->id,
-                'amount' => 100000,
+                'amount' => 1000,
                 'paid_at' => now()->toDateString(),
                 'target_year' => $futureMonth->year,
                 'target_month' => $futureMonth->month,
             ]);
 
-        expect($contribution->fresh()->total_paid)->toBe(100000);
+        expect($contribution->fresh()->total_paid)->toBe(1000);
         expect($contribution->fresh()->status)->toBe(PaymentStatus::Partial);
 
         // Second partial payment - ₦1,500
         $this->actingAs($this->financialSecretary)
             ->post(route('payments.store'), [
                 'member_id' => $this->member->id,
-                'amount' => 150000,
+                'amount' => 1500,
                 'paid_at' => now()->toDateString(),
                 'target_year' => $futureMonth->year,
                 'target_month' => $futureMonth->month,
             ]);
 
-        expect($contribution->fresh()->total_paid)->toBe(250000);
-        expect($contribution->fresh()->balance)->toBe(150000);
+        expect($contribution->fresh()->total_paid)->toBe(2500);
+        expect($contribution->fresh()->balance)->toBe(1500);
         expect($contribution->fresh()->status)->toBe(PaymentStatus::Partial);
 
         // Third payment - remaining ₦1,500
         $this->actingAs($this->financialSecretary)
             ->post(route('payments.store'), [
                 'member_id' => $this->member->id,
-                'amount' => 150000,
+                'amount' => 1500,
                 'paid_at' => now()->toDateString(),
                 'target_year' => $futureMonth->year,
                 'target_month' => $futureMonth->month,
             ]);
 
-        expect($contribution->fresh()->total_paid)->toBe(400000);
+        expect($contribution->fresh()->total_paid)->toBe(4000);
         expect($contribution->fresh()->balance)->toBe(0);
         expect($contribution->fresh()->status)->toBe(PaymentStatus::Paid);
     });
@@ -102,7 +102,7 @@ describe('Record Partial Payment', function () {
         Payment::factory()
             ->forContribution($contribution)
             ->recordedBy($this->financialSecretary)
-            ->create(['amount' => 200000]); // ₦2,000 partial
+            ->create(['amount' => 2000]); // ₦2,000 partial
 
         $this->actingAs($this->financialSecretary)
             ->get(route('contributions.show', $contribution))

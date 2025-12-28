@@ -165,7 +165,7 @@ class PaymentAllocationService
             'user_id' => $member->id,
             'year' => $year,
             'month' => $month,
-            'expected_amount' => $member->category->monthlyAmountInKobo(),
+            'expected_amount' => $member->category->monthlyAmount(),
         ]);
     }
 

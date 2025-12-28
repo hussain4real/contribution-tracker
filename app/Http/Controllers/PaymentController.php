@@ -35,7 +35,7 @@ class PaymentController extends Controller
                 'email' => $member->email,
                 'category' => $member->category?->value,
                 'category_label' => $member->category?->label(),
-                'monthly_amount' => $member->category?->monthlyAmountInKobo() ?? 0,
+                'monthly_amount' => $member->category?->monthlyAmount() ?? 0,
             ]);
 
         return Inertia::render('Payments/Index', [
@@ -83,7 +83,7 @@ class PaymentController extends Controller
             'member' => $member->only(['id', 'name', 'email', 'category']),
             'available_months' => $availableMonths,
             'pending_contributions' => $pendingContributions,
-            'category_amount' => $member->category?->monthlyAmountInKobo(),
+            'category_amount' => $member->category?->monthlyAmount(),
             'formatted_amount' => $member->category?->formattedAmount(),
             'categories' => collect(MemberCategory::cases())->map(fn ($cat) => [
                 'value' => $cat->value,
@@ -110,7 +110,7 @@ class PaymentController extends Controller
         );
 
         $totalAllocated = $payments->sum('amount');
-        $formattedAmount = '₦'.number_format($totalAllocated / 100, 2);
+        $formattedAmount = '₦'.number_format($totalAllocated, 2);
 
         return redirect()->route('dashboard')
             ->with('success', "Payment of {$formattedAmount} recorded for {$member->name}.");

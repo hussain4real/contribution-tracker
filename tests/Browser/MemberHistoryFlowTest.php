@@ -19,7 +19,7 @@ describe('Member History Flow', function () {
         $contribution = Contribution::factory()
             ->forUser($this->member)
             ->currentMonth()
-            ->create(['expected_amount' => 400000]);
+            ->create(['expected_amount' => 4000]);
 
         $page = visit(route('login'));
 
@@ -38,11 +38,11 @@ describe('Member History Flow', function () {
         $contribution = Contribution::factory()
             ->forUser($this->member)
             ->currentMonth()
-            ->create(['expected_amount' => 400000]);
+            ->create(['expected_amount' => 4000]);
 
         Payment::factory()->create([
             'contribution_id' => $contribution->id,
-            'amount' => 200000,
+            'amount' => 2000,
             'recorded_by' => $this->recorder->id,
         ]);
 
@@ -63,13 +63,13 @@ describe('Member History Flow', function () {
         Contribution::factory()
             ->forUser($this->member)
             ->currentMonth()
-            ->create(['expected_amount' => 400000]);
+            ->create(['expected_amount' => 4000]);
 
         $otherMember = User::factory()->member()->employed()->create();
         Contribution::factory()
             ->forUser($otherMember)
             ->currentMonth()
-            ->create(['expected_amount' => 400000]);
+            ->create(['expected_amount' => 4000]);
 
         $page = visit(route('login'));
 
@@ -84,7 +84,7 @@ describe('Member History Flow', function () {
         $contribution = Contribution::factory()
             ->forUser($this->member)
             ->currentMonth()
-            ->create(['expected_amount' => 400000]);
+            ->create(['expected_amount' => 4000]);
 
         $page = visit(route('login'));
 
@@ -104,7 +104,7 @@ describe('Member History Flow', function () {
         Contribution::factory()
             ->forUser($this->member)
             ->forMonth(now()->subMonth()->year, now()->subMonth()->month)
-            ->create(['expected_amount' => 400000]);
+            ->create(['expected_amount' => 4000]);
 
         $page = visit(route('login'));
 
@@ -119,11 +119,11 @@ describe('Member History Flow', function () {
         $contribution = Contribution::factory()
             ->forUser($this->member)
             ->currentMonth()
-            ->create(['expected_amount' => 400000]);
+            ->create(['expected_amount' => 4000]);
 
         Payment::factory()->create([
             'contribution_id' => $contribution->id,
-            'amount' => 400000,
+            'amount' => 4000,
             'recorded_by' => $this->recorder->id,
         ]);
 
@@ -141,17 +141,17 @@ describe('Member History Flow', function () {
         Contribution::factory()
             ->forUser($this->member)
             ->forMonth(2025, 10)
-            ->create(['expected_amount' => 400000]);
+            ->create(['expected_amount' => 4000]);
 
         Contribution::factory()
             ->forUser($this->member)
             ->forMonth(2025, 12)
-            ->create(['expected_amount' => 400000]);
+            ->create(['expected_amount' => 4000]);
 
         Contribution::factory()
             ->forUser($this->member)
             ->forMonth(2025, 11)
-            ->create(['expected_amount' => 400000]);
+            ->create(['expected_amount' => 4000]);
 
         $page = visit(route('login'));
 
@@ -170,12 +170,12 @@ describe('Member History Flow', function () {
         Contribution::factory()
             ->forUser($this->member)
             ->currentMonth()
-            ->create(['expected_amount' => 400000]);
+            ->create(['expected_amount' => 4000]);
 
         Contribution::factory()
             ->forUser($otherMember)
             ->currentMonth()
-            ->create(['expected_amount' => 400000]);
+            ->create(['expected_amount' => 4000]);
 
         $page = visit(route('login'));
 

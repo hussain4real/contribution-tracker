@@ -57,13 +57,13 @@ describe('Role Access', function () {
         $this->actingAs($newFs)
             ->post(route('payments.store'), [
                 'member_id' => $this->member->id,
-                'amount' => 100000,
+                'amount' => 1000,
                 'paid_at' => now()->toDateString(),
             ])
             ->assertRedirect();
 
         $this->assertDatabaseHas('payments', [
-            'amount' => 100000,
+            'amount' => 1000,
             'recorded_by' => $newFs->id,
         ]);
     });
@@ -111,7 +111,7 @@ describe('Role Access', function () {
         $this->actingAs($fs)
             ->post(route('payments.store'), [
                 'member_id' => $this->member->id,
-                'amount' => 100000,
+                'amount' => 1000,
                 'paid_at' => now()->toDateString(),
             ])
             ->assertForbidden();

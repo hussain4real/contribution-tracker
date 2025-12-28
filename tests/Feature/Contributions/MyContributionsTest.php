@@ -36,7 +36,7 @@ describe('My Contributions', function () {
             ->forUser($this->member)
             ->forMonth(now()->year, now()->month)
             ->create([
-                'expected_amount' => 400000,
+                'expected_amount' => 4000,
             ]);
 
         $this->actingAs($this->member)
@@ -65,12 +65,12 @@ describe('My Contributions', function () {
         Contribution::factory()
             ->forUser($this->member)
             ->currentMonth()
-            ->create(['expected_amount' => 400000]);
+            ->create(['expected_amount' => 4000]);
 
         Contribution::factory()
             ->forUser($member2)
             ->currentMonth()
-            ->create(['expected_amount' => 400000]);
+            ->create(['expected_amount' => 4000]);
 
         $this->actingAs($this->member)
             ->get(route('contributions.my'))
@@ -132,13 +132,13 @@ describe('My Contributions', function () {
         $contribution = Contribution::factory()
             ->forUser($this->member)
             ->currentMonth()
-            ->create(['expected_amount' => 400000]);
+            ->create(['expected_amount' => 4000]);
 
         $recorder = User::factory()->financialSecretary()->create();
 
         Payment::factory()->create([
             'contribution_id' => $contribution->id,
-            'amount' => 200000,
+            'amount' => 2000,
             'recorded_by' => $recorder->id,
         ]);
 

@@ -181,9 +181,9 @@ class DashboardController extends Controller
 
         if (! $contribution) {
             return [
-                'expected_amount' => $user->category?->monthlyAmountInKobo() ?? 0,
+                'expected_amount' => $user->category?->monthlyAmount() ?? 0,
                 'total_paid' => 0,
-                'current_month_balance' => $user->category?->monthlyAmountInKobo() ?? 0,
+                'current_month_balance' => $user->category?->monthlyAmount() ?? 0,
                 'current_month_status' => 'unpaid',
             ];
         }

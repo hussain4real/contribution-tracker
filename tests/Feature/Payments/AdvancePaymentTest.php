@@ -23,7 +23,7 @@ describe('Advance Payments (FR-018)', function () {
         $this->actingAs($this->financialSecretary)
             ->post(route('payments.store'), [
                 'member_id' => $this->member->id,
-                'amount' => 400000,
+                'amount' => 4000,
                 'paid_at' => now()->toDateString(),
                 'target_year' => $nextMonth->year,
                 'target_month' => $nextMonth->month,
@@ -44,7 +44,7 @@ describe('Advance Payments (FR-018)', function () {
         $this->actingAs($this->financialSecretary)
             ->post(route('payments.store'), [
                 'member_id' => $this->member->id,
-                'amount' => 400000,
+                'amount' => 4000,
                 'paid_at' => now()->toDateString(),
                 'target_year' => $sixMonthsAhead->year,
                 'target_month' => $sixMonthsAhead->month,
@@ -72,7 +72,7 @@ describe('Advance Payments (FR-018)', function () {
         $this->actingAs($this->financialSecretary)
             ->post(route('payments.store'), [
                 'member_id' => $this->member->id,
-                'amount' => 1200000, // ₦12,000 = 3 months
+                'amount' => 12000, // ₦12,000 = 3 months
                 'paid_at' => now()->toDateString(),
             ])
             ->assertRedirect();

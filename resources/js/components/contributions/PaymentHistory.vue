@@ -17,12 +17,11 @@ interface Props {
 
 defineProps<Props>();
 
-function formatCurrency(kobo: number): string {
-    const naira = kobo / 100;
+function formatCurrency(amount: number): string {
     return new Intl.NumberFormat('en-NG', {
         style: 'currency',
         currency: 'NGN',
-    }).format(naira);
+    }).format(amount);
 }
 
 function formatDate(date: string): string {

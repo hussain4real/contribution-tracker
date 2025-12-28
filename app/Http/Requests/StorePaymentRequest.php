@@ -25,7 +25,7 @@ class StorePaymentRequest extends FormRequest
     {
         return [
             'member_id' => ['required', 'exists:users,id'],
-            'amount' => ['required', 'integer', 'min:5'],
+            'amount' => ['required', 'integer', 'min:1'],
             'paid_at' => ['required', 'date'],
             'notes' => ['nullable', 'string', 'max:500'],
             'target_year' => ['nullable', 'integer', 'min:2020', 'max:2100'],
@@ -77,8 +77,8 @@ class StorePaymentRequest extends FormRequest
             'member_id.required' => 'Please select a family member.',
             'member_id.exists' => 'The selected member does not exist.',
             'amount.required' => 'Please enter the payment amount.',
-            'amount.integer' => 'The amount must be a whole number (in kobo).',
-            'amount.min' => 'The amount must be at least ₦0.01.',
+            'amount.integer' => 'The amount must be a whole number in Naira.',
+            'amount.min' => 'The amount must be at least ₦5.',
             'paid_at.required' => 'Please enter the payment date.',
             'paid_at.date' => 'Please enter a valid date.',
         ];

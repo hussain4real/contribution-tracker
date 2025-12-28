@@ -25,7 +25,7 @@ describe('Category Change Next Month', function () {
             ->employed()
             ->create();
 
-        expect($contribution->expected_amount)->toBe(400000);
+        expect($contribution->expected_amount)->toBe(4000);
 
         // Change category to student
         $this->actingAs($this->superAdmin)
@@ -39,7 +39,7 @@ describe('Category Change Next Month', function () {
 
         // The existing contribution should still have the old amount
         $contribution->refresh();
-        expect($contribution->expected_amount)->toBe(400000); // Still ₦4,000
+        expect($contribution->expected_amount)->toBe(4000); // Still ₦4,000
     });
 
     it('new contribution after category change uses new amount', function () {
@@ -61,15 +61,15 @@ describe('Category Change Next Month', function () {
             ->forUser($this->member)
             ->forMonth($nextMonth->year, $nextMonth->month)
             ->create([
-                'expected_amount' => $this->member->getMonthlyAmountInKobo(),
+                'expected_amount' => $this->member->getMonthlyAmount(),
             ]);
 
         // Should use new category amount (₦1,000 for student)
-        expect($contribution->expected_amount)->toBe(100000);
+        expect($contribution->expected_amount)->toBe(1000);
     });
 
     it('user model reflects new monthly amount immediately', function () {
-        expect($this->member->getMonthlyAmountInKobo())->toBe(400000); // Employed
+        expect($this->member->getMonthlyAmount())->toBe(4000); // Employed
 
         $this->actingAs($this->superAdmin)
             ->put("/members/{$this->member->id}", [
@@ -80,14 +80,14 @@ describe('Category Change Next Month', function () {
             ]);
 
         $this->member->refresh();
-        expect($this->member->getMonthlyAmountInKobo())->toBe(200000); // Unemployed
+        expect($this->member->getMonthlyAmount())->toBe(2000); // Unemployed
     });
 
     it('all category transitions work correctly', function () {
         $transitions = [
-            ['from' => 'employed', 'to' => 'unemployed', 'amount' => 200000],
-            ['from' => 'unemployed', 'to' => 'student', 'amount' => 100000],
-            ['from' => 'student', 'to' => 'employed', 'amount' => 400000],
+            ['from' => 'employed', 'to' => 'unemployed', 'amount' => 2000],
+            ['from' => 'unemployed', 'to' => 'student', 'amount' => 1000],
+            ['from' => 'student', 'to' => 'employed', 'amount' => 4000],
         ];
 
         foreach ($transitions as $transition) {
@@ -104,7 +104,7 @@ describe('Category Change Next Month', function () {
                 ]);
 
             $member->refresh();
-            expect($member->getMonthlyAmountInKobo())->toBe($transition['amount']);
+            expect($member->getMonthlyAmount())->toBe($transition['amount']);
         }
     });
 });

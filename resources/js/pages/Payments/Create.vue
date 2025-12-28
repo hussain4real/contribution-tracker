@@ -77,27 +77,21 @@ const paidAt = ref<string>(new Date().toISOString().split('T')[0]);
 const notes = ref<string>('');
 
 // Helper to format amount in Naira
-const formatAmount = (kobo: number): string => {
-    return `₦${(kobo / 100).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
+const formatAmount = (amount: number): string => {
+    return `₦${amount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
 };
 
 // Quick amount buttons (values in Naira)
 const quickAmounts = computed(() => [
-    { label: '1 Month', value: props.category_amount / 100 },
-    { label: '2 Months', value: (props.category_amount * 2) / 100 },
-    { label: '3 Months', value: (props.category_amount * 3) / 100 },
-    { label: '6 Months', value: (props.category_amount * 6) / 100 },
+    { label: '1 Month', value: props.category_amount },
+    { label: '2 Months', value: props.category_amount * 2 },
+    { label: '3 Months', value: props.category_amount * 3 },
+    { label: '6 Months', value: props.category_amount * 6 },
 ]);
 
 const setQuickAmount = (value: number) => {
     amount.value = value.toString();
 };
-
-// Convert Naira to kobo for form submission
-const amountInKobo = computed(() => {
-    const nairaValue = parseFloat(amount.value);
-    return isNaN(nairaValue) ? 0 : Math.round(nairaValue * 100);
-});
 
 // Parse selected month
 const targetYear = computed(() => {
@@ -180,17 +174,17 @@ const targetMonth = computed(() => {
                 />
 
                 <!-- Amount Field -->
-                <input type="hidden" name="amount" :value="amountInKobo" />
                 <div class="grid gap-2">
-                    <Label for="amount_display">Amount (₦)</Label>
+                    <Label for="amount">Amount (₦)</Label>
                     <Input
-                        id="amount_display"
+                        id="amount"
                         type="number"
+                        name="amount"
                         v-model="amount"
                         placeholder="Enter amount in Naira"
                         required
-                        min="0.01"
-                        step="0.01"
+                        min="1"
+                        step="1"
                         @change="validate('amount')"
                     />
                     <InputError :message="errors.amount" />

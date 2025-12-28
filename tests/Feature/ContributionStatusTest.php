@@ -34,7 +34,7 @@ describe('Contribution Status Calculation', function () {
 
         Payment::factory()
             ->forContribution($contribution)
-            ->create(['amount' => $contribution->expected_amount + 100000]);
+            ->create(['amount' => $contribution->expected_amount + 1000]);
 
         expect($contribution->fresh()->status)->toBe(PaymentStatus::Paid);
     });
@@ -104,13 +104,13 @@ describe('Contribution Status Calculation', function () {
 
         Payment::factory()
             ->forContribution($contribution)
-            ->create(['amount' => 100000]); // ₦1,000
+            ->create(['amount' => 1000]); // ₦1,000
 
         Payment::factory()
             ->forContribution($contribution)
-            ->create(['amount' => 150000]); // ₦1,500
+            ->create(['amount' => 1500]); // ₦1,500
 
-        expect($contribution->fresh()->total_paid)->toBe(250000); // ₦2,500
+        expect($contribution->fresh()->total_paid)->toBe(2500); // ₦2,500
     });
 
     it('calculates balance correctly', function () {
@@ -122,10 +122,10 @@ describe('Contribution Status Calculation', function () {
 
         Payment::factory()
             ->forContribution($contribution)
-            ->create(['amount' => 100000]); // ₦1,000 of ₦4,000
+            ->create(['amount' => 1000]); // ₦1,000 of ₦4,000
 
         // Expected: ₦4,000 - ₦1,000 = ₦3,000
-        expect($contribution->fresh()->balance)->toBe(300000);
+        expect($contribution->fresh()->balance)->toBe(3000);
     });
 
     it('returns zero balance when fully paid', function () {
@@ -157,8 +157,8 @@ describe('Contribution Status Calculation', function () {
             ->currentMonth()
             ->create();
 
-        expect($employedContribution->expected_amount)->toBe(400000);  // ₦4,000
-        expect($unemployedContribution->expected_amount)->toBe(200000); // ₦2,000
-        expect($studentContribution->expected_amount)->toBe(100000);   // ₦1,000
+        expect($employedContribution->expected_amount)->toBe(4000);  // ₦4,000
+        expect($unemployedContribution->expected_amount)->toBe(2000); // ₦2,000
+        expect($studentContribution->expected_amount)->toBe(1000);   // ₦1,000
     });
 });

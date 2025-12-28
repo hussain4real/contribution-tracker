@@ -11,24 +11,15 @@ enum MemberCategory: string
     case Student = 'student';
 
     /**
-     * Get the monthly contribution amount in kobo.
-     * ₦1 = 100 kobo
-     */
-    public function monthlyAmountInKobo(): int
-    {
-        return match ($this) {
-            self::Employed => 400_000,   // ₦4,000
-            self::Unemployed => 200_000, // ₦2,000
-            self::Student => 100_000,    // ₦1,000
-        };
-    }
-
-    /**
      * Get the monthly contribution amount in Naira.
      */
-    public function monthlyAmountInNaira(): float
+    public function monthlyAmount(): int
     {
-        return $this->monthlyAmountInKobo() / 100;
+        return match ($this) {
+            self::Employed => 4000,   // ₦4,000
+            self::Unemployed => 2000, // ₦2,000
+            self::Student => 1000,    // ₦1,000
+        };
     }
 
     /**
@@ -36,7 +27,7 @@ enum MemberCategory: string
      */
     public function formattedAmount(): string
     {
-        return '₦'.number_format($this->monthlyAmountInNaira(), 0);
+        return '₦'.number_format($this->monthlyAmount(), 0);
     }
 
     /**

@@ -22,7 +22,7 @@ class PaymentFactory extends Factory
     {
         return [
             'contribution_id' => Contribution::factory(),
-            'amount' => MemberCategory::Employed->monthlyAmountInKobo(),
+            'amount' => MemberCategory::Employed->monthlyAmount(),
             'paid_at' => now(),
             'recorded_by' => User::factory()->financialSecretary(),
             'notes' => null,
@@ -39,7 +39,7 @@ class PaymentFactory extends Factory
     public function partial(): static
     {
         return $this->state(fn (array $attributes) => [
-            'amount' => (int) (MemberCategory::Employed->monthlyAmountInKobo() / 2),
+            'amount' => (int) (MemberCategory::Employed->monthlyAmount() / 2),
         ]);
     }
 
@@ -54,17 +54,17 @@ class PaymentFactory extends Factory
                 return ['amount' => $attributes['contribution_id']->expected_amount];
             }
 
-            return ['amount' => MemberCategory::Employed->monthlyAmountInKobo()];
+            return ['amount' => MemberCategory::Employed->monthlyAmount()];
         });
     }
 
     /**
-     * Create a payment with a specific amount in kobo.
+     * Create a payment with a specific amount in Naira.
      */
-    public function withAmount(int $amountInKobo): static
+    public function withAmount(int $amount): static
     {
         return $this->state(fn (array $attributes) => [
-            'amount' => $amountInKobo,
+            'amount' => $amount,
         ]);
     }
 

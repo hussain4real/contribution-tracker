@@ -23,7 +23,7 @@ class ContributionFactory extends Factory
             'user_id' => User::factory(),
             'year' => now()->year,
             'month' => now()->month,
-            'expected_amount' => MemberCategory::Employed->monthlyAmountInKobo(),
+            'expected_amount' => MemberCategory::Employed->monthlyAmount(),
         ];
     }
 
@@ -89,7 +89,7 @@ class ContributionFactory extends Factory
     public function employed(): static
     {
         return $this->state(fn (array $attributes) => [
-            'expected_amount' => MemberCategory::Employed->monthlyAmountInKobo(),
+            'expected_amount' => MemberCategory::Employed->monthlyAmount(),
         ]);
     }
 
@@ -99,7 +99,7 @@ class ContributionFactory extends Factory
     public function unemployed(): static
     {
         return $this->state(fn (array $attributes) => [
-            'expected_amount' => MemberCategory::Unemployed->monthlyAmountInKobo(),
+            'expected_amount' => MemberCategory::Unemployed->monthlyAmount(),
         ]);
     }
 
@@ -109,17 +109,17 @@ class ContributionFactory extends Factory
     public function student(): static
     {
         return $this->state(fn (array $attributes) => [
-            'expected_amount' => MemberCategory::Student->monthlyAmountInKobo(),
+            'expected_amount' => MemberCategory::Student->monthlyAmount(),
         ]);
     }
 
     /**
-     * Create a contribution with a custom amount in kobo.
+     * Create a contribution with a custom amount in Naira.
      */
-    public function withAmount(int $amountInKobo): static
+    public function withAmount(int $amount): static
     {
         return $this->state(fn (array $attributes) => [
-            'expected_amount' => $amountInKobo,
+            'expected_amount' => $amount,
         ]);
     }
 
@@ -134,7 +134,7 @@ class ContributionFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'user_id' => $user->id,
-            'expected_amount' => $user->category?->monthlyAmountInKobo() ?? MemberCategory::Employed->monthlyAmountInKobo(),
+            'expected_amount' => $user->category?->monthlyAmount() ?? MemberCategory::Employed->monthlyAmount(),
         ]);
     }
 }

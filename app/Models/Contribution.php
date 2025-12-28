@@ -244,7 +244,7 @@ class Contribution extends Model
      */
     public function formattedExpectedAmount(): string
     {
-        return '₦'.number_format($this->expected_amount / 100, 2);
+        return '₦'.number_format($this->expected_amount, 2);
     }
 
     /**
@@ -252,7 +252,7 @@ class Contribution extends Model
      */
     public function formattedTotalPaid(): string
     {
-        return '₦'.number_format($this->total_paid / 100, 2);
+        return '₦'.number_format($this->total_paid, 2);
     }
 
     /**
@@ -260,6 +260,6 @@ class Contribution extends Model
      */
     public function formattedBalance(): string
     {
-        return '₦'.number_format($this->balance / 100, 2);
+        return '₦'.number_format($this->balance, 2);
     }
 }

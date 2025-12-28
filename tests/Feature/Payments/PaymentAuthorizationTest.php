@@ -20,7 +20,7 @@ describe('Payment Authorization', function () {
         $this->actingAs($member)
             ->post(route('payments.store'), [
                 'member_id' => $this->member->id,
-                'amount' => 400000,
+                'amount' => 4000,
                 'paid_at' => now()->toDateString(),
             ])
             ->assertForbidden();
@@ -40,13 +40,13 @@ describe('Payment Authorization', function () {
         $this->actingAs($financialSecretary)
             ->post(route('payments.store'), [
                 'member_id' => $this->member->id,
-                'amount' => 400000,
+                'amount' => 4000,
                 'paid_at' => now()->toDateString(),
             ])
             ->assertRedirect();
 
         $this->assertDatabaseHas('payments', [
-            'amount' => 400000,
+            'amount' => 4000,
             'recorded_by' => $financialSecretary->id,
         ]);
     });
@@ -57,13 +57,13 @@ describe('Payment Authorization', function () {
         $this->actingAs($superAdmin)
             ->post(route('payments.store'), [
                 'member_id' => $this->member->id,
-                'amount' => 400000,
+                'amount' => 4000,
                 'paid_at' => now()->toDateString(),
             ])
             ->assertRedirect();
 
         $this->assertDatabaseHas('payments', [
-            'amount' => 400000,
+            'amount' => 4000,
             'recorded_by' => $superAdmin->id,
         ]);
     });
@@ -71,7 +71,7 @@ describe('Payment Authorization', function () {
     it('forbids unauthenticated users from recording payments', function () {
         $this->post(route('payments.store'), [
             'member_id' => $this->member->id,
-            'amount' => 400000,
+            'amount' => 4000,
             'paid_at' => now()->toDateString(),
         ])->assertRedirect();
     });

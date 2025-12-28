@@ -73,12 +73,12 @@ class FamilyMemberSeeder extends Seeder
                 'user_id' => $member->id,
                 'year' => $previousMonth->year,
                 'month' => $previousMonth->month,
-                'expected_amount' => $member->category->monthlyAmountInKobo(),
+                'expected_amount' => $member->category->monthlyAmount(),
             ]);
 
             Payment::create([
                 'contribution_id' => $previousContribution->id,
-                'amount' => $member->category->monthlyAmountInKobo(),
+                'amount' => $member->category->monthlyAmount(),
                 'paid_at' => $previousMonth->setDay(15),
                 'recorded_by' => $financialSecretary->id,
                 'notes' => 'Seeded payment',
@@ -89,14 +89,14 @@ class FamilyMemberSeeder extends Seeder
                 'user_id' => $member->id,
                 'year' => $currentYear,
                 'month' => $currentMonth,
-                'expected_amount' => $member->category->monthlyAmountInKobo(),
+                'expected_amount' => $member->category->monthlyAmount(),
             ]);
 
             // Only financial secretary has paid current month (partial for demo)
             if ($member->id === $financialSecretary->id) {
                 Payment::create([
                     'contribution_id' => $currentContribution->id,
-                    'amount' => $member->category->monthlyAmountInKobo(),
+                    'amount' => $member->category->monthlyAmount(),
                     'paid_at' => now()->setDay(10),
                     'recorded_by' => $financialSecretary->id,
                     'notes' => 'Seeded payment',
@@ -105,7 +105,7 @@ class FamilyMemberSeeder extends Seeder
                 // Employed member has partial payment
                 Payment::create([
                     'contribution_id' => $currentContribution->id,
-                    'amount' => 200000, // ₦2,000 partial of ₦4,000
+                    'amount' => 2000, // ₦2,000 partial of ₦4,000
                     'paid_at' => now()->setDay(5),
                     'recorded_by' => $financialSecretary->id,
                     'notes' => 'Partial payment - seeded',

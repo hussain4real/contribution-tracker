@@ -49,7 +49,7 @@ class ReportController extends Controller
             ->paginate(15)
             ->through(function ($member) {
                 $contribution = $member->contributions->first();
-                $expectedAmount = $member->category->monthlyAmountInKobo();
+                $expectedAmount = $member->category->monthlyAmount();
                 $paidAmount = $contribution ? $contribution->payments->sum('amount') : 0;
 
                 return [

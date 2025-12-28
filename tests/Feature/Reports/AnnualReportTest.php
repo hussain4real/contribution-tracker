@@ -42,12 +42,12 @@ describe('Annual Report', function () {
             $contribution = Contribution::factory()->create([
                 'user_id' => $member->id,
                 'month' => now()->setYear(now()->year)->setMonth($month)->startOfMonth(),
-                'expected_amount' => MemberCategory::Employed->monthlyAmountInKobo(),
+                'expected_amount' => MemberCategory::Employed->monthlyAmount(),
             ]);
 
             Payment::factory()->create([
                 'contribution_id' => $contribution->id,
-                'amount' => MemberCategory::Employed->monthlyAmountInKobo(),
+                'amount' => MemberCategory::Employed->monthlyAmount(),
                 'recorded_by' => $admin->id,
             ]);
         }
@@ -70,12 +70,12 @@ describe('Annual Report', function () {
             $contribution = Contribution::factory()->create([
                 'user_id' => $member->id,
                 'month' => now()->setYear(now()->year)->setMonth($month)->startOfMonth(),
-                'expected_amount' => MemberCategory::Employed->monthlyAmountInKobo(),
+                'expected_amount' => MemberCategory::Employed->monthlyAmount(),
             ]);
 
             Payment::factory()->create([
                 'contribution_id' => $contribution->id,
-                'amount' => MemberCategory::Employed->monthlyAmountInKobo(),
+                'amount' => MemberCategory::Employed->monthlyAmount(),
                 'recorded_by' => $admin->id,
             ]);
         }
@@ -131,12 +131,12 @@ describe('Annual Report', function () {
             $contribution = Contribution::factory()->create([
                 'user_id' => $member->id,
                 'month' => now()->startOfMonth(),
-                'expected_amount' => $member->category->monthlyAmountInKobo(),
+                'expected_amount' => $member->category->monthlyAmount(),
             ]);
 
             Payment::factory()->create([
                 'contribution_id' => $contribution->id,
-                'amount' => $member->category->monthlyAmountInKobo(),
+                'amount' => $member->category->monthlyAmount(),
                 'recorded_by' => $admin->id,
             ]);
         }

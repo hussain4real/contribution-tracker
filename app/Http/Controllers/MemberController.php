@@ -35,7 +35,7 @@ class MemberController extends Controller
                 'role_label' => $user->role->label(),
                 'category' => $user->category?->value,
                 'category_label' => $user->category?->label(),
-                'monthly_amount' => $user->getMonthlyAmountInKobo(),
+                'monthly_amount' => $user->getMonthlyAmount(),
                 'is_archived' => $user->isArchived(),
             ]);
 
@@ -51,7 +51,7 @@ class MemberController extends Controller
                 'role_label' => $user->role->label(),
                 'category' => $user->category?->value,
                 'category_label' => $user->category?->label(),
-                'monthly_amount' => $user->getMonthlyAmountInKobo(),
+                'monthly_amount' => $user->getMonthlyAmount(),
                 'archived_at' => $user->archived_at?->toDateString(),
                 'is_archived' => true,
             ]);
@@ -121,7 +121,7 @@ class MemberController extends Controller
                 'role_label' => $member->role->label(),
                 'category' => $member->category?->value,
                 'category_label' => $member->category?->label(),
-                'monthly_amount' => $member->getMonthlyAmountInKobo(),
+                'monthly_amount' => $member->getMonthlyAmount(),
                 'is_archived' => $member->isArchived(),
                 'archived_at' => $member->archived_at?->toDateString(),
                 'created_at' => $member->created_at?->toDateString(),
@@ -292,7 +292,7 @@ class MemberController extends Controller
             ->map(fn (MemberCategory $category) => [
                 'value' => $category->value,
                 'label' => $category->label(),
-                'amount' => $category->monthlyAmountInKobo(),
+                'amount' => $category->monthlyAmount(),
             ])
             ->values()
             ->toArray();

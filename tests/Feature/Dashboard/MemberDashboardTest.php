@@ -39,7 +39,7 @@ describe('Member Dashboard', function () {
         Payment::factory()
             ->forContribution($this->memberContribution)
             ->recordedBy($this->financialSecretary)
-            ->create(['amount' => 200000]); // Partial payment
+            ->create(['amount' => 2000]); // Partial payment
     });
 
     it('displays family aggregate stats for members (FR-015)', function () {
@@ -92,16 +92,16 @@ describe('Member Dashboard', function () {
     });
 
     it('calculates family aggregate correctly', function () {
-        // Total expected: 400000 (employed) + 100000 (student) = 500000
-        // Total collected: 200000 (partial payment to member)
+        // Total expected: 4000 (employed) + 1000 (student) = 5000
+        // Total collected: 2000 (partial payment to member)
 
         $this->actingAs($this->member)
             ->get('/dashboard')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->where('family_aggregate.total_expected', 500000)
-                ->where('family_aggregate.total_collected', 200000)
-                ->where('family_aggregate.total_outstanding', 300000)
+                ->where('family_aggregate.total_expected', 5000)
+                ->where('family_aggregate.total_collected', 2000)
+                ->where('family_aggregate.total_outstanding', 3000)
             );
     });
 
@@ -110,9 +110,9 @@ describe('Member Dashboard', function () {
             ->get('/dashboard')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->where('personal.expected_amount', 400000)
-                ->where('personal.total_paid', 200000)
-                ->where('personal.current_month_balance', 200000)
+                ->where('personal.expected_amount', 4000)
+                ->where('personal.total_paid', 2000)
+                ->where('personal.current_month_balance', 2000)
                 ->where('personal.current_month_status', 'partial')
             );
     });

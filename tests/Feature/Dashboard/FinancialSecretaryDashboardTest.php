@@ -57,7 +57,7 @@ describe('Financial Secretary Dashboard', function () {
         Payment::factory()
             ->forContribution($contribution)
             ->recordedBy($this->financialSecretary)
-            ->create(['amount' => 400000]);
+            ->create(['amount' => 4000]);
 
         $this->actingAs($this->financialSecretary)
             ->get('/dashboard')

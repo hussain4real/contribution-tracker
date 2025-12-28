@@ -43,7 +43,7 @@ describe('Payment Recording Flow (Browser)', function () {
             ->assertSee($this->member->name);
 
         // Fill payment form
-        $page->fill('#amount', '400000')
+        $page->fill('#amount', '4000')
             ->fill('#paid_at', now()->format('Y-m-d'))
             ->click('Record Payment');
 
@@ -57,7 +57,7 @@ describe('Payment Recording Flow (Browser)', function () {
     it('shows pending contributions on payment form', function () {
         // Create a partial payment
         $this->contribution->payments()->create([
-            'amount' => 200000,
+            'amount' => 2000,
             'paid_at' => now(),
             'recorded_by' => $this->financialSecretary->id,
         ]);
@@ -83,6 +83,6 @@ describe('Payment Recording Flow (Browser)', function () {
 
         $page->navigate("/members/{$this->member->id}/payments/create")
             ->click('1 Month')
-            ->assertValue('#amount', '400000');
+            ->assertValue('#amount', '4000');
     });
 });

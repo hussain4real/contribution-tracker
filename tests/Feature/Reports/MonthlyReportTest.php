@@ -45,25 +45,25 @@ describe('Monthly Report', function () {
         $contribution1 = Contribution::factory()->create([
             'user_id' => $employed->id,
             'month' => now()->startOfMonth(),
-            'expected_amount' => MemberCategory::Employed->monthlyAmountInKobo(),
+            'expected_amount' => MemberCategory::Employed->monthlyAmount(),
         ]);
 
         $contribution2 = Contribution::factory()->create([
             'user_id' => $student->id,
             'month' => now()->startOfMonth(),
-            'expected_amount' => MemberCategory::Student->monthlyAmountInKobo(),
+            'expected_amount' => MemberCategory::Student->monthlyAmount(),
         ]);
 
         // Add payments
         Payment::factory()->create([
             'contribution_id' => $contribution1->id,
-            'amount' => MemberCategory::Employed->monthlyAmountInKobo(),
+            'amount' => MemberCategory::Employed->monthlyAmount(),
             'recorded_by' => $admin->id,
         ]);
 
         Payment::factory()->create([
             'contribution_id' => $contribution2->id,
-            'amount' => 50000, // Partial payment
+            'amount' => 500, // Partial payment
             'recorded_by' => $admin->id,
         ]);
 
@@ -98,7 +98,7 @@ describe('Monthly Report', function () {
                 Contribution::factory()->create([
                     'user_id' => $user->id,
                     'month' => now()->startOfMonth(),
-                    'expected_amount' => $user->category->monthlyAmountInKobo(),
+                    'expected_amount' => $user->category->monthlyAmount(),
                 ]);
             });
 
@@ -119,12 +119,12 @@ describe('Monthly Report', function () {
         $contribution = Contribution::factory()->create([
             'user_id' => $member->id,
             'month' => now()->startOfMonth(),
-            'expected_amount' => MemberCategory::Employed->monthlyAmountInKobo(),
+            'expected_amount' => MemberCategory::Employed->monthlyAmount(),
         ]);
 
         Payment::factory()->create([
             'contribution_id' => $contribution->id,
-            'amount' => MemberCategory::Employed->monthlyAmountInKobo(),
+            'amount' => MemberCategory::Employed->monthlyAmount(),
             'recorded_by' => $admin->id,
         ]);
 
@@ -177,14 +177,14 @@ describe('Monthly Report', function () {
             $contribution = Contribution::factory()->create([
                 'user_id' => $member->id,
                 'month' => now()->startOfMonth(),
-                'expected_amount' => MemberCategory::Employed->monthlyAmountInKobo(),
+                'expected_amount' => MemberCategory::Employed->monthlyAmount(),
             ]);
 
             // First member: fully paid
             if ($index === 0) {
                 Payment::factory()->create([
                     'contribution_id' => $contribution->id,
-                    'amount' => MemberCategory::Employed->monthlyAmountInKobo(),
+                    'amount' => MemberCategory::Employed->monthlyAmount(),
                     'recorded_by' => $admin->id,
                 ]);
             }
@@ -192,7 +192,7 @@ describe('Monthly Report', function () {
             elseif ($index === 1) {
                 Payment::factory()->create([
                     'contribution_id' => $contribution->id,
-                    'amount' => 200000,
+                    'amount' => 2000,
                     'recorded_by' => $admin->id,
                 ]);
             }

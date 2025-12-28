@@ -58,7 +58,7 @@ describe('Create Member', function () {
 
         $member = User::where('email', 'jane@example.com')->first();
         expect($member->category)->toBe(MemberCategory::Student);
-        expect($member->getMonthlyAmountInKobo())->toBe(100000); // ₦1,000
+        expect($member->getMonthlyAmount())->toBe(1000); // ₦1,000
     });
 
     it('validates required fields', function () {

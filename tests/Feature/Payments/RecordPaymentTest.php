@@ -34,7 +34,7 @@ describe('Record Full Payment', function () {
         $this->actingAs($this->financialSecretary)
             ->post(route('payments.store'), [
                 'member_id' => $this->member->id,
-                'amount' => 400000, // ₦4,000 full payment
+                'amount' => 4000, // ₦4,000 full payment
                 'paid_at' => now()->toDateString(),
                 'notes' => 'Full payment received',
             ])
@@ -42,7 +42,7 @@ describe('Record Full Payment', function () {
 
         $this->assertDatabaseHas('payments', [
             'contribution_id' => $contribution->id,
-            'amount' => 400000,
+            'amount' => 4000,
             'recorded_by' => $this->financialSecretary->id,
         ]);
 
@@ -61,7 +61,7 @@ describe('Record Full Payment', function () {
         $this->actingAs($superAdmin)
             ->post(route('payments.store'), [
                 'member_id' => $this->member->id,
-                'amount' => 400000,
+                'amount' => 4000,
                 'paid_at' => now()->toDateString(),
             ])
             ->assertRedirect();
@@ -81,7 +81,7 @@ describe('Record Full Payment', function () {
         $this->actingAs($this->financialSecretary)
             ->post(route('payments.store'), [
                 'member_id' => $this->member->id,
-                'amount' => 400000,
+                'amount' => 4000,
                 'paid_at' => now()->toDateString(),
             ]);
 
@@ -109,7 +109,7 @@ describe('Record Full Payment', function () {
         $this->actingAs($this->financialSecretary)
             ->post(route('payments.store'), [
                 'member_id' => $this->member->id,
-                'amount' => 100000,
+                'amount' => 1000,
                 'paid_at' => 'invalid-date',
             ])
             ->assertSessionHasErrors('paid_at');

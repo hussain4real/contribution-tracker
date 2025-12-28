@@ -48,7 +48,7 @@ describe('Overdue Highlighting', function () {
 
         // Fully pay it
         $contribution->payments()->create([
-            'amount' => 400000,
+            'amount' => 4000,
             'paid_at' => now(),
             'recorded_by' => $this->superAdmin->id,
         ]);
@@ -117,7 +117,7 @@ describe('Overdue Highlighting', function () {
             ->create();
 
         $paidContribution->payments()->create([
-            'amount' => 100000,
+            'amount' => 1000,
             'paid_at' => now(),
             'recorded_by' => $this->superAdmin->id,
         ]);

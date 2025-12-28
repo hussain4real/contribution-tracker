@@ -20,11 +20,11 @@ describe('Partial Payment Details', function () {
         $contribution = Contribution::factory()
             ->forUser($this->member)
             ->currentMonth()
-            ->create(['expected_amount' => 400000]);
+            ->create(['expected_amount' => 4000]);
 
         Payment::factory()->create([
             'contribution_id' => $contribution->id,
-            'amount' => 200000,
+            'amount' => 2000,
             'recorded_by' => $this->recorder->id,
         ]);
 
@@ -32,7 +32,7 @@ describe('Partial Payment Details', function () {
             ->get(route('contributions.my'))
             ->assertInertia(fn (Assert $page) => $page
                 ->where('contributions.0.status', 'partial')
-                ->where('contributions.0.balance', 200000)
+                ->where('contributions.0.balance', 2000)
             );
     });
 
@@ -40,11 +40,11 @@ describe('Partial Payment Details', function () {
         $contribution = Contribution::factory()
             ->forUser($this->member)
             ->currentMonth()
-            ->create(['expected_amount' => 400000]);
+            ->create(['expected_amount' => 4000]);
 
         Payment::factory()->create([
             'contribution_id' => $contribution->id,
-            'amount' => 400000,
+            'amount' => 4000,
             'recorded_by' => $this->recorder->id,
         ]);
 
@@ -60,13 +60,13 @@ describe('Partial Payment Details', function () {
         Contribution::factory()
             ->forUser($this->member)
             ->currentMonth()
-            ->create(['expected_amount' => 400000]);
+            ->create(['expected_amount' => 4000]);
 
         $this->actingAs($this->member)
             ->get(route('contributions.my'))
             ->assertInertia(fn (Assert $page) => $page
                 ->where('contributions.0.status', 'unpaid')
-                ->where('contributions.0.balance', 400000)
+                ->where('contributions.0.balance', 4000)
             );
     });
 
@@ -75,7 +75,7 @@ describe('Partial Payment Details', function () {
         Contribution::factory()
             ->forUser($this->member)
             ->forMonth(now()->subMonth()->year, now()->subMonth()->month)
-            ->create(['expected_amount' => 400000]);
+            ->create(['expected_amount' => 4000]);
 
         $this->actingAs($this->member)
             ->get(route('contributions.my'))
@@ -88,25 +88,25 @@ describe('Partial Payment Details', function () {
         $contribution = Contribution::factory()
             ->forUser($this->member)
             ->currentMonth()
-            ->create(['expected_amount' => 400000]);
+            ->create(['expected_amount' => 4000]);
 
         Payment::factory()->create([
             'contribution_id' => $contribution->id,
-            'amount' => 100000,
+            'amount' => 1000,
             'recorded_by' => $this->recorder->id,
         ]);
 
         Payment::factory()->create([
             'contribution_id' => $contribution->id,
-            'amount' => 150000,
+            'amount' => 1500,
             'recorded_by' => $this->recorder->id,
         ]);
 
         $this->actingAs($this->member)
             ->get(route('contributions.my'))
             ->assertInertia(fn (Assert $page) => $page
-                ->where('contributions.0.total_paid', 250000)
-                ->where('contributions.0.balance', 150000)
+                ->where('contributions.0.total_paid', 2500)
+                ->where('contributions.0.balance', 1500)
                 ->where('contributions.0.status', 'partial')
             );
     });
@@ -115,11 +115,11 @@ describe('Partial Payment Details', function () {
         $contribution = Contribution::factory()
             ->forUser($this->member)
             ->currentMonth()
-            ->create(['expected_amount' => 400000]);
+            ->create(['expected_amount' => 4000]);
 
         $payment = Payment::factory()->create([
             'contribution_id' => $contribution->id,
-            'amount' => 200000,
+            'amount' => 2000,
             'paid_at' => now()->subDays(3),
             'notes' => 'Partial payment for December',
             'recorded_by' => $this->recorder->id,
@@ -129,7 +129,7 @@ describe('Partial Payment Details', function () {
             ->get(route('contributions.my'))
             ->assertInertia(fn (Assert $page) => $page
                 ->has('contributions.0.payments', 1)
-                ->where('contributions.0.payments.0.amount', 200000)
+                ->where('contributions.0.payments.0.amount', 2000)
                 ->has('contributions.0.payments.0.paid_at')
                 ->where('contributions.0.payments.0.notes', 'Partial payment for December')
             );
@@ -140,12 +140,12 @@ describe('Partial Payment Details', function () {
         $employedContribution = Contribution::factory()
             ->forUser($this->member)
             ->currentMonth()
-            ->create(['expected_amount' => 400000]);
+            ->create(['expected_amount' => 4000]);
 
         $this->actingAs($this->member)
             ->get(route('contributions.my'))
             ->assertInertia(fn (Assert $page) => $page
-                ->where('contributions.0.expected_amount', 400000)
+                ->where('contributions.0.expected_amount', 4000)
             );
 
         // Create student member
@@ -153,12 +153,12 @@ describe('Partial Payment Details', function () {
         Contribution::factory()
             ->forUser($student)
             ->currentMonth()
-            ->create(['expected_amount' => 100000]);
+            ->create(['expected_amount' => 1000]);
 
         $this->actingAs($student)
             ->get(route('contributions.my'))
             ->assertInertia(fn (Assert $page) => $page
-                ->where('contributions.0.expected_amount', 100000)
+                ->where('contributions.0.expected_amount', 1000)
             );
     });
 });

@@ -12,13 +12,12 @@ defineProps<{
     canRecordPayments: boolean;
 }>();
 
-// Format currency from kobo to naira
-function formatCurrency(kobo: number): string {
-    const naira = kobo / 100;
+// Format currency in Naira
+function formatCurrency(amount: number): string {
     return new Intl.NumberFormat('en-NG', {
         style: 'currency',
         currency: 'NGN',
-    }).format(naira);
+    }).format(amount);
 }
 </script>
 

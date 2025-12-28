@@ -201,10 +201,10 @@ class User extends Authenticatable
     }
 
     /**
-     * Get the monthly contribution amount in kobo for this user.
+     * Get the monthly contribution amount in Naira for this user.
      */
-    public function getMonthlyAmountInKobo(): ?int
+    public function getMonthlyAmount(): ?int
     {
-        return $this->category?->monthlyAmountInKobo();
+        return $this->category?->monthlyAmount();
     }
 }
