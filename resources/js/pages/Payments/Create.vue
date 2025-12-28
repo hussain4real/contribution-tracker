@@ -163,7 +163,7 @@ const targetMonth = computed(() => {
             <Form
                 :action="store()"
                 class="space-y-6"
-                v-slot="{ errors, processing, recentlySuccessful }"
+                #default="{ errors, invalid, validate, validating, processing, recentlySuccessful }"
             >
                 <input type="hidden" name="member_id" :value="member.id" />
                 <input
@@ -266,7 +266,14 @@ const targetMonth = computed(() => {
                         v-model="notes"
                         placeholder="e.g., Cash payment, Bank transfer ref: ABC123"
                         maxlength="500"
+                        @change="validate('notes')"
                     />
+                    <p v-if="invalid('notes')" class="text-xs text-red-600">
+                        {{ errors.notes }}
+                    </p>
+                    <p v-if="validating" class="text-xs text-muted-foreground">
+                        Validating...
+                    </p>
                     <InputError :message="errors.notes" />
                 </div>
 
