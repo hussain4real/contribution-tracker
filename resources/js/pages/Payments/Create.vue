@@ -81,27 +81,33 @@ const formatAmount = (kobo: number): string => {
     return `₦${(kobo / 100).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
 };
 
-// Quick amount buttons
+// Quick amount buttons (values in Naira)
 const quickAmounts = computed(() => [
-    { label: '1 Month', value: props.category_amount },
-    { label: '2 Months', value: props.category_amount * 2 },
-    { label: '3 Months', value: props.category_amount * 3 },
-    { label: '6 Months', value: props.category_amount * 6 },
+    { label: '1 Month', value: props.category_amount / 100 },
+    { label: '2 Months', value: (props.category_amount * 2) / 100 },
+    { label: '3 Months', value: (props.category_amount * 3) / 100 },
+    { label: '6 Months', value: (props.category_amount * 6) / 100 },
 ]);
 
 const setQuickAmount = (value: number) => {
     amount.value = value.toString();
 };
 
+// Convert Naira to kobo for form submission
+const amountInKobo = computed(() => {
+    const nairaValue = parseFloat(amount.value);
+    return isNaN(nairaValue) ? 0 : Math.round(nairaValue * 100);
+});
+
 // Parse selected month
 const targetYear = computed(() => {
-    if (!selectedMonth.value) return null;
+    if (!selectedMonth.value || selectedMonth.value === 'current') return null;
     const [year] = selectedMonth.value.split('-');
     return parseInt(year);
 });
 
 const targetMonth = computed(() => {
-    if (!selectedMonth.value) return null;
+    if (!selectedMonth.value || selectedMonth.value === 'current') return null;
     const [, month] = selectedMonth.value.split('-');
     return parseInt(month);
 });
@@ -174,21 +180,21 @@ const targetMonth = computed(() => {
                 />
 
                 <!-- Amount Field -->
+                <input type="hidden" name="amount" :value="amountInKobo" />
                 <div class="grid gap-2">
-                    <Label for="amount">Amount (₦)</Label>
+                    <Label for="amount_display">Amount (₦)</Label>
                     <Input
-                        id="amount"
+                        id="amount_display"
                         type="number"
-                        name="amount"
                         v-model="amount"
-                        placeholder="Enter amount in kobo"
+                        placeholder="Enter amount in Naira"
                         required
-                        min="1"
+                        min="0.01"
+                        step="0.01"
                     />
                     <InputError :message="errors.amount" />
                     <p class="text-xs text-muted-foreground">
-                        Amount is in kobo. ₦1 = 100 kobo. For example,
-                        {{ category_amount }} kobo = {{ formatted_amount }}
+                        Monthly contribution: {{ formatted_amount }}
                     </p>
                 </div>
 
@@ -206,7 +212,7 @@ const targetMonth = computed(() => {
                                 amount === quick.value.toString(),
                         }"
                     >
-                        {{ quick.label }} ({{ formatAmount(quick.value) }})
+                        {{ quick.label }} (₦{{ quick.value.toLocaleString('en-NG', { minimumFractionDigits: 2 }) }})
                     </Button>
                 </div>
 
@@ -220,7 +226,7 @@ const targetMonth = computed(() => {
                             />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="">Current Month</SelectItem>
+                            <SelectItem value="current">Current Month</SelectItem>
                             <SelectItem
                                 v-for="month in available_months"
                                 :key="`${month.year}-${month.month}`"

@@ -138,6 +138,7 @@ class DashboardController extends Controller
                 'amount' => $payment->amount,
                 'paid_at' => $payment->paid_at->toDateString(),
                 'member_name' => $payment->contribution->user->name,
+                'category' => $payment->contribution->user->category,
                 'recorded_by' => $payment->recorder?->name,
                 'month' => $payment->contribution->month,
                 'year' => $payment->contribution->year,

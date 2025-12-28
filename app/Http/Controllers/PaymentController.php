@@ -18,16 +18,28 @@ class PaymentController extends Controller
     ) {}
 
     /**
-     * Display a listing of all payments.
+     * Display member selection for recording a payment.
      */
     public function index(): Response
     {
-        $payments = Payment::with(['contribution.user', 'recorder'])
-            ->latestFirst()
-            ->paginate(20);
+        $this->authorize('create', Payment::class);
+
+        $members = User::query()
+            ->whereNull('archived_at')
+            ->where('id', '!=', 1) // Exclude super admin seed
+            ->orderBy('name')
+            ->get()
+            ->map(fn ($member) => [
+                'id' => $member->id,
+                'name' => $member->name,
+                'email' => $member->email,
+                'category' => $member->category?->value,
+                'category_label' => $member->category?->label(),
+                'monthly_amount' => $member->category?->monthlyAmountInKobo() ?? 0,
+            ]);
 
         return Inertia::render('Payments/Index', [
-            'payments' => $payments,
+            'members' => $members,
         ]);
     }
 
@@ -51,11 +63,21 @@ class PaymentController extends Controller
             ]);
         }
 
-        // Get member's pending contributions
+        // Get member's pending contributions with computed fields
         $pendingContributions = $member->contributions()
             ->incomplete()
             ->oldestFirst()
-            ->get();
+            ->get()
+            ->map(fn ($contribution) => [
+                'id' => $contribution->id,
+                'year' => $contribution->year,
+                'month' => $contribution->month,
+                'expected_amount' => $contribution->expected_amount,
+                'total_paid' => $contribution->total_paid,
+                'balance' => $contribution->balance,
+                'status' => $contribution->status,
+                'period_label' => $contribution->period_label,
+            ]);
 
         return Inertia::render('Payments/Create', [
             'member' => $member->only(['id', 'name', 'email', 'category']),

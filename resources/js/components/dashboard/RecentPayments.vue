@@ -4,6 +4,7 @@ interface Payment {
     amount: number;
     paid_at: string;
     member_name: string;
+    category: string;
     recorded_by: string | null;
     month: number;
     year: number;
@@ -66,6 +67,9 @@ function getMonthName(month: number): string {
                     </div>
                     <div>
                         <p class="font-medium text-neutral-900 dark:text-neutral-100">{{ payment.member_name }}</p>
+                        <p class="mt-0.5 text-sm text-neutral-600 dark:text-neutral-400">
+                            {{payment.category}}
+                        </p>
                         <p class="text-sm text-neutral-500 dark:text-neutral-400">
                             {{ getMonthName(payment.month) }} {{ payment.year }} • {{ formatDate(payment.paid_at) }}
                         </p>
