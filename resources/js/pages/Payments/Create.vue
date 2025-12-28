@@ -161,7 +161,7 @@ const targetMonth = computed(() => {
 
             <!-- Payment Form -->
             <Form
-                v-bind="store.form()"
+                :action="store()"
                 class="space-y-6"
                 v-slot="{ errors, processing, recentlySuccessful }"
             >

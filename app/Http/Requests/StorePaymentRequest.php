@@ -27,7 +27,7 @@ class StorePaymentRequest extends FormRequest
             'member_id' => ['required', 'exists:users,id'],
             'amount' => ['required', 'integer', 'min:1'],
             'paid_at' => ['required', 'date'],
-            'notes' => ['nullable', 'string', 'max:500'],
+            'notes' => ['required', 'string', 'max:500'],
             'target_year' => ['nullable', 'integer', 'min:2020', 'max:2100'],
             'target_month' => ['nullable', 'integer', 'min:1', 'max:12'],
         ];

@@ -5,6 +5,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MemberController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ReportController;
+use Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
@@ -35,7 +36,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Payments
     Route::get('payments', [PaymentController::class, 'index'])->name('payments.index');
     Route::get('members/{member}/payments/create', [PaymentController::class, 'create'])->name('payments.create');
-    Route::post('payments', [PaymentController::class, 'store'])->name('payments.store');
+    Route::post('payments', [PaymentController::class, 'store'])->name('payments.store')
+        ->middleware([HandlePrecognitiveRequests::class]);
     Route::delete('payments/{payment}', [PaymentController::class, 'destroy'])->name('payments.destroy');
 
     // Reports (Financial Secretary and Super Admin only)
