@@ -77,8 +77,23 @@ class ContributionController extends Controller
             ? round(($totalCollected / $totalExpected) * 100, 1)
             : 0;
 
+        // Calculate personal stats (all-time for the current member)
+        $personalTotalExpected = $contributions->sum('expected_amount');
+        $personalTotalPaid = $contributions->sum('total_paid');
+        $personalTotalOutstanding = $personalTotalExpected - $personalTotalPaid;
+        $personalPaymentRate = $personalTotalExpected > 0
+            ? round(($personalTotalPaid / $personalTotalExpected) * 100, 1)
+            : 0;
+
         return Inertia::render('Contributions/My', [
             'contributions' => $contributions,
+            'personal_stats' => [
+                'total_expected' => $personalTotalExpected,
+                'total_paid' => $personalTotalPaid,
+                'total_outstanding' => $personalTotalOutstanding,
+                'payment_rate' => $personalPaymentRate,
+                'contribution_count' => $contributions->count(),
+            ],
             'family_aggregate' => [
                 'total_expected' => $totalExpected,
                 'total_collected' => $totalCollected,

@@ -85,6 +85,31 @@ describe('My Contributions', function () {
             );
     });
 
+    it('includes personal contribution stats', function () {
+        // Create contributions for the member
+        Contribution::factory()
+            ->forUser($this->member)
+            ->forMonth(2025, 10)
+            ->create(['expected_amount' => 4000]);
+
+        Contribution::factory()
+            ->forUser($this->member)
+            ->forMonth(2025, 11)
+            ->create(['expected_amount' => 4000]);
+
+        $this->actingAs($this->member)
+            ->get(route('contributions.my'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('personal_stats', fn (Assert $stats) => $stats
+                    ->where('total_expected', 8000)
+                    ->where('total_paid', 0)
+                    ->where('total_outstanding', 8000)
+                    ->where('payment_rate', 0.0)
+                    ->where('contribution_count', 2)
+                )
+            );
+    });
+
     it('does not show other members individual details (FR-016)', function () {
         $otherMember = User::factory()->member()->employed()->create();
 
