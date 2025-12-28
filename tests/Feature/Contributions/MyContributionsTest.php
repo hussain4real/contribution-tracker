@@ -104,7 +104,7 @@ describe('My Contributions', function () {
                     ->where('total_expected', 8000)
                     ->where('total_paid', 0)
                     ->where('total_outstanding', 8000)
-                    ->where('payment_rate', 0.0)
+                    ->where('payment_rate', 0)
                     ->where('contribution_count', 2)
                 )
             );
