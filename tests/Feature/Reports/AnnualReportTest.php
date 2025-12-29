@@ -39,11 +39,10 @@ describe('Annual Report', function () {
         // Create contributions for several months
         $months = [1, 3, 6, 9, 12];
         foreach ($months as $month) {
-            $contribution = Contribution::factory()->create([
-                'user_id' => $member->id,
-                'month' => now()->setYear(now()->year)->setMonth($month)->startOfMonth(),
-                'expected_amount' => MemberCategory::Employed->monthlyAmount(),
-            ]);
+            $contribution = Contribution::factory()
+                ->forUser($member)
+                ->forMonth(now()->year, $month)
+                ->create(['expected_amount' => MemberCategory::Employed->monthlyAmount()]);
 
             Payment::factory()->create([
                 'contribution_id' => $contribution->id,
@@ -67,11 +66,10 @@ describe('Annual Report', function () {
 
         // Create contributions for the year
         for ($month = 1; $month <= 3; $month++) {
-            $contribution = Contribution::factory()->create([
-                'user_id' => $member->id,
-                'month' => now()->setYear(now()->year)->setMonth($month)->startOfMonth(),
-                'expected_amount' => MemberCategory::Employed->monthlyAmount(),
-            ]);
+            $contribution = Contribution::factory()
+                ->forUser($member)
+                ->forMonth(now()->year, $month)
+                ->create(['expected_amount' => MemberCategory::Employed->monthlyAmount()]);
 
             Payment::factory()->create([
                 'contribution_id' => $contribution->id,

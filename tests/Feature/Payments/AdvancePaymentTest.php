@@ -83,15 +83,15 @@ describe('Advance Payments (FR-018)', function () {
             ->first();
         expect($currentContribution?->status)->toBe(PaymentStatus::Paid);
 
-        // Check next month is paid
-        $nextMonth = now()->addMonth();
+        // Check next month is paid (use startOfMonth to avoid day overflow issues)
+        $nextMonth = now()->startOfMonth()->addMonth();
         $nextContribution = Contribution::forUser($this->member->id)
             ->forMonth($nextMonth->year, $nextMonth->month)
             ->first();
         expect($nextContribution?->status)->toBe(PaymentStatus::Paid);
 
         // Check month after next is paid
-        $monthAfterNext = now()->addMonths(2);
+        $monthAfterNext = now()->startOfMonth()->addMonths(2);
         $thirdContribution = Contribution::forUser($this->member->id)
             ->forMonth($monthAfterNext->year, $monthAfterNext->month)
             ->first();

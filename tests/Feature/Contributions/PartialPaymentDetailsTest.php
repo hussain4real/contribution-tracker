@@ -17,9 +17,11 @@ describe('Partial Payment Details', function () {
     });
 
     it('shows partial status when payment is incomplete', function () {
+        // Use next month to avoid overdue status (current month may be past due date)
+        $nextMonth = now()->addMonth();
         $contribution = Contribution::factory()
             ->forUser($this->member)
-            ->currentMonth()
+            ->forMonth($nextMonth->year, $nextMonth->month)
             ->create(['expected_amount' => 4000]);
 
         Payment::factory()->create([
@@ -57,9 +59,11 @@ describe('Partial Payment Details', function () {
     });
 
     it('shows unpaid status when no payment made', function () {
+        // Use next month to avoid overdue status (current month may be past due date)
+        $nextMonth = now()->addMonth();
         Contribution::factory()
             ->forUser($this->member)
-            ->currentMonth()
+            ->forMonth($nextMonth->year, $nextMonth->month)
             ->create(['expected_amount' => 4000]);
 
         $this->actingAs($this->member)
@@ -85,9 +89,11 @@ describe('Partial Payment Details', function () {
     });
 
     it('calculates balance correctly with multiple payments', function () {
+        // Use next month to avoid overdue status (current month may be past due date)
+        $nextMonth = now()->addMonth();
         $contribution = Contribution::factory()
             ->forUser($this->member)
-            ->currentMonth()
+            ->forMonth($nextMonth->year, $nextMonth->month)
             ->create(['expected_amount' => 4000]);
 
         Payment::factory()->create([

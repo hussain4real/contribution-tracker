@@ -20,10 +20,10 @@ describe('Balance-First Rule (FR-020)', function () {
     });
 
     it('auto-applies payment to oldest incomplete month first', function () {
-        // Use future months to avoid overdue status
-        $month1 = now()->addMonth();
-        $month2 = now()->addMonths(2);
-        $month3 = now()->addMonths(3);
+        // Use startOfMonth to avoid date overflow issues (Dec 29 + 2 months = March, not February)
+        $month1 = now()->startOfMonth()->addMonths(2);
+        $month2 = now()->startOfMonth()->addMonths(3);
+        $month3 = now()->startOfMonth()->addMonths(4);
 
         // Create contributions for 3 consecutive months
         $first = Contribution::factory()
@@ -77,9 +77,10 @@ describe('Balance-First Rule (FR-020)', function () {
     });
 
     it('completes multiple incomplete months in order', function () {
-        $month1 = now()->addMonth();
-        $month2 = now()->addMonths(2);
-        $month3 = now()->addMonths(3);
+        // Use months within the 6-month advance limit, starting from current month
+        $month1 = now()->startOfMonth();
+        $month2 = now()->startOfMonth()->addMonth();
+        $month3 = now()->startOfMonth()->addMonths(2);
 
         // Create contributions for 3 months
         $first = Contribution::factory()
@@ -123,8 +124,9 @@ describe('Balance-First Rule (FR-020)', function () {
     });
 
     it('skips already paid months', function () {
-        $month1 = now()->addMonth();
-        $month2 = now()->addMonths(2);
+        // Use months within the 6-month advance limit
+        $month1 = now()->startOfMonth()->addMonths(3);
+        $month2 = now()->startOfMonth()->addMonths(4);
 
         // Create first and second month
         $first = Contribution::factory()

@@ -106,6 +106,9 @@ describe('Member Dashboard', function () {
     });
 
     it('shows correct personal status', function () {
+        // Freeze time to the 15th to ensure we're before the due date (28th)
+        $this->travelTo(now()->day(15));
+
         $this->actingAs($this->member)
             ->get('/dashboard')
             ->assertOk()
