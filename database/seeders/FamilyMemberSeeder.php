@@ -4,11 +4,13 @@ namespace Database\Seeders;
 
 use App\Enums\MemberCategory;
 use App\Enums\Role;
+use App\Mail\TwoFactorRecoveryCodesMail;
 use App\Models\Contribution;
 use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 
 class FamilyMemberSeeder extends Seeder
 {
@@ -25,6 +27,8 @@ class FamilyMemberSeeder extends Seeder
             'role' => Role::SuperAdmin,
             'category' => null, // Super Admin doesn't pay contributions
         ]);
+
+        Mail::to($admin)->send(new TwoFactorRecoveryCodesMail($admin, $admin->recoveryCodes()));
 
         // Create Financial Secretary
         $financialSecretary = User::factory()->create([

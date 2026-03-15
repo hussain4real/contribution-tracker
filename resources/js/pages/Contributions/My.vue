@@ -54,7 +54,23 @@ interface Props {
     family_aggregate: FamilyAggregate;
 }
 
-defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+    contributions: () => [],
+    personal_stats: () => ({
+        total_expected: 0,
+        total_paid: 0,
+        total_outstanding: 0,
+        payment_rate: 0,
+        contribution_count: 0,
+    }),
+    family_aggregate: () => ({
+        total_expected: 0,
+        total_collected: 0,
+        total_outstanding: 0,
+        collection_rate: 0,
+        period_label: '',
+    }),
+});
 
 const breadcrumbs: BreadcrumbItem[] = [
     {

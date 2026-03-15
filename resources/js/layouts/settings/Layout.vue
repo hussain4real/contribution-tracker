@@ -14,18 +14,22 @@ const sidebarNavItems: NavItem[] = [
     {
         title: 'Profile',
         href: editProfile(),
+        component: 'settings/Profile',
     },
     {
         title: 'Password',
         href: editPassword(),
+        component: 'settings/Password',
     },
     {
         title: 'Two-Factor Auth',
         href: show(),
+        component: 'settings/TwoFactor',
     },
     {
         title: 'Appearance',
         href: editAppearance(),
+        component: 'settings/Appearance',
     },
 ];
 
@@ -52,7 +56,7 @@ const currentPath = typeof window !== undefined ? window.location.pathname : '';
                         ]"
                         as-child
                     >
-                        <Link :href="item.href">
+                        <Link :href="item.href" prefetch :component="item.component">
                             <component :is="item.icon" class="h-4 w-4" />
                             {{ item.title }}
                         </Link>

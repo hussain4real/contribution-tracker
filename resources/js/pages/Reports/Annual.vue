@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { type BreadcrumbItem } from '@/types';
 import { Button } from '@/components/ui/button';
 import { index, annual, monthly } from '@/actions/App/Http/Controllers/ReportController';
@@ -226,12 +226,12 @@ function getBarHeight(amount: number): string {
                                 </div>
                             </div>
                         </div>
-                        <router-link
-                            :to="monthly({ year, month: monthData.month }).url"
+                        <Link
+                            :href="monthly({ year, month: monthData.month }).url"
                             class="text-xs text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100"
                         >
                             {{ monthData.short_name }}
-                        </router-link>
+                        </Link>
                     </div>
                 </div>
                 <div class="mt-4 flex items-center justify-center gap-6 text-sm">

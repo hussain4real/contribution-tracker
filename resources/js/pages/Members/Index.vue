@@ -27,7 +27,11 @@ interface Props {
     canManageMembers: boolean;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+    members: () => [],
+    archivedMembers: () => [],
+    canManageMembers: false,
+});
 
 const breadcrumbs: BreadcrumbItem[] = [
     {

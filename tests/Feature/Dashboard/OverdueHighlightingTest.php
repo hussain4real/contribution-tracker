@@ -62,8 +62,8 @@ describe('Overdue Highlighting', function () {
     });
 
     it('member statuses show overdue flag correctly', function () {
-        // Travel to a date past the due date
-        Carbon::setTestNow(Carbon::now()->startOfMonth()->addDays(28));
+        // Travel to a fixed date past the due date to avoid collisions with real current month
+        Carbon::setTestNow(Carbon::create(2030, 6, 28));
 
         // Create overdue contribution for last month
         $lastMonth = now()->subMonth();
@@ -76,7 +76,7 @@ describe('Overdue Highlighting', function () {
         // Also create current month contribution (so member appears in member_statuses)
         Contribution::factory()
             ->forUser($this->member)
-            ->currentMonth()
+            ->forMonth(2030, 6)
             ->employed()
             ->create();
 
@@ -95,7 +95,7 @@ describe('Overdue Highlighting', function () {
     });
 
     it('counts only incomplete contributions as overdue', function () {
-        Carbon::setTestNow(Carbon::now()->startOfMonth()->addDays(28));
+        Carbon::setTestNow(Carbon::create(2030, 7, 28));
 
         $lastMonth = now()->subMonth();
 

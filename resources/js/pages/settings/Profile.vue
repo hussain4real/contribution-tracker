@@ -19,7 +19,9 @@ interface Props {
     status?: string;
 }
 
-defineProps<Props>();
+withDefaults(defineProps<Props>(), {
+    mustVerifyEmail: false,
+});
 
 const breadcrumbItems: BreadcrumbItem[] = [
     {

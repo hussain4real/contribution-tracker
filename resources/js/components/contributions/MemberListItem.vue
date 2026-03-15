@@ -50,7 +50,10 @@ function getRoleBadgeVariant(role: string) {
 
 function archiveMember() {
     if (confirm(`Are you sure you want to archive ${props.member.name}?`)) {
-        router.delete(destroy(props.member.id).url, {
+        router.optimistic((pageProps: any) => ({
+            members: pageProps.members.filter((m: any) => m.id !== props.member.id),
+            archivedMembers: [...pageProps.archivedMembers, { ...props.member, is_archived: true }],
+        })).delete(destroy(props.member.id).url, {
             onSuccess: () => emit('archived', props.member),
         });
     }
@@ -58,7 +61,10 @@ function archiveMember() {
 
 function restoreMember() {
     if (confirm(`Are you sure you want to restore ${props.member.name}?`)) {
-        router.post(restore(props.member.id).url, {}, {
+        router.optimistic((pageProps: any) => ({
+            archivedMembers: pageProps.archivedMembers.filter((m: any) => m.id !== props.member.id),
+            members: [...pageProps.members, { ...props.member, is_archived: false, archived_at: undefined }],
+        })).post(restore(props.member.id).url, {}, {
             onSuccess: () => emit('restored', props.member),
         });
     }

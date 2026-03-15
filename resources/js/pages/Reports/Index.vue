@@ -12,7 +12,11 @@ interface Props {
     current_month: number;
 }
 
-defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+    years: () => [],
+    current_year: () => new Date().getFullYear(),
+    current_month: () => new Date().getMonth() + 1,
+});
 
 const breadcrumbs: BreadcrumbItem[] = [
     {

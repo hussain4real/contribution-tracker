@@ -31,29 +31,33 @@ const mainNavItems = computed<NavItem[]>(() => {
             title: 'Dashboard',
             href: dashboard(),
             icon: LayoutGrid,
+            component: 'Dashboard/Index',
         },
     ];
 
     // Members link - visible to all authenticated users
     items.push({
         title: 'Members',
-        href: membersIndex().url,
+        href: membersIndex(),
         icon: Users,
+        component: 'Members/Index',
     });
 
     // My Contributions - visible to all authenticated users
     items.push({
         title: 'My Contributions',
-        href: myContributions().url,
+        href: myContributions(),
         icon: Wallet,
+        component: 'Contributions/My',
     });
 
     // Reports - only for Financial Secretary and Super Admin
     if (can.value?.generate_reports) {
         items.push({
             title: 'Reports',
-            href: reportsIndex().url,
+            href: reportsIndex(),
             icon: FileBarChart2,
+            component: 'Reports/Index',
         });
     }
 
