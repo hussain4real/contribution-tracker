@@ -3,6 +3,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { dashboard } from '@/routes';
 import { type BreadcrumbItem } from '@/types';
 import { Head, usePoll } from '@inertiajs/vue3';
+import { computed } from 'vue';
 import SummaryCards from '@/components/dashboard/SummaryCards.vue';
 import RecentPayments from '@/components/dashboard/RecentPayments.vue';
 import MemberContributionStatus from '@/components/dashboard/MemberContributionStatus.vue';
@@ -83,7 +84,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 // Check if this is an admin/FS view
-const isAdminView = !!props.summary;
+const isAdminView = computed(() => !!props.summary);
 
 // Format currency in Naira
 function formatCurrency(amount: number): string {

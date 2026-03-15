@@ -7,9 +7,9 @@ import { index, monthly, annual } from '@/actions/App/Http/Controllers/ReportCon
 import { FileBarChart2, Calendar, CalendarDays } from 'lucide-vue-next';
 
 interface Props {
-    years: number[];
-    current_year: number;
-    current_month: number;
+    years?: number[];
+    current_year?: number;
+    current_month?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {

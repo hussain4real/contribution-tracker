@@ -49,9 +49,9 @@ interface FamilyAggregate {
 }
 
 interface Props {
-    contributions: Contribution[];
-    personal_stats: PersonalStats;
-    family_aggregate: FamilyAggregate;
+    contributions?: Contribution[];
+    personal_stats?: PersonalStats;
+    family_aggregate?: FamilyAggregate;
 }
 
 const props = withDefaults(defineProps<Props>(), {

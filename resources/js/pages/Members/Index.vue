@@ -22,9 +22,9 @@ interface Member {
 }
 
 interface Props {
-    members: Member[];
-    archivedMembers: Member[];
-    canManageMembers: boolean;
+    members?: Member[];
+    archivedMembers?: Member[];
+    canManageMembers?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
