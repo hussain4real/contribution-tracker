@@ -12,18 +12,57 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import { index as membersIndex } from '@/actions/App/Http/Controllers/MemberController';
+import { my as myContributions } from '@/actions/App/Http/Controllers/ContributionController';
+import { index as reportsIndex } from '@/actions/App/Http/Controllers/ReportController';
 import { type NavItem } from '@/types';
-import { Link } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid } from 'lucide-vue-next';
+import { Link, usePage } from '@inertiajs/vue3';
+import { LayoutGrid, Users, Wallet, FileBarChart2, BookOpen, Folder } from 'lucide-vue-next';
+import { computed } from 'vue';
 import AppLogo from './AppLogo.vue';
 
-const mainNavItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
-    },
-];
+const page = usePage();
+
+const can = computed(() => page.props.auth?.can);
+
+const mainNavItems = computed<NavItem[]>(() => {
+    const items: NavItem[] = [
+        {
+            title: 'Dashboard',
+            href: dashboard(),
+            icon: LayoutGrid,
+            component: 'Dashboard/Index',
+        },
+    ];
+
+    // Members link - visible to all authenticated users
+    items.push({
+        title: 'Members',
+        href: membersIndex(),
+        icon: Users,
+        component: 'Members/Index',
+    });
+
+    // My Contributions - visible to all authenticated users
+    items.push({
+        title: 'My Contributions',
+        href: myContributions(),
+        icon: Wallet,
+        component: 'Contributions/My',
+    });
+
+    // Reports - only for Financial Secretary and Super Admin
+    if (can.value?.generate_reports) {
+        items.push({
+            title: 'Reports',
+            href: reportsIndex(),
+            icon: FileBarChart2,
+            component: 'Reports/Index',
+        });
+    }
+
+    return items;
+});
 
 const footerNavItems: NavItem[] = [
     {
