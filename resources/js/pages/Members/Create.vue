@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import AppLayout from '@/layouts/AppLayout.vue';
-import { Head, Link, Form } from '@inertiajs/vue3';
-import { type BreadcrumbItem } from '@/types';
+import { index, store } from '@/actions/App/Http/Controllers/MemberController';
+import HeadingSmall from '@/components/HeadingSmall.vue';
+import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import InputError from '@/components/InputError.vue';
-import HeadingSmall from '@/components/HeadingSmall.vue';
-import { index, store } from '@/actions/App/Http/Controllers/MemberController';
-import { ref, computed } from 'vue';
+import AppLayout from '@/layouts/AppLayout.vue';
+import { type BreadcrumbItem } from '@/types';
+import { Form, Head, Link } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
 
 interface CategoryOption {
     value: string;
@@ -43,7 +43,9 @@ const selectedCategory = ref('member');
 const selectedRole = ref('member');
 
 const selectedCategoryAmount = computed(() => {
-    const category = props.categories.find(c => c.value === selectedCategory.value);
+    const category = props.categories.find(
+        (c) => c.value === selectedCategory.value,
+    );
     return category ? category.amount : 0;
 });
 
@@ -61,7 +63,9 @@ function formatCurrency(amount: number): string {
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
             <div class="mx-auto w-full max-w-2xl">
-                <div class="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border dark:bg-neutral-900">
+                <div
+                    class="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border dark:bg-neutral-900"
+                >
                     <HeadingSmall
                         title="Add New Member"
                         description="Create a new family member account"
@@ -112,7 +116,9 @@ function formatCurrency(amount: number): string {
                         </div>
 
                         <div class="grid gap-2">
-                            <Label for="password_confirmation">Confirm Password</Label>
+                            <Label for="password_confirmation"
+                                >Confirm Password</Label
+                            >
                             <Input
                                 id="password_confirmation"
                                 name="password_confirmation"
@@ -130,19 +136,26 @@ function formatCurrency(amount: number): string {
                                 name="category"
                                 v-model="selectedCategory"
                                 required
-                                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                                <option value="" disabled>Select a category</option>
+                                <option value="" disabled>
+                                    Select a category
+                                </option>
                                 <option
                                     v-for="category in categories"
                                     :key="category.value"
                                     :value="category.value"
                                 >
-                                    {{ category.label }} ({{ formatCurrency(category.amount) }}/month)
+                                    {{ category.label }} ({{
+                                        formatCurrency(category.amount)
+                                    }}/month)
                                 </option>
                             </select>
                             <p class="text-sm text-muted-foreground">
-                                Monthly contribution: <strong>{{ formatCurrency(selectedCategoryAmount) }}</strong>
+                                Monthly contribution:
+                                <strong>{{
+                                    formatCurrency(selectedCategoryAmount)
+                                }}</strong>
                             </p>
                             <InputError :message="errors.category" />
                         </div>
@@ -154,7 +167,7 @@ function formatCurrency(amount: number): string {
                                 name="role"
                                 v-model="selectedRole"
                                 required
-                                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 <option value="" disabled>Select a role</option>
                                 <option
@@ -169,11 +182,10 @@ function formatCurrency(amount: number): string {
                         </div>
 
                         <div class="flex items-center gap-4">
-                            <Button
-                                type="submit"
-                                :disabled="processing"
-                            >
-                                {{ processing ? 'Creating...' : 'Create Member' }}
+                            <Button type="submit" :disabled="processing">
+                                {{
+                                    processing ? 'Creating...' : 'Create Member'
+                                }}
                             </Button>
                             <Link :href="index().url">
                                 <Button variant="outline" type="button">

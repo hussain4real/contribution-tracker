@@ -27,7 +27,11 @@ const page = usePage();
                     :is-active="urlIsActive(item.href, page.url)"
                     :tooltip="item.title"
                 >
-                    <Link :href="item.href" prefetch :component="item.component">
+                    <Link
+                        :href="item.href"
+                        prefetch
+                        :component="item.component"
+                    >
                         <component :is="item.icon" />
                         <span>{{ item.title }}</span>
                     </Link>

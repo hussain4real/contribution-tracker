@@ -12,7 +12,7 @@ const hasSetupData = computed<boolean>(
 );
 
 export const useTwoFactorAuth = () => {
-    const http = useHttp<{}, any>({});
+    const http = useHttp<Record<string, never>, any>({});
 
     const fetchQrCode = async (): Promise<void> => {
         try {

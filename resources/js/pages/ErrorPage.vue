@@ -34,9 +34,13 @@ const description = computed(() => {
     <div>
         <Head :title="title" />
 
-        <div class="flex min-h-screen items-center justify-center bg-white dark:bg-neutral-950">
+        <div
+            class="flex min-h-screen items-center justify-center bg-white dark:bg-neutral-950"
+        >
             <div class="text-center">
-                <h1 class="text-6xl font-bold text-neutral-900 dark:text-neutral-100">
+                <h1
+                    class="text-6xl font-bold text-neutral-900 dark:text-neutral-100"
+                >
                     {{ status }}
                 </h1>
                 <p class="mt-4 text-lg text-neutral-600 dark:text-neutral-400">

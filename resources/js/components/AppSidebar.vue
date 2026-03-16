@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import { my as myContributions } from '@/actions/App/Http/Controllers/ContributionController';
+import { index as expensesIndex } from '@/actions/App/Http/Controllers/ExpenseController';
+import { index as fundAdjustmentsIndex } from '@/actions/App/Http/Controllers/FundAdjustmentController';
+import { index as membersIndex } from '@/actions/App/Http/Controllers/MemberController';
+import { index as reportsIndex } from '@/actions/App/Http/Controllers/ReportController';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
@@ -12,14 +17,18 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
-import { index as membersIndex } from '@/actions/App/Http/Controllers/MemberController';
-import { my as myContributions } from '@/actions/App/Http/Controllers/ContributionController';
-import { index as expensesIndex } from '@/actions/App/Http/Controllers/ExpenseController';
-import { index as fundAdjustmentsIndex } from '@/actions/App/Http/Controllers/FundAdjustmentController';
-import { index as reportsIndex } from '@/actions/App/Http/Controllers/ReportController';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { LayoutGrid, Users, Wallet, FileBarChart2, BookOpen, Folder, Receipt, Landmark } from 'lucide-vue-next';
+import {
+    BookOpen,
+    FileBarChart2,
+    Folder,
+    Landmark,
+    LayoutGrid,
+    Receipt,
+    Users,
+    Wallet,
+} from 'lucide-vue-next';
 import { computed } from 'vue';
 import AppLogo from './AppLogo.vue';
 
