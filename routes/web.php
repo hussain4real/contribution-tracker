@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\ContributionController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ExpenseController;
+use App\Http\Controllers\FundAdjustmentController;
 use App\Http\Controllers\MemberController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ReportController;
@@ -39,6 +41,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('payments', [PaymentController::class, 'store'])->name('payments.store')
         ->middleware([HandlePrecognitiveRequests::class]);
     Route::delete('payments/{payment}', [PaymentController::class, 'destroy'])->name('payments.destroy');
+
+    // Expenses
+    Route::get('expenses', [ExpenseController::class, 'index'])->name('expenses.index');
+    Route::get('expenses/create', [ExpenseController::class, 'create'])->name('expenses.create');
+    Route::post('expenses', [ExpenseController::class, 'store'])->name('expenses.store')
+        ->middleware([HandlePrecognitiveRequests::class]);
+    Route::delete('expenses/{expense}', [ExpenseController::class, 'destroy'])->name('expenses.destroy');
+
+    // Fund Adjustments (Super Admin only for create/delete)
+    Route::get('fund-adjustments', [FundAdjustmentController::class, 'index'])->name('fund-adjustments.index');
+    Route::post('fund-adjustments', [FundAdjustmentController::class, 'store'])->name('fund-adjustments.store')
+        ->middleware([HandlePrecognitiveRequests::class]);
+    Route::delete('fund-adjustments/{fund_adjustment}', [FundAdjustmentController::class, 'destroy'])->name('fund-adjustments.destroy');
 
     // Reports (Financial Secretary and Super Admin only)
     Route::prefix('reports')->name('reports.')->middleware('can:generate-reports')->group(function () {

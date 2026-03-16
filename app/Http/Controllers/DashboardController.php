@@ -4,8 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Enums\Role;
 use App\Models\Contribution;
+use App\Models\Expense;
+use App\Models\FundAdjustment;
 use App\Models\Payment;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -45,6 +48,7 @@ class DashboardController extends Controller
 
         $props = [
             'can_record_payments' => $canRecordPayments,
+            'fund_balance' => $this->calculateFundBalance(),
         ];
 
         if ($canSeeAllMembers) {
@@ -64,8 +68,8 @@ class DashboardController extends Controller
     /**
      * Calculate summary statistics for current month.
      *
-     * @param  \Illuminate\Database\Eloquent\Collection<Contribution>  $currentMonthContributions
-     * @param  \Illuminate\Database\Eloquent\Collection<Contribution>  $allContributions
+     * @param  Collection<Contribution>  $currentMonthContributions
+     * @param  Collection<Contribution>  $allContributions
      */
     private function calculateSummary($currentMonthContributions, $allContributions): array
     {
@@ -92,8 +96,8 @@ class DashboardController extends Controller
     /**
      * Get all members' contribution statuses for the current month.
      *
-     * @param  \Illuminate\Database\Eloquent\Collection<Contribution>  $currentMonthContributions
-     * @param  \Illuminate\Database\Eloquent\Collection<Contribution>  $allContributions
+     * @param  Collection<Contribution>  $currentMonthContributions
+     * @param  Collection<Contribution>  $allContributions
      */
     private function getMemberStatuses($currentMonthContributions, $allContributions): array
     {
@@ -149,7 +153,7 @@ class DashboardController extends Controller
     /**
      * Calculate family aggregate stats for member view (FR-015).
      *
-     * @param  \Illuminate\Database\Eloquent\Collection<Contribution>  $contributions
+     * @param  Collection<Contribution>  $contributions
      */
     private function calculateFamilyAggregate($contributions): array
     {
@@ -197,5 +201,19 @@ class DashboardController extends Controller
             'current_month_balance' => $balance,
             'current_month_status' => $contribution->status->value,
         ];
+    }
+
+    /**
+     * Calculate the total family fund balance.
+     *
+     * Fund Balance = SUM(payments) + SUM(fund_adjustments) - SUM(expenses)
+     */
+    private function calculateFundBalance(): int
+    {
+        $totalPayments = (int) Payment::query()->sum('amount');
+        $totalAdjustments = (int) FundAdjustment::query()->sum('amount');
+        $totalExpenses = (int) Expense::query()->sum('amount');
+
+        return $totalPayments + $totalAdjustments - $totalExpenses;
     }
 }
