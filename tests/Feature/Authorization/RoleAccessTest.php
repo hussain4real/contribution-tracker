@@ -3,8 +3,9 @@
 use App\Enums\Role;
 use App\Models\Contribution;
 use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
-uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
+uses(RefreshDatabase::class);
 
 /**
  * T071 [US4] Feature test for verifying role-based access after assignment

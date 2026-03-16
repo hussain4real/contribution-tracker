@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
 import { show as showContribution } from '@/actions/App/Http/Controllers/ContributionController';
 import { create as createPayment } from '@/actions/App/Http/Controllers/PaymentController';
 import StatusBadge from '@/components/contributions/StatusBadge.vue';
+import { Link } from '@inertiajs/vue3';
 
 interface Member {
     id: number;
@@ -35,7 +35,9 @@ function formatCategory(category: string): string {
 </script>
 
 <template>
-    <tr class="border-b border-neutral-100 transition hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-800/50">
+    <tr
+        class="border-b border-neutral-100 transition hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-800/50"
+    >
         <td class="px-4 py-3">
             <Link
                 :href="showContribution(member.contribution_id).url"
@@ -45,11 +47,15 @@ function formatCategory(category: string): string {
             </Link>
         </td>
         <td class="px-4 py-3">
-            <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
+            <span
+                class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
                 :class="{
-                    'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400': member.category === 'employed',
-                    'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400': member.category === 'unemployed',
-                    'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400': member.category === 'student',
+                    'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400':
+                        member.category === 'employed',
+                    'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400':
+                        member.category === 'unemployed',
+                    'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400':
+                        member.category === 'student',
                 }"
             >
                 {{ formatCategory(member.category) }}
@@ -59,12 +65,23 @@ function formatCategory(category: string): string {
             <StatusBadge :status="member.current_month_status" />
         </td>
         <td class="px-4 py-3 text-right">
-            <span class="font-medium" :class="{
-                'text-neutral-900 dark:text-neutral-100': member.current_month_balance === 0,
-                'text-amber-600 dark:text-amber-400': member.current_month_balance > 0 && member.current_month_status !== 'overdue',
-                'text-red-600 dark:text-red-400': member.current_month_status === 'overdue',
-            }">
-                {{ member.current_month_balance > 0 ? formatCurrency(member.current_month_balance) : '-' }}
+            <span
+                class="font-medium"
+                :class="{
+                    'text-neutral-900 dark:text-neutral-100':
+                        member.current_month_balance === 0,
+                    'text-amber-600 dark:text-amber-400':
+                        member.current_month_balance > 0 &&
+                        member.current_month_status !== 'overdue',
+                    'text-red-600 dark:text-red-400':
+                        member.current_month_status === 'overdue',
+                }"
+            >
+                {{
+                    member.current_month_balance > 0
+                        ? formatCurrency(member.current_month_balance)
+                        : '-'
+                }}
             </span>
             <Link
                 v-if="canRecordPayments && member.current_month_balance > 0"

@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import AppLayout from '@/layouts/AppLayout.vue';
-import { Head, Link } from '@inertiajs/vue3';
-import { type BreadcrumbItem } from '@/types';
+import {
+    create as createExpense,
+    index,
+} from '@/actions/App/Http/Controllers/ExpenseController';
 import { Button } from '@/components/ui/button';
-import { index, create as createExpense } from '@/actions/App/Http/Controllers/ExpenseController';
-import { Receipt, Plus, Trash2 } from 'lucide-vue-next';
-import { router } from '@inertiajs/vue3';
+import AppLayout from '@/layouts/AppLayout.vue';
+import { type BreadcrumbItem } from '@/types';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { Plus, Receipt, Trash2 } from 'lucide-vue-next';
 
 interface ExpenseItem {
     id: number;
@@ -28,7 +30,7 @@ interface Props {
     can_create?: boolean;
 }
 
-const props = defineProps<Props>();
+defineProps<Props>();
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -68,7 +70,9 @@ function deleteExpense(id: number): void {
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3">
                     <Receipt class="h-6 w-6 text-neutral-500" />
-                    <h1 class="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">
+                    <h1
+                        class="text-2xl font-semibold text-neutral-900 dark:text-neutral-100"
+                    >
                         Expenses
                     </h1>
                 </div>
@@ -81,7 +85,9 @@ function deleteExpense(id: number): void {
             </div>
 
             <!-- Expenses Table -->
-            <div class="rounded-xl border border-sidebar-border/70 bg-white dark:border-sidebar-border dark:bg-neutral-900">
+            <div
+                class="rounded-xl border border-sidebar-border/70 bg-white dark:border-sidebar-border dark:bg-neutral-900"
+            >
                 <div v-if="!expenses?.data?.length" class="p-6 text-center">
                     <p class="text-neutral-600 dark:text-neutral-400">
                         No expenses recorded yet.
@@ -91,30 +97,60 @@ function deleteExpense(id: number): void {
                 <div v-else class="overflow-x-auto">
                     <table class="w-full text-left text-sm">
                         <thead>
-                            <tr class="border-b border-neutral-200 dark:border-neutral-700">
-                                <th class="px-6 py-3 font-medium text-neutral-600 dark:text-neutral-400">Date</th>
-                                <th class="px-6 py-3 font-medium text-neutral-600 dark:text-neutral-400">Description</th>
-                                <th class="px-6 py-3 text-right font-medium text-neutral-600 dark:text-neutral-400">Amount</th>
-                                <th class="px-6 py-3 font-medium text-neutral-600 dark:text-neutral-400">Recorded By</th>
-                                <th class="px-6 py-3 font-medium text-neutral-600 dark:text-neutral-400"></th>
+                            <tr
+                                class="border-b border-neutral-200 dark:border-neutral-700"
+                            >
+                                <th
+                                    class="px-6 py-3 font-medium text-neutral-600 dark:text-neutral-400"
+                                >
+                                    Date
+                                </th>
+                                <th
+                                    class="px-6 py-3 font-medium text-neutral-600 dark:text-neutral-400"
+                                >
+                                    Description
+                                </th>
+                                <th
+                                    class="px-6 py-3 text-right font-medium text-neutral-600 dark:text-neutral-400"
+                                >
+                                    Amount
+                                </th>
+                                <th
+                                    class="px-6 py-3 font-medium text-neutral-600 dark:text-neutral-400"
+                                >
+                                    Recorded By
+                                </th>
+                                <th
+                                    class="px-6 py-3 font-medium text-neutral-600 dark:text-neutral-400"
+                                ></th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-neutral-100 dark:divide-neutral-800">
+                        <tbody
+                            class="divide-y divide-neutral-100 dark:divide-neutral-800"
+                        >
                             <tr
                                 v-for="expense in expenses.data"
                                 :key="expense.id"
                                 class="hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
                             >
-                                <td class="px-6 py-4 text-neutral-900 dark:text-neutral-100">
+                                <td
+                                    class="px-6 py-4 text-neutral-900 dark:text-neutral-100"
+                                >
                                     {{ formatDate(expense.spent_at) }}
                                 </td>
-                                <td class="max-w-xs truncate px-6 py-4 text-neutral-700 dark:text-neutral-300">
+                                <td
+                                    class="max-w-xs truncate px-6 py-4 text-neutral-700 dark:text-neutral-300"
+                                >
                                     {{ expense.description }}
                                 </td>
-                                <td class="px-6 py-4 text-right font-medium text-red-600 dark:text-red-400">
+                                <td
+                                    class="px-6 py-4 text-right font-medium text-red-600 dark:text-red-400"
+                                >
                                     -{{ formatCurrency(expense.amount) }}
                                 </td>
-                                <td class="px-6 py-4 text-neutral-500 dark:text-neutral-400">
+                                <td
+                                    class="px-6 py-4 text-neutral-500 dark:text-neutral-400"
+                                >
                                     {{ expense.recorded_by ?? 'System' }}
                                 </td>
                                 <td class="px-6 py-4 text-right">
@@ -134,15 +170,23 @@ function deleteExpense(id: number): void {
                 </div>
 
                 <!-- Pagination -->
-                <div v-if="expenses && expenses.last_page > 1" class="flex items-center justify-center gap-2 border-t border-neutral-200 px-6 py-4 dark:border-neutral-700">
+                <div
+                    v-if="expenses && expenses.last_page > 1"
+                    class="flex items-center justify-center gap-2 border-t border-neutral-200 px-6 py-4 dark:border-neutral-700"
+                >
                     <template v-for="link in expenses.links" :key="link.label">
                         <Link
                             v-if="link.url"
                             :href="link.url"
                             class="rounded-md px-3 py-1 text-sm"
-                            :class="link.active ? 'bg-primary text-primary-foreground' : 'text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800'"
-                            v-html="link.label"
-                        />
+                            :class="
+                                link.active
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800'
+                            "
+                        >
+                            <span v-html="link.label" />
+                        </Link>
                         <span
                             v-else
                             class="px-3 py-1 text-sm text-neutral-400 dark:text-neutral-600"

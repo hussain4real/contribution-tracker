@@ -1,19 +1,23 @@
 <script setup lang="ts">
-import AppLayout from '@/layouts/AppLayout.vue';
-import { Head, Link, router } from '@inertiajs/vue3';
-import { type BreadcrumbItem } from '@/types';
-import { Button } from '@/components/ui/button';
-import { index, annual, monthly } from '@/actions/App/Http/Controllers/ReportController';
 import {
-    FileBarChart2,
+    annual,
+    index,
+    monthly,
+} from '@/actions/App/Http/Controllers/ReportController';
+import { Button } from '@/components/ui/button';
+import AppLayout from '@/layouts/AppLayout.vue';
+import { type BreadcrumbItem } from '@/types';
+import { Head, Link, router } from '@inertiajs/vue3';
+import {
+    AlertCircle,
+    BarChart3,
     ChevronLeft,
     ChevronRight,
-    TrendingUp,
     DollarSign,
-    AlertCircle,
-    BarChart3
+    FileBarChart2,
+    TrendingUp,
 } from 'lucide-vue-next';
-import { ref, computed, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 interface MonthData {
     month: number;
@@ -95,7 +99,7 @@ watch(selectedYear, (newYear) => {
 
 // Calculate the max collected for chart scaling
 const maxCollected = computed(() => {
-    return Math.max(...props.monthly_breakdown.map(m => m.expected), 1);
+    return Math.max(...props.monthly_breakdown.map((m) => m.expected), 1);
 });
 
 // Get bar height percentage
@@ -110,10 +114,14 @@ function getBarHeight(amount: number): string {
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
             <!-- Header with Navigation -->
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div
+                class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+            >
                 <div class="flex items-center gap-3">
                     <FileBarChart2 class="h-6 w-6 text-neutral-500" />
-                    <h1 class="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">
+                    <h1
+                        class="text-2xl font-semibold text-neutral-900 dark:text-neutral-100"
+                    >
                         {{ year }} Annual Report
                     </h1>
                 </div>
@@ -125,7 +133,17 @@ function getBarHeight(amount: number): string {
                         v-model="selectedYear"
                         class="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-600 dark:bg-neutral-800"
                     >
-                        <option v-for="y in [year - 3, year - 2, year - 1, year, year + 1]" :key="y" :value="y">
+                        <option
+                            v-for="y in [
+                                year - 3,
+                                year - 2,
+                                year - 1,
+                                year,
+                                year + 1,
+                            ]"
+                            :key="y"
+                            :value="y"
+                        >
                             {{ y }}
                         </option>
                     </select>
@@ -137,56 +155,104 @@ function getBarHeight(amount: number): string {
 
             <!-- Annual Summary Cards -->
             <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <div class="rounded-xl border border-sidebar-border/70 bg-white p-4 dark:border-sidebar-border dark:bg-neutral-900">
+                <div
+                    class="rounded-xl border border-sidebar-border/70 bg-white p-4 dark:border-sidebar-border dark:bg-neutral-900"
+                >
                     <div class="flex items-center gap-3">
-                        <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900">
-                            <DollarSign class="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                        <div
+                            class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900"
+                        >
+                            <DollarSign
+                                class="h-5 w-5 text-blue-600 dark:text-blue-400"
+                            />
                         </div>
                         <div>
-                            <p class="text-sm text-neutral-600 dark:text-neutral-400">Total Expected</p>
-                            <p class="text-xl font-semibold text-neutral-900 dark:text-neutral-100">
+                            <p
+                                class="text-sm text-neutral-600 dark:text-neutral-400"
+                            >
+                                Total Expected
+                            </p>
+                            <p
+                                class="text-xl font-semibold text-neutral-900 dark:text-neutral-100"
+                            >
                                 {{ formatCurrency(total.expected) }}
                             </p>
                         </div>
                     </div>
                 </div>
 
-                <div class="rounded-xl border border-sidebar-border/70 bg-white p-4 dark:border-sidebar-border dark:bg-neutral-900">
+                <div
+                    class="rounded-xl border border-sidebar-border/70 bg-white p-4 dark:border-sidebar-border dark:bg-neutral-900"
+                >
                     <div class="flex items-center gap-3">
-                        <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900">
-                            <TrendingUp class="h-5 w-5 text-green-600 dark:text-green-400" />
+                        <div
+                            class="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900"
+                        >
+                            <TrendingUp
+                                class="h-5 w-5 text-green-600 dark:text-green-400"
+                            />
                         </div>
                         <div>
-                            <p class="text-sm text-neutral-600 dark:text-neutral-400">Total Collected</p>
-                            <p class="text-xl font-semibold text-green-600 dark:text-green-400">
+                            <p
+                                class="text-sm text-neutral-600 dark:text-neutral-400"
+                            >
+                                Total Collected
+                            </p>
+                            <p
+                                class="text-xl font-semibold text-green-600 dark:text-green-400"
+                            >
                                 {{ formatCurrency(total.collected) }}
                             </p>
                         </div>
                     </div>
                 </div>
 
-                <div class="rounded-xl border border-sidebar-border/70 bg-white p-4 dark:border-sidebar-border dark:bg-neutral-900">
+                <div
+                    class="rounded-xl border border-sidebar-border/70 bg-white p-4 dark:border-sidebar-border dark:bg-neutral-900"
+                >
                     <div class="flex items-center gap-3">
-                        <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900">
-                            <AlertCircle class="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                        <div
+                            class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900"
+                        >
+                            <AlertCircle
+                                class="h-5 w-5 text-amber-600 dark:text-amber-400"
+                            />
                         </div>
                         <div>
-                            <p class="text-sm text-neutral-600 dark:text-neutral-400">Total Outstanding</p>
-                            <p class="text-xl font-semibold text-amber-600 dark:text-amber-400">
+                            <p
+                                class="text-sm text-neutral-600 dark:text-neutral-400"
+                            >
+                                Total Outstanding
+                            </p>
+                            <p
+                                class="text-xl font-semibold text-amber-600 dark:text-amber-400"
+                            >
                                 {{ formatCurrency(total.outstanding) }}
                             </p>
                         </div>
                     </div>
                 </div>
 
-                <div class="rounded-xl border border-sidebar-border/70 bg-white p-4 dark:border-sidebar-border dark:bg-neutral-900">
+                <div
+                    class="rounded-xl border border-sidebar-border/70 bg-white p-4 dark:border-sidebar-border dark:bg-neutral-900"
+                >
                     <div class="flex items-center gap-3">
-                        <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900">
-                            <BarChart3 class="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                        <div
+                            class="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900"
+                        >
+                            <BarChart3
+                                class="h-5 w-5 text-purple-600 dark:text-purple-400"
+                            />
                         </div>
                         <div>
-                            <p class="text-sm text-neutral-600 dark:text-neutral-400">Yearly Collection Rate</p>
-                            <p class="text-xl font-semibold text-neutral-900 dark:text-neutral-100">
+                            <p
+                                class="text-sm text-neutral-600 dark:text-neutral-400"
+                            >
+                                Yearly Collection Rate
+                            </p>
+                            <p
+                                class="text-xl font-semibold text-neutral-900 dark:text-neutral-100"
+                            >
                                 {{ total.collection_rate }}%
                             </p>
                         </div>
@@ -195,53 +261,91 @@ function getBarHeight(amount: number): string {
             </div>
 
             <!-- Monthly Chart -->
-            <div class="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border dark:bg-neutral-900">
-                <h2 class="mb-6 text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+            <div
+                class="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border dark:bg-neutral-900"
+            >
+                <h2
+                    class="mb-6 text-lg font-semibold text-neutral-900 dark:text-neutral-100"
+                >
                     Monthly Collection Trend
                 </h2>
                 <div class="flex h-64 items-end gap-2">
                     <div
                         v-for="monthData in monthly_breakdown"
                         :key="monthData.month"
-                        class="group flex-1 flex flex-col items-center gap-2"
+                        class="group flex flex-1 flex-col items-center gap-2"
                     >
-                        <div class="relative flex h-full w-full items-end justify-center gap-0.5">
+                        <div
+                            class="relative flex h-full w-full items-end justify-center gap-0.5"
+                        >
                             <!-- Expected bar (background) -->
                             <div
                                 class="w-1/2 rounded-t bg-neutral-200 dark:bg-neutral-700"
-                                :style="{ height: getBarHeight(monthData.expected) }"
+                                :style="{
+                                    height: getBarHeight(monthData.expected),
+                                }"
                             />
                             <!-- Collected bar (foreground) -->
                             <div
                                 class="w-1/2 rounded-t bg-green-500 dark:bg-green-600"
-                                :style="{ height: getBarHeight(monthData.collected) }"
+                                :style="{
+                                    height: getBarHeight(monthData.collected),
+                                }"
                             />
                             <!-- Tooltip -->
-                            <div class="absolute bottom-full left-1/2 mb-2 -translate-x-1/2 hidden group-hover:block z-10">
-                                <div class="rounded-lg bg-neutral-900 px-3 py-2 text-xs text-white shadow-lg dark:bg-neutral-100 dark:text-neutral-900 whitespace-nowrap">
-                                    <p class="font-medium">{{ monthData.month_name }}</p>
-                                    <p>Expected: {{ formatCurrency(monthData.expected) }}</p>
-                                    <p>Collected: {{ formatCurrency(monthData.collected) }}</p>
-                                    <p>Rate: {{ monthData.collection_rate }}%</p>
+                            <div
+                                class="absolute bottom-full left-1/2 z-10 mb-2 hidden -translate-x-1/2 group-hover:block"
+                            >
+                                <div
+                                    class="rounded-lg bg-neutral-900 px-3 py-2 text-xs whitespace-nowrap text-white shadow-lg dark:bg-neutral-100 dark:text-neutral-900"
+                                >
+                                    <p class="font-medium">
+                                        {{ monthData.month_name }}
+                                    </p>
+                                    <p>
+                                        Expected:
+                                        {{ formatCurrency(monthData.expected) }}
+                                    </p>
+                                    <p>
+                                        Collected:
+                                        {{
+                                            formatCurrency(monthData.collected)
+                                        }}
+                                    </p>
+                                    <p>
+                                        Rate: {{ monthData.collection_rate }}%
+                                    </p>
                                 </div>
                             </div>
                         </div>
                         <Link
-                            :href="monthly({ year, month: monthData.month }).url"
+                            :href="
+                                monthly({ year, month: monthData.month }).url
+                            "
                             class="text-xs text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100"
                         >
                             {{ monthData.short_name }}
                         </Link>
                     </div>
                 </div>
-                <div class="mt-4 flex items-center justify-center gap-6 text-sm">
+                <div
+                    class="mt-4 flex items-center justify-center gap-6 text-sm"
+                >
                     <div class="flex items-center gap-2">
-                        <div class="h-3 w-3 rounded bg-neutral-200 dark:bg-neutral-700" />
-                        <span class="text-neutral-600 dark:text-neutral-400">Expected</span>
+                        <div
+                            class="h-3 w-3 rounded bg-neutral-200 dark:bg-neutral-700"
+                        />
+                        <span class="text-neutral-600 dark:text-neutral-400"
+                            >Expected</span
+                        >
                     </div>
                     <div class="flex items-center gap-2">
-                        <div class="h-3 w-3 rounded bg-green-500 dark:bg-green-600" />
-                        <span class="text-neutral-600 dark:text-neutral-400">Collected</span>
+                        <div
+                            class="h-3 w-3 rounded bg-green-500 dark:bg-green-600"
+                        />
+                        <span class="text-neutral-600 dark:text-neutral-400"
+                            >Collected</span
+                        >
                     </div>
                 </div>
             </div>
@@ -249,29 +353,47 @@ function getBarHeight(amount: number): string {
             <!-- Monthly Breakdown Table & Category -->
             <div class="grid gap-6 lg:grid-cols-3">
                 <!-- Monthly Breakdown Table -->
-                <div class="lg:col-span-2 rounded-xl border border-sidebar-border/70 bg-white dark:border-sidebar-border dark:bg-neutral-900">
-                    <div class="border-b border-neutral-200 p-4 dark:border-neutral-700">
-                        <h2 class="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+                <div
+                    class="rounded-xl border border-sidebar-border/70 bg-white lg:col-span-2 dark:border-sidebar-border dark:bg-neutral-900"
+                >
+                    <div
+                        class="border-b border-neutral-200 p-4 dark:border-neutral-700"
+                    >
+                        <h2
+                            class="text-lg font-semibold text-neutral-900 dark:text-neutral-100"
+                        >
                             Monthly Breakdown
                         </h2>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left text-sm">
                             <thead>
-                                <tr class="border-b border-neutral-200 dark:border-neutral-700">
-                                    <th class="px-6 py-4 font-medium text-neutral-600 dark:text-neutral-400">
+                                <tr
+                                    class="border-b border-neutral-200 dark:border-neutral-700"
+                                >
+                                    <th
+                                        class="px-6 py-4 font-medium text-neutral-600 dark:text-neutral-400"
+                                    >
                                         Month
                                     </th>
-                                    <th class="px-6 py-4 text-right font-medium text-neutral-600 dark:text-neutral-400">
+                                    <th
+                                        class="px-6 py-4 text-right font-medium text-neutral-600 dark:text-neutral-400"
+                                    >
                                         Expected
                                     </th>
-                                    <th class="px-6 py-4 text-right font-medium text-neutral-600 dark:text-neutral-400">
+                                    <th
+                                        class="px-6 py-4 text-right font-medium text-neutral-600 dark:text-neutral-400"
+                                    >
                                         Collected
                                     </th>
-                                    <th class="px-6 py-4 text-right font-medium text-neutral-600 dark:text-neutral-400">
+                                    <th
+                                        class="px-6 py-4 text-right font-medium text-neutral-600 dark:text-neutral-400"
+                                    >
                                         Outstanding
                                     </th>
-                                    <th class="px-6 py-4 text-right font-medium text-neutral-600 dark:text-neutral-400">
+                                    <th
+                                        class="px-6 py-4 text-right font-medium text-neutral-600 dark:text-neutral-400"
+                                    >
                                         Rate
                                     </th>
                                 </tr>
@@ -280,28 +402,52 @@ function getBarHeight(amount: number): string {
                                 <tr
                                     v-for="monthData in monthly_breakdown"
                                     :key="monthData.month"
-                                    class="border-b border-neutral-100 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-800/50 cursor-pointer"
-                                    @click="router.get(monthly({ year, month: monthData.month }).url)"
+                                    class="cursor-pointer border-b border-neutral-100 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-800/50"
+                                    @click="
+                                        router.get(
+                                            monthly({
+                                                year,
+                                                month: monthData.month,
+                                            }).url,
+                                        )
+                                    "
                                 >
-                                    <td class="px-6 py-4 font-medium text-neutral-900 dark:text-neutral-100">
+                                    <td
+                                        class="px-6 py-4 font-medium text-neutral-900 dark:text-neutral-100"
+                                    >
                                         {{ monthData.month_name }}
                                     </td>
-                                    <td class="px-6 py-4 text-right text-neutral-600 dark:text-neutral-400">
+                                    <td
+                                        class="px-6 py-4 text-right text-neutral-600 dark:text-neutral-400"
+                                    >
                                         {{ formatCurrency(monthData.expected) }}
                                     </td>
-                                    <td class="px-6 py-4 text-right text-green-600 dark:text-green-400">
-                                        {{ formatCurrency(monthData.collected) }}
+                                    <td
+                                        class="px-6 py-4 text-right text-green-600 dark:text-green-400"
+                                    >
+                                        {{
+                                            formatCurrency(monthData.collected)
+                                        }}
                                     </td>
-                                    <td class="px-6 py-4 text-right text-amber-600 dark:text-amber-400">
-                                        {{ formatCurrency(monthData.outstanding) }}
+                                    <td
+                                        class="px-6 py-4 text-right text-amber-600 dark:text-amber-400"
+                                    >
+                                        {{
+                                            formatCurrency(
+                                                monthData.outstanding,
+                                            )
+                                        }}
                                     </td>
                                     <td class="px-6 py-4 text-right">
                                         <span
-                                            :class="monthData.collection_rate >= 80
-                                                ? 'text-green-600 dark:text-green-400'
-                                                : monthData.collection_rate >= 50
-                                                    ? 'text-amber-600 dark:text-amber-400'
-                                                    : 'text-red-600 dark:text-red-400'"
+                                            :class="
+                                                monthData.collection_rate >= 80
+                                                    ? 'text-green-600 dark:text-green-400'
+                                                    : monthData.collection_rate >=
+                                                        50
+                                                      ? 'text-amber-600 dark:text-amber-400'
+                                                      : 'text-red-600 dark:text-red-400'
+                                            "
                                         >
                                             {{ monthData.collection_rate }}%
                                         </span>
@@ -309,20 +455,32 @@ function getBarHeight(amount: number): string {
                                 </tr>
                             </tbody>
                             <tfoot>
-                                <tr class="bg-neutral-50 dark:bg-neutral-800/50 font-semibold">
-                                    <td class="px-6 py-4 text-neutral-900 dark:text-neutral-100">
+                                <tr
+                                    class="bg-neutral-50 font-semibold dark:bg-neutral-800/50"
+                                >
+                                    <td
+                                        class="px-6 py-4 text-neutral-900 dark:text-neutral-100"
+                                    >
                                         Total
                                     </td>
-                                    <td class="px-6 py-4 text-right text-neutral-900 dark:text-neutral-100">
+                                    <td
+                                        class="px-6 py-4 text-right text-neutral-900 dark:text-neutral-100"
+                                    >
                                         {{ formatCurrency(total.expected) }}
                                     </td>
-                                    <td class="px-6 py-4 text-right text-green-600 dark:text-green-400">
+                                    <td
+                                        class="px-6 py-4 text-right text-green-600 dark:text-green-400"
+                                    >
                                         {{ formatCurrency(total.collected) }}
                                     </td>
-                                    <td class="px-6 py-4 text-right text-amber-600 dark:text-amber-400">
+                                    <td
+                                        class="px-6 py-4 text-right text-amber-600 dark:text-amber-400"
+                                    >
                                         {{ formatCurrency(total.outstanding) }}
                                     </td>
-                                    <td class="px-6 py-4 text-right text-neutral-900 dark:text-neutral-100">
+                                    <td
+                                        class="px-6 py-4 text-right text-neutral-900 dark:text-neutral-100"
+                                    >
                                         {{ total.collection_rate }}%
                                     </td>
                                 </tr>
@@ -332,8 +490,12 @@ function getBarHeight(amount: number): string {
                 </div>
 
                 <!-- Category Breakdown -->
-                <div class="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border dark:bg-neutral-900">
-                    <h2 class="mb-4 text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+                <div
+                    class="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border dark:bg-neutral-900"
+                >
+                    <h2
+                        class="mb-4 text-lg font-semibold text-neutral-900 dark:text-neutral-100"
+                    >
                         By Category
                     </h2>
                     <div class="space-y-4">
@@ -342,8 +504,10 @@ function getBarHeight(amount: number): string {
                             :key="key"
                             class="rounded-lg border border-neutral-200 p-4 dark:border-neutral-700"
                         >
-                            <div class="flex items-center justify-between mb-3">
-                                <span class="font-medium text-neutral-900 dark:text-neutral-100">
+                            <div class="mb-3 flex items-center justify-between">
+                                <span
+                                    class="font-medium text-neutral-900 dark:text-neutral-100"
+                                >
                                     {{ category.label }}
                                 </span>
                                 <span class="text-sm text-neutral-500">
@@ -352,29 +516,50 @@ function getBarHeight(amount: number): string {
                             </div>
                             <div class="space-y-2 text-sm">
                                 <div class="flex justify-between">
-                                    <span class="text-neutral-500">Expected</span>
-                                    <span class="font-medium text-neutral-900 dark:text-neutral-100">
+                                    <span class="text-neutral-500"
+                                        >Expected</span
+                                    >
+                                    <span
+                                        class="font-medium text-neutral-900 dark:text-neutral-100"
+                                    >
                                         {{ formatCurrency(category.expected) }}
                                     </span>
                                 </div>
                                 <div class="flex justify-between">
-                                    <span class="text-neutral-500">Collected</span>
-                                    <span class="font-medium text-green-600 dark:text-green-400">
+                                    <span class="text-neutral-500"
+                                        >Collected</span
+                                    >
+                                    <span
+                                        class="font-medium text-green-600 dark:text-green-400"
+                                    >
                                         {{ formatCurrency(category.collected) }}
                                     </span>
                                 </div>
                                 <div class="flex justify-between">
-                                    <span class="text-neutral-500">Outstanding</span>
-                                    <span class="font-medium text-amber-600 dark:text-amber-400">
-                                        {{ formatCurrency(category.outstanding) }}
+                                    <span class="text-neutral-500"
+                                        >Outstanding</span
+                                    >
+                                    <span
+                                        class="font-medium text-amber-600 dark:text-amber-400"
+                                    >
+                                        {{
+                                            formatCurrency(category.outstanding)
+                                        }}
                                     </span>
                                 </div>
                                 <!-- Progress bar -->
                                 <div class="mt-2">
-                                    <div class="h-2 w-full rounded-full bg-neutral-200 dark:bg-neutral-700">
+                                    <div
+                                        class="h-2 w-full rounded-full bg-neutral-200 dark:bg-neutral-700"
+                                    >
                                         <div
                                             class="h-2 rounded-full bg-green-500"
-                                            :style="{ width: category.expected > 0 ? `${(category.collected / category.expected) * 100}%` : '0%' }"
+                                            :style="{
+                                                width:
+                                                    category.expected > 0
+                                                        ? `${(category.collected / category.expected) * 100}%`
+                                                        : '0%',
+                                            }"
                                         />
                                     </div>
                                 </div>

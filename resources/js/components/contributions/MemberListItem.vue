@@ -1,8 +1,12 @@
 <script setup lang="ts">
+import {
+    destroy,
+    restore,
+    show,
+} from '@/actions/App/Http/Controllers/MemberController';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Link, router } from '@inertiajs/vue3';
-import { show, destroy, restore } from '@/actions/App/Http/Controllers/MemberController';
 import { Archive, Eye, Pencil, RotateCcw } from 'lucide-vue-next';
 
 interface Member {
@@ -50,34 +54,61 @@ function getRoleBadgeVariant(role: string) {
 
 function archiveMember() {
     if (confirm(`Are you sure you want to archive ${props.member.name}?`)) {
-        router.optimistic((pageProps: any) => ({
-            members: pageProps.members.filter((m: any) => m.id !== props.member.id),
-            archivedMembers: [...pageProps.archivedMembers, { ...props.member, is_archived: true }],
-        })).delete(destroy(props.member.id).url, {
-            onSuccess: () => emit('archived', props.member),
-        });
+        router
+            .optimistic((pageProps: any) => ({
+                members: pageProps.members.filter(
+                    (m: any) => m.id !== props.member.id,
+                ),
+                archivedMembers: [
+                    ...pageProps.archivedMembers,
+                    { ...props.member, is_archived: true },
+                ],
+            }))
+            .delete(destroy(props.member.id).url, {
+                onSuccess: () => emit('archived', props.member),
+            });
     }
 }
 
 function restoreMember() {
     if (confirm(`Are you sure you want to restore ${props.member.name}?`)) {
-        router.optimistic((pageProps: any) => ({
-            archivedMembers: pageProps.archivedMembers.filter((m: any) => m.id !== props.member.id),
-            members: [...pageProps.members, { ...props.member, is_archived: false, archived_at: undefined }],
-        })).post(restore(props.member.id).url, {}, {
-            onSuccess: () => emit('restored', props.member),
-        });
+        router
+            .optimistic((pageProps: any) => ({
+                archivedMembers: pageProps.archivedMembers.filter(
+                    (m: any) => m.id !== props.member.id,
+                ),
+                members: [
+                    ...pageProps.members,
+                    {
+                        ...props.member,
+                        is_archived: false,
+                        archived_at: undefined,
+                    },
+                ],
+            }))
+            .post(
+                restore(props.member.id).url,
+                {},
+                {
+                    onSuccess: () => emit('restored', props.member),
+                },
+            );
     }
 }
 </script>
 
 <template>
-    <tr class="border-b border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
+    <tr
+        class="border-b border-neutral-100 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-800/50"
+    >
         <td class="px-6 py-4">
             <div class="font-medium text-neutral-900 dark:text-neutral-100">
                 {{ member.name }}
             </div>
-            <div v-if="member.archived_at" class="text-xs text-red-500 dark:text-red-400">
+            <div
+                v-if="member.archived_at"
+                class="text-xs text-red-500 dark:text-red-400"
+            >
                 Archived {{ member.archived_at }}
             </div>
         </td>
@@ -92,7 +123,9 @@ function restoreMember() {
         <td class="px-6 py-4 text-neutral-600 dark:text-neutral-400">
             {{ member.category_label ?? '—' }}
         </td>
-        <td class="px-6 py-4 text-right font-medium text-neutral-900 dark:text-neutral-100">
+        <td
+            class="px-6 py-4 text-right font-medium text-neutral-900 dark:text-neutral-100"
+        >
             {{ formatCurrency(member.monthly_amount) }}
         </td>
         <td class="px-6 py-4">

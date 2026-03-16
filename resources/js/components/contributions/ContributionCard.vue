@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
 import { show as showContribution } from '@/actions/App/Http/Controllers/ContributionController';
-import StatusBadge from '@/components/contributions/StatusBadge.vue';
 import PaymentHistory from '@/components/contributions/PaymentHistory.vue';
+import StatusBadge from '@/components/contributions/StatusBadge.vue';
+import { Link } from '@inertiajs/vue3';
 import { ChevronDown, ChevronUp } from 'lucide-vue-next';
 import { ref } from 'vue';
 
@@ -66,8 +66,12 @@ function togglePayments() {
 
             <div class="flex items-center gap-6 text-sm">
                 <div class="text-right">
-                    <p class="text-neutral-600 dark:text-neutral-400">Expected</p>
-                    <p class="font-medium text-neutral-900 dark:text-neutral-100">
+                    <p class="text-neutral-600 dark:text-neutral-400">
+                        Expected
+                    </p>
+                    <p
+                        class="font-medium text-neutral-900 dark:text-neutral-100"
+                    >
                         {{ formatCurrency(contribution.expected_amount) }}
                     </p>
                 </div>
@@ -80,12 +84,20 @@ function togglePayments() {
                 </div>
 
                 <div v-if="contribution.balance > 0" class="text-right">
-                    <p class="text-neutral-600 dark:text-neutral-400">Balance</p>
-                    <p class="font-medium" :class="{
-                        'text-amber-600 dark:text-amber-400': contribution.status === 'partial',
-                        'text-red-600 dark:text-red-400': contribution.status === 'overdue',
-                        'text-neutral-600 dark:text-neutral-400': contribution.status === 'unpaid',
-                    }">
+                    <p class="text-neutral-600 dark:text-neutral-400">
+                        Balance
+                    </p>
+                    <p
+                        class="font-medium"
+                        :class="{
+                            'text-amber-600 dark:text-amber-400':
+                                contribution.status === 'partial',
+                            'text-red-600 dark:text-red-400':
+                                contribution.status === 'overdue',
+                            'text-neutral-600 dark:text-neutral-400':
+                                contribution.status === 'unpaid',
+                        }"
+                    >
                         {{ formatCurrency(contribution.balance) }}
                     </p>
                 </div>
@@ -98,8 +110,14 @@ function togglePayments() {
                 @click="togglePayments"
                 class="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
             >
-                <component :is="showPayments ? ChevronUp : ChevronDown" class="h-4 w-4" />
-                {{ showPayments ? 'Hide' : 'Show' }} {{ contribution.payments.length }} payment{{ contribution.payments.length !== 1 ? 's' : '' }}
+                <component
+                    :is="showPayments ? ChevronUp : ChevronDown"
+                    class="h-4 w-4"
+                />
+                {{ showPayments ? 'Hide' : 'Show' }}
+                {{ contribution.payments.length }} payment{{
+                    contribution.payments.length !== 1 ? 's' : ''
+                }}
             </button>
 
             <Transition

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { store } from '@/actions/App/Http/Controllers/PaymentController';
 import StatusBadge from '@/components/contributions/StatusBadge.vue';
 import HeadingSmall from '@/components/HeadingSmall.vue';
 import InputError from '@/components/InputError.vue';
@@ -13,9 +14,8 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import AppLayout from '@/layouts/AppLayout.vue';
-import type { BreadcrumbItem } from '@/types';
-import { store } from '@/actions/App/Http/Controllers/PaymentController';
 import { dashboard } from '@/routes';
+import type { BreadcrumbItem } from '@/types';
 import { Form, Head } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
@@ -157,7 +157,13 @@ const targetMonth = computed(() => {
             <Form
                 :action="store()"
                 class="space-y-6"
-                #default="{ errors, validate, validating, processing, recentlySuccessful }"
+                #default="{
+                    errors,
+                    validate,
+                    validating,
+                    processing,
+                    recentlySuccessful,
+                }"
             >
                 <input type="hidden" name="member_id" :value="member.id" />
                 <input
@@ -207,7 +213,11 @@ const targetMonth = computed(() => {
                                 amount === quick.value.toString(),
                         }"
                     >
-                        {{ quick.label }} (₦{{ quick.value.toLocaleString('en-NG', { minimumFractionDigits: 2 }) }})
+                        {{ quick.label }} (₦{{
+                            quick.value.toLocaleString('en-NG', {
+                                minimumFractionDigits: 2,
+                            })
+                        }})
                     </Button>
                 </div>
 
@@ -221,7 +231,9 @@ const targetMonth = computed(() => {
                             />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="current">Current Month</SelectItem>
+                            <SelectItem value="current"
+                                >Current Month</SelectItem
+                            >
                             <SelectItem
                                 v-for="month in available_months"
                                 :key="`${month.year}-${month.month}`"

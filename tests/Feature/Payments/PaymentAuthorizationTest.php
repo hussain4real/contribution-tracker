@@ -2,8 +2,9 @@
 
 use App\Models\Contribution;
 use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
-uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
+uses(RefreshDatabase::class);
 
 describe('Payment Authorization', function () {
     beforeEach(function () {

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { create as createPayment } from '@/actions/App/Http/Controllers/PaymentController';
 import StatusBadge from '@/components/contributions/StatusBadge.vue';
 import HeadingSmall from '@/components/HeadingSmall.vue';
 import { Button } from '@/components/ui/button';
@@ -18,9 +19,8 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import AppLayout from '@/layouts/AppLayout.vue';
-import type { BreadcrumbItem } from '@/types';
-import { create as createPayment } from '@/actions/App/Http/Controllers/PaymentController';
 import { dashboard } from '@/routes';
+import type { BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/vue3';
 
 interface Payment {
@@ -96,7 +96,7 @@ const progressPercentage = (): number => {
     return Math.min(
         100,
         (props.contribution.total_paid / props.contribution.expected_amount) *
-            100
+            100,
     );
 };
 </script>
@@ -141,10 +141,14 @@ const progressPercentage = (): number => {
                             <div
                                 class="h-full rounded-full transition-all duration-300"
                                 :class="{
-                                    'bg-green-600': contribution.status === 'paid',
-                                    'bg-amber-500': contribution.status === 'partial',
-                                    'bg-red-500': contribution.status === 'overdue',
-                                    'bg-neutral-400': contribution.status === 'unpaid',
+                                    'bg-green-600':
+                                        contribution.status === 'paid',
+                                    'bg-amber-500':
+                                        contribution.status === 'partial',
+                                    'bg-red-500':
+                                        contribution.status === 'overdue',
+                                    'bg-neutral-400':
+                                        contribution.status === 'unpaid',
                                 }"
                                 :style="{ width: `${progressPercentage()}%` }"
                             />
@@ -174,7 +178,8 @@ const progressPercentage = (): number => {
                                 class="text-2xl font-bold"
                                 :class="{
                                     'text-amber-500': contribution.balance > 0,
-                                    'text-green-600': contribution.balance === 0,
+                                    'text-green-600':
+                                        contribution.balance === 0,
                                 }"
                             >
                                 {{ formatAmount(contribution.balance) }}
@@ -191,9 +196,7 @@ const progressPercentage = (): number => {
                         class="pt-4"
                     >
                         <Link :href="createPayment(contribution.user.id).url">
-                            <Button class="w-full">
-                                Record Payment
-                            </Button>
+                            <Button class="w-full"> Record Payment </Button>
                         </Link>
                     </div>
                 </CardContent>
