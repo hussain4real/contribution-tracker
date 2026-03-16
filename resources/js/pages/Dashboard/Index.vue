@@ -72,7 +72,9 @@ interface MemberProps {
     can_record_payments: boolean;
 }
 
-type Props = Partial<AdminProps & MemberProps>;
+type Props = Partial<AdminProps & MemberProps> & {
+    fund_balance?: number;
+};
 
 const props = defineProps<Props>();
 
@@ -100,6 +102,14 @@ function formatCurrency(amount: number): string {
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
+            <!-- Fund Balance (visible to all users) -->
+            <div class="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border dark:bg-neutral-900">
+                <p class="text-sm text-neutral-600 dark:text-neutral-400">Family Fund Balance</p>
+                <p class="mt-1 text-3xl font-bold" :class="(fund_balance ?? 0) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
+                    {{ formatCurrency(fund_balance ?? 0) }}
+                </p>
+            </div>
+
             <!-- Admin/Financial Secretary View -->
             <template v-if="isAdminView">
                 <SummaryCards
