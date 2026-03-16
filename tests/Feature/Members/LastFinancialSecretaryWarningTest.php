@@ -2,8 +2,9 @@
 
 use App\Enums\Role;
 use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
-uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
+uses(RefreshDatabase::class);
 
 /**
  * T071a [US4] Feature test for warning when removing last Financial Secretary (FR-019)

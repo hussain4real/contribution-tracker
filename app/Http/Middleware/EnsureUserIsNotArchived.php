@@ -16,7 +16,7 @@ class EnsureUserIsNotArchived
      *
      * Archived users should not be able to access the application.
      *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     * @param  Closure(Request): (Response)  $next
      */
     public function handle(Request $request, Closure $next): Response
     {
