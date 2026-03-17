@@ -20,9 +20,7 @@ import { dashboard } from '@/routes';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
 import {
-    BookOpen,
     FileBarChart2,
-    Folder,
     Landmark,
     LayoutGrid,
     Receipt,
