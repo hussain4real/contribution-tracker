@@ -84,16 +84,16 @@ function resetForm(): void {
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
             <!-- Header -->
-            <div class="flex items-center justify-between">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div class="flex items-center gap-3">
                     <Landmark class="h-6 w-6 text-neutral-500" />
                     <h1
-                        class="text-2xl font-semibold text-neutral-900 dark:text-neutral-100"
+                        class="text-xl font-semibold text-neutral-900 sm:text-2xl dark:text-neutral-100"
                     >
                         Fund Adjustments
                     </h1>
                 </div>
-                <Button v-if="can_create && !showForm" @click="showForm = true">
+                <Button v-if="can_create && !showForm" size="sm" @click="showForm = true">
                     <Plus class="mr-2 h-4 w-4" />
                     Record Adjustment
                 </Button>
@@ -205,27 +205,27 @@ function resetForm(): void {
                                 class="border-b border-neutral-200 dark:border-neutral-700"
                             >
                                 <th
-                                    class="px-6 py-3 font-medium text-neutral-600 dark:text-neutral-400"
+                                    class="px-4 py-3 font-medium text-neutral-600 sm:px-6 dark:text-neutral-400"
                                 >
                                     Date
                                 </th>
                                 <th
-                                    class="px-6 py-3 font-medium text-neutral-600 dark:text-neutral-400"
+                                    class="px-4 py-3 font-medium text-neutral-600 sm:px-6 dark:text-neutral-400"
                                 >
                                     Description
                                 </th>
                                 <th
-                                    class="px-6 py-3 text-right font-medium text-neutral-600 dark:text-neutral-400"
+                                    class="px-4 py-3 text-right font-medium text-neutral-600 sm:px-6 dark:text-neutral-400"
                                 >
                                     Amount
                                 </th>
                                 <th
-                                    class="px-6 py-3 font-medium text-neutral-600 dark:text-neutral-400"
+                                    class="hidden px-6 py-3 font-medium text-neutral-600 md:table-cell dark:text-neutral-400"
                                 >
                                     Recorded By
                                 </th>
                                 <th
-                                    class="px-6 py-3 font-medium text-neutral-600 dark:text-neutral-400"
+                                    class="px-4 py-3 font-medium text-neutral-600 sm:px-6 dark:text-neutral-400"
                                 ></th>
                             </tr>
                         </thead>
@@ -238,26 +238,26 @@ function resetForm(): void {
                                 class="hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
                             >
                                 <td
-                                    class="px-6 py-4 text-neutral-900 dark:text-neutral-100"
+                                    class="px-4 py-4 text-neutral-900 sm:px-6 dark:text-neutral-100"
                                 >
                                     {{ formatDate(adjustment.recorded_at) }}
                                 </td>
                                 <td
-                                    class="max-w-xs truncate px-6 py-4 text-neutral-700 dark:text-neutral-300"
+                                    class="max-w-[120px] truncate px-4 py-4 text-neutral-700 sm:max-w-xs sm:px-6 dark:text-neutral-300"
                                 >
                                     {{ adjustment.description }}
                                 </td>
                                 <td
-                                    class="px-6 py-4 text-right font-medium text-green-600 dark:text-green-400"
+                                    class="px-4 py-4 text-right font-medium text-green-600 sm:px-6 dark:text-green-400"
                                 >
                                     +{{ formatCurrency(adjustment.amount) }}
                                 </td>
                                 <td
-                                    class="px-6 py-4 text-neutral-500 dark:text-neutral-400"
+                                    class="hidden px-6 py-4 text-neutral-500 md:table-cell dark:text-neutral-400"
                                 >
                                     {{ adjustment.recorded_by ?? 'System' }}
                                 </td>
-                                <td class="px-6 py-4 text-right">
+                                <td class="px-4 py-4 text-right sm:px-6">
                                     <Button
                                         v-if="can_create"
                                         variant="ghost"

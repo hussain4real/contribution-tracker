@@ -372,27 +372,27 @@ function getBarHeight(amount: number): string {
                                     class="border-b border-neutral-200 dark:border-neutral-700"
                                 >
                                     <th
-                                        class="px-6 py-4 font-medium text-neutral-600 dark:text-neutral-400"
+                                        class="px-4 py-4 font-medium text-neutral-600 sm:px-6 dark:text-neutral-400"
                                     >
                                         Month
                                     </th>
                                     <th
-                                        class="px-6 py-4 text-right font-medium text-neutral-600 dark:text-neutral-400"
+                                        class="hidden px-6 py-4 text-right font-medium text-neutral-600 sm:table-cell dark:text-neutral-400"
                                     >
                                         Expected
                                     </th>
                                     <th
-                                        class="px-6 py-4 text-right font-medium text-neutral-600 dark:text-neutral-400"
+                                        class="px-4 py-4 text-right font-medium text-neutral-600 sm:px-6 dark:text-neutral-400"
                                     >
                                         Collected
                                     </th>
                                     <th
-                                        class="px-6 py-4 text-right font-medium text-neutral-600 dark:text-neutral-400"
+                                        class="hidden px-6 py-4 text-right font-medium text-neutral-600 md:table-cell dark:text-neutral-400"
                                     >
                                         Outstanding
                                     </th>
                                     <th
-                                        class="px-6 py-4 text-right font-medium text-neutral-600 dark:text-neutral-400"
+                                        class="px-4 py-4 text-right font-medium text-neutral-600 sm:px-6 dark:text-neutral-400"
                                     >
                                         Rate
                                     </th>
@@ -413,24 +413,24 @@ function getBarHeight(amount: number): string {
                                     "
                                 >
                                     <td
-                                        class="px-6 py-4 font-medium text-neutral-900 dark:text-neutral-100"
+                                        class="px-4 py-4 font-medium text-neutral-900 sm:px-6 dark:text-neutral-100"
                                     >
                                         {{ monthData.month_name }}
                                     </td>
                                     <td
-                                        class="px-6 py-4 text-right text-neutral-600 dark:text-neutral-400"
+                                        class="hidden px-6 py-4 text-right text-neutral-600 sm:table-cell dark:text-neutral-400"
                                     >
                                         {{ formatCurrency(monthData.expected) }}
                                     </td>
                                     <td
-                                        class="px-6 py-4 text-right text-green-600 dark:text-green-400"
+                                        class="px-4 py-4 text-right text-green-600 sm:px-6 dark:text-green-400"
                                     >
                                         {{
                                             formatCurrency(monthData.collected)
                                         }}
                                     </td>
                                     <td
-                                        class="px-6 py-4 text-right text-amber-600 dark:text-amber-400"
+                                        class="hidden px-6 py-4 text-right text-amber-600 md:table-cell dark:text-amber-400"
                                     >
                                         {{
                                             formatCurrency(
@@ -438,7 +438,7 @@ function getBarHeight(amount: number): string {
                                             )
                                         }}
                                     </td>
-                                    <td class="px-6 py-4 text-right">
+                                    <td class="px-4 py-4 text-right sm:px-6">
                                         <span
                                             :class="
                                                 monthData.collection_rate >= 80
@@ -459,27 +459,27 @@ function getBarHeight(amount: number): string {
                                     class="bg-neutral-50 font-semibold dark:bg-neutral-800/50"
                                 >
                                     <td
-                                        class="px-6 py-4 text-neutral-900 dark:text-neutral-100"
+                                        class="px-4 py-4 text-neutral-900 sm:px-6 dark:text-neutral-100"
                                     >
                                         Total
                                     </td>
                                     <td
-                                        class="px-6 py-4 text-right text-neutral-900 dark:text-neutral-100"
+                                        class="hidden px-6 py-4 text-right text-neutral-900 sm:table-cell dark:text-neutral-100"
                                     >
                                         {{ formatCurrency(total.expected) }}
                                     </td>
                                     <td
-                                        class="px-6 py-4 text-right text-green-600 dark:text-green-400"
+                                        class="px-4 py-4 text-right text-green-600 sm:px-6 dark:text-green-400"
                                     >
                                         {{ formatCurrency(total.collected) }}
                                     </td>
                                     <td
-                                        class="px-6 py-4 text-right text-amber-600 dark:text-amber-400"
+                                        class="hidden px-6 py-4 text-right text-amber-600 md:table-cell dark:text-amber-400"
                                     >
                                         {{ formatCurrency(total.outstanding) }}
                                     </td>
                                     <td
-                                        class="px-6 py-4 text-right text-neutral-900 dark:text-neutral-100"
+                                        class="px-4 py-4 text-right text-neutral-900 sm:px-6 dark:text-neutral-100"
                                     >
                                         {{ total.collection_rate }}%
                                     </td>

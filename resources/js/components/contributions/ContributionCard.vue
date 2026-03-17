@@ -52,20 +52,20 @@ function togglePayments() {
 </script>
 
 <template>
-    <div class="p-6">
-        <div class="flex items-center justify-between">
-            <div class="flex items-center gap-4">
+    <div class="p-4 sm:p-6">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex items-center gap-3 sm:gap-4">
                 <Link
                     :href="showContribution(contribution.id).url"
-                    class="text-lg font-medium text-neutral-900 hover:text-blue-600 dark:text-neutral-100 dark:hover:text-blue-400"
+                    class="text-base font-medium text-neutral-900 hover:text-blue-600 sm:text-lg dark:text-neutral-100 dark:hover:text-blue-400"
                 >
                     {{ contribution.period_label }}
                 </Link>
                 <StatusBadge :status="contribution.status" />
             </div>
 
-            <div class="flex items-center gap-6 text-sm">
-                <div class="text-right">
+            <div class="flex flex-wrap items-center gap-4 text-sm sm:gap-6">
+                <div class="text-left sm:text-right">
                     <p class="text-neutral-600 dark:text-neutral-400">
                         Expected
                     </p>
@@ -76,14 +76,14 @@ function togglePayments() {
                     </p>
                 </div>
 
-                <div class="text-right">
+                <div class="text-left sm:text-right">
                     <p class="text-neutral-600 dark:text-neutral-400">Paid</p>
                     <p class="font-medium text-green-600 dark:text-green-400">
                         {{ formatCurrency(contribution.total_paid) }}
                     </p>
                 </div>
 
-                <div v-if="contribution.balance > 0" class="text-right">
+                <div v-if="contribution.balance > 0" class="text-left sm:text-right">
                     <p class="text-neutral-600 dark:text-neutral-400">
                         Balance
                     </p>

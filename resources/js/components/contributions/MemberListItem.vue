@@ -101,9 +101,14 @@ function restoreMember() {
     <tr
         class="border-b border-neutral-100 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-800/50"
     >
-        <td class="px-6 py-4">
+        <td class="px-4 py-4 sm:px-6">
             <div class="font-medium text-neutral-900 dark:text-neutral-100">
                 {{ member.name }}
+            </div>
+            <div
+                class="text-xs text-neutral-500 md:hidden dark:text-neutral-400"
+            >
+                {{ member.email }}
             </div>
             <div
                 v-if="member.archived_at"
@@ -112,24 +117,24 @@ function restoreMember() {
                 Archived {{ member.archived_at }}
             </div>
         </td>
-        <td class="px-6 py-4 text-neutral-600 dark:text-neutral-400">
+        <td class="hidden px-6 py-4 text-neutral-600 md:table-cell dark:text-neutral-400">
             {{ member.email }}
         </td>
-        <td class="px-6 py-4">
+        <td class="hidden px-6 py-4 lg:table-cell">
             <Badge :variant="getRoleBadgeVariant(member.role)">
                 {{ member.role_label }}
             </Badge>
         </td>
-        <td class="px-6 py-4 text-neutral-600 dark:text-neutral-400">
+        <td class="px-4 py-4 text-neutral-600 sm:px-6 dark:text-neutral-400">
             {{ member.category_label ?? '—' }}
         </td>
         <td
-            class="px-6 py-4 text-right font-medium text-neutral-900 dark:text-neutral-100"
+            class="hidden px-6 py-4 text-right font-medium text-neutral-900 sm:table-cell dark:text-neutral-100"
         >
             {{ formatCurrency(member.monthly_amount) }}
         </td>
-        <td class="px-6 py-4">
-            <div class="flex items-center justify-end gap-2">
+        <td class="px-4 py-4 sm:px-6">
+            <div class="flex items-center justify-end gap-1 sm:gap-2">
                 <Link :href="show(member.id).url">
                     <Button variant="ghost" size="icon" title="View">
                         <Eye class="h-4 w-4" />

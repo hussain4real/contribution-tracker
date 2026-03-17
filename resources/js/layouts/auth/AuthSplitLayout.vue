@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
+import ThemeToggle from '@/components/ThemeToggle.vue';
 import { home } from '@/routes';
 import { Link, usePage } from '@inertiajs/vue3';
 
@@ -37,7 +38,10 @@ defineProps<{
                 </blockquote>
             </div>
         </div>
-        <div class="lg:p-8">
+        <div class="relative lg:p-8">
+            <div class="absolute top-4 right-4">
+                <ThemeToggle />
+            </div>
             <div
                 class="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]"
             >
