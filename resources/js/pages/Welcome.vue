@@ -104,7 +104,7 @@ const stats = [
         </header>
 
         <!-- Hero Section -->
-        <section class="relative overflow-hidden pt-32 pb-20 sm:pt-40 sm:pb-32">
+        <section class="relative overflow-hidden pt-32 pb-16 sm:pt-40 sm:pb-24">
             <!-- Background decoration -->
             <div class="absolute inset-0 -z-10 overflow-hidden">
                 <div
@@ -205,7 +205,7 @@ const stats = [
                             <Button
                                 variant="outline"
                                 size="lg"
-                                class="w-full sm:w-auto"
+                                class="w-full border-slate-300 sm:w-auto dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
                             >
                                 Sign In
                             </Button>
@@ -238,7 +238,7 @@ const stats = [
         </section>
 
         <!-- Features Section -->
-        <section class="py-20 sm:py-32">
+        <section class="py-16 sm:py-24">
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div class="mx-auto max-w-2xl text-center">
                     <h2
@@ -336,10 +336,9 @@ const stats = [
         </section>
 
         <!-- CTA Section -->
-        <section class="relative overflow-hidden py-20 sm:py-32">
-            <div
-                class="absolute inset-0 -z-10 bg-linear-to-br from-emerald-600 to-teal-700"
-            />
+        <section
+            class="relative isolate overflow-hidden bg-linear-to-br from-emerald-600 to-teal-700 py-16 sm:py-24"
+        >
             <div
                 class="absolute inset-0 -z-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PHBhdGggZD0iTTM2IDM0djItSDI0di0yaDEyek0zNiAyNHYySDI0di0yaDEyeiIvPjwvZz48L2c+PC9zdmc+')] opacity-30"
             />
