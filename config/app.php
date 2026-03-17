@@ -123,4 +123,20 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Admin Account Configuration
+    |--------------------------------------------------------------------------
+    |
+    | These values are used by the ProductionSeeder to create the initial
+    | Super Admin account. Set them in your .env file.
+    |
+    */
+
+    'admin_email' => env('ADMIN_EMAIL'),
+
+    'admin_password' => env('ADMIN_PASSWORD'),
+
+    'admin_name' => env('ADMIN_NAME', 'Super Admin'),
+
 ];

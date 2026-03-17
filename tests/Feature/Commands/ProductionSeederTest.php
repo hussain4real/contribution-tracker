@@ -8,10 +8,16 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
+beforeEach(function () {
+    config()->set('app.admin_email', null);
+    config()->set('app.admin_password', null);
+    config()->set('app.admin_name', null);
+});
+
 it('creates a super admin account with environment variables', function () {
-    putenv('ADMIN_EMAIL=admin@production.test');
-    putenv('ADMIN_PASSWORD=secure-password');
-    putenv('ADMIN_NAME=Family Admin');
+    config()->set('app.admin_email', 'admin@production.test');
+    config()->set('app.admin_password', 'secure-password');
+    config()->set('app.admin_name', 'Family Admin');
 
     $this->artisan('db:seed', ['--class' => 'ProductionSeeder'])
         ->assertSuccessful();
@@ -23,15 +29,11 @@ it('creates a super admin account with environment variables', function () {
     expect($admin->role)->toBe(Role::SuperAdmin);
     expect($admin->category)->toBeNull();
     expect($admin->email_verified_at)->not->toBeNull();
-
-    putenv('ADMIN_EMAIL');
-    putenv('ADMIN_PASSWORD');
-    putenv('ADMIN_NAME');
 });
 
 it('uses default name when ADMIN_NAME is not set', function () {
-    putenv('ADMIN_EMAIL=admin@production.test');
-    putenv('ADMIN_PASSWORD=secure-password');
+    config()->set('app.admin_email', 'admin@production.test');
+    config()->set('app.admin_password', 'secure-password');
 
     $this->artisan('db:seed', ['--class' => 'ProductionSeeder'])
         ->assertSuccessful();
@@ -39,51 +41,41 @@ it('uses default name when ADMIN_NAME is not set', function () {
     $admin = User::query()->where('email', 'admin@production.test')->first();
 
     expect($admin->name)->toBe('Super Admin');
-
-    putenv('ADMIN_EMAIL');
-    putenv('ADMIN_PASSWORD');
 });
 
 it('fails when email is not provided', function () {
-    putenv('ADMIN_PASSWORD=secure-password');
+    config()->set('app.admin_password', 'secure-password');
 
     $this->artisan('db:seed', ['--class' => 'ProductionSeeder'])
         ->expectsOutputToContain('ADMIN_EMAIL and ADMIN_PASSWORD environment variables are required');
 
     expect(User::query()->count())->toBe(0);
-
-    putenv('ADMIN_PASSWORD');
 });
 
 it('fails when password is not provided', function () {
-    putenv('ADMIN_EMAIL=admin@production.test');
+    config()->set('app.admin_email', 'admin@production.test');
 
     $this->artisan('db:seed', ['--class' => 'ProductionSeeder'])
         ->expectsOutputToContain('ADMIN_EMAIL and ADMIN_PASSWORD environment variables are required');
 
     expect(User::query()->count())->toBe(0);
-
-    putenv('ADMIN_EMAIL');
 });
 
 it('skips creation if user with email already exists', function () {
     User::factory()->superAdmin()->create(['email' => 'admin@production.test']);
 
-    putenv('ADMIN_EMAIL=admin@production.test');
-    putenv('ADMIN_PASSWORD=secure-password');
+    config()->set('app.admin_email', 'admin@production.test');
+    config()->set('app.admin_password', 'secure-password');
 
     $this->artisan('db:seed', ['--class' => 'ProductionSeeder'])
         ->expectsOutputToContain('already exists');
 
     expect(User::query()->where('email', 'admin@production.test')->count())->toBe(1);
-
-    putenv('ADMIN_EMAIL');
-    putenv('ADMIN_PASSWORD');
 });
 
 it('does not create any demo data', function () {
-    putenv('ADMIN_EMAIL=admin@production.test');
-    putenv('ADMIN_PASSWORD=secure-password');
+    config()->set('app.admin_email', 'admin@production.test');
+    config()->set('app.admin_password', 'secure-password');
 
     $this->artisan('db:seed', ['--class' => 'ProductionSeeder'])
         ->assertSuccessful();
@@ -91,7 +83,4 @@ it('does not create any demo data', function () {
     expect(User::query()->count())->toBe(1);
     expect(Contribution::query()->count())->toBe(0);
     expect(Payment::query()->count())->toBe(0);
-
-    putenv('ADMIN_EMAIL');
-    putenv('ADMIN_PASSWORD');
 });

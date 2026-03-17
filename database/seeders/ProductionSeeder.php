@@ -21,9 +21,9 @@ class ProductionSeeder extends Seeder
      */
     public function run(): void
     {
-        $email = config('app.admin_email') ?: env('ADMIN_EMAIL');
-        $password = config('app.admin_password') ?: env('ADMIN_PASSWORD');
-        $name = config('app.admin_name') ?: env('ADMIN_NAME', 'Super Admin');
+        $email = config('app.admin_email');
+        $password = config('app.admin_password');
+        $name = config('app.admin_name') ?: 'Super Admin';
 
         if (! $email || ! $password) {
             $this->command->error('ADMIN_EMAIL and ADMIN_PASSWORD environment variables are required.');
