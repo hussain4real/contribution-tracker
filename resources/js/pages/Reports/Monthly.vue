@@ -514,7 +514,9 @@ function getStatusColor(status: string): string {
                                     class="px-4 py-4 font-medium text-neutral-900 sm:px-6 dark:text-neutral-100"
                                 >
                                     {{ member.name }}
-                                    <span class="block text-xs font-normal text-neutral-500 md:hidden">
+                                    <span
+                                        class="block text-xs font-normal text-neutral-500 md:hidden"
+                                    >
                                         {{ member.category_label }}
                                     </span>
                                 </td>

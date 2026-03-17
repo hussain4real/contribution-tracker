@@ -67,7 +67,9 @@ function deleteExpense(id: number): void {
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
             <!-- Header -->
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div
+                class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+            >
                 <div class="flex items-center gap-3">
                     <Receipt class="h-6 w-6 text-neutral-500" />
                     <h1

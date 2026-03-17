@@ -53,7 +53,9 @@ const displayedMembers = computed(() => {
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
             <!-- Header -->
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div
+                class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+            >
                 <div class="flex items-center gap-3">
                     <Users class="h-6 w-6 text-neutral-500" />
                     <h1
@@ -69,8 +71,12 @@ const displayedMembers = computed(() => {
                         @click="showArchived = !showArchived"
                     >
                         <Archive class="mr-1 h-4 w-4 sm:mr-2" />
-                        <span class="hidden sm:inline">{{ showArchived ? 'Show Active' : 'Show Archived' }}</span>
-                        <span class="sm:hidden">{{ showArchived ? 'Active' : 'Archived' }}</span>
+                        <span class="hidden sm:inline">{{
+                            showArchived ? 'Show Active' : 'Show Archived'
+                        }}</span>
+                        <span class="sm:hidden">{{
+                            showArchived ? 'Active' : 'Archived'
+                        }}</span>
                     </Button>
                     <Link v-if="canManageMembers" :href="create().url">
                         <Button size="sm">

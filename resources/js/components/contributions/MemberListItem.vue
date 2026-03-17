@@ -117,7 +117,9 @@ function restoreMember() {
                 Archived {{ member.archived_at }}
             </div>
         </td>
-        <td class="hidden px-6 py-4 text-neutral-600 md:table-cell dark:text-neutral-400">
+        <td
+            class="hidden px-6 py-4 text-neutral-600 md:table-cell dark:text-neutral-400"
+        >
             {{ member.email }}
         </td>
         <td class="hidden px-6 py-4 lg:table-cell">

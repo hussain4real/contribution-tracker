@@ -84,7 +84,9 @@ function resetForm(): void {
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
             <!-- Header -->
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div
+                class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+            >
                 <div class="flex items-center gap-3">
                     <Landmark class="h-6 w-6 text-neutral-500" />
                     <h1
@@ -93,7 +95,11 @@ function resetForm(): void {
                         Fund Adjustments
                     </h1>
                 </div>
-                <Button v-if="can_create && !showForm" size="sm" @click="showForm = true">
+                <Button
+                    v-if="can_create && !showForm"
+                    size="sm"
+                    @click="showForm = true"
+                >
                     <Plus class="mr-2 h-4 w-4" />
                     Record Adjustment
                 </Button>

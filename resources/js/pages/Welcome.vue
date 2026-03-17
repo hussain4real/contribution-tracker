@@ -52,17 +52,20 @@ const steps = [
     {
         number: '01',
         title: 'Sign Up',
-        description: 'Create your family account and invite members to join the contribution pool.',
+        description:
+            'Create your family account and invite members to join the contribution pool.',
     },
     {
         number: '02',
         title: 'Track Contributions',
-        description: 'Monthly contributions are automatically tracked with clear status updates for each member.',
+        description:
+            'Monthly contributions are automatically tracked with clear status updates for each member.',
     },
     {
         number: '03',
         title: 'Stay Accountable',
-        description: 'View reports, monitor balances, and ensure every naira is accounted for.',
+        description:
+            'View reports, monitor balances, and ensure every naira is accounted for.',
     },
 ];
 
@@ -74,7 +77,7 @@ const testimonials = [
         initials: 'AF',
     },
     {
-        quote: 'No more arguments about who has paid and who hasn\'t. The reports make our monthly meetings so much smoother.',
+        quote: "No more arguments about who has paid and who hasn't. The reports make our monthly meetings so much smoother.",
         name: 'Okonkwo Family',
         role: 'Abuja, Nigeria',
         initials: 'OF',
@@ -337,8 +340,13 @@ onUnmounted(() => {
             id="section-features"
             data-animate
             class="py-16 sm:py-24"
-            :class="visibleSections.has('section-features') ? 'animate-fade-in-up' : 'opacity-0'"
-        >    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            :class="
+                visibleSections.has('section-features')
+                    ? 'animate-fade-in-up'
+                    : 'opacity-0'
+            "
+        >
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div class="mx-auto max-w-2xl text-center">
                     <h2
                         class="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl dark:text-white"
@@ -439,7 +447,11 @@ onUnmounted(() => {
             id="section-how-it-works"
             data-animate
             class="border-t border-slate-200 bg-slate-50 py-16 sm:py-24 dark:border-slate-800 dark:bg-slate-900/50"
-            :class="visibleSections.has('section-how-it-works') ? 'animate-fade-in-up' : 'opacity-0'"
+            :class="
+                visibleSections.has('section-how-it-works')
+                    ? 'animate-fade-in-up'
+                    : 'opacity-0'
+            "
         >
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div class="mx-auto max-w-2xl text-center">
@@ -484,7 +496,11 @@ onUnmounted(() => {
             id="section-testimonials"
             data-animate
             class="py-16 sm:py-24"
-            :class="visibleSections.has('section-testimonials') ? 'animate-fade-in-up' : 'opacity-0'"
+            :class="
+                visibleSections.has('section-testimonials')
+                    ? 'animate-fade-in-up'
+                    : 'opacity-0'
+            "
         >
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div class="mx-auto max-w-2xl text-center">
@@ -498,7 +514,9 @@ onUnmounted(() => {
                     </p>
                 </div>
 
-                <div class="mx-auto mt-16 grid max-w-5xl gap-8 sm:grid-cols-2 lg:grid-cols-3">
+                <div
+                    class="mx-auto mt-16 grid max-w-5xl gap-8 sm:grid-cols-2 lg:grid-cols-3"
+                >
                     <div
                         v-for="testimonial in testimonials"
                         :key="testimonial.name"
@@ -518,7 +536,7 @@ onUnmounted(() => {
                             </svg>
                         </div>
                         <p
-                            class="text-slate-600 leading-relaxed dark:text-slate-400"
+                            class="leading-relaxed text-slate-600 dark:text-slate-400"
                         >
                             "{{ testimonial.quote }}"
                         </p>
@@ -551,7 +569,11 @@ onUnmounted(() => {
             id="section-faq"
             data-animate
             class="border-t border-slate-200 bg-slate-50 py-16 sm:py-24 dark:border-slate-800 dark:bg-slate-900/50"
-            :class="visibleSections.has('section-faq') ? 'animate-fade-in-up' : 'opacity-0'"
+            :class="
+                visibleSections.has('section-faq')
+                    ? 'animate-fade-in-up'
+                    : 'opacity-0'
+            "
         >
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div class="mx-auto max-w-2xl text-center">
@@ -565,12 +587,10 @@ onUnmounted(() => {
                     </p>
                 </div>
 
-                <div class="mx-auto mt-12 max-w-3xl divide-y divide-slate-200 dark:divide-slate-700">
-                    <div
-                        v-for="(faq, index) in faqs"
-                        :key="index"
-                        class="py-5"
-                    >
+                <div
+                    class="mx-auto mt-12 max-w-3xl divide-y divide-slate-200 dark:divide-slate-700"
+                >
+                    <div v-for="(faq, index) in faqs" :key="index" class="py-5">
                         <button
                             @click="toggleFaq(index)"
                             class="flex w-full items-center justify-between text-left"

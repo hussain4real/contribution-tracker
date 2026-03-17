@@ -53,7 +53,9 @@ function togglePayments() {
 
 <template>
     <div class="p-4 sm:p-6">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div
+            class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+        >
             <div class="flex items-center gap-3 sm:gap-4">
                 <Link
                     :href="showContribution(contribution.id).url"
@@ -83,7 +85,10 @@ function togglePayments() {
                     </p>
                 </div>
 
-                <div v-if="contribution.balance > 0" class="text-left sm:text-right">
+                <div
+                    v-if="contribution.balance > 0"
+                    class="text-left sm:text-right"
+                >
                     <p class="text-neutral-600 dark:text-neutral-400">
                         Balance
                     </p>

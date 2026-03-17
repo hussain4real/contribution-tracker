@@ -161,15 +161,21 @@ const progressPercentage = (): number => {
                             <div class="text-lg font-bold sm:text-2xl">
                                 {{ formatAmount(contribution.expected_amount) }}
                             </div>
-                            <div class="text-xs text-muted-foreground sm:text-sm">
+                            <div
+                                class="text-xs text-muted-foreground sm:text-sm"
+                            >
                                 Expected
                             </div>
                         </div>
                         <div class="text-center">
-                            <div class="text-lg font-bold text-green-600 sm:text-2xl">
+                            <div
+                                class="text-lg font-bold text-green-600 sm:text-2xl"
+                            >
                                 {{ formatAmount(contribution.total_paid) }}
                             </div>
-                            <div class="text-xs text-muted-foreground sm:text-sm">
+                            <div
+                                class="text-xs text-muted-foreground sm:text-sm"
+                            >
                                 Paid
                             </div>
                         </div>
@@ -184,7 +190,9 @@ const progressPercentage = (): number => {
                             >
                                 {{ formatAmount(contribution.balance) }}
                             </div>
-                            <div class="text-xs text-muted-foreground sm:text-sm">
+                            <div
+                                class="text-xs text-muted-foreground sm:text-sm"
+                            >
                                 Balance
                             </div>
                         </div>
@@ -226,8 +234,12 @@ const progressPercentage = (): number => {
                             <TableRow>
                                 <TableHead>Date</TableHead>
                                 <TableHead>Amount</TableHead>
-                                <TableHead class="hidden md:table-cell">Recorded By</TableHead>
-                                <TableHead class="hidden sm:table-cell">Notes</TableHead>
+                                <TableHead class="hidden md:table-cell"
+                                    >Recorded By</TableHead
+                                >
+                                <TableHead class="hidden sm:table-cell"
+                                    >Notes</TableHead
+                                >
                             </TableRow>
                         </TableHeader>
                         <TableBody>
