@@ -21,9 +21,11 @@ import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
 import {
     FileBarChart2,
+    FileText,
     Landmark,
     LayoutGrid,
     Receipt,
+    Shield,
     Users,
     Wallet,
 } from 'lucide-vue-next';
@@ -90,16 +92,16 @@ const mainNavItems = computed<NavItem[]>(() => {
 });
 
 const footerNavItems: NavItem[] = [
-    // {
-    //     title: 'Github Repo',
-    //     href: 'https://github.com/laravel/vue-starter-kit',
-    //     icon: Folder,
-    // },
-    // {
-    //     title: 'Documentation',
-    //     href: 'https://laravel.com/docs/starter-kits#vue',
-    //     icon: BookOpen,
-    // },
+    {
+        title: 'Privacy Policy',
+        href: '/privacy',
+        icon: Shield,
+    },
+    {
+        title: 'Terms of Service',
+        href: '/terms',
+        icon: FileText,
+    },
 ];
 </script>
 

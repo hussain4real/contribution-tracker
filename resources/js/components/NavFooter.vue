@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/sidebar';
 import { toUrl } from '@/lib/utils';
 import { type NavItem } from '@/types';
+import { Link } from '@inertiajs/vue3';
 
 interface Props {
     items: NavItem[];
@@ -15,6 +16,10 @@ interface Props {
 }
 
 defineProps<Props>();
+
+function isExternal(href: string | Record<string, unknown>): boolean {
+    return typeof href === 'string' && href.startsWith('http');
+}
 </script>
 
 <template>
@@ -29,6 +34,7 @@ defineProps<Props>();
                         as-child
                     >
                         <a
+                            v-if="isExternal(toUrl(item.href))"
                             :href="toUrl(item.href)"
                             target="_blank"
                             rel="noopener noreferrer"
@@ -36,6 +42,10 @@ defineProps<Props>();
                             <component :is="item.icon" />
                             <span>{{ item.title }}</span>
                         </a>
+                        <Link v-else :href="toUrl(item.href)">
+                            <component :is="item.icon" />
+                            <span>{{ item.title }}</span>
+                        </Link>
                     </SidebarMenuButton>
                 </SidebarMenuItem>
             </SidebarMenu>
