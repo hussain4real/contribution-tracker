@@ -473,32 +473,32 @@ function getStatusColor(status: string): string {
                                 class="border-b border-neutral-200 dark:border-neutral-700"
                             >
                                 <th
-                                    class="px-6 py-4 font-medium text-neutral-600 dark:text-neutral-400"
+                                    class="px-4 py-4 font-medium text-neutral-600 sm:px-6 dark:text-neutral-400"
                                 >
                                     Name
                                 </th>
                                 <th
-                                    class="px-6 py-4 font-medium text-neutral-600 dark:text-neutral-400"
+                                    class="hidden px-6 py-4 font-medium text-neutral-600 md:table-cell dark:text-neutral-400"
                                 >
                                     Category
                                 </th>
                                 <th
-                                    class="px-6 py-4 text-right font-medium text-neutral-600 dark:text-neutral-400"
+                                    class="hidden px-6 py-4 text-right font-medium text-neutral-600 sm:table-cell dark:text-neutral-400"
                                 >
                                     Expected
                                 </th>
                                 <th
-                                    class="px-6 py-4 text-right font-medium text-neutral-600 dark:text-neutral-400"
+                                    class="px-4 py-4 text-right font-medium text-neutral-600 sm:px-6 dark:text-neutral-400"
                                 >
                                     Paid
                                 </th>
                                 <th
-                                    class="px-6 py-4 text-right font-medium text-neutral-600 dark:text-neutral-400"
+                                    class="hidden px-6 py-4 text-right font-medium text-neutral-600 lg:table-cell dark:text-neutral-400"
                                 >
                                     Balance
                                 </th>
                                 <th
-                                    class="px-6 py-4 font-medium text-neutral-600 dark:text-neutral-400"
+                                    class="px-4 py-4 font-medium text-neutral-600 sm:px-6 dark:text-neutral-400"
                                 >
                                     Status
                                 </th>
@@ -511,27 +511,32 @@ function getStatusColor(status: string): string {
                                 class="border-b border-neutral-100 dark:border-neutral-800"
                             >
                                 <td
-                                    class="px-6 py-4 font-medium text-neutral-900 dark:text-neutral-100"
+                                    class="px-4 py-4 font-medium text-neutral-900 sm:px-6 dark:text-neutral-100"
                                 >
                                     {{ member.name }}
+                                    <span
+                                        class="block text-xs font-normal text-neutral-500 md:hidden"
+                                    >
+                                        {{ member.category_label }}
+                                    </span>
                                 </td>
                                 <td
-                                    class="px-6 py-4 text-neutral-600 dark:text-neutral-400"
+                                    class="hidden px-6 py-4 text-neutral-600 md:table-cell dark:text-neutral-400"
                                 >
                                     {{ member.category_label }}
                                 </td>
                                 <td
-                                    class="px-6 py-4 text-right text-neutral-600 dark:text-neutral-400"
+                                    class="hidden px-6 py-4 text-right text-neutral-600 sm:table-cell dark:text-neutral-400"
                                 >
                                     {{ formatCurrency(member.expected_amount) }}
                                 </td>
                                 <td
-                                    class="px-6 py-4 text-right text-green-600 dark:text-green-400"
+                                    class="px-4 py-4 text-right text-green-600 sm:px-6 dark:text-green-400"
                                 >
                                     {{ formatCurrency(member.paid_amount) }}
                                 </td>
                                 <td
-                                    class="px-6 py-4 text-right"
+                                    class="hidden px-6 py-4 text-right lg:table-cell"
                                     :class="
                                         member.balance > 0
                                             ? 'text-amber-600 dark:text-amber-400'
@@ -540,7 +545,7 @@ function getStatusColor(status: string): string {
                                 >
                                     {{ formatCurrency(member.balance) }}
                                 </td>
-                                <td class="px-6 py-4">
+                                <td class="px-4 py-4 sm:px-6">
                                     <span
                                         :class="getStatusColor(member.status)"
                                         class="inline-flex rounded-full px-2 py-1 text-xs font-medium"

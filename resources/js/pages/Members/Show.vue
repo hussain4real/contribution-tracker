@@ -189,24 +189,28 @@ function restoreMember() {
         <div class="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
             <div class="mx-auto w-full max-w-2xl">
                 <div
-                    class="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border dark:bg-neutral-900"
+                    class="rounded-xl border border-sidebar-border/70 bg-white p-4 sm:p-6 dark:border-sidebar-border dark:bg-neutral-900"
                 >
                     <!-- Header -->
-                    <div class="flex items-start justify-between">
-                        <div class="flex items-center gap-4">
+                    <div
+                        class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
+                    >
+                        <div class="flex items-center gap-3 sm:gap-4">
                             <div
-                                class="flex h-16 w-16 items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-800"
+                                class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-neutral-100 sm:h-16 sm:w-16 dark:bg-neutral-800"
                             >
-                                <User class="h-8 w-8 text-neutral-500" />
+                                <User
+                                    class="h-6 w-6 text-neutral-500 sm:h-8 sm:w-8"
+                                />
                             </div>
-                            <div>
+                            <div class="min-w-0">
                                 <h1
-                                    class="text-2xl font-semibold text-neutral-900 dark:text-neutral-100"
+                                    class="truncate text-xl font-semibold text-neutral-900 sm:text-2xl dark:text-neutral-100"
                                 >
                                     {{ member.name }}
                                 </h1>
                                 <p
-                                    class="text-neutral-600 dark:text-neutral-400"
+                                    class="truncate text-sm text-neutral-600 sm:text-base dark:text-neutral-400"
                                 >
                                     {{ member.email }}
                                 </p>
@@ -343,7 +347,7 @@ function restoreMember() {
                         <!-- Summary Stats -->
                         <div
                             v-if="contributions.length > 0"
-                            class="mt-4 grid grid-cols-3 gap-3"
+                            class="mt-4 grid grid-cols-3 gap-2 sm:gap-3"
                         >
                             <div
                                 class="rounded-lg bg-emerald-50 p-3 dark:bg-emerald-900/20"
@@ -358,7 +362,7 @@ function restoreMember() {
                                     >
                                 </div>
                                 <p
-                                    class="mt-1 text-lg font-bold text-emerald-700 dark:text-emerald-300"
+                                    class="mt-1 text-base font-bold text-emerald-700 sm:text-lg dark:text-emerald-300"
                                 >
                                     {{ formatCurrency(summary.total_paid) }}
                                 </p>
@@ -376,7 +380,7 @@ function restoreMember() {
                                     >
                                 </div>
                                 <p
-                                    class="mt-1 text-lg font-bold text-blue-700 dark:text-blue-300"
+                                    class="mt-1 text-base font-bold text-blue-700 sm:text-lg dark:text-blue-300"
                                 >
                                     {{ formatCurrency(summary.total_expected) }}
                                 </p>
@@ -476,10 +480,12 @@ function restoreMember() {
                                             </p>
                                         </div>
                                     </div>
-                                    <div class="flex items-center gap-4">
+                                    <div
+                                        class="flex items-center gap-2 sm:gap-4"
+                                    >
                                         <div class="text-right">
                                             <p
-                                                class="font-semibold text-neutral-900 dark:text-neutral-100"
+                                                class="text-sm font-semibold text-neutral-900 sm:text-base dark:text-neutral-100"
                                             >
                                                 {{
                                                     formatCurrency(
@@ -507,7 +513,7 @@ function restoreMember() {
                                                       ? 'destructive'
                                                       : 'secondary'
                                             "
-                                            class="text-xs"
+                                            class="hidden text-xs sm:inline-flex"
                                         >
                                             {{ contribution.status_label }}
                                         </Badge>

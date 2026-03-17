@@ -53,27 +53,34 @@ const displayedMembers = computed(() => {
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
             <!-- Header -->
-            <div class="flex items-center justify-between">
+            <div
+                class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+            >
                 <div class="flex items-center gap-3">
                     <Users class="h-6 w-6 text-neutral-500" />
                     <h1
-                        class="text-2xl font-semibold text-neutral-900 dark:text-neutral-100"
+                        class="text-xl font-semibold text-neutral-900 sm:text-2xl dark:text-neutral-100"
                     >
                         Family Members
                     </h1>
                 </div>
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2 sm:gap-3">
                     <Button
                         variant="outline"
                         size="sm"
                         @click="showArchived = !showArchived"
                     >
-                        <Archive class="mr-2 h-4 w-4" />
-                        {{ showArchived ? 'Show Active' : 'Show Archived' }}
+                        <Archive class="mr-1 h-4 w-4 sm:mr-2" />
+                        <span class="hidden sm:inline">{{
+                            showArchived ? 'Show Active' : 'Show Archived'
+                        }}</span>
+                        <span class="sm:hidden">{{
+                            showArchived ? 'Active' : 'Archived'
+                        }}</span>
                     </Button>
                     <Link v-if="canManageMembers" :href="create().url">
-                        <Button>
-                            <Plus class="mr-2 h-4 w-4" />
+                        <Button size="sm">
+                            <Plus class="mr-1 h-4 w-4 sm:mr-2" />
                             Add Member
                         </Button>
                     </Link>
@@ -91,32 +98,32 @@ const displayedMembers = computed(() => {
                                 class="border-b border-neutral-200 dark:border-neutral-700"
                             >
                                 <th
-                                    class="px-6 py-4 font-medium text-neutral-600 dark:text-neutral-400"
+                                    class="px-4 py-4 font-medium text-neutral-600 sm:px-6 dark:text-neutral-400"
                                 >
                                     Name
                                 </th>
                                 <th
-                                    class="px-6 py-4 font-medium text-neutral-600 dark:text-neutral-400"
+                                    class="hidden px-6 py-4 font-medium text-neutral-600 md:table-cell dark:text-neutral-400"
                                 >
                                     Email
                                 </th>
                                 <th
-                                    class="px-6 py-4 font-medium text-neutral-600 dark:text-neutral-400"
+                                    class="hidden px-6 py-4 font-medium text-neutral-600 lg:table-cell dark:text-neutral-400"
                                 >
                                     Role
                                 </th>
                                 <th
-                                    class="px-6 py-4 font-medium text-neutral-600 dark:text-neutral-400"
+                                    class="px-4 py-4 font-medium text-neutral-600 sm:px-6 dark:text-neutral-400"
                                 >
                                     Category
                                 </th>
                                 <th
-                                    class="px-6 py-4 text-right font-medium text-neutral-600 dark:text-neutral-400"
+                                    class="hidden px-6 py-4 text-right font-medium text-neutral-600 sm:table-cell dark:text-neutral-400"
                                 >
                                     Monthly Amount
                                 </th>
                                 <th
-                                    class="px-6 py-4 text-right font-medium text-neutral-600 dark:text-neutral-400"
+                                    class="px-4 py-4 text-right font-medium text-neutral-600 sm:px-6 dark:text-neutral-400"
                                 >
                                     Actions
                                 </th>

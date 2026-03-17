@@ -138,7 +138,7 @@ function formatCurrency(amount: number): string {
                     <!-- Member Statuses Table -->
                     <div
                         v-if="member_statuses"
-                        class="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border dark:bg-neutral-900"
+                        class="rounded-xl border border-sidebar-border/70 bg-white p-4 sm:p-6 dark:border-sidebar-border dark:bg-neutral-900"
                     >
                         <h2
                             class="mb-4 text-lg font-semibold text-neutral-900 dark:text-neutral-100"
@@ -152,22 +152,22 @@ function formatCurrency(amount: number): string {
                                         class="border-b border-neutral-200 dark:border-neutral-700"
                                     >
                                         <th
-                                            class="px-4 py-3 font-medium text-neutral-600 dark:text-neutral-400"
+                                            class="px-3 py-3 font-medium text-neutral-600 sm:px-4 dark:text-neutral-400"
                                         >
                                             Member
                                         </th>
                                         <th
-                                            class="px-4 py-3 font-medium text-neutral-600 dark:text-neutral-400"
+                                            class="hidden px-3 py-3 font-medium text-neutral-600 sm:table-cell sm:px-4 dark:text-neutral-400"
                                         >
                                             Category
                                         </th>
                                         <th
-                                            class="px-4 py-3 font-medium text-neutral-600 dark:text-neutral-400"
+                                            class="px-3 py-3 font-medium text-neutral-600 sm:px-4 dark:text-neutral-400"
                                         >
                                             Status
                                         </th>
                                         <th
-                                            class="px-4 py-3 text-right font-medium text-neutral-600 dark:text-neutral-400"
+                                            class="px-3 py-3 text-right font-medium text-neutral-600 sm:px-4 dark:text-neutral-400"
                                         >
                                             Balance
                                         </th>

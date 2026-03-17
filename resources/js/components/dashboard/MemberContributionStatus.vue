@@ -38,7 +38,7 @@ function formatCategory(category: string): string {
     <tr
         class="border-b border-neutral-100 transition hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-800/50"
     >
-        <td class="px-4 py-3">
+        <td class="px-3 py-3 sm:px-4">
             <Link
                 :href="showContribution(member.contribution_id).url"
                 class="font-medium text-neutral-900 hover:text-blue-600 dark:text-neutral-100 dark:hover:text-blue-400"
@@ -46,7 +46,7 @@ function formatCategory(category: string): string {
                 {{ member.name }}
             </Link>
         </td>
-        <td class="px-4 py-3">
+        <td class="hidden px-3 py-3 sm:table-cell sm:px-4">
             <span
                 class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
                 :class="{
@@ -61,10 +61,10 @@ function formatCategory(category: string): string {
                 {{ formatCategory(member.category) }}
             </span>
         </td>
-        <td class="px-4 py-3">
+        <td class="px-3 py-3 sm:px-4">
             <StatusBadge :status="member.current_month_status" />
         </td>
-        <td class="px-4 py-3 text-right">
+        <td class="px-3 py-3 text-right sm:px-4">
             <span
                 class="font-medium"
                 :class="{

@@ -54,7 +54,7 @@ function getMonthName(month: number): string {
 
 <template>
     <div
-        class="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border dark:bg-neutral-900"
+        class="rounded-xl border border-sidebar-border/70 bg-white p-4 sm:p-6 dark:border-sidebar-border dark:bg-neutral-900"
     >
         <h2
             class="mb-4 text-lg font-semibold text-neutral-900 dark:text-neutral-100"
@@ -73,7 +73,7 @@ function getMonthName(month: number): string {
             <div
                 v-for="payment in payments"
                 :key="payment.id"
-                class="flex items-center justify-between rounded-lg border border-neutral-200 p-4 dark:border-neutral-700"
+                class="flex items-center justify-between rounded-lg border border-neutral-200 p-3 sm:p-4 dark:border-neutral-700"
             >
                 <div class="flex items-center gap-3">
                     <div

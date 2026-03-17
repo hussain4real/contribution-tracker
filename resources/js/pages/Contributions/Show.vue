@@ -156,26 +156,32 @@ const progressPercentage = (): number => {
                     </div>
 
                     <!-- Stats Grid -->
-                    <div class="grid grid-cols-3 gap-4 pt-2">
+                    <div class="grid grid-cols-3 gap-2 pt-2 sm:gap-4">
                         <div class="text-center">
-                            <div class="text-2xl font-bold">
+                            <div class="text-lg font-bold sm:text-2xl">
                                 {{ formatAmount(contribution.expected_amount) }}
                             </div>
-                            <div class="text-sm text-muted-foreground">
+                            <div
+                                class="text-xs text-muted-foreground sm:text-sm"
+                            >
                                 Expected
                             </div>
                         </div>
                         <div class="text-center">
-                            <div class="text-2xl font-bold text-green-600">
+                            <div
+                                class="text-lg font-bold text-green-600 sm:text-2xl"
+                            >
                                 {{ formatAmount(contribution.total_paid) }}
                             </div>
-                            <div class="text-sm text-muted-foreground">
+                            <div
+                                class="text-xs text-muted-foreground sm:text-sm"
+                            >
                                 Paid
                             </div>
                         </div>
                         <div class="text-center">
                             <div
-                                class="text-2xl font-bold"
+                                class="text-lg font-bold sm:text-2xl"
                                 :class="{
                                     'text-amber-500': contribution.balance > 0,
                                     'text-green-600':
@@ -184,7 +190,9 @@ const progressPercentage = (): number => {
                             >
                                 {{ formatAmount(contribution.balance) }}
                             </div>
-                            <div class="text-sm text-muted-foreground">
+                            <div
+                                class="text-xs text-muted-foreground sm:text-sm"
+                            >
                                 Balance
                             </div>
                         </div>
@@ -226,8 +234,12 @@ const progressPercentage = (): number => {
                             <TableRow>
                                 <TableHead>Date</TableHead>
                                 <TableHead>Amount</TableHead>
-                                <TableHead>Recorded By</TableHead>
-                                <TableHead>Notes</TableHead>
+                                <TableHead class="hidden md:table-cell"
+                                    >Recorded By</TableHead
+                                >
+                                <TableHead class="hidden sm:table-cell"
+                                    >Notes</TableHead
+                                >
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -241,11 +253,11 @@ const progressPercentage = (): number => {
                                 <TableCell class="font-medium">
                                     {{ formatAmount(payment.amount) }}
                                 </TableCell>
-                                <TableCell>
+                                <TableCell class="hidden md:table-cell">
                                     {{ payment.recorder.name }}
                                 </TableCell>
                                 <TableCell
-                                    class="max-w-xs truncate text-muted-foreground"
+                                    class="hidden max-w-xs truncate text-muted-foreground sm:table-cell"
                                 >
                                     {{ payment.notes || '-' }}
                                 </TableCell>

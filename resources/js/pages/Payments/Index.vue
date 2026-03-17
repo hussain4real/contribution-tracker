@@ -63,7 +63,7 @@ function formatCurrency(amount: number): string {
             <div class="flex items-center gap-3">
                 <CreditCard class="h-6 w-6 text-neutral-500" />
                 <h1
-                    class="text-2xl font-semibold text-neutral-900 dark:text-neutral-100"
+                    class="text-xl font-semibold text-neutral-900 sm:text-2xl dark:text-neutral-100"
                 >
                     Record Payment
                 </h1>
@@ -136,11 +136,11 @@ function formatCurrency(amount: number): string {
                         v-for="member in filteredMembers"
                         :key="member.id"
                         :href="createPayment(member.id).url"
-                        class="flex items-center justify-between px-6 py-4 transition hover:bg-neutral-50 dark:hover:bg-neutral-800"
+                        class="flex items-center justify-between gap-3 px-4 py-4 transition hover:bg-neutral-50 sm:gap-4 sm:px-6 dark:hover:bg-neutral-800"
                     >
-                        <div class="flex items-center gap-4">
+                        <div class="flex min-w-0 items-center gap-3 sm:gap-4">
                             <div
-                                class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30"
+                                class="flex size-10 shrink-0 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30"
                             >
                                 <span
                                     class="text-sm font-medium text-blue-600 dark:text-blue-400"
@@ -148,21 +148,21 @@ function formatCurrency(amount: number): string {
                                     {{ member.name.charAt(0).toUpperCase() }}
                                 </span>
                             </div>
-                            <div>
+                            <div class="min-w-0">
                                 <p
-                                    class="font-medium text-neutral-900 dark:text-neutral-100"
+                                    class="truncate font-medium text-neutral-900 dark:text-neutral-100"
                                 >
                                     {{ member.name }}
                                 </p>
                                 <p
-                                    class="text-sm text-neutral-500 dark:text-neutral-400"
+                                    class="truncate text-sm text-neutral-500 dark:text-neutral-400"
                                 >
                                     {{ member.email }}
                                 </p>
                             </div>
                         </div>
-                        <div class="flex items-center gap-4">
-                            <div class="text-right">
+                        <div class="flex shrink-0 items-center gap-2 sm:gap-4">
+                            <div class="hidden text-right sm:block">
                                 <p
                                     class="text-sm text-neutral-500 dark:text-neutral-400"
                                 >

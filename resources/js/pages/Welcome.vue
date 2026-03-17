@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import ThemeToggle from '@/components/ThemeToggle.vue';
 import { Button } from '@/components/ui/button';
 import { dashboard, login, register } from '@/routes';
 import { Head, Link } from '@inertiajs/vue3';
+import { onMounted, onUnmounted, ref } from 'vue';
 
 withDefaults(
     defineProps<{
@@ -45,6 +47,101 @@ const stats = [
     { value: '3', label: 'Categories' },
     { value: '100%', label: 'Transparent' },
 ];
+
+const steps = [
+    {
+        number: '01',
+        title: 'Sign Up',
+        description:
+            'Create your family account and invite members to join the contribution pool.',
+    },
+    {
+        number: '02',
+        title: 'Track Contributions',
+        description:
+            'Monthly contributions are automatically tracked with clear status updates for each member.',
+    },
+    {
+        number: '03',
+        title: 'Stay Accountable',
+        description:
+            'View reports, monitor balances, and ensure every naira is accounted for.',
+    },
+];
+
+const testimonials = [
+    {
+        quote: 'FamilyFund has transformed how we manage our family contributions. Everything is transparent and everyone knows where they stand.',
+        name: 'Adebayo Family',
+        role: 'Lagos, Nigeria',
+        initials: 'AF',
+    },
+    {
+        quote: "No more arguments about who has paid and who hasn't. The reports make our monthly meetings so much smoother.",
+        name: 'Okonkwo Family',
+        role: 'Abuja, Nigeria',
+        initials: 'OF',
+    },
+    {
+        quote: 'The different member categories are perfect for our family. Students pay less and everyone is happy.',
+        name: 'Ibrahim Family',
+        role: 'Kano, Nigeria',
+        initials: 'IF',
+    },
+];
+
+const faqs = [
+    {
+        question: 'How are contribution amounts determined?',
+        answer: 'Contributions are based on member categories: Employed members pay ₦4,000, Unemployed members pay ₦2,000, and Students pay ₦1,000 per month.',
+    },
+    {
+        question: 'When are contributions due?',
+        answer: 'Monthly contributions are due by the 28th of each month. Members receive reminders as the due date approaches.',
+    },
+    {
+        question: 'Who can view the financial reports?',
+        answer: 'Super Admins and Financial Secretaries have full access to reports. Regular members can view their own contribution history and family-level summaries.',
+    },
+    {
+        question: 'Can I make partial payments?',
+        answer: 'Yes! Partial payments are fully supported. Your balance is automatically updated and the system tracks exactly how much remains.',
+    },
+    {
+        question: 'Is my financial data secure?',
+        answer: 'Absolutely. We use role-based access control to ensure only authorized family members can view or manage financial data.',
+    },
+];
+
+const openFaqIndex = ref<number | null>(null);
+
+function toggleFaq(index: number): void {
+    openFaqIndex.value = openFaqIndex.value === index ? null : index;
+}
+
+const visibleSections = ref<Set<string>>(new Set());
+let observer: IntersectionObserver | null = null;
+
+onMounted(() => {
+    observer = new IntersectionObserver(
+        (entries) => {
+            entries.forEach((entry) => {
+                if (entry.isIntersecting) {
+                    visibleSections.value.add(entry.target.id);
+                }
+            });
+        },
+        { threshold: 0.1 },
+    );
+
+    document.querySelectorAll('[data-animate]').forEach((el) => {
+        observer?.observe(el);
+    });
+});
+
+onUnmounted(() => {
+    observer?.disconnect();
+});
 </script>
 
 <template>
@@ -87,12 +184,13 @@ const stats = [
                     >
                 </div>
 
-                <nav class="flex items-center gap-3">
+                <nav class="flex items-center gap-2 sm:gap-3">
+                    <ThemeToggle />
                     <Link v-if="$page.props.auth.user" :href="dashboard()">
                         <Button variant="default" size="sm"> Dashboard </Button>
                     </Link>
                     <template v-else>
-                        <Link :href="login()">
+                        <Link :href="login()" class="hidden sm:inline-flex">
                             <Button variant="ghost" size="sm"> Log in </Button>
                         </Link>
                         <Link v-if="canRegister" :href="register()">
@@ -238,7 +336,16 @@ const stats = [
         </section>
 
         <!-- Features Section -->
-        <section class="py-16 sm:py-24">
+        <section
+            id="section-features"
+            data-animate
+            class="py-16 sm:py-24"
+            :class="
+                visibleSections.has('section-features')
+                    ? 'animate-fade-in-up'
+                    : 'opacity-0'
+            "
+        >
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div class="mx-auto max-w-2xl text-center">
                     <h2
@@ -330,6 +437,205 @@ const stats = [
                         <p class="mt-2 text-slate-600 dark:text-slate-400">
                             {{ feature.description }}
                         </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- How It Works Section -->
+        <section
+            id="section-how-it-works"
+            data-animate
+            class="border-t border-slate-200 bg-slate-50 py-16 sm:py-24 dark:border-slate-800 dark:bg-slate-900/50"
+            :class="
+                visibleSections.has('section-how-it-works')
+                    ? 'animate-fade-in-up'
+                    : 'opacity-0'
+            "
+        >
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div class="mx-auto max-w-2xl text-center">
+                    <h2
+                        class="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl dark:text-white"
+                    >
+                        How it works
+                    </h2>
+                    <p class="mt-4 text-lg text-slate-600 dark:text-slate-400">
+                        Get started in three simple steps.
+                    </p>
+                </div>
+
+                <div class="mx-auto mt-16 grid max-w-5xl gap-8 sm:grid-cols-3">
+                    <div
+                        v-for="step in steps"
+                        :key="step.number"
+                        class="relative text-center"
+                    >
+                        <div
+                            class="mx-auto mb-6 flex size-16 items-center justify-center rounded-2xl bg-linear-to-br from-emerald-500 to-teal-600 text-2xl font-bold text-white shadow-lg shadow-emerald-500/25"
+                        >
+                            {{ step.number }}
+                        </div>
+                        <h3
+                            class="text-xl font-semibold text-slate-900 dark:text-white"
+                        >
+                            {{ step.title }}
+                        </h3>
+                        <p
+                            class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400"
+                        >
+                            {{ step.description }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Testimonials Section -->
+        <section
+            id="section-testimonials"
+            data-animate
+            class="py-16 sm:py-24"
+            :class="
+                visibleSections.has('section-testimonials')
+                    ? 'animate-fade-in-up'
+                    : 'opacity-0'
+            "
+        >
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div class="mx-auto max-w-2xl text-center">
+                    <h2
+                        class="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl dark:text-white"
+                    >
+                        Trusted by families across Nigeria
+                    </h2>
+                    <p class="mt-4 text-lg text-slate-600 dark:text-slate-400">
+                        See what families are saying about FamilyFund.
+                    </p>
+                </div>
+
+                <div
+                    class="mx-auto mt-16 grid max-w-5xl gap-8 sm:grid-cols-2 lg:grid-cols-3"
+                >
+                    <div
+                        v-for="testimonial in testimonials"
+                        :key="testimonial.name"
+                        class="rounded-2xl border border-slate-200 bg-white p-8 transition-all hover:shadow-lg dark:border-slate-800 dark:bg-slate-900"
+                    >
+                        <div class="mb-4 flex gap-1">
+                            <svg
+                                v-for="n in 5"
+                                :key="n"
+                                class="size-5 text-amber-400"
+                                fill="currentColor"
+                                viewBox="0 0 20 20"
+                            >
+                                <path
+                                    d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"
+                                />
+                            </svg>
+                        </div>
+                        <p
+                            class="leading-relaxed text-slate-600 dark:text-slate-400"
+                        >
+                            "{{ testimonial.quote }}"
+                        </p>
+                        <div class="mt-6 flex items-center gap-3">
+                            <div
+                                class="flex size-10 items-center justify-center rounded-full bg-linear-to-br from-emerald-500 to-teal-600 text-sm font-bold text-white"
+                            >
+                                {{ testimonial.initials }}
+                            </div>
+                            <div>
+                                <p
+                                    class="font-semibold text-slate-900 dark:text-white"
+                                >
+                                    {{ testimonial.name }}
+                                </p>
+                                <p
+                                    class="text-sm text-slate-500 dark:text-slate-400"
+                                >
+                                    {{ testimonial.role }}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- FAQ Section -->
+        <section
+            id="section-faq"
+            data-animate
+            class="border-t border-slate-200 bg-slate-50 py-16 sm:py-24 dark:border-slate-800 dark:bg-slate-900/50"
+            :class="
+                visibleSections.has('section-faq')
+                    ? 'animate-fade-in-up'
+                    : 'opacity-0'
+            "
+        >
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div class="mx-auto max-w-2xl text-center">
+                    <h2
+                        class="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl dark:text-white"
+                    >
+                        Frequently asked questions
+                    </h2>
+                    <p class="mt-4 text-lg text-slate-600 dark:text-slate-400">
+                        Everything you need to know about FamilyFund.
+                    </p>
+                </div>
+
+                <div
+                    class="mx-auto mt-12 max-w-3xl divide-y divide-slate-200 dark:divide-slate-700"
+                >
+                    <div v-for="(faq, index) in faqs" :key="index" class="py-5">
+                        <button
+                            @click="toggleFaq(index)"
+                            class="flex w-full items-center justify-between text-left"
+                        >
+                            <span
+                                class="text-base font-medium text-slate-900 dark:text-white"
+                            >
+                                {{ faq.question }}
+                            </span>
+                            <svg
+                                class="size-5 shrink-0 text-slate-500 transition-transform duration-200"
+                                :class="
+                                    openFaqIndex === index ? 'rotate-180' : ''
+                                "
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M19 9l-7 7-7-7"
+                                />
+                            </svg>
+                        </button>
+                        <Transition
+                            enter-active-class="transition duration-200 ease-out"
+                            enter-from-class="max-h-0 opacity-0"
+                            enter-to-class="max-h-40 opacity-100"
+                            leave-active-class="transition duration-150 ease-in"
+                            leave-from-class="max-h-40 opacity-100"
+                            leave-to-class="max-h-0 opacity-0"
+                        >
+                            <div
+                                v-if="openFaqIndex === index"
+                                class="overflow-hidden"
+                            >
+                                <p
+                                    class="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-400"
+                                >
+                                    {{ faq.answer }}
+                                </p>
+                            </div>
+                        </Transition>
                     </div>
                 </div>
             </div>
