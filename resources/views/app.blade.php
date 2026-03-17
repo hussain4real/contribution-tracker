@@ -32,6 +32,25 @@
 
         <title inertia>{{ config('app.name', 'Laravel') }}</title>
 
+        {{-- Open Graph / Social sharing meta tags --}}
+        <meta property="og:type" content="website">
+        <meta property="og:url" content="{{ config('app.url') }}">
+        <meta property="og:title" content="{{ config('app.name', 'FamilyFunds') }}">
+        <meta property="og:description" content="Track family contributions with ease. Manage monthly contributions, record payments, and monitor your family fund — all in one place.">
+        <meta property="og:image" content="{{ config('app.url') }}/og-image.png">
+        <meta property="og:image:width" content="1200">
+        <meta property="og:image:height" content="630">
+        <meta property="og:site_name" content="{{ config('app.name', 'FamilyFunds') }}">
+
+        {{-- Twitter Card --}}
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:title" content="{{ config('app.name', 'FamilyFunds') }}">
+        <meta name="twitter:description" content="Track family contributions with ease. Manage monthly contributions, record payments, and monitor your family fund.">
+        <meta name="twitter:image" content="{{ config('app.url') }}/og-image.png">
+
+        {{-- General meta --}}
+        <meta name="description" content="Track family contributions with ease. Manage monthly contributions, record payments, and monitor your family fund — all in one place.">
+
         <link rel="icon" href="/favicon.ico" sizes="any">
         <link rel="icon" href="/favicon.svg" type="image/svg+xml">
         <link rel="apple-touch-icon" href="/apple-touch-icon.png">

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0d9488;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#115e59;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)" rx="0"/>
+  <!-- Icon group centered -->
+  <g transform="translate(600, 240)" fill="none" stroke="white" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Three people icon -->
+    <circle cx="-60" cy="-30" r="20"/>
+    <circle cx="0" cy="-45" r="24"/>
+    <circle cx="60" cy="-30" r="20"/>
+    <path d="M-100 30 Q-80 0 -60 10 Q-30 25 0 15 Q30 25 60 10 Q80 0 100 30"/>
+  </g>
+  <!-- App name -->
+  <text x="600" y="370" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-weight="700" font-size="72" fill="white" letter-spacing="-1">FamilyFunds</text>
+  <!-- Tagline -->
+  <text x="600" y="430" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-weight="400" font-size="32" fill="rgba(255,255,255,0.85)">Track family contributions with ease</text>
+  <!-- URL -->
+  <text x="600" y="580" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-weight="400" font-size="24" fill="rgba(255,255,255,0.6)">familyfunds.app</text>
+</svg>
