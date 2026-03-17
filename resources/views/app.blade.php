@@ -41,6 +41,7 @@
         <meta property="og:image:width" content="1200">
         <meta property="og:image:height" content="630">
         <meta property="og:site_name" content="{{ config('app.name', 'FamilyFunds') }}">
+        <meta property="fb:app_id" content="{{ config('services.facebook.app_id', '') }}">
 
         {{-- Twitter Card --}}
         <meta name="twitter:card" content="summary_large_image">

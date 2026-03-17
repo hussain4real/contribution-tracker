@@ -770,6 +770,20 @@ onUnmounted(() => {
                         © {{ new Date().getFullYear() }} FamilyFund. Built with
                         ❤️ for Nigerian families.
                     </p>
+                    <div class="flex items-center gap-4">
+                        <Link
+                            href="/privacy"
+                            class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                        >
+                            Privacy
+                        </Link>
+                        <Link
+                            href="/terms"
+                            class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                        >
+                            Terms
+                        </Link>
+                    </div>
                 </div>
             </div>
         </footer>
