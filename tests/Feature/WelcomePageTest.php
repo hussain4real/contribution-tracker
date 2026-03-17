@@ -16,7 +16,7 @@ test('welcome page displays correct app title', function () {
     $response = $this->get(route('home'));
 
     $response->assertSuccessful();
-    $response->assertSee('FamilyFund');
+    $response->assertSee(config('app.name'));
 });
 
 test('welcome page loads successfully for authenticated users', function () {
