@@ -26,7 +26,7 @@ import { Head, Link } from '@inertiajs/vue3';
             </div>
 
             <div
-                class="prose prose-neutral dark:prose-invert max-w-none space-y-6"
+                class="prose max-w-none space-y-6 prose-neutral dark:prose-invert"
             >
                 <p class="text-sm text-muted-foreground">
                     Last updated: March 17, 2026

@@ -103,7 +103,7 @@ function timeAgo(dateString: string): string {
             <div v-else class="relative space-y-8">
                 <!-- Timeline Line -->
                 <div
-                    class="absolute bottom-0 left-[15px] top-2 w-px bg-neutral-200 dark:bg-neutral-800"
+                    class="absolute top-2 bottom-0 left-[15px] w-px bg-neutral-200 dark:bg-neutral-800"
                 />
 
                 <div
@@ -135,7 +135,7 @@ function timeAgo(dateString: string): string {
                     <!-- Release Content -->
                     <div class="min-w-0 flex-1 pb-2">
                         <div
-                            class="border-sidebar-border/70 dark:border-sidebar-border overflow-hidden rounded-xl border bg-white shadow-sm dark:bg-neutral-900"
+                            class="overflow-hidden rounded-xl border border-sidebar-border/70 bg-white shadow-sm dark:border-sidebar-border dark:bg-neutral-900"
                         >
                             <!-- Release Header -->
                             <div
@@ -188,7 +188,7 @@ function timeAgo(dateString: string): string {
 
                             <!-- Release Body -->
                             <div
-                                class="prose prose-sm prose-neutral dark:prose-invert prose-headings:text-base prose-headings:font-semibold prose-a:text-green-600 hover:prose-a:text-green-500 prose-li:my-0.5 prose-ul:my-2 prose-p:my-2 max-w-none px-6 py-4"
+                                class="prose prose-sm max-w-none px-6 py-4 prose-neutral dark:prose-invert prose-headings:text-base prose-headings:font-semibold prose-p:my-2 prose-a:text-green-600 hover:prose-a:text-green-500 prose-ul:my-2 prose-li:my-0.5"
                                 v-html="release.body"
                             />
                         </div>

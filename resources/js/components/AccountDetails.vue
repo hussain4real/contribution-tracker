@@ -24,8 +24,8 @@ function copyToClipboard(): void {
 
 <template>
     <Card class="relative w-full overflow-hidden">
-        <div class="pointer-events-none absolute right-0 top-0 opacity-5">
-            <Landmark class="-mr-4 -mt-4 h-32 w-32" />
+        <div class="pointer-events-none absolute top-0 right-0 opacity-5">
+            <Landmark class="-mt-4 -mr-4 h-32 w-32" />
         </div>
         <CardHeader>
             <CardTitle class="flex items-center gap-2 text-lg">
