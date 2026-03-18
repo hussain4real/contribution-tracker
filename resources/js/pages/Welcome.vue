@@ -70,23 +70,23 @@ const steps = [
 ];
 
 const testimonials = [
-    {
-        quote: 'FamilyFund has transformed how we manage our family contributions. Everything is transparent and everyone knows where they stand.',
-        name: 'Adebayo Family',
-        role: 'Lagos, Nigeria',
-        initials: 'AF',
-    },
-    {
-        quote: "No more arguments about who has paid and who hasn't. The reports make our monthly meetings so much smoother.",
-        name: 'Okonkwo Family',
-        role: 'Abuja, Nigeria',
-        initials: 'OF',
-    },
+    // {
+    //     quote: 'FamilyFund has transformed how we manage our family contributions. Everything is transparent and everyone knows where they stand.',
+    //     name: 'Adebayo Family',
+    //     role: 'Lagos, Nigeria',
+    //     initials: 'AF',
+    // },
+    // {
+    //     quote: "No more arguments about who has paid and who hasn't. The reports make our monthly meetings so much smoother.",
+    //     name: 'Okonkwo Family',
+    //     role: 'Abuja, Nigeria',
+    //     initials: 'OF',
+    // },
     {
         quote: 'The different member categories are perfect for our family. Students pay less and everyone is happy.',
-        name: 'Ibrahim Family',
-        role: 'Kano, Nigeria',
-        initials: 'IF',
+        name: 'Hussain Family',
+        role: 'Kogi, Nigeria',
+        initials: 'HF',
     },
 ];
 
