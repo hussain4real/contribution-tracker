@@ -62,9 +62,9 @@ class HandleInertiaRequests extends Middleware
                 ] : null,
             ],
             'flash' => [
-                'success' => fn () => $request->session()->get('success'),
-                'error' => fn () => $request->session()->get('error'),
-                'warning' => fn () => $request->session()->get('warning'),
+                'success' => fn () => $request->hasSession() ? $request->session()->get('success') : null,
+                'error' => fn () => $request->hasSession() ? $request->session()->get('error') : null,
+                'warning' => fn () => $request->hasSession() ? $request->session()->get('warning') : null,
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
