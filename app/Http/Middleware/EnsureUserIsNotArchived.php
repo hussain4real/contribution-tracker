@@ -12,15 +12,11 @@ use Symfony\Component\HttpFoundation\Response;
 class EnsureUserIsNotArchived
 {
     /**
-     * Handle an incoming request.
-     *
-     * Archived users should not be able to access the application.
-     *
      * @param  Closure(Request): (Response)  $next
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (Auth::check() && Auth::user()->isArchived()) {
+        if ($request->user()?->isArchived()) {
             Auth::logout();
             abort(403, 'Your account has been archived.');
         }

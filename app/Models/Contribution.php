@@ -168,21 +168,11 @@ class Contribution extends Model
             return PaymentStatus::Paid;
         }
 
-        if ($totalPaid > 0) {
-            // Check if overdue
-            if ($this->isOverdue()) {
-                return PaymentStatus::Overdue;
-            }
-
-            return PaymentStatus::Partial;
-        }
-
-        // Nothing paid
         if ($this->isOverdue()) {
             return PaymentStatus::Overdue;
         }
 
-        return PaymentStatus::Unpaid;
+        return $totalPaid > 0 ? PaymentStatus::Partial : PaymentStatus::Unpaid;
     }
 
     /**

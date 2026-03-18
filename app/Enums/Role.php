@@ -27,10 +27,7 @@ enum Role: string
      */
     public function canRecordPayments(): bool
     {
-        return match ($this) {
-            self::SuperAdmin, self::FinancialSecretary => true,
-            self::Member => false,
-        };
+        return $this !== self::Member;
     }
 
     /**
@@ -54,10 +51,7 @@ enum Role: string
      */
     public function canViewAllMembers(): bool
     {
-        return match ($this) {
-            self::SuperAdmin, self::FinancialSecretary => true,
-            self::Member => false,
-        };
+        return $this !== self::Member;
     }
 
     /**
@@ -65,9 +59,6 @@ enum Role: string
      */
     public function canGenerateReports(): bool
     {
-        return match ($this) {
-            self::SuperAdmin, self::FinancialSecretary => true,
-            self::Member => false,
-        };
+        return $this !== self::Member;
     }
 }

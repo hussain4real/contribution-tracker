@@ -229,22 +229,8 @@ class MemberController extends Controller
 
         // Prevent super admin from demoting themselves
         if ($member->id === $currentUser->id && $oldRole === Role::SuperAdmin && $newRole !== Role::SuperAdmin) {
-            $member->update([
-                'name' => $validated['name'],
-                'email' => $validated['email'],
-                'category' => MemberCategory::from($validated['category']),
-                // Keep the same role
-            ]);
-
-            if (! empty($validated['password'])) {
-                $member->update([
-                    'password' => Hash::make($validated['password']),
-                ]);
-            }
-
-            return redirect()
-                ->route('members.show', $member)
-                ->with('success', 'Member updated successfully.');
+            $newRole = $oldRole;
+            $roleChanged = false;
         }
 
         // Check if removing last Financial Secretary (FR-019)
@@ -261,29 +247,27 @@ class MemberController extends Controller
             }
         }
 
-        $member->update([
+        $data = [
             'name' => $validated['name'],
             'email' => $validated['email'],
             'category' => MemberCategory::from($validated['category']),
             'role' => $newRole,
-        ]);
+        ];
 
-        // Update password only if provided
         if (! empty($validated['password'])) {
-            $member->update([
-                'password' => Hash::make($validated['password']),
-            ]);
+            $data['password'] = Hash::make($validated['password']);
         }
 
-        $redirect = redirect()->route('members.show', $member);
+        $member->update($data);
+
+        $redirect = redirect()->route('members.show', $member)
+            ->with('success', 'Member updated successfully.');
 
         if ($warning) {
-            return $redirect
-                ->with('success', 'Member updated successfully.')
-                ->with('warning', $warning);
+            $redirect->with('warning', $warning);
         }
 
-        return $redirect->with('success', 'Member updated successfully.');
+        return $redirect;
     }
 
     /**

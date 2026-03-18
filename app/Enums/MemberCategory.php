@@ -35,11 +35,7 @@ enum MemberCategory: string
      */
     public function label(): string
     {
-        return match ($this) {
-            self::Employed => 'Employed',
-            self::Unemployed => 'Unemployed',
-            self::Student => 'Student',
-        };
+        return $this->name;
     }
 
     /**

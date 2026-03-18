@@ -30,7 +30,6 @@ class ContributionController extends Controller
         /** @var User $user */
         $user = Auth::user();
 
-        // Get user's own contributions with payments, ordered by date descending
         $contributions = Contribution::query()
             ->where('user_id', $user->id)
             ->with(['payments.recorder'])
@@ -60,8 +59,6 @@ class ContributionController extends Controller
                 ]),
             ]);
 
-        // Calculate family aggregate statistics (FR-015)
-        // Members can see aggregate totals but NOT individual details (FR-016)
         $currentYear = now()->year;
         $currentMonth = now()->month;
 
@@ -77,7 +74,6 @@ class ContributionController extends Controller
             ? round(($totalCollected / $totalExpected) * 100, 1)
             : 0;
 
-        // Calculate personal stats (all-time for the current member)
         $personalTotalExpected = $contributions->sum('expected_amount');
         $personalTotalPaid = $contributions->sum('total_paid');
         $personalTotalOutstanding = $personalTotalExpected - $personalTotalPaid;
