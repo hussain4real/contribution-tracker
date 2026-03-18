@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AccountDetails from '@/components/AccountDetails.vue';
 import AggregateStats from '@/components/contributions/AggregateStats.vue';
 import MemberContributionStatus from '@/components/dashboard/MemberContributionStatus.vue';
 import RecentPayments from '@/components/dashboard/RecentPayments.vue';
@@ -104,7 +105,7 @@ function formatCurrency(amount: number): string {
         <div class="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
             <!-- Fund Balance (visible to all users) -->
             <div
-                class="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border dark:bg-neutral-900"
+                class="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border bg-white p-6 dark:bg-neutral-900"
             >
                 <p class="text-sm text-neutral-600 dark:text-neutral-400">
                     Family Fund Balance
@@ -138,7 +139,7 @@ function formatCurrency(amount: number): string {
                     <!-- Member Statuses Table -->
                     <div
                         v-if="member_statuses"
-                        class="rounded-xl border border-sidebar-border/70 bg-white p-4 sm:p-6 dark:border-sidebar-border dark:bg-neutral-900"
+                        class="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border bg-white p-4 sm:p-6 dark:bg-neutral-900"
                     >
                         <h2
                             class="mb-4 text-lg font-semibold text-neutral-900 dark:text-neutral-100"
@@ -197,10 +198,12 @@ function formatCurrency(amount: number): string {
 
             <!-- Member View -->
             <template v-else>
+                <AccountDetails />
+
                 <!-- Personal Status -->
                 <div
                     v-if="personal"
-                    class="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border dark:bg-neutral-900"
+                    class="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border bg-white p-6 dark:bg-neutral-900"
                 >
                     <h2
                         class="mb-4 text-lg font-semibold text-neutral-900 dark:text-neutral-100"

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AccountDetails from '@/components/AccountDetails.vue';
 import AggregateStats from '@/components/contributions/AggregateStats.vue';
 import ContributionCard from '@/components/contributions/ContributionCard.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -112,9 +113,11 @@ function formatCurrency(amount: number): string {
                 </div>
             </div>
 
+            <AccountDetails />
+
             <!-- Personal Stats (Primary) -->
             <div
-                class="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border dark:bg-neutral-900"
+                class="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border bg-white p-6 dark:bg-neutral-900"
             >
                 <div class="mb-4 flex items-center justify-between">
                     <h2
@@ -296,10 +299,10 @@ function formatCurrency(amount: number): string {
 
             <!-- Contributions List -->
             <div
-                class="rounded-xl border border-sidebar-border/70 bg-white dark:border-sidebar-border dark:bg-neutral-900"
+                class="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border bg-white dark:bg-neutral-900"
             >
                 <div
-                    class="border-b border-sidebar-border/70 px-6 py-4 dark:border-sidebar-border"
+                    class="border-sidebar-border/70 dark:border-sidebar-border border-b px-6 py-4"
                 >
                     <h2
                         class="text-lg font-medium text-neutral-900 dark:text-neutral-100"
@@ -316,7 +319,7 @@ function formatCurrency(amount: number): string {
 
                 <div
                     v-else
-                    class="divide-y divide-sidebar-border/70 dark:divide-sidebar-border"
+                    class="divide-sidebar-border/70 dark:divide-sidebar-border divide-y"
                 >
                     <ContributionCard
                         v-for="contribution in contributions"

@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@plugin '@tailwindcss/typography';
 
 @import 'tw-animate-css';
 
@@ -70,6 +71,7 @@
   color utility to any element that depends on these defaults.
 */
 @layer base {
+
     *,
     ::after,
     ::before,
@@ -80,6 +82,7 @@
 }
 
 @layer utilities {
+
     body,
     html {
         --font-sans:
