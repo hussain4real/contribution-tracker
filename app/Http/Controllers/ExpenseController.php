@@ -33,7 +33,7 @@ class ExpenseController extends Controller
 
         return Inertia::render('Expenses/Index', [
             'expenses' => $expenses,
-            'can_create' => $this->canCreate(),
+            'can_create' => request()->user()->canRecordPayments(),
         ]);
     }
 
@@ -74,13 +74,5 @@ class ExpenseController extends Controller
 
         return redirect()->route('expenses.index')
             ->with('success', 'Expense has been deleted.');
-    }
-
-    /**
-     * Check if the current user can create expenses.
-     */
-    private function canCreate(): bool
-    {
-        return request()->user()->canRecordPayments();
     }
 }

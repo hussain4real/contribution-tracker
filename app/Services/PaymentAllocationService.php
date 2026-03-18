@@ -184,7 +184,6 @@ class PaymentAllocationService
         int $targetMonth
     ): Collection {
         $payments = collect();
-        $currentDate = now()->startOfMonth();
         $targetDate = now()->setYear($targetYear)->setMonth($targetMonth)->startOfMonth();
 
         // Start from target month and work forward if needed

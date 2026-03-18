@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\Role;
 use App\Models\Contribution;
 use App\Models\Expense;
 use App\Models\FundAdjustment;
@@ -29,8 +28,8 @@ class DashboardController extends Controller
         $currentMonth = now()->month;
 
         // Check if user can see all member details (admin or financial secretary)
-        $canSeeAllMembers = in_array($user->role, [Role::SuperAdmin, Role::FinancialSecretary]);
-        $canRecordPayments = $user->role === Role::SuperAdmin || $user->role === Role::FinancialSecretary;
+        $canSeeAllMembers = $user->canViewAllMembers();
+        $canRecordPayments = $user->canRecordPayments();
 
         // Get current month contributions with payments for calculations
         $currentMonthContributions = Contribution::query()

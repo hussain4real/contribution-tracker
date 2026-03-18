@@ -40,7 +40,6 @@ class StorePaymentRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator) {
-            // Validate member exists and has a category
             if ($this->member_id) {
                 $member = User::find($this->member_id);
                 if ($member && ! $member->category) {
@@ -48,18 +47,15 @@ class StorePaymentRequest extends FormRequest
                 }
             }
 
-            // Validate target month is within 6 months ahead (FR-018)
             if ($this->target_year && $this->target_month) {
                 $targetDate = now()->setYear($this->target_year)->setMonth($this->target_month)->startOfMonth();
                 $currentMonth = now()->startOfMonth();
                 $maxAdvanceDate = now()->addMonths(6)->startOfMonth();
 
-                // Cannot target past months
                 if ($targetDate->lt($currentMonth)) {
                     $validator->errors()->add('target_month', 'Cannot record payments for past months.');
                 }
 
-                // Cannot target more than 6 months ahead
                 if ($targetDate->gt($maxAdvanceDate)) {
                     $validator->errors()->add('target_month', 'Advance payments are limited to 6 months ahead.');
                 }
