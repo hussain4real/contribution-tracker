@@ -9,7 +9,7 @@ test('recovery codes mail contains all recovery codes', function () {
 
     $mailable = new TwoFactorRecoveryCodesMail($user, $recoveryCodes);
 
-    $mailable->assertSeeInHtml(e($user->name), escape: false);
+    $mailable->assertSeeInHtml($user->name);
 
     foreach ($recoveryCodes as $code) {
         $mailable->assertSeeInHtml($code);
