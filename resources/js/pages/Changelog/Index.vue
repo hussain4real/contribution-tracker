@@ -2,7 +2,8 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/vue3';
-import { ExternalLink, Rocket } from 'lucide-vue-next';
+import { ChevronDown, ExternalLink, Rocket } from 'lucide-vue-next';
+import { reactive } from 'vue';
 
 interface Release {
     id: number;
@@ -14,9 +15,17 @@ interface Release {
     prerelease: boolean;
 }
 
-withDefaults(defineProps<{ releases?: Release[] }>(), {
+const props = withDefaults(defineProps<{ releases?: Release[] }>(), {
     releases: () => [],
 });
+
+const expanded: Record<number, boolean> = reactive(
+    Object.fromEntries(props.releases.map((r, i) => [r.id, i === 0])),
+);
+
+function toggleExpanded(id: number): void {
+    expanded[id] = !expanded[id];
+}
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: '/dashboard' },
@@ -138,10 +147,25 @@ function timeAgo(dateString: string): string {
                             class="overflow-hidden rounded-xl border border-sidebar-border/70 bg-white shadow-sm dark:border-sidebar-border dark:bg-neutral-900"
                         >
                             <!-- Release Header -->
-                            <div
-                                class="flex flex-col gap-3 border-b border-neutral-100 px-6 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-neutral-800"
+                            <button
+                                type="button"
+                                class="flex w-full cursor-pointer flex-col gap-3 px-6 py-4 text-left transition-colors hover:bg-neutral-50 sm:flex-row sm:items-center sm:justify-between dark:hover:bg-neutral-800/50"
+                                :class="
+                                    expanded[release.id]
+                                        ? 'border-b border-neutral-100 dark:border-neutral-800'
+                                        : ''
+                                "
+                                @click="toggleExpanded(release.id)"
                             >
                                 <div class="flex flex-wrap items-center gap-2">
+                                    <ChevronDown
+                                        class="h-4 w-4 shrink-0 text-neutral-400 transition-transform duration-200"
+                                        :class="
+                                            expanded[release.id]
+                                                ? 'rotate-0'
+                                                : '-rotate-90'
+                                        "
+                                    />
                                     <h2
                                         class="text-lg font-bold text-neutral-900 dark:text-neutral-100"
                                     >
@@ -180,17 +204,32 @@ function timeAgo(dateString: string): string {
                                         rel="noopener noreferrer"
                                         class="inline-flex items-center gap-1 text-neutral-400 transition-colors hover:text-green-600 dark:hover:text-green-400"
                                         title="View on GitHub"
+                                        @click.stop
                                     >
                                         <ExternalLink class="h-4 w-4" />
                                     </a>
                                 </div>
-                            </div>
+                            </button>
 
                             <!-- Release Body -->
-                            <div
-                                class="prose prose-sm max-w-none px-6 py-4 prose-neutral dark:prose-invert prose-headings:text-base prose-headings:font-semibold prose-p:my-2 prose-a:text-green-600 hover:prose-a:text-green-500 prose-ul:my-2 prose-li:my-0.5"
-                                v-html="release.body"
-                            />
+                            <Transition
+                                enter-active-class="transition-all duration-200 ease-out"
+                                leave-active-class="transition-all duration-150 ease-in"
+                                enter-from-class="max-h-0 opacity-0"
+                                enter-to-class="max-h-[2000px] opacity-100"
+                                leave-from-class="max-h-[2000px] opacity-100"
+                                leave-to-class="max-h-0 opacity-0"
+                            >
+                                <div
+                                    v-show="expanded[release.id]"
+                                    class="overflow-hidden"
+                                >
+                                    <div
+                                        class="prose prose-sm max-w-none px-6 py-4 prose-neutral dark:prose-invert prose-headings:text-base prose-headings:font-semibold prose-p:my-2 prose-a:text-green-600 hover:prose-a:text-green-500 prose-ul:my-2 prose-li:my-0.5"
+                                        v-html="release.body"
+                                    />
+                                </div>
+                            </Transition>
                         </div>
                     </div>
                 </div>
