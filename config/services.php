@@ -39,4 +39,16 @@ return [
         'app_id' => env('FACEBOOK_APP_ID'),
     ],
 
+    'github' => [
+        'releases' => [
+            'owner' => env('GITHUB_RELEASES_OWNER'),
+            'repo' => env('GITHUB_RELEASES_REPO'),
+            'token' => env('GITHUB_RELEASES_TOKEN'),
+            'cache_ttl' => (int) env('GITHUB_RELEASES_CACHE_TTL', 600),
+            'include_prereleases' => (bool) env('GITHUB_RELEASES_INCLUDE_PRERELEASES', true),
+            'max' => (int) env('GITHUB_RELEASES_MAX', 50),
+            'include_body' => (bool) env('GITHUB_RELEASES_INCLUDE_BODY', true),
+        ],
+    ],
+
 ];

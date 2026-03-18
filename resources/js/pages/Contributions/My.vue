@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AccountDetails from '@/components/AccountDetails.vue';
 import AggregateStats from '@/components/contributions/AggregateStats.vue';
 import ContributionCard from '@/components/contributions/ContributionCard.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -111,6 +112,8 @@ function formatCurrency(amount: number): string {
                     </p>
                 </div>
             </div>
+
+            <AccountDetails />
 
             <!-- Personal Stats (Primary) -->
             <div

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ChangelogController;
 use App\Http\Controllers\ContributionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExpenseController;
@@ -29,6 +30,9 @@ Route::get('/data-deletion', fn () => Inertia::render('Legal/DataDeletion'))->na
 Route::middleware(['auth', 'verified'])->group(function () {
     // Dashboard
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    // Changelog
+    Route::get('changelog', ChangelogController::class)->name('changelog');
 
     // Members (Super Admin only for management, all can view list)
     Route::resource('members', MemberController::class);

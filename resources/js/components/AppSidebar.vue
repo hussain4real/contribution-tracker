@@ -25,6 +25,7 @@ import {
     Landmark,
     LayoutGrid,
     Receipt,
+    Rocket,
     Shield,
     Users,
     Wallet,
@@ -87,6 +88,14 @@ const mainNavItems = computed<NavItem[]>(() => {
             component: 'Reports/Index',
         });
     }
+
+    // What's New - visible to all authenticated users
+    items.push({
+        title: "What's New",
+        href: '/changelog',
+        icon: Rocket,
+        component: 'Changelog/Index',
+    });
 
     return items;
 });

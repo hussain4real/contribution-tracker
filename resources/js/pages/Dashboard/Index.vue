@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AccountDetails from '@/components/AccountDetails.vue';
 import AggregateStats from '@/components/contributions/AggregateStats.vue';
 import MemberContributionStatus from '@/components/dashboard/MemberContributionStatus.vue';
 import RecentPayments from '@/components/dashboard/RecentPayments.vue';
@@ -197,6 +198,8 @@ function formatCurrency(amount: number): string {
 
             <!-- Member View -->
             <template v-else>
+                <AccountDetails />
+
                 <!-- Personal Status -->
                 <div
                     v-if="personal"
