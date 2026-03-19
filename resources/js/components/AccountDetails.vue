@@ -13,14 +13,20 @@ import { computed, ref } from 'vue';
 
 const page = usePage();
 
-const family = computed(() => page.props.family as {
-    bank_name: string | null;
-    account_name: string | null;
-    account_number: string | null;
-} | null);
+const family = computed(
+    () =>
+        page.props.family as {
+            bank_name: string | null;
+            account_name: string | null;
+            account_number: string | null;
+        } | null,
+);
 
 const hasBankDetails = computed(
-    () => family.value?.bank_name || family.value?.account_name || family.value?.account_number,
+    () =>
+        family.value?.bank_name ||
+        family.value?.account_name ||
+        family.value?.account_number,
 );
 
 const copied = ref(false);

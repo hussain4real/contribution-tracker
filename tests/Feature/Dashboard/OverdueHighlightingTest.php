@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Contribution;
+use App\Models\Family;
 use App\Models\User;
 use Carbon\Carbon;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -12,8 +13,10 @@ use Inertia\Testing\AssertableInertia as Assert;
  */
 describe('Overdue Highlighting', function () {
     beforeEach(function () {
-        $this->admin = User::factory()->admin()->create();
-        $this->member = User::factory()->member()->employed()->create();
+        $family = Family::factory()->create();
+
+        $this->admin = User::factory()->admin()->create(['family_id' => $family->id]);
+        $this->member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
     });
 
     it('shows overdue count when contributions are past due', function () {
@@ -100,7 +103,7 @@ describe('Overdue Highlighting', function () {
         $lastMonth = now()->subMonth();
 
         // Create two overdue contributions
-        $member2 = User::factory()->member()->student()->create();
+        $member2 = User::factory()->member()->student()->create(['family_id' => $this->admin->family_id]);
 
         // First member - unpaid (overdue)
         Contribution::factory()

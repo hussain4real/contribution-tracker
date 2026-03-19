@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Contribution;
+use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -13,14 +14,16 @@ use Inertia\Testing\AssertableInertia as Assert;
  */
 describe('Member Dashboard', function () {
     beforeEach(function () {
+        $family = Family::factory()->create();
+
         // Create regular member
-        $this->member = User::factory()->member()->employed()->create();
+        $this->member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
 
         // Create another member (member should NOT see their details)
-        $this->otherMember = User::factory()->member()->student()->create();
+        $this->otherMember = User::factory()->member()->student()->create(['family_id' => $family->id]);
 
         // Create a financial secretary for recording payments
-        $this->financialSecretary = User::factory()->financialSecretary()->create();
+        $this->financialSecretary = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
 
         // Create contributions for both members
         $this->memberContribution = Contribution::factory()

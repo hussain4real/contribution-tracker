@@ -102,7 +102,7 @@ describe('Admin Dashboard', function () {
             ->get('/dashboard')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->where('summary.total_members', 2)
+                ->where('summary.total_members', 3) // admin + 2 members
                 ->where('summary.total_expected', 5000) // 4000 + 1000
                 ->where('summary.total_collected', 4000) // Only employed paid
                 ->where('summary.total_outstanding', 1000) // Student outstanding

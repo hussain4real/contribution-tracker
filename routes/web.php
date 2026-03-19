@@ -48,6 +48,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Contributions
     Route::get('contributions', [ContributionController::class, 'index'])->name('contributions.index');
     Route::get('contributions/my', [ContributionController::class, 'my'])->name('contributions.my');
+    Route::post('contributions/generate', [ContributionController::class, 'generate'])->name('contributions.generate');
     Route::get('contributions/{contribution}', [ContributionController::class, 'show'])->name('contributions.show');
 
     // Payments

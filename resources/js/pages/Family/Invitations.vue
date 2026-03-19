@@ -95,8 +95,8 @@ function statusBadge(invitation: Invitation): { text: string; class: string } {
     <AppLayout :breadcrumbs="breadcrumbs">
         <Head title="Invitations" />
 
-        <div class="mx-auto max-w-3xl space-y-6 p-6">
-            <div class="flex items-center justify-between">
+        <div class="mx-auto w-full max-w-3xl space-y-6 p-6">
+            <div class="flex items-center justify-between space-x-6">
                 <Heading
                     title="Invitations"
                     :description="`Invite new members to join ${props.family_name}.`"

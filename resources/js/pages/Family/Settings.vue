@@ -76,7 +76,7 @@ function cancelEdit(): void {
     <AppLayout :breadcrumbs="breadcrumbs">
         <Head title="Family Settings" />
 
-        <div class="mx-auto max-w-3xl space-y-8 p-6">
+        <div class="mx-auto w-full max-w-3xl space-y-8 p-6">
             <Heading
                 title="Family Settings"
                 description="Manage your family group settings, categories, and contribution amounts."
@@ -156,21 +156,15 @@ function cancelEdit(): void {
                                 <InputError :message="errors.bank_name" />
                             </div>
                             <div class="grid gap-2">
-                                <Label for="account_name"
-                                    >Account Name</Label
-                                >
+                                <Label for="account_name">Account Name</Label>
                                 <Input
                                     id="account_name"
                                     name="account_name"
                                     type="text"
-                                    :default-value="
-                                        family.account_name ?? ''
-                                    "
+                                    :default-value="family.account_name ?? ''"
                                     placeholder="e.g. John Doe"
                                 />
-                                <InputError
-                                    :message="errors.account_name"
-                                />
+                                <InputError :message="errors.account_name" />
                             </div>
                             <div class="grid gap-2">
                                 <Label for="account_number"
@@ -180,14 +174,10 @@ function cancelEdit(): void {
                                     id="account_number"
                                     name="account_number"
                                     type="text"
-                                    :default-value="
-                                        family.account_number ?? ''
-                                    "
+                                    :default-value="family.account_number ?? ''"
                                     placeholder="e.g. 0123456789"
                                 />
-                                <InputError
-                                    :message="errors.account_number"
-                                />
+                                <InputError :message="errors.account_number" />
                             </div>
                         </div>
                     </div>
