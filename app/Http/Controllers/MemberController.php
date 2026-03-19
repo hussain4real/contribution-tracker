@@ -23,7 +23,11 @@ class MemberController extends Controller
      */
     public function index(): Response
     {
+        /** @var User $currentUser */
+        $currentUser = Auth::user();
+
         $members = User::query()
+            ->where('family_id', $currentUser->family_id)
             ->active()
             ->orderBy('name')
             ->get()
@@ -40,6 +44,7 @@ class MemberController extends Controller
             ]);
 
         $archivedMembers = User::query()
+            ->where('family_id', $currentUser->family_id)
             ->archived()
             ->orderBy('name')
             ->get()
@@ -68,7 +73,7 @@ class MemberController extends Controller
 
     /**
      * Show the form for creating a new family member.
-     * Only Super Admin can access.
+     * Only Admin can access.
      */
     public function create(): Response
     {
@@ -87,7 +92,7 @@ class MemberController extends Controller
 
     /**
      * Store a newly created family member.
-     * Only Super Admin can create members.
+     * Only Admin can create members.
      */
     public function store(StoreMemberRequest $request): RedirectResponse
     {
@@ -99,6 +104,7 @@ class MemberController extends Controller
             'password' => Hash::make($validated['password']),
             'category' => MemberCategory::from($validated['category']),
             'role' => Role::from($validated['role']),
+            'family_id' => $request->user()->family_id,
         ]);
 
         return redirect()
@@ -110,7 +116,7 @@ class MemberController extends Controller
      * Display the specified family member.
      * All authenticated users can view basic member info.
      * Contribution history is only visible to the member themselves,
-     * Super Admin, or Financial Secretary.
+     * Admin, or Financial Secretary.
      */
     public function show(User $member): Response
     {
@@ -188,7 +194,7 @@ class MemberController extends Controller
 
     /**
      * Show the form for editing the specified family member.
-     * Only Super Admin can access.
+     * Only Admin can access.
      */
     public function edit(User $member): Response
     {
@@ -214,7 +220,7 @@ class MemberController extends Controller
 
     /**
      * Update the specified family member.
-     * Only Super Admin can update members.
+     * Only Admin can update members.
      * Includes role change handling and last Financial Secretary warning (FR-019).
      */
     public function update(UpdateMemberRequest $request, User $member): RedirectResponse
@@ -228,7 +234,7 @@ class MemberController extends Controller
         $roleChanged = $oldRole !== $newRole;
 
         // Prevent super admin from demoting themselves
-        if ($member->id === $currentUser->id && $oldRole === Role::SuperAdmin && $newRole !== Role::SuperAdmin) {
+        if ($member->id === $currentUser->id && $oldRole === Role::Admin && $newRole !== Role::Admin) {
             $newRole = $oldRole;
             $roleChanged = false;
         }
@@ -243,7 +249,7 @@ class MemberController extends Controller
                 ->count();
 
             if ($activeFinancialSecretaryCount === 0) {
-                $warning = 'This was the last Financial Secretary. Only Super Admins can now record payments.';
+                $warning = 'This was the last Financial Secretary. Only Admins can now record payments.';
             }
         }
 
@@ -272,8 +278,8 @@ class MemberController extends Controller
 
     /**
      * Archive the specified family member (soft delete).
-     * Only Super Admin can archive members.
-     * Cannot archive self or other Super Admins.
+     * Only Admin can archive members.
+     * Cannot archive self or other Admins.
      */
     public function destroy(User $member): RedirectResponse
     {
@@ -289,9 +295,9 @@ class MemberController extends Controller
             abort(403, 'You cannot archive yourself.');
         }
 
-        // Cannot archive other Super Admins
-        if ($member->isSuperAdmin()) {
-            abort(403, 'You cannot archive a Super Admin.');
+        // Cannot archive other Admins
+        if ($member->isAdmin()) {
+            abort(403, 'You cannot archive a Admin.');
         }
 
         $member->update(['archived_at' => now()]);
@@ -303,7 +309,7 @@ class MemberController extends Controller
 
     /**
      * Restore an archived family member.
-     * Only Super Admin can restore members.
+     * Only Admin can restore members.
      */
     public function restore(User $member): RedirectResponse
     {

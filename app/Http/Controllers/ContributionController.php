@@ -63,6 +63,7 @@ class ContributionController extends Controller
         $currentMonth = now()->month;
 
         $allContributions = Contribution::query()
+            ->where('family_id', $user->family_id)
             ->where('year', $currentYear)
             ->where('month', $currentMonth)
             ->get();

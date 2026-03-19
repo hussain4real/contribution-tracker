@@ -12,7 +12,7 @@ use Inertia\Testing\AssertableInertia as Assert;
  */
 describe('Overdue Highlighting', function () {
     beforeEach(function () {
-        $this->superAdmin = User::factory()->superAdmin()->create();
+        $this->admin = User::factory()->admin()->create();
         $this->member = User::factory()->member()->employed()->create();
     });
 
@@ -28,7 +28,7 @@ describe('Overdue Highlighting', function () {
             ->employed()
             ->create();
 
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->get('/dashboard')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
@@ -50,10 +50,10 @@ describe('Overdue Highlighting', function () {
         $contribution->payments()->create([
             'amount' => 4000,
             'paid_at' => now(),
-            'recorded_by' => $this->superAdmin->id,
+            'recorded_by' => $this->admin->id,
         ]);
 
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->get('/dashboard')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
@@ -80,7 +80,7 @@ describe('Overdue Highlighting', function () {
             ->employed()
             ->create();
 
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->get('/dashboard')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
@@ -119,10 +119,10 @@ describe('Overdue Highlighting', function () {
         $paidContribution->payments()->create([
             'amount' => 1000,
             'paid_at' => now(),
-            'recorded_by' => $this->superAdmin->id,
+            'recorded_by' => $this->admin->id,
         ]);
 
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->get('/dashboard')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page

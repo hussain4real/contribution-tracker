@@ -37,10 +37,15 @@ class ReportController extends Controller
         $month = (int) $request->get('month', now()->month);
         $monthDate = Carbon::create($year, $month, 1);
 
+        /** @var User $currentUser */
+        $currentUser = $request->user();
+        $familyId = $currentUser->family_id;
+
         // Get all active members
         $members = User::query()
+            ->where('family_id', $familyId)
             ->whereNull('archived_at')
-            ->where('id', '!=', 1) // Exclude first user (super admin seed)
+            ->whereNotNull('category')
             ->with(['contributions' => function ($query) use ($year, $month) {
                 $query->where('year', $year)
                     ->where('month', $month)
@@ -67,6 +72,7 @@ class ReportController extends Controller
 
         // Calculate summary statistics
         $allContributions = Contribution::query()
+            ->where('family_id', $familyId)
             ->where('year', $year)
             ->where('month', $month)
             ->with('payments')
@@ -95,7 +101,9 @@ class ReportController extends Controller
         // Count members without contributions as unpaid
         $membersWithContributions = $allContributions->pluck('user_id')->toArray();
         $membersWithoutContributions = User::query()
+            ->where('family_id', $familyId)
             ->whereNull('archived_at')
+            ->whereNotNull('category')
             ->whereNotIn('id', $membersWithContributions)
             ->count();
         $statusCounts[PaymentStatus::Unpaid->value] += $membersWithoutContributions;
@@ -143,6 +151,10 @@ class ReportController extends Controller
     {
         $year = (int) $request->get('year', now()->year);
 
+        /** @var User $currentUser */
+        $currentUser = $request->user();
+        $familyId = $currentUser->family_id;
+
         // Generate monthly breakdown for all 12 months
         $monthlyBreakdown = [];
         $yearlyTotal = [
@@ -155,6 +167,7 @@ class ReportController extends Controller
             $monthDate = Carbon::create($year, $month, 1);
 
             $contributions = Contribution::query()
+                ->where('family_id', $familyId)
                 ->where('year', $year)
                 ->where('month', $month)
                 ->with('payments')
@@ -190,6 +203,7 @@ class ReportController extends Controller
         $byCategory = [];
         foreach (MemberCategory::cases() as $category) {
             $categoryContributions = Contribution::query()
+                ->where('family_id', $familyId)
                 ->where('year', $year)
                 ->whereHas('user', fn ($q) => $q->where('category', $category))
                 ->with('payments')

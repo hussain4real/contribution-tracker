@@ -51,7 +51,7 @@ describe('Record Full Payment', function () {
     });
 
     it('super admin can record a full payment', function () {
-        $superAdmin = User::factory()->superAdmin()->create();
+        $admin = User::factory()->admin()->create();
 
         $contribution = Contribution::factory()
             ->forUser($this->member)
@@ -59,7 +59,7 @@ describe('Record Full Payment', function () {
             ->employed()
             ->create();
 
-        $this->actingAs($superAdmin)
+        $this->actingAs($admin)
             ->post(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 4000,

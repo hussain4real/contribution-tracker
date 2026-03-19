@@ -17,7 +17,7 @@ class DashboardController extends Controller
     /**
      * Display the contribution dashboard with role-based props.
      *
-     * - Super Admin & Financial Secretary: See all members, summary stats, recent payments
+     * - Admin & Financial Secretary: See all members, summary stats, recent payments
      * - Member: See personal status and family aggregate only (FR-015, FR-016)
      */
     public function index(): Response
@@ -130,7 +130,11 @@ class DashboardController extends Controller
      */
     private function getRecentPayments(): array
     {
+        /** @var User $user */
+        $user = Auth::user();
+
         return Payment::query()
+            ->whereHas('contribution', fn ($q) => $q->where('family_id', $user->family_id))
             ->with(['contribution.user', 'recorder'])
             ->latest('paid_at')
             ->latest('id')
@@ -209,9 +213,15 @@ class DashboardController extends Controller
      */
     private function calculateFundBalance(): int
     {
-        $totalPayments = (int) Payment::query()->sum('amount');
-        $totalAdjustments = (int) FundAdjustment::query()->sum('amount');
-        $totalExpenses = (int) Expense::query()->sum('amount');
+        /** @var User $user */
+        $user = Auth::user();
+        $familyId = $user->family_id;
+
+        $totalPayments = (int) Payment::query()
+            ->whereHas('contribution', fn ($q) => $q->where('family_id', $familyId))
+            ->sum('amount');
+        $totalAdjustments = (int) FundAdjustment::query()->where('family_id', $familyId)->sum('amount');
+        $totalExpenses = (int) Expense::query()->where('family_id', $familyId)->sum('amount');
 
         return $totalPayments + $totalAdjustments - $totalExpenses;
     }

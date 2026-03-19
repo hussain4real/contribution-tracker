@@ -11,7 +11,7 @@ uses(RefreshDatabase::class);
  */
 describe('Assign Role', function () {
     beforeEach(function () {
-        $this->superAdmin = User::factory()->superAdmin()->create();
+        $this->admin = User::factory()->admin()->create();
     });
 
     it('super admin can assign financial secretary role to a member', function () {
@@ -19,7 +19,7 @@ describe('Assign Role', function () {
 
         expect($member->role)->toBe(Role::Member);
 
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->put("/members/{$member->id}", [
                 'name' => $member->name,
                 'email' => $member->email,
@@ -35,17 +35,17 @@ describe('Assign Role', function () {
     it('super admin can assign super admin role to a member', function () {
         $member = User::factory()->member()->create();
 
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->put("/members/{$member->id}", [
                 'name' => $member->name,
                 'email' => $member->email,
                 'category' => $member->category->value,
-                'role' => 'super_admin',
+                'role' => 'admin',
             ])
             ->assertRedirect();
 
         $member->refresh();
-        expect($member->role)->toBe(Role::SuperAdmin);
+        expect($member->role)->toBe(Role::Admin);
     });
 
     it('financial secretary cannot assign roles', function () {
@@ -83,7 +83,7 @@ describe('Assign Role', function () {
         $member = User::factory()->member()->create();
 
         // Assign FS role
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->put("/members/{$member->id}", [
                 'name' => $member->name,
                 'email' => $member->email,
@@ -100,7 +100,7 @@ describe('Assign Role', function () {
     it('returns success flash message after role assignment', function () {
         $member = User::factory()->member()->create();
 
-        $response = $this->actingAs($this->superAdmin)
+        $response = $this->actingAs($this->admin)
             ->put("/members/{$member->id}", [
                 'name' => $member->name,
                 'email' => $member->email,

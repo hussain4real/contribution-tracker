@@ -12,7 +12,7 @@ class StoreFundAdjustmentRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return $this->user()->isSuperAdmin();
+        return $this->user()->isAdmin();
     }
 
     /**

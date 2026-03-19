@@ -10,11 +10,11 @@ use Inertia\Testing\AssertableInertia as Assert;
  */
 describe('Create Member', function () {
     beforeEach(function () {
-        $this->superAdmin = User::factory()->superAdmin()->create();
+        $this->admin = User::factory()->admin()->create();
     });
 
     it('super admin can access member creation form', function () {
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->get('/members/create')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
@@ -25,7 +25,7 @@ describe('Create Member', function () {
     });
 
     it('super admin can create a new member', function () {
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->post('/members', [
                 'name' => 'John Doe',
                 'email' => 'john@example.com',
@@ -45,7 +45,7 @@ describe('Create Member', function () {
     });
 
     it('creates student member with correct expected amount', function () {
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->post('/members', [
                 'name' => 'Jane Student',
                 'email' => 'jane@example.com',
@@ -62,7 +62,7 @@ describe('Create Member', function () {
     });
 
     it('validates required fields', function () {
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->post('/members', [])
             ->assertSessionHasErrors(['name', 'email', 'password', 'category']);
     });
@@ -70,7 +70,7 @@ describe('Create Member', function () {
     it('validates unique email', function () {
         User::factory()->create(['email' => 'existing@example.com']);
 
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->post('/members', [
                 'name' => 'New User',
                 'email' => 'existing@example.com',
@@ -83,7 +83,7 @@ describe('Create Member', function () {
     });
 
     it('validates password confirmation', function () {
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->post('/members', [
                 'name' => 'New User',
                 'email' => 'new@example.com',

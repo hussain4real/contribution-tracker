@@ -13,7 +13,7 @@ use App\Models\User;
  */
 describe('Category Change Next Month', function () {
     beforeEach(function () {
-        $this->superAdmin = User::factory()->superAdmin()->create();
+        $this->admin = User::factory()->admin()->create();
         $this->member = User::factory()->member()->employed()->create();
     });
 
@@ -28,7 +28,7 @@ describe('Category Change Next Month', function () {
         expect($contribution->expected_amount)->toBe(4000);
 
         // Change category to student
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->put("/members/{$this->member->id}", [
                 'name' => $this->member->name,
                 'email' => $this->member->email,
@@ -44,7 +44,7 @@ describe('Category Change Next Month', function () {
 
     it('new contribution after category change uses new amount', function () {
         // Change category from employed to student
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->put("/members/{$this->member->id}", [
                 'name' => $this->member->name,
                 'email' => $this->member->email,
@@ -71,7 +71,7 @@ describe('Category Change Next Month', function () {
     it('user model reflects new monthly amount immediately', function () {
         expect($this->member->getMonthlyAmount())->toBe(4000); // Employed
 
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->put("/members/{$this->member->id}", [
                 'name' => $this->member->name,
                 'email' => $this->member->email,
@@ -95,7 +95,7 @@ describe('Category Change Next Month', function () {
                 'category' => MemberCategory::from($transition['from']),
             ]);
 
-            $this->actingAs($this->superAdmin)
+            $this->actingAs($this->admin)
                 ->put("/members/{$member->id}", [
                     'name' => $member->name,
                     'email' => $member->email,

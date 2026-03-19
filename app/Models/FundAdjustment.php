@@ -19,6 +19,7 @@ class FundAdjustment extends Model
      * @var list<string>
      */
     protected $fillable = [
+        'family_id',
         'amount',
         'description',
         'recorded_at',
@@ -41,6 +42,14 @@ class FundAdjustment extends Model
     // =========================================================================
     // Relationships
     // =========================================================================
+
+    /**
+     * The family this adjustment belongs to.
+     */
+    public function family(): BelongsTo
+    {
+        return $this->belongsTo(Family::class);
+    }
 
     /**
      * The user who recorded this adjustment.

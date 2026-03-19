@@ -2,6 +2,7 @@
 
 use App\Models\Contribution;
 use App\Models\Expense;
+use App\Models\Family;
 use App\Models\FundAdjustment;
 use App\Models\Payment;
 use App\Models\User;
@@ -10,8 +11,9 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 uses(RefreshDatabase::class);
 
 beforeEach(function () {
-    $this->admin = User::factory()->superAdmin()->create();
-    $this->member = User::factory()->member()->employed()->create();
+    $this->family = Family::factory()->create();
+    $this->admin = User::factory()->admin()->create(['family_id' => $this->family->id]);
+    $this->member = User::factory()->member()->employed()->create(['family_id' => $this->family->id]);
 });
 
 it('returns fund_balance as a prop for admin dashboard', function () {
@@ -44,7 +46,7 @@ it('calculates fund_balance as zero when no data exists', function () {
 
 it('calculates fund_balance = payments + adjustments - expenses', function () {
     $contribution = Contribution::factory()
-        ->for($this->member)
+        ->forUser($this->member)
         ->create(['expected_amount' => 4000]);
 
     Payment::factory()->create([

@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Enums\MemberCategory;
 use App\Models\Contribution;
+use App\Models\Family;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -20,6 +21,7 @@ class ContributionFactory extends Factory
     public function definition(): array
     {
         return [
+            'family_id' => Family::factory(),
             'user_id' => User::factory(),
             'year' => now()->year,
             'month' => now()->month,
@@ -134,7 +136,8 @@ class ContributionFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'user_id' => $user->id,
-            'expected_amount' => $user->category?->monthlyAmount() ?? MemberCategory::Employed->monthlyAmount(),
+            'family_id' => $user->family_id,
+            'expected_amount' => $user->getMonthlyAmount() ?? MemberCategory::Employed->monthlyAmount(),
         ]);
     }
 }

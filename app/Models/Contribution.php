@@ -25,10 +25,12 @@ class Contribution extends Model
      * @var list<string>
      */
     protected $fillable = [
+        'family_id',
         'user_id',
         'year',
         'month',
         'expected_amount',
+        'due_date',
     ];
 
     /**
@@ -42,12 +44,21 @@ class Contribution extends Model
             'year' => 'integer',
             'month' => 'integer',
             'expected_amount' => 'integer',
+            'due_date' => 'date',
         ];
     }
 
     // =========================================================================
     // Relationships
     // =========================================================================
+
+    /**
+     * The family this contribution belongs to.
+     */
+    public function family(): BelongsTo
+    {
+        return $this->belongsTo(Family::class);
+    }
 
     /**
      * The user this contribution belongs to.
@@ -100,23 +111,7 @@ class Contribution extends Model
      */
     public function scopeOverdue(Builder $query): Builder
     {
-        $today = now();
-
-        return $query->where(function (Builder $q) use ($today) {
-            // Past years are definitely overdue
-            $q->where('year', '<', $today->year)
-                // Or same year but past month
-                ->orWhere(function (Builder $q2) use ($today) {
-                    $q2->where('year', $today->year)
-                        ->where('month', '<', $today->month);
-                })
-                // Or current month but past due date
-                ->orWhere(function (Builder $q2) use ($today) {
-                    $q2->where('year', $today->year)
-                        ->where('month', $today->month)
-                        ->where($today->day > self::DUE_DAY, true);
-                });
-        });
+        return $query->where('due_date', '<', now()->startOfDay());
     }
 
     /**
@@ -180,6 +175,10 @@ class Contribution extends Model
      */
     public function getDueDateAttribute(): Carbon
     {
+        if ($this->attributes['due_date'] ?? null) {
+            return Carbon::parse($this->attributes['due_date']);
+        }
+
         return Carbon::createFromDate($this->year, $this->month, self::DUE_DAY);
     }
 

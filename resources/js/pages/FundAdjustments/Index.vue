@@ -115,7 +115,7 @@ function resetForm(): void {
                 </p>
             </div>
 
-            <!-- Inline Form (Super Admin only) -->
+            <!-- Inline Form (Admin only) -->
             <div
                 v-if="showForm && can_create"
                 class="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border dark:bg-neutral-900"

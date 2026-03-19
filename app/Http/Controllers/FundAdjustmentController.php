@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreFundAdjustmentRequest;
 use App\Models\FundAdjustment;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -17,7 +18,11 @@ class FundAdjustmentController extends Controller
     {
         $this->authorize('viewAny', FundAdjustment::class);
 
+        /** @var User $user */
+        $user = request()->user();
+
         $adjustments = FundAdjustment::query()
+            ->where('family_id', $user->family_id)
             ->with('recorder')
             ->latestFirst()
             ->latest('id')
@@ -33,7 +38,7 @@ class FundAdjustmentController extends Controller
 
         return Inertia::render('FundAdjustments/Index', [
             'adjustments' => $adjustments,
-            'can_create' => request()->user()->isSuperAdmin(),
+            'can_create' => request()->user()->isAdmin(),
         ]);
     }
 
@@ -43,6 +48,7 @@ class FundAdjustmentController extends Controller
     public function store(StoreFundAdjustmentRequest $request): RedirectResponse
     {
         FundAdjustment::create([
+            'family_id' => $request->user()->family_id,
             'amount' => $request->amount,
             'description' => $request->description,
             'recorded_at' => $request->recorded_at,

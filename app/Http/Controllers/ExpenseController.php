@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreExpenseRequest;
 use App\Models\Expense;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -17,7 +18,11 @@ class ExpenseController extends Controller
     {
         $this->authorize('viewAny', Expense::class);
 
+        /** @var User $user */
+        $user = request()->user();
+
         $expenses = Expense::query()
+            ->where('family_id', $user->family_id)
             ->with('recorder')
             ->latestFirst()
             ->latest('id')
@@ -53,6 +58,7 @@ class ExpenseController extends Controller
     public function store(StoreExpenseRequest $request): RedirectResponse
     {
         Expense::create([
+            'family_id' => $request->user()->family_id,
             'amount' => $request->amount,
             'description' => $request->description,
             'spent_at' => $request->spent_at,

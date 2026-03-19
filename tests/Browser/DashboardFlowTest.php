@@ -11,7 +11,7 @@ use App\Models\User;
 
 describe('Dashboard Flow (Browser)', function () {
     beforeEach(function () {
-        $this->superAdmin = User::factory()->superAdmin()->create([
+        $this->admin = User::factory()->admin()->create([
             'email' => 'admin@test.com',
             'password' => bcrypt('password'),
         ]);

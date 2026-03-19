@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\Expense;
+use App\Models\Family;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -19,10 +20,11 @@ class ExpenseFactory extends Factory
     public function definition(): array
     {
         return [
+            'family_id' => Family::factory(),
             'amount' => fake()->numberBetween(1000, 50000),
             'description' => fake()->sentence(),
             'spent_at' => now(),
-            'recorded_by' => User::factory()->superAdmin(),
+            'recorded_by' => User::factory()->admin(),
         ];
     }
 
@@ -43,6 +45,7 @@ class ExpenseFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'recorded_by' => $user->id,
+            'family_id' => $user->family_id,
         ]);
     }
 

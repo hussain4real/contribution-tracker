@@ -14,7 +14,7 @@ class ExpensePolicy
 
     public function view(User $user, Expense $expense): bool
     {
-        return true;
+        return $user->family_id === $expense->family_id;
     }
 
     public function create(User $user): bool
@@ -24,21 +24,21 @@ class ExpensePolicy
 
     public function update(User $user, Expense $expense): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isAdmin() && $user->family_id === $expense->family_id;
     }
 
     public function delete(User $user, Expense $expense): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isAdmin() && $user->family_id === $expense->family_id;
     }
 
     public function restore(User $user, Expense $expense): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isAdmin() && $user->family_id === $expense->family_id;
     }
 
     public function forceDelete(User $user, Expense $expense): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isAdmin() && $user->family_id === $expense->family_id;
     }
 }

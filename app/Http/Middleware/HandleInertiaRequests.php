@@ -44,6 +44,8 @@ class HandleInertiaRequests extends Middleware
                     'role_label' => $user->role->label(),
                     'category' => $user->category?->value,
                     'category_label' => $user->category?->label(),
+                    'family_id' => $user->family_id,
+                    'is_super_admin' => $user->is_super_admin,
                 ] : null,
                 'can' => $user ? [
                     'manage_members' => $user->role->canManageMembers(),
@@ -51,6 +53,15 @@ class HandleInertiaRequests extends Middleware
                     'generate_reports' => $user->role->canGenerateReports(),
                 ] : null,
             ],
+            'family' => $user?->family ? [
+                'id' => $user->family->id,
+                'name' => $user->family->name,
+                'currency' => $user->family->currency,
+                'due_day' => $user->family->due_day,
+                'bank_name' => $user->family->bank_name,
+                'account_name' => $user->family->account_name,
+                'account_number' => $user->family->account_number,
+            ] : null,
             'flash' => [
                 'success' => fn () => $request->hasSession() ? $request->session()->get('success') : null,
                 'error' => fn () => $request->hasSession() ? $request->session()->get('error') : null,

@@ -8,12 +8,12 @@ use App\Models\User;
  */
 describe('Archive Member', function () {
     beforeEach(function () {
-        $this->superAdmin = User::factory()->superAdmin()->create();
+        $this->admin = User::factory()->admin()->create();
         $this->member = User::factory()->member()->employed()->create();
     });
 
     it('super admin can archive a member', function () {
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->delete("/members/{$this->member->id}")
             ->assertRedirect('/members');
 
@@ -23,7 +23,7 @@ describe('Archive Member', function () {
     });
 
     it('archived member is excluded from active scope', function () {
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->delete("/members/{$this->member->id}");
 
         $this->member->refresh();
@@ -45,7 +45,7 @@ describe('Archive Member', function () {
             ->employed()
             ->create();
 
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->delete("/members/{$this->member->id}");
 
         // Contribution should still exist
@@ -56,9 +56,9 @@ describe('Archive Member', function () {
     });
 
     it('cannot archive super admin', function () {
-        $anotherAdmin = User::factory()->superAdmin()->create();
+        $anotherAdmin = User::factory()->admin()->create();
 
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->delete("/members/{$anotherAdmin->id}")
             ->assertForbidden();
 
@@ -67,11 +67,11 @@ describe('Archive Member', function () {
     });
 
     it('cannot archive self', function () {
-        $this->actingAs($this->superAdmin)
-            ->delete("/members/{$this->superAdmin->id}")
+        $this->actingAs($this->admin)
+            ->delete("/members/{$this->admin->id}")
             ->assertForbidden();
 
-        $this->superAdmin->refresh();
-        expect($this->superAdmin->isArchived())->toBeFalse();
+        $this->admin->refresh();
+        expect($this->admin->isArchived())->toBeFalse();
     });
 });

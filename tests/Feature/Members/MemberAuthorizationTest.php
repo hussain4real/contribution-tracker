@@ -8,7 +8,7 @@ use Inertia\Testing\AssertableInertia as Assert;
  */
 describe('Member Authorization', function () {
     beforeEach(function () {
-        $this->superAdmin = User::factory()->superAdmin()->create();
+        $this->admin = User::factory()->admin()->create();
         $this->financialSecretary = User::factory()->financialSecretary()->create();
         $this->member = User::factory()->member()->employed()->create();
         $this->targetMember = User::factory()->member()->student()->create();
@@ -16,7 +16,7 @@ describe('Member Authorization', function () {
 
     // Index - All authenticated users can view list
     it('super admin can view members index', function () {
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->get('/members')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
@@ -36,9 +36,9 @@ describe('Member Authorization', function () {
             ->assertOk();
     });
 
-    // Show - Super Admin and Financial Secretary can view any member, regular members can only view their own
+    // Show - Admin and Financial Secretary can view any member, regular members can only view their own
     it('super admin can view any member profile', function () {
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->get("/members/{$this->targetMember->id}")
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
@@ -78,9 +78,9 @@ describe('Member Authorization', function () {
             );
     });
 
-    // Create - Only Super Admin
+    // Create - Only Admin
     it('super admin can access create form', function () {
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->get('/members/create')
             ->assertOk();
     });
@@ -97,9 +97,9 @@ describe('Member Authorization', function () {
             ->assertForbidden();
     });
 
-    // Store - Only Super Admin
+    // Store - Only Admin
     it('super admin can create member', function () {
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->post('/members', [
                 'name' => 'New Member',
                 'email' => 'new@example.com',
@@ -141,9 +141,9 @@ describe('Member Authorization', function () {
             ->assertForbidden();
     });
 
-    // Edit - Only Super Admin
+    // Edit - Only Admin
     it('super admin can access edit form', function () {
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->get("/members/{$this->targetMember->id}/edit")
             ->assertOk();
     });
@@ -160,7 +160,7 @@ describe('Member Authorization', function () {
             ->assertForbidden();
     });
 
-    // Update - Only Super Admin
+    // Update - Only Admin
     it('financial secretary cannot update member', function () {
         $this->actingAs($this->financialSecretary)
             ->put("/members/{$this->targetMember->id}", [
@@ -172,7 +172,7 @@ describe('Member Authorization', function () {
             ->assertForbidden();
     });
 
-    // Delete - Only Super Admin
+    // Delete - Only Admin
     it('financial secretary cannot archive member', function () {
         $this->actingAs($this->financialSecretary)
             ->delete("/members/{$this->targetMember->id}")
@@ -188,7 +188,7 @@ describe('Member Authorization', function () {
             ->assertForbidden();
     });
 
-    // Restore - Only Super Admin
+    // Restore - Only Admin
     it('financial secretary cannot restore member', function () {
         $archivedMember = User::factory()->member()->archived()->create();
 

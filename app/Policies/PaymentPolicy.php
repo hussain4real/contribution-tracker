@@ -14,6 +14,10 @@ class PaymentPolicy
 
     public function view(User $user, Payment $payment): bool
     {
+        if ($user->family_id !== $payment->contribution?->family_id) {
+            return false;
+        }
+
         if ($user->canViewAllMembers()) {
             return true;
         }
@@ -28,22 +32,23 @@ class PaymentPolicy
 
     public function update(User $user, Payment $payment): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isAdmin() && $user->family_id === $payment->contribution?->family_id;
     }
 
     public function delete(User $user, Payment $payment): bool
     {
-        return $user->isSuperAdmin()
+        return $user->isAdmin()
+            && $user->family_id === $payment->contribution?->family_id
             && $payment->created_at->diffInHours(now()) <= 24;
     }
 
     public function restore(User $user, Payment $payment): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isAdmin() && $user->family_id === $payment->contribution?->family_id;
     }
 
     public function forceDelete(User $user, Payment $payment): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isAdmin() && $user->family_id === $payment->contribution?->family_id;
     }
 }

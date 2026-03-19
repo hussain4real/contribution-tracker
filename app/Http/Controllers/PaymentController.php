@@ -24,9 +24,13 @@ class PaymentController extends Controller
     {
         $this->authorize('create', Payment::class);
 
+        /** @var User $currentUser */
+        $currentUser = auth()->user();
+
         $members = User::query()
+            ->where('family_id', $currentUser->family_id)
             ->whereNull('archived_at')
-            ->where('id', '!=', 1) // Exclude super admin seed
+            ->whereNotNull('category')
             ->orderBy('name')
             ->get()
             ->map(fn ($member) => [
@@ -35,7 +39,7 @@ class PaymentController extends Controller
                 'email' => $member->email,
                 'category' => $member->category?->value,
                 'category_label' => $member->category?->label(),
-                'monthly_amount' => $member->category?->monthlyAmount() ?? 0,
+                'monthly_amount' => $member->getMonthlyAmount() ?? 0,
             ]);
 
         return Inertia::render('Payments/Index', [
