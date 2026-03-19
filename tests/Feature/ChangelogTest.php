@@ -71,7 +71,7 @@ it('handles github api failure gracefully', function () {
         );
 });
 
-it('caches github releases', function () {
+it('caches github releases with stale-while-revalidate', function () {
     Http::fake([
         'api.github.com/*' => Http::response([
             [
@@ -87,10 +87,22 @@ it('caches github releases', function () {
         ], 200),
     ]);
 
-    expect(Cache::has('github_releases'))->toBeFalse();
-
+    // First request populates the cache
     $this->actingAs($this->user)->get('/changelog');
 
     expect(Cache::has('github_releases'))->toBeTrue();
     expect(Cache::get('github_releases'))->toHaveCount(1);
+
+    // Second request should serve from cache without hitting the API again
+    Http::fake([
+        'api.github.com/*' => Http::response([], 500),
+    ]);
+
+    $this->actingAs($this->user)
+        ->get('/changelog')
+        ->assertSuccessful()
+        ->assertInertia(fn ($page) => $page
+            ->has('releases', 1)
+            ->where('releases.0.name', 'v1.0.0')
+        );
 });

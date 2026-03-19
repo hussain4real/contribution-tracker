@@ -14,9 +14,10 @@ class ChangelogController extends Controller
     {
         $owner = config('services.github.releases.owner');
         $repo = config('services.github.releases.repo');
-        $cacheTtl = config('services.github.releases.cache_ttl', 600);
+        $freshTtl = config('services.github.releases.cache_fresh_ttl', 600);
+        $staleTtl = config('services.github.releases.cache_stale_ttl', 3600);
 
-        $releases = Cache::remember('github_releases', $cacheTtl, function () use ($owner, $repo) {
+        $releases = Cache::flexible('github_releases', [$freshTtl, $staleTtl], function () use ($owner, $repo) {
             $token = config('services.github.releases.token');
             $max = config('services.github.releases.max', 50);
 
