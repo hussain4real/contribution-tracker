@@ -10,7 +10,7 @@ use App\Models\User;
 
 describe('Member Management Flow (Browser)', function () {
     beforeEach(function () {
-        $this->superAdmin = User::factory()->superAdmin()->create([
+        $this->admin = User::factory()->admin()->create([
             'email' => 'admin@test.com',
             'password' => bcrypt('password'),
         ]);
@@ -118,7 +118,7 @@ describe('Member Management Flow (Browser)', function () {
             ->assertNoJavaScriptErrors();
 
         // Archive via direct request (button click is fragile in browser tests)
-        $this->actingAs($this->superAdmin)->delete("/members/{$member->id}");
+        $this->actingAs($this->admin)->delete("/members/{$member->id}");
 
         // Verify in database
         $member->refresh();
@@ -142,7 +142,7 @@ describe('Member Management Flow (Browser)', function () {
             ->assertNoJavaScriptErrors();
 
         // Restore via direct request
-        $this->actingAs($this->superAdmin)->post("/members/{$member->id}/restore");
+        $this->actingAs($this->admin)->post("/members/{$member->id}/restore");
 
         // Verify in database
         $member->refresh();

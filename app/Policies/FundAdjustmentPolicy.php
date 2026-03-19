@@ -14,31 +14,31 @@ class FundAdjustmentPolicy
 
     public function view(User $user, FundAdjustment $fundAdjustment): bool
     {
-        return true;
+        return $user->family_id === $fundAdjustment->family_id;
     }
 
     public function create(User $user): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isAdmin();
     }
 
     public function update(User $user, FundAdjustment $fundAdjustment): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isAdmin() && $user->family_id === $fundAdjustment->family_id;
     }
 
     public function delete(User $user, FundAdjustment $fundAdjustment): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isAdmin() && $user->family_id === $fundAdjustment->family_id;
     }
 
     public function restore(User $user, FundAdjustment $fundAdjustment): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isAdmin() && $user->family_id === $fundAdjustment->family_id;
     }
 
     public function forceDelete(User $user, FundAdjustment $fundAdjustment): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isAdmin() && $user->family_id === $fundAdjustment->family_id;
     }
 }

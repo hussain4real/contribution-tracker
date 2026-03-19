@@ -26,7 +26,7 @@ it('creates a super admin account with environment variables', function () {
 
     expect($admin)->not->toBeNull();
     expect($admin->name)->toBe('Family Admin');
-    expect($admin->role)->toBe(Role::SuperAdmin);
+    expect($admin->role)->toBe(Role::Admin);
     expect($admin->category)->toBeNull();
     expect($admin->email_verified_at)->not->toBeNull();
 });
@@ -40,7 +40,7 @@ it('uses default name when ADMIN_NAME is not set', function () {
 
     $admin = User::query()->where('email', 'admin@production.test')->first();
 
-    expect($admin->name)->toBe('Super Admin');
+    expect($admin->name)->toBe('Admin');
 });
 
 it('fails when email is not provided', function () {
@@ -62,7 +62,7 @@ it('fails when password is not provided', function () {
 });
 
 it('skips creation if user with email already exists', function () {
-    User::factory()->superAdmin()->create(['email' => 'admin@production.test']);
+    User::factory()->admin()->create(['email' => 'admin@production.test']);
 
     config()->set('app.admin_email', 'admin@production.test');
     config()->set('app.admin_password', 'secure-password');

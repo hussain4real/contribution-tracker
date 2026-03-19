@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Contribution;
+use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -8,15 +9,17 @@ use Inertia\Testing\AssertableInertia as Assert;
 /**
  * T042 [US2] Feature test for Financial Secretary dashboard
  *
- * Financial Secretary should see the same view as Super Admin
+ * Financial Secretary should see the same view as Admin
  */
 describe('Financial Secretary Dashboard', function () {
     beforeEach(function () {
-        $this->financialSecretary = User::factory()->financialSecretary()->create();
+        $family = Family::factory()->create();
+
+        $this->financialSecretary = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
 
         // Create some members with contributions
-        $this->employedMember = User::factory()->member()->employed()->create();
-        $this->studentMember = User::factory()->member()->student()->create();
+        $this->employedMember = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $this->studentMember = User::factory()->member()->student()->create(['family_id' => $family->id]);
 
         // Create contributions for current month
         Contribution::factory()

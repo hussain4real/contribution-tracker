@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { generate } from '@/actions/App/Http/Controllers/ContributionController';
 import AccountDetails from '@/components/AccountDetails.vue';
 import AggregateStats from '@/components/contributions/AggregateStats.vue';
 import MemberContributionStatus from '@/components/dashboard/MemberContributionStatus.vue';
@@ -7,8 +8,8 @@ import SummaryCards from '@/components/dashboard/SummaryCards.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { dashboard } from '@/routes';
 import { type BreadcrumbItem } from '@/types';
-import { Head, usePoll } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { Head, router, usePoll } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
 
 // Auto-refresh dashboard every 30 seconds (T052)
 usePoll(30000);
@@ -75,6 +76,8 @@ interface MemberProps {
 
 type Props = Partial<AdminProps & MemberProps> & {
     fund_balance?: number;
+    can_generate_contributions?: boolean;
+    contributions_generated?: boolean;
 };
 
 const props = defineProps<Props>();
@@ -88,6 +91,23 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 // Check if this is an admin/FS view
 const isAdminView = computed(() => !!props.summary);
+
+// Generate contributions
+const generating = ref(false);
+
+function generateContributions() {
+    generating.value = true;
+    router.post(
+        generate().url,
+        {},
+        {
+            preserveScroll: true,
+            onFinish: () => {
+                generating.value = false;
+            },
+        },
+    );
+}
 
 // Format currency in Naira
 function formatCurrency(amount: number): string {
@@ -124,6 +144,39 @@ function formatCurrency(amount: number): string {
 
             <!-- Admin/Financial Secretary View -->
             <template v-if="isAdminView">
+                <!-- Generate Contributions Banner -->
+                <div
+                    v-if="
+                        can_generate_contributions && !contributions_generated
+                    "
+                    class="flex flex-col items-start justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 p-6 sm:flex-row sm:items-center dark:border-amber-800 dark:bg-amber-900/20"
+                >
+                    <div>
+                        <h3
+                            class="font-semibold text-amber-800 dark:text-amber-200"
+                        >
+                            No contributions generated this month
+                        </h3>
+                        <p
+                            class="mt-1 text-sm text-amber-700 dark:text-amber-300"
+                        >
+                            Generate contribution records for all active family
+                            members to start tracking payments.
+                        </p>
+                    </div>
+                    <button
+                        :disabled="generating"
+                        class="shrink-0 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-amber-700 disabled:opacity-50 dark:bg-amber-500 dark:hover:bg-amber-600"
+                        @click="generateContributions"
+                    >
+                        {{
+                            generating
+                                ? 'Generating...'
+                                : 'Generate Contributions'
+                        }}
+                    </button>
+                </div>
+
                 <SummaryCards
                     v-if="summary"
                     :total-members="summary.total_members"

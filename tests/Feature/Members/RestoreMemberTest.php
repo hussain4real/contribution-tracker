@@ -7,14 +7,14 @@ use App\Models\User;
  */
 describe('Restore Member', function () {
     beforeEach(function () {
-        $this->superAdmin = User::factory()->superAdmin()->create();
+        $this->admin = User::factory()->admin()->create();
         $this->archivedMember = User::factory()->member()->employed()->archived()->create();
     });
 
     it('super admin can restore an archived member', function () {
         expect($this->archivedMember->isArchived())->toBeTrue();
 
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->post("/members/{$this->archivedMember->id}/restore")
             ->assertRedirect();
 
@@ -24,7 +24,7 @@ describe('Restore Member', function () {
     });
 
     it('restored member appears in active scope', function () {
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->post("/members/{$this->archivedMember->id}/restore");
 
         $this->archivedMember->refresh();
@@ -41,7 +41,7 @@ describe('Restore Member', function () {
     it('cannot restore non-archived member', function () {
         $activeMember = User::factory()->member()->create();
 
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->post("/members/{$activeMember->id}/restore")
             ->assertRedirect(); // Should just redirect without error
 
@@ -56,7 +56,7 @@ describe('Restore Member', function () {
             ->assertForbidden();
 
         // Restore the member
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->post("/members/{$this->archivedMember->id}/restore");
 
         $this->archivedMember->refresh();

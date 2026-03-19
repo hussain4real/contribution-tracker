@@ -43,7 +43,7 @@ function formatCurrency(amount: number): string {
 
 function getRoleBadgeVariant(role: string) {
     switch (role) {
-        case 'super_admin':
+        case 'admin':
             return 'default';
         case 'financial_secretary':
             return 'secondary';

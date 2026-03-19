@@ -25,12 +25,20 @@ export interface NavItem {
     component?: string;
 }
 
+export interface Family {
+    id: number;
+    name: string;
+    currency: string;
+    due_day: number;
+}
+
 export type AppPageProps<
     T extends Record<string, unknown> = Record<string, unknown>,
 > = T & {
     name: string;
     quote: { message: string; author: string };
     auth: Auth;
+    family: Family | null;
     sidebarOpen: boolean;
 };
 
@@ -44,6 +52,8 @@ export interface User {
     role_label: string;
     category: string | null;
     category_label: string | null;
+    family_id: number | null;
+    is_super_admin: boolean;
     created_at?: string;
     updated_at?: string;
 }

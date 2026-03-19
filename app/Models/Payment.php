@@ -50,7 +50,7 @@ class Payment extends Model
     }
 
     /**
-     * The user who recorded this payment (Financial Secretary or Super Admin).
+     * The user who recorded this payment (Financial Secretary or Admin).
      */
     public function recorder(): BelongsTo
     {

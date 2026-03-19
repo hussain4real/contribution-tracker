@@ -187,10 +187,10 @@ describe('My Contributions', function () {
     });
 
     it('is accessible to all authenticated users regardless of role', function () {
-        $superAdmin = User::factory()->superAdmin()->create();
+        $admin = User::factory()->admin()->create();
         $financialSecretary = User::factory()->financialSecretary()->create();
 
-        $this->actingAs($superAdmin)
+        $this->actingAs($admin)
             ->get(route('contributions.my'))
             ->assertOk();
 

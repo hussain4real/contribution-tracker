@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Enums\MemberCategory;
 use App\Enums\Role;
+use App\Models\Family;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -39,6 +40,7 @@ class UserFactory extends Factory
             'two_factor_confirmed_at' => now(),
             'role' => Role::Member,
             'category' => MemberCategory::Employed,
+            'family_id' => Family::factory(),
         ];
     }
 
@@ -69,13 +71,23 @@ class UserFactory extends Factory
     // =========================================================================
 
     /**
-     * Create a Super Admin user.
+     * Create a Family Admin user.
+     */
+    public function admin(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => Role::Admin,
+            'category' => null, // Admin doesn't pay contributions
+        ]);
+    }
+
+    /**
+     * Create a platform Super Admin user.
      */
     public function superAdmin(): static
     {
         return $this->state(fn (array $attributes) => [
-            'role' => Role::SuperAdmin,
-            'category' => null, // Super Admin doesn't pay contributions
+            'is_super_admin' => true,
         ]);
     }
 

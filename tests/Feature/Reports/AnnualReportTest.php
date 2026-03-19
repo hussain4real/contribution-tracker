@@ -23,7 +23,7 @@ describe('Annual Report', function () {
     });
 
     it('displays annual report page for super admin', function () {
-        $user = User::factory()->superAdmin()->create();
+        $user = User::factory()->admin()->create();
 
         $this->actingAs($user)
             ->get('/reports/annual')
@@ -34,7 +34,7 @@ describe('Annual Report', function () {
     });
 
     it('includes monthly breakdown for 12 months', function () {
-        $admin = User::factory()->superAdmin()->create();
+        $admin = User::factory()->admin()->create();
         $member = User::factory()->employed()->create();
 
         // Create contributions for several months
@@ -62,7 +62,7 @@ describe('Annual Report', function () {
     });
 
     it('includes annual total summary', function () {
-        $admin = User::factory()->superAdmin()->create();
+        $admin = User::factory()->admin()->create();
         $member = User::factory()->employed()->create();
 
         // Create contributions for the year
@@ -95,7 +95,7 @@ describe('Annual Report', function () {
     });
 
     it('accepts year parameter', function () {
-        $admin = User::factory()->superAdmin()->create();
+        $admin = User::factory()->admin()->create();
 
         $this->actingAs($admin)
             ->get('/reports/annual?year=2024')
@@ -107,7 +107,7 @@ describe('Annual Report', function () {
     });
 
     it('defaults to current year when no parameter provided', function () {
-        $admin = User::factory()->superAdmin()->create();
+        $admin = User::factory()->admin()->create();
 
         $this->actingAs($admin)
             ->get('/reports/annual')
@@ -119,7 +119,7 @@ describe('Annual Report', function () {
     });
 
     it('includes category breakdown for the year', function () {
-        $admin = User::factory()->superAdmin()->create();
+        $admin = User::factory()->admin()->create();
 
         // Create members with different categories
         $employed = User::factory()->employed()->create();
@@ -150,7 +150,7 @@ describe('Annual Report', function () {
     });
 
     it('shows collection rate trend over months', function () {
-        $admin = User::factory()->superAdmin()->create();
+        $admin = User::factory()->admin()->create();
 
         $this->actingAs($admin)
             ->get('/reports/annual?year='.now()->year)

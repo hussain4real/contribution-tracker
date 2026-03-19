@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Contribution;
+use App\Models\Family;
 use App\Models\User;
 use Carbon\Carbon;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -12,8 +13,10 @@ use Inertia\Testing\AssertableInertia as Assert;
  */
 describe('Overdue Highlighting', function () {
     beforeEach(function () {
-        $this->superAdmin = User::factory()->superAdmin()->create();
-        $this->member = User::factory()->member()->employed()->create();
+        $family = Family::factory()->create();
+
+        $this->admin = User::factory()->admin()->create(['family_id' => $family->id]);
+        $this->member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
     });
 
     it('shows overdue count when contributions are past due', function () {
@@ -28,7 +31,7 @@ describe('Overdue Highlighting', function () {
             ->employed()
             ->create();
 
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->get('/dashboard')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
@@ -50,10 +53,10 @@ describe('Overdue Highlighting', function () {
         $contribution->payments()->create([
             'amount' => 4000,
             'paid_at' => now(),
-            'recorded_by' => $this->superAdmin->id,
+            'recorded_by' => $this->admin->id,
         ]);
 
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->get('/dashboard')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
@@ -80,7 +83,7 @@ describe('Overdue Highlighting', function () {
             ->employed()
             ->create();
 
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->get('/dashboard')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
@@ -100,7 +103,7 @@ describe('Overdue Highlighting', function () {
         $lastMonth = now()->subMonth();
 
         // Create two overdue contributions
-        $member2 = User::factory()->member()->student()->create();
+        $member2 = User::factory()->member()->student()->create(['family_id' => $this->admin->family_id]);
 
         // First member - unpaid (overdue)
         Contribution::factory()
@@ -119,10 +122,10 @@ describe('Overdue Highlighting', function () {
         $paidContribution->payments()->create([
             'amount' => 1000,
             'paid_at' => now(),
-            'recorded_by' => $this->superAdmin->id,
+            'recorded_by' => $this->admin->id,
         ]);
 
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->get('/dashboard')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page

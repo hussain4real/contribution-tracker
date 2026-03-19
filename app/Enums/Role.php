@@ -6,7 +6,7 @@ namespace App\Enums;
 
 enum Role: string
 {
-    case SuperAdmin = 'super_admin';
+    case Admin = 'admin';
     case FinancialSecretary = 'financial_secretary';
     case Member = 'member';
 
@@ -16,7 +16,7 @@ enum Role: string
     public function label(): string
     {
         return match ($this) {
-            self::SuperAdmin => 'Super Admin',
+            self::Admin => 'Admin',
             self::FinancialSecretary => 'Financial Secretary',
             self::Member => 'Member',
         };
@@ -35,7 +35,7 @@ enum Role: string
      */
     public function canManageMembers(): bool
     {
-        return $this === self::SuperAdmin;
+        return $this === self::Admin;
     }
 
     /**
@@ -43,7 +43,7 @@ enum Role: string
      */
     public function canManageRoles(): bool
     {
-        return $this === self::SuperAdmin;
+        return $this === self::Admin;
     }
 
     /**

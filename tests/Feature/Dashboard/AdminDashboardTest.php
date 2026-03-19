@@ -1,25 +1,28 @@
 <?php
 
 use App\Models\Contribution;
+use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
 /**
- * T041 [US2] Feature test for Super Admin dashboard
+ * T041 [US2] Feature test for Admin dashboard
  *
- * Super Admin should see:
+ * Admin should see:
  * - Summary statistics (total members, total expected, total collected, overdue)
  * - All members' contribution statuses
  * - Recent payments
  */
-describe('Super Admin Dashboard', function () {
+describe('Admin Dashboard', function () {
     beforeEach(function () {
-        $this->superAdmin = User::factory()->superAdmin()->create();
+        $family = Family::factory()->create();
+
+        $this->admin = User::factory()->admin()->create(['family_id' => $family->id]);
 
         // Create some members with contributions
-        $this->employedMember = User::factory()->member()->employed()->create();
-        $this->studentMember = User::factory()->member()->student()->create();
+        $this->employedMember = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $this->studentMember = User::factory()->member()->student()->create(['family_id' => $family->id]);
 
         // Create contributions for current month
         $this->employedContribution = Contribution::factory()
@@ -37,14 +40,14 @@ describe('Super Admin Dashboard', function () {
         // Record a full payment for employed member
         Payment::factory()
             ->forContribution($this->employedContribution)
-            ->recordedBy($this->superAdmin)
+            ->recordedBy($this->admin)
             ->create(['amount' => 4000]);
 
         // Student has no payment (unpaid)
     });
 
     it('displays dashboard with summary statistics', function () {
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->get('/dashboard')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
@@ -62,7 +65,7 @@ describe('Super Admin Dashboard', function () {
     });
 
     it('displays all members contribution statuses for admin', function () {
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->get('/dashboard')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
@@ -79,7 +82,7 @@ describe('Super Admin Dashboard', function () {
     });
 
     it('displays recent payments', function () {
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->get('/dashboard')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
@@ -95,11 +98,11 @@ describe('Super Admin Dashboard', function () {
     });
 
     it('calculates summary statistics correctly', function () {
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->get('/dashboard')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->where('summary.total_members', 2)
+                ->where('summary.total_members', 3) // admin + 2 members
                 ->where('summary.total_expected', 5000) // 4000 + 1000
                 ->where('summary.total_collected', 4000) // Only employed paid
                 ->where('summary.total_outstanding', 1000) // Student outstanding

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Contribution;
 use App\Models\Payment;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
 class PaymentAllocationService
@@ -161,11 +162,16 @@ class PaymentAllocationService
      */
     private function createContribution(User $member, int $year, int $month): Contribution
     {
+        $family = $member->family;
+        $dueDay = $family?->due_day ?? Contribution::DUE_DAY;
+
         return Contribution::create([
+            'family_id' => $member->family_id,
             'user_id' => $member->id,
             'year' => $year,
             'month' => $month,
-            'expected_amount' => $member->category->monthlyAmount(),
+            'expected_amount' => $member->getMonthlyAmount() ?? 0,
+            'due_date' => Carbon::createFromDate($year, $month, $dueDay),
         ]);
     }
 

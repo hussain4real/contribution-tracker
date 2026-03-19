@@ -25,7 +25,7 @@ const features = [
         icon: 'users',
         title: 'Member Categories',
         description:
-            'Flexible tiers for Employed (₦4,000), Unemployed (₦2,000), and Students (₦1,000).',
+            'Define custom categories with flexible contribution amounts tailored to your family.',
     },
     {
         icon: 'chart',
@@ -37,14 +37,14 @@ const features = [
         icon: 'shield',
         title: 'Role-Based Access',
         description:
-            'Secure access control for Super Admins, Financial Secretaries, and Members.',
+            'Secure access control for Admins, Financial Secretaries, and Members.',
     },
 ];
 
 const stats = [
-    { value: '₦7,000', label: 'Max Monthly' },
-    { value: '28th', label: 'Due Date' },
-    { value: '3', label: 'Categories' },
+    { value: 'Custom', label: 'Amounts' },
+    { value: 'Flexible', label: 'Due Dates' },
+    { value: 'Unlimited', label: 'Categories' },
     { value: '100%', label: 'Transparent' },
 ];
 
@@ -65,43 +65,43 @@ const steps = [
         number: '03',
         title: 'Stay Accountable',
         description:
-            'View reports, monitor balances, and ensure every naira is accounted for.',
+            'View reports, monitor balances, and ensure every payment is accounted for.',
     },
 ];
 
 const testimonials = [
+    // {
+    //     quote: 'FamilyFund has transformed how we manage our family contributions. Everything is transparent and everyone knows where they stand.',
+    //     name: 'Adebayo Family',
+    //     role: 'Lagos, Nigeria',
+    //     initials: 'AF',
+    // },
+    // {
+    //     quote: "No more arguments about who has paid and who hasn't. The reports make our monthly meetings so much smoother.",
+    //     name: 'Okonkwo Family',
+    //     role: 'Abuja, Nigeria',
+    //     initials: 'OF',
+    // },
     {
-        quote: 'FamilyFund has transformed how we manage our family contributions. Everything is transparent and everyone knows where they stand.',
-        name: 'Adebayo Family',
-        role: 'Lagos, Nigeria',
-        initials: 'AF',
-    },
-    {
-        quote: "No more arguments about who has paid and who hasn't. The reports make our monthly meetings so much smoother.",
-        name: 'Okonkwo Family',
-        role: 'Abuja, Nigeria',
-        initials: 'OF',
-    },
-    {
-        quote: 'The different member categories are perfect for our family. Students pay less and everyone is happy.',
-        name: 'Ibrahim Family',
-        role: 'Kano, Nigeria',
-        initials: 'IF',
+        quote: 'The different member categories are perfect for our family. Flexible amounts mean everyone can contribute fairly.',
+        name: 'The Johnsons',
+        role: 'Family Group',
+        initials: 'TJ',
     },
 ];
 
 const faqs = [
     {
         question: 'How are contribution amounts determined?',
-        answer: 'Contributions are based on member categories: Employed members pay ₦4,000, Unemployed members pay ₦2,000, and Students pay ₦1,000 per month.',
+        answer: 'Each family admin defines contribution categories and amounts. Members are assigned to categories, and their monthly contribution is determined automatically.',
     },
     {
         question: 'When are contributions due?',
-        answer: 'Monthly contributions are due by the 28th of each month. Members receive reminders as the due date approaches.',
+        answer: 'Each family sets their own due date. Members receive reminders as the due date approaches.',
     },
     {
         question: 'Who can view the financial reports?',
-        answer: 'Super Admins and Financial Secretaries have full access to reports. Regular members can view their own contribution history and family-level summaries.',
+        answer: 'Admins and Financial Secretaries have full access to reports. Regular members can view their own contribution history and family-level summaries.',
     },
     {
         question: 'Can I make partial payments?',
@@ -354,7 +354,7 @@ onUnmounted(() => {
                         Everything you need to manage contributions
                     </h2>
                     <p class="mt-4 text-lg text-slate-600 dark:text-slate-400">
-                        Built for Nigerian families who value transparency and
+                        Built for families who value transparency and
                         accountability.
                     </p>
                 </div>
@@ -507,7 +507,7 @@ onUnmounted(() => {
                     <h2
                         class="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl dark:text-white"
                     >
-                        Trusted by families across Nigeria
+                        Trusted by families everywhere
                     </h2>
                     <p class="mt-4 text-lg text-slate-600 dark:text-slate-400">
                         See what families are saying about FamilyFund.
@@ -657,8 +657,8 @@ onUnmounted(() => {
                         Ready to bring your family together?
                     </h2>
                     <p class="mt-4 text-lg text-emerald-100">
-                        Join families across Nigeria who trust FamilyFund to
-                        manage their contributions with transparency and ease.
+                        Join families who trust FamilyFund to manage their
+                        contributions with transparency and ease.
                     </p>
                     <div class="mt-10">
                         <Link
@@ -768,7 +768,7 @@ onUnmounted(() => {
                     </div>
                     <p class="text-sm text-slate-500 dark:text-slate-400">
                         © {{ new Date().getFullYear() }} FamilyFund. Built with
-                        ❤️ for Nigerian families.
+                        ❤️ for families everywhere.
                     </p>
                     <div class="flex items-center gap-4">
                         <Link

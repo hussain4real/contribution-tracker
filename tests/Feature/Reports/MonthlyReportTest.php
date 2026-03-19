@@ -25,7 +25,7 @@ describe('Monthly Report', function () {
     });
 
     it('displays monthly report page for super admin', function () {
-        $user = User::factory()->superAdmin()->create();
+        $user = User::factory()->admin()->create();
 
         $this->actingAs($user)
             ->get('/reports/monthly')
@@ -36,7 +36,7 @@ describe('Monthly Report', function () {
     });
 
     it('includes summary with total expected and collected', function () {
-        $admin = User::factory()->superAdmin()->create();
+        $admin = User::factory()->admin()->create();
 
         // Create members with different categories
         $employed = User::factory()->employed()->create();
@@ -85,7 +85,7 @@ describe('Monthly Report', function () {
     });
 
     it('includes breakdown by category', function () {
-        $admin = User::factory()->superAdmin()->create();
+        $admin = User::factory()->admin()->create();
 
         // Create members with different categories
         User::factory()->employed()->count(3)->create();
@@ -114,7 +114,7 @@ describe('Monthly Report', function () {
     });
 
     it('includes member statuses for the month', function () {
-        $admin = User::factory()->superAdmin()->create();
+        $admin = User::factory()->admin()->create();
         $member = User::factory()->employed()->create();
 
         $contribution = Contribution::factory()->create([
@@ -142,7 +142,7 @@ describe('Monthly Report', function () {
     });
 
     it('accepts year and month parameters', function () {
-        $admin = User::factory()->superAdmin()->create();
+        $admin = User::factory()->admin()->create();
 
         $this->actingAs($admin)
             ->get('/reports/monthly?year=2024&month=6')
@@ -155,7 +155,7 @@ describe('Monthly Report', function () {
     });
 
     it('defaults to current month when no parameters provided', function () {
-        $admin = User::factory()->superAdmin()->create();
+        $admin = User::factory()->admin()->create();
 
         $this->actingAs($admin)
             ->get('/reports/monthly')
@@ -168,7 +168,7 @@ describe('Monthly Report', function () {
     });
 
     it('shows status counts (paid, partial, unpaid, overdue)', function () {
-        $admin = User::factory()->superAdmin()->create();
+        $admin = User::factory()->admin()->create();
 
         // Create members
         $members = User::factory()->employed()->count(4)->create();

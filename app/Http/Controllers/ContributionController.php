@@ -4,7 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Contribution;
 use App\Models\User;
+use Carbon\Carbon;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -63,6 +66,7 @@ class ContributionController extends Controller
         $currentMonth = now()->month;
 
         $allContributions = Contribution::query()
+            ->where('family_id', $user->family_id)
             ->where('year', $currentYear)
             ->where('month', $currentMonth)
             ->get();
@@ -140,5 +144,29 @@ class ContributionController extends Controller
             ],
             'can_record_payment' => $request->user()->canRecordPayments(),
         ]);
+    }
+
+    /**
+     * Generate monthly contributions for the current family.
+     */
+    public function generate(Request $request): RedirectResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        $this->authorize('create', Contribution::class);
+
+        $year = (int) ($request->input('year', now()->year));
+        $month = (int) ($request->input('month', now()->month));
+
+        Artisan::call('contributions:generate', [
+            '--year' => $year,
+            '--month' => $month,
+            '--family' => $user->family_id,
+        ]);
+
+        $periodLabel = Carbon::createFromDate($year, $month, 1)->format('F Y');
+
+        return back()->with('success', "Contributions generated for {$periodLabel}.");
     }
 }

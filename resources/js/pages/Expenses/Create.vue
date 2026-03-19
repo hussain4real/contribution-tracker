@@ -30,7 +30,7 @@ const spentAt = ref<string>(new Date().toISOString().split('T')[0]);
     <Head title="Record Expense" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="mx-auto max-w-2xl space-y-6 p-4">
+        <div class="mx-auto w-full max-w-2xl space-y-6 p-4">
             <HeadingSmall
                 title="Record Expense"
                 description="Record an expense from the family fund."

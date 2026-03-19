@@ -8,7 +8,7 @@ uses(RefreshDatabase::class);
 describe('Report Authorization', function () {
     describe('Report Index', function () {
         it('allows super admin to access reports index', function () {
-            $admin = User::factory()->superAdmin()->create();
+            $admin = User::factory()->admin()->create();
 
             $this->actingAs($admin)
                 ->get('/reports')
@@ -39,7 +39,7 @@ describe('Report Authorization', function () {
 
     describe('Monthly Report', function () {
         it('allows super admin to access monthly report', function () {
-            $admin = User::factory()->superAdmin()->create();
+            $admin = User::factory()->admin()->create();
 
             $this->actingAs($admin)
                 ->get('/reports/monthly')
@@ -70,7 +70,7 @@ describe('Report Authorization', function () {
 
     describe('Annual Report', function () {
         it('allows super admin to access annual report', function () {
-            $admin = User::factory()->superAdmin()->create();
+            $admin = User::factory()->admin()->create();
 
             $this->actingAs($admin)
                 ->get('/reports/annual')

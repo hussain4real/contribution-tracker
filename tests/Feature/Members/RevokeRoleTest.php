@@ -12,7 +12,7 @@ uses(RefreshDatabase::class);
  */
 describe('Revoke Role', function () {
     beforeEach(function () {
-        $this->superAdmin = User::factory()->superAdmin()->create();
+        $this->admin = User::factory()->admin()->create();
     });
 
     it('super admin can revoke financial secretary role', function () {
@@ -20,7 +20,7 @@ describe('Revoke Role', function () {
 
         expect($financialSecretary->role)->toBe(Role::FinancialSecretary);
 
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->put("/members/{$financialSecretary->id}", [
                 'name' => $financialSecretary->name,
                 'email' => $financialSecretary->email,
@@ -40,7 +40,7 @@ describe('Revoke Role', function () {
         expect($financialSecretary->canRecordPayments())->toBeTrue();
 
         // Revoke role
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->put("/members/{$financialSecretary->id}", [
                 'name' => $financialSecretary->name,
                 'email' => $financialSecretary->email,
@@ -56,9 +56,9 @@ describe('Revoke Role', function () {
 
     it('super admin can demote another super admin to member', function () {
         // Create another super admin with a category so they can be demoted
-        $anotherAdmin = User::factory()->superAdmin()->employed()->create();
+        $anotherAdmin = User::factory()->admin()->employed()->create();
 
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->put("/members/{$anotherAdmin->id}", [
                 'name' => $anotherAdmin->name,
                 'email' => $anotherAdmin->email,
@@ -73,19 +73,19 @@ describe('Revoke Role', function () {
 
     it('super admin cannot demote themselves', function () {
         // Give super admin a category for the form submission
-        $this->superAdmin->update(['category' => MemberCategory::Employed]);
+        $this->admin->update(['category' => MemberCategory::Employed]);
 
-        $response = $this->actingAs($this->superAdmin)
-            ->put("/members/{$this->superAdmin->id}", [
-                'name' => $this->superAdmin->name,
-                'email' => $this->superAdmin->email,
-                'category' => $this->superAdmin->category->value,
+        $response = $this->actingAs($this->admin)
+            ->put("/members/{$this->admin->id}", [
+                'name' => $this->admin->name,
+                'email' => $this->admin->email,
+                'category' => $this->admin->category->value,
                 'role' => 'member',
             ]);
 
         // Should either be forbidden or redirect with error
-        $this->superAdmin->refresh();
-        expect($this->superAdmin->role)->toBe(Role::SuperAdmin);
+        $this->admin->refresh();
+        expect($this->admin->role)->toBe(Role::Admin);
     });
 
     it('financial secretary cannot revoke roles', function () {

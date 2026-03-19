@@ -12,7 +12,7 @@ uses(RefreshDatabase::class);
  */
 describe('Role Access', function () {
     beforeEach(function () {
-        $this->superAdmin = User::factory()->superAdmin()->create();
+        $this->admin = User::factory()->admin()->create();
         $this->member = User::factory()->member()->employed()->create();
         $this->contribution = Contribution::factory()
             ->forUser($this->member)
@@ -24,7 +24,7 @@ describe('Role Access', function () {
         $newFs = User::factory()->member()->create();
 
         // Assign FS role
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->put("/members/{$newFs->id}", [
                 'name' => $newFs->name,
                 'email' => $newFs->email,
@@ -44,7 +44,7 @@ describe('Role Access', function () {
         $newFs = User::factory()->member()->create();
 
         // Assign FS role
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->put("/members/{$newFs->id}", [
                 'name' => $newFs->name,
                 'email' => $newFs->email,
@@ -78,7 +78,7 @@ describe('Role Access', function () {
             ->assertOk();
 
         // Demote to member
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->put("/members/{$fs->id}", [
                 'name' => $fs->name,
                 'email' => $fs->email,
@@ -98,7 +98,7 @@ describe('Role Access', function () {
         $fs = User::factory()->financialSecretary()->create();
 
         // Demote to member
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->put("/members/{$fs->id}", [
                 'name' => $fs->name,
                 'email' => $fs->email,
@@ -118,16 +118,16 @@ describe('Role Access', function () {
             ->assertForbidden();
     });
 
-    it('newly promoted super admin can manage members', function () {
+    it('newly promoted admin can manage members', function () {
         $newAdmin = User::factory()->member()->create();
 
-        // Promote to super admin
-        $this->actingAs($this->superAdmin)
+        // Promote to admin
+        $this->actingAs($this->admin)
             ->put("/members/{$newAdmin->id}", [
                 'name' => $newAdmin->name,
                 'email' => $newAdmin->email,
                 'category' => $newAdmin->category->value,
-                'role' => 'super_admin',
+                'role' => 'admin',
             ]);
 
         $newAdmin->refresh();
@@ -138,17 +138,17 @@ describe('Role Access', function () {
             ->assertOk();
     });
 
-    it('newly promoted super admin can assign roles', function () {
+    it('newly promoted admin can assign roles', function () {
         $newAdmin = User::factory()->member()->create();
         $targetMember = User::factory()->member()->create();
 
-        // Promote to super admin
-        $this->actingAs($this->superAdmin)
+        // Promote to admin
+        $this->actingAs($this->admin)
             ->put("/members/{$newAdmin->id}", [
                 'name' => $newAdmin->name,
                 'email' => $newAdmin->email,
                 'category' => $newAdmin->category->value,
-                'role' => 'super_admin',
+                'role' => 'admin',
             ]);
 
         $newAdmin->refresh();
@@ -167,12 +167,12 @@ describe('Role Access', function () {
         expect($targetMember->role)->toBe(Role::FinancialSecretary);
     });
 
-    it('demoted super admin cannot manage members', function () {
+    it('demoted admin cannot manage members', function () {
         // Create another admin with a category
-        $anotherAdmin = User::factory()->superAdmin()->employed()->create();
+        $anotherAdmin = User::factory()->admin()->employed()->create();
 
         // Demote to member
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->put("/members/{$anotherAdmin->id}", [
                 'name' => $anotherAdmin->name,
                 'email' => $anotherAdmin->email,

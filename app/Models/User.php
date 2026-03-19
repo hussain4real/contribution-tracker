@@ -8,6 +8,7 @@ use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -30,6 +31,9 @@ class User extends Authenticatable implements MustVerifyEmail
         'password',
         'role',
         'category',
+        'family_id',
+        'family_category_id',
+        'is_super_admin',
         'archived_at',
     ];
 
@@ -58,6 +62,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'two_factor_confirmed_at' => 'datetime',
             'role' => Role::class,
             'category' => MemberCategory::class,
+            'is_super_admin' => 'boolean',
             'archived_at' => 'datetime',
         ];
     }
@@ -65,6 +70,22 @@ class User extends Authenticatable implements MustVerifyEmail
     // =========================================================================
     // Relationships
     // =========================================================================
+
+    /**
+     * The family this user belongs to.
+     */
+    public function family(): BelongsTo
+    {
+        return $this->belongsTo(Family::class);
+    }
+
+    /**
+     * The family category (contribution tier) for this user.
+     */
+    public function familyCategory(): BelongsTo
+    {
+        return $this->belongsTo(FamilyCategory::class);
+    }
 
     /**
      * User has many contributions.
@@ -155,11 +176,19 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
-     * Check if user is a Super Admin.
+     * Check if user is a platform Super Admin.
      */
     public function isSuperAdmin(): bool
     {
-        return $this->role === Role::SuperAdmin;
+        return $this->is_super_admin === true;
+    }
+
+    /**
+     * Check if user is a Family Admin.
+     */
+    public function isAdmin(): bool
+    {
+        return $this->role === Role::Admin;
     }
 
     /**
@@ -207,6 +236,6 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function getMonthlyAmount(): ?int
     {
-        return $this->category?->monthlyAmount();
+        return $this->familyCategory?->monthly_amount ?? $this->category?->monthlyAmount();
     }
 }

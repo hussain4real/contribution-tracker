@@ -53,9 +53,9 @@ describe('Payment Authorization', function () {
     });
 
     it('allows super admin to record payments', function () {
-        $superAdmin = User::factory()->superAdmin()->create();
+        $admin = User::factory()->admin()->create();
 
-        $this->actingAs($superAdmin)
+        $this->actingAs($admin)
             ->post(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 4000,
@@ -65,7 +65,7 @@ describe('Payment Authorization', function () {
 
         $this->assertDatabaseHas('payments', [
             'amount' => 4000,
-            'recorded_by' => $superAdmin->id,
+            'recorded_by' => $admin->id,
         ]);
     });
 

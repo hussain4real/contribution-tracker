@@ -17,7 +17,7 @@ class DashboardController extends Controller
     /**
      * Display the contribution dashboard with role-based props.
      *
-     * - Super Admin & Financial Secretary: See all members, summary stats, recent payments
+     * - Admin & Financial Secretary: See all members, summary stats, recent payments
      * - Member: See personal status and family aggregate only (FR-015, FR-016)
      */
     public function index(): Response
@@ -33,6 +33,7 @@ class DashboardController extends Controller
 
         // Get current month contributions with payments for calculations
         $currentMonthContributions = Contribution::query()
+            ->where('family_id', $user->family_id)
             ->with(['user', 'payments'])
             ->whereHas('user', fn ($q) => $q->whereNull('archived_at'))
             ->where('year', $currentYear)
@@ -41,12 +42,15 @@ class DashboardController extends Controller
 
         // Get all contributions to count overdue (FR-006: past 28th of their month)
         $allContributions = Contribution::query()
+            ->where('family_id', $user->family_id)
             ->with(['user', 'payments'])
             ->whereHas('user', fn ($q) => $q->whereNull('archived_at'))
             ->get();
 
         $props = [
             'can_record_payments' => $canRecordPayments,
+            'can_generate_contributions' => $user->isAdmin(),
+            'contributions_generated' => $currentMonthContributions->isNotEmpty(),
             'fund_balance' => $this->calculateFundBalance(),
         ];
 
@@ -72,7 +76,9 @@ class DashboardController extends Controller
      */
     private function calculateSummary($currentMonthContributions, $allContributions): array
     {
-        $totalMembers = $currentMonthContributions->count();
+        /** @var User $user */
+        $user = Auth::user();
+        $totalMembers = User::where('family_id', $user->family_id)->active()->count();
         $totalExpected = $currentMonthContributions->sum('expected_amount');
         $totalCollected = $currentMonthContributions->sum(fn ($c) => $c->payments->sum('amount'));
         $totalOutstanding = $totalExpected - $totalCollected;
@@ -130,7 +136,11 @@ class DashboardController extends Controller
      */
     private function getRecentPayments(): array
     {
+        /** @var User $user */
+        $user = Auth::user();
+
         return Payment::query()
+            ->whereHas('contribution', fn ($q) => $q->where('family_id', $user->family_id))
             ->with(['contribution.user', 'recorder'])
             ->latest('paid_at')
             ->latest('id')
@@ -209,9 +219,15 @@ class DashboardController extends Controller
      */
     private function calculateFundBalance(): int
     {
-        $totalPayments = (int) Payment::query()->sum('amount');
-        $totalAdjustments = (int) FundAdjustment::query()->sum('amount');
-        $totalExpenses = (int) Expense::query()->sum('amount');
+        /** @var User $user */
+        $user = Auth::user();
+        $familyId = $user->family_id;
+
+        $totalPayments = (int) Payment::query()
+            ->whereHas('contribution', fn ($q) => $q->where('family_id', $familyId))
+            ->sum('amount');
+        $totalAdjustments = (int) FundAdjustment::query()->where('family_id', $familyId)->sum('amount');
+        $totalExpenses = (int) Expense::query()->where('family_id', $familyId)->sum('amount');
 
         return $totalPayments + $totalAdjustments - $totalExpenses;
     }

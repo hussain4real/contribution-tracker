@@ -9,12 +9,12 @@ use Inertia\Testing\AssertableInertia as Assert;
  */
 describe('Update Member', function () {
     beforeEach(function () {
-        $this->superAdmin = User::factory()->superAdmin()->create();
+        $this->admin = User::factory()->admin()->create();
         $this->member = User::factory()->member()->employed()->create();
     });
 
     it('super admin can access member edit form', function () {
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->get("/members/{$this->member->id}/edit")
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
@@ -28,7 +28,7 @@ describe('Update Member', function () {
     });
 
     it('super admin can update member name', function () {
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->put("/members/{$this->member->id}", [
                 'name' => 'Updated Name',
                 'email' => $this->member->email,
@@ -42,7 +42,7 @@ describe('Update Member', function () {
     });
 
     it('super admin can update member category', function () {
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->put("/members/{$this->member->id}", [
                 'name' => $this->member->name,
                 'email' => $this->member->email,
@@ -59,7 +59,7 @@ describe('Update Member', function () {
         // Initially employed (₦4,000)
         expect($this->member->getMonthlyAmount())->toBe(4000);
 
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->put("/members/{$this->member->id}", [
                 'name' => $this->member->name,
                 'email' => $this->member->email,
@@ -74,7 +74,7 @@ describe('Update Member', function () {
     });
 
     it('validates required fields on update', function () {
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->put("/members/{$this->member->id}", [])
             ->assertSessionHasErrors(['name', 'email', 'category']);
     });
@@ -84,7 +84,7 @@ describe('Update Member', function () {
         $otherMember = User::factory()->member()->create(['email' => 'other@example.com']);
 
         // Try to update to the other member's email
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->put("/members/{$this->member->id}", [
                 'name' => $this->member->name,
                 'email' => 'other@example.com',
@@ -95,7 +95,7 @@ describe('Update Member', function () {
     });
 
     it('can keep same email on update', function () {
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->put("/members/{$this->member->id}", [
                 'name' => 'New Name',
                 'email' => $this->member->email, // Same email

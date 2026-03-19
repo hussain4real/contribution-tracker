@@ -13,7 +13,7 @@ uses(RefreshDatabase::class);
  */
 describe('Last Financial Secretary Warning', function () {
     beforeEach(function () {
-        $this->superAdmin = User::factory()->superAdmin()->create();
+        $this->admin = User::factory()->admin()->create();
     });
 
     it('allows removing financial secretary when others exist', function () {
@@ -22,7 +22,7 @@ describe('Last Financial Secretary Warning', function () {
         $fs2 = User::factory()->financialSecretary()->create();
 
         // Remove first FS
-        $this->actingAs($this->superAdmin)
+        $this->actingAs($this->admin)
             ->put("/members/{$fs1->id}", [
                 'name' => $fs1->name,
                 'email' => $fs1->email,
@@ -40,7 +40,7 @@ describe('Last Financial Secretary Warning', function () {
         $lastFs = User::factory()->financialSecretary()->create();
 
         // Attempt to remove last FS
-        $response = $this->actingAs($this->superAdmin)
+        $response = $this->actingAs($this->admin)
             ->put("/members/{$lastFs->id}", [
                 'name' => $lastFs->name,
                 'email' => $lastFs->email,
@@ -61,7 +61,7 @@ describe('Last Financial Secretary Warning', function () {
         $lastFs = User::factory()->financialSecretary()->create();
 
         // Remove with force flag
-        $response = $this->actingAs($this->superAdmin)
+        $response = $this->actingAs($this->admin)
             ->put("/members/{$lastFs->id}", [
                 'name' => $lastFs->name,
                 'email' => $lastFs->email,
@@ -80,7 +80,7 @@ describe('Last Financial Secretary Warning', function () {
         // Super admin exists and can record payments, so removing last FS is less critical
         $lastFs = User::factory()->financialSecretary()->create();
 
-        $response = $this->actingAs($this->superAdmin)
+        $response = $this->actingAs($this->admin)
             ->put("/members/{$lastFs->id}", [
                 'name' => $lastFs->name,
                 'email' => $lastFs->email,
@@ -101,7 +101,7 @@ describe('Last Financial Secretary Warning', function () {
         ]);
 
         // Removing the active FS should trigger warning since archived doesn't count
-        $response = $this->actingAs($this->superAdmin)
+        $response = $this->actingAs($this->admin)
             ->put("/members/{$activeFs->id}", [
                 'name' => $activeFs->name,
                 'email' => $activeFs->email,

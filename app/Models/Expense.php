@@ -19,6 +19,7 @@ class Expense extends Model
      * @var list<string>
      */
     protected $fillable = [
+        'family_id',
         'amount',
         'description',
         'spent_at',
@@ -41,6 +42,14 @@ class Expense extends Model
     // =========================================================================
     // Relationships
     // =========================================================================
+
+    /**
+     * The family this expense belongs to.
+     */
+    public function family(): BelongsTo
+    {
+        return $this->belongsTo(Family::class);
+    }
 
     /**
      * The user who recorded this expense.

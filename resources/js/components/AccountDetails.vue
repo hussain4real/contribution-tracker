@@ -7,23 +7,43 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import { usePage } from '@inertiajs/vue3';
 import { Check, Copy, Landmark } from 'lucide-vue-next';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
+
+const page = usePage();
+
+const family = computed(
+    () =>
+        page.props.family as {
+            bank_name: string | null;
+            account_name: string | null;
+            account_number: string | null;
+        } | null,
+);
+
+const hasBankDetails = computed(
+    () =>
+        family.value?.bank_name ||
+        family.value?.account_name ||
+        family.value?.account_number,
+);
 
 const copied = ref(false);
-const accountNumber = '0232875402';
 
 function copyToClipboard(): void {
-    navigator.clipboard.writeText(accountNumber);
-    copied.value = true;
-    setTimeout(() => {
-        copied.value = false;
-    }, 2000);
+    if (family.value?.account_number) {
+        navigator.clipboard.writeText(family.value.account_number);
+        copied.value = true;
+        setTimeout(() => {
+            copied.value = false;
+        }, 2000);
+    }
 }
 </script>
 
 <template>
-    <Card class="relative w-full overflow-hidden">
+    <Card v-if="hasBankDetails" class="relative w-full overflow-hidden">
         <div class="pointer-events-none absolute top-0 right-0 opacity-5">
             <Landmark class="-mt-4 -mr-4 h-32 w-32" />
         </div>
@@ -39,7 +59,7 @@ function copyToClipboard(): void {
         </CardHeader>
         <CardContent>
             <div class="grid gap-6 sm:grid-cols-3">
-                <div class="space-y-1">
+                <div v-if="family?.account_name" class="space-y-1">
                     <p
                         class="text-sm font-medium text-neutral-500 dark:text-neutral-400"
                     >
@@ -48,10 +68,10 @@ function copyToClipboard(): void {
                     <p
                         class="font-semibold text-neutral-900 dark:text-neutral-100"
                     >
-                        Musa Sadiya Halima
+                        {{ family.account_name }}
                     </p>
                 </div>
-                <div class="space-y-1">
+                <div v-if="family?.bank_name" class="space-y-1">
                     <p
                         class="text-sm font-medium text-neutral-500 dark:text-neutral-400"
                     >
@@ -60,10 +80,10 @@ function copyToClipboard(): void {
                     <p
                         class="font-semibold text-neutral-900 dark:text-neutral-100"
                     >
-                        Guaranteed Trust Bank
+                        {{ family.bank_name }}
                     </p>
                 </div>
-                <div class="space-y-1">
+                <div v-if="family?.account_number" class="space-y-1">
                     <p
                         class="text-sm font-medium text-neutral-500 dark:text-neutral-400"
                     >
@@ -73,7 +93,7 @@ function copyToClipboard(): void {
                         <span
                             class="font-mono text-lg font-bold text-neutral-900 dark:text-neutral-100"
                         >
-                            {{ accountNumber }}
+                            {{ family.account_number }}
                         </span>
                         <Button
                             variant="outline"
