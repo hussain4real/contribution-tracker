@@ -47,10 +47,18 @@ class DashboardController extends Controller
             ->whereHas('user', fn ($q) => $q->whereNull('archived_at'))
             ->get();
 
+        $membersWithContributions = $currentMonthContributions->pluck('user_id');
+        $membersNeedingContributions = User::query()
+            ->where('family_id', $user->family_id)
+            ->active()
+            ->whereNotNull('category')
+            ->whereNotIn('id', $membersWithContributions)
+            ->exists();
+
         $props = [
             'can_record_payments' => $canRecordPayments,
             'can_generate_contributions' => $user->isAdmin(),
-            'contributions_generated' => $currentMonthContributions->isNotEmpty(),
+            'has_pending_contributions' => $membersNeedingContributions,
             'fund_balance' => $this->calculateFundBalance(),
         ];
 
