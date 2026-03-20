@@ -20,6 +20,7 @@ withDefaults(defineProps<Props>(), {
 
 const page = usePage();
 const isImpersonating = computed(() => page.props.impersonating);
+const impersonatedName = computed(() => page.props.auth?.user?.name ?? 'a user');
 const stopping = ref(false);
 
 function stopImpersonation(): void {
@@ -41,7 +42,7 @@ function stopImpersonation(): void {
                 v-if="isImpersonating"
                 class="flex items-center justify-between bg-amber-500 px-4 py-2 text-sm font-medium text-white dark:bg-amber-600"
             >
-                <span>You are currently impersonating a user.</span>
+                <span>You are currently impersonating <strong>{{ impersonatedName }}</strong>.</span>
                 <Button
                     variant="secondary"
                     size="sm"
