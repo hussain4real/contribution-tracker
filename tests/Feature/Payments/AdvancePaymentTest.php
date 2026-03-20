@@ -39,6 +39,60 @@ describe('Advance Payments (FR-018)', function () {
         expect($contribution->status)->toBe(PaymentStatus::Paid);
     });
 
+    it('handles string target_year and target_month from form input', function () {
+        $nextMonth = now()->addMonth();
+
+        $this->actingAs($this->financialSecretary)
+            ->post(route('payments.store'), [
+                'member_id' => $this->member->id,
+                'amount' => 4000,
+                'paid_at' => now()->toDateString(),
+                'target_year' => (string) $nextMonth->year,
+                'target_month' => (string) $nextMonth->month,
+            ])
+            ->assertRedirect();
+
+        $contribution = Contribution::forUser($this->member->id)
+            ->forMonth($nextMonth->year, $nextMonth->month)
+            ->first();
+
+        expect($contribution)->not->toBeNull();
+        expect($contribution->status)->toBe(PaymentStatus::Paid);
+    });
+
+    it('payment form excludes fully paid contributions', function () {
+        // Create a paid contribution
+        $paidContribution = Contribution::factory()
+            ->forUser($this->member)
+            ->currentMonth()
+            ->employed()
+            ->create();
+
+        $paidContribution->payments()->create([
+            'amount' => $paidContribution->expected_amount,
+            'paid_at' => now(),
+            'recorded_by' => $this->financialSecretary->id,
+        ]);
+
+        // Create an unpaid contribution for next month
+        $nextMonth = now()->startOfMonth()->addMonth();
+        $unpaidContribution = Contribution::factory()
+            ->forUser($this->member)
+            ->create([
+                'year' => $nextMonth->year,
+                'month' => $nextMonth->month,
+            ]);
+
+        $this->actingAs($this->financialSecretary)
+            ->get(route('payments.create', $this->member))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('pending_contributions', 1)
+                ->where('pending_contributions.0.year', $nextMonth->year)
+                ->where('pending_contributions.0.month', $nextMonth->month)
+            );
+    });
+
     it('allows payment for up to 6 months ahead', function () {
         $sixMonthsAhead = now()->addMonths(6);
 
@@ -59,12 +113,20 @@ describe('Advance Payments (FR-018)', function () {
         expect($contribution)->not->toBeNull();
     });
 
-    it('payment form shows current month plus next 6 months', function () {
+    it('payment form shows only incomplete contributions', function () {
+        // Create an unpaid contribution
+        Contribution::factory()
+            ->forUser($this->member)
+            ->currentMonth()
+            ->employed()
+            ->create();
+
         $this->actingAs($this->financialSecretary)
             ->get(route('payments.create', $this->member))
             ->assertOk()
             ->assertInertia(fn ($page) => $page
-                ->has('available_months', 7) // Current + 6 future months
+                ->has('pending_contributions', 1)
+                ->where('pending_contributions.0.balance', 4000)
             );
     });
 
