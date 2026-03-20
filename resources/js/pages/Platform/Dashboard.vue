@@ -78,7 +78,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                         <span class="text-sm font-medium">Total Payments</span>
                     </div>
                     <p class="mt-2 text-2xl font-bold">
-                        {{ props.stats.total_contributions }}
+                        {{ props.stats.total_payments.toLocaleString() }}
                     </p>
                 </div>
                 <div class="rounded-lg border p-4">
