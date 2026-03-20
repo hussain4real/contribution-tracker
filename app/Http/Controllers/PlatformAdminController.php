@@ -18,9 +18,14 @@ class PlatformAdminController extends Controller
     {
         $totalFamilies = Family::count();
         $totalUsers = User::count();
+        $activeUsers = User::active()->count();
+        $archivedUsers = User::archived()->count();
         $totalPayments = (int) Payment::sum('amount');
         $totalExpenses = (int) Expense::sum('amount');
         $totalContributions = Contribution::count();
+        $newFamiliesThisMonth = Family::query()
+            ->where('created_at', '>=', now()->startOfMonth())
+            ->count();
 
         $recentFamilies = Family::query()
             ->withCount('members')
@@ -36,15 +41,32 @@ class PlatformAdminController extends Controller
                 'created_at' => $family->created_at->toDateString(),
             ]);
 
+        $recentPayments = Payment::query()
+            ->with(['contribution.user', 'recorder'])
+            ->latest()
+            ->limit(5)
+            ->get()
+            ->map(fn (Payment $payment) => [
+                'id' => $payment->id,
+                'amount' => $payment->amount,
+                'member_name' => $payment->contribution?->user?->name,
+                'recorded_by' => $payment->recorder?->name,
+                'created_at' => $payment->created_at->toDateString(),
+            ]);
+
         return Inertia::render('Platform/Dashboard', [
             'stats' => [
                 'total_families' => $totalFamilies,
                 'total_users' => $totalUsers,
+                'active_users' => $activeUsers,
+                'archived_users' => $archivedUsers,
                 'total_payments' => $totalPayments,
                 'total_expenses' => $totalExpenses,
                 'total_contributions' => $totalContributions,
+                'new_families_this_month' => $newFamiliesThisMonth,
             ],
             'recent_families' => $recentFamilies,
+            'recent_payments' => $recentPayments,
         ]);
     }
 
@@ -71,9 +93,47 @@ class PlatformAdminController extends Controller
         ]);
     }
 
+    public function users(): Response
+    {
+        $users = User::query()
+            ->with('family')
+            ->latest()
+            ->paginate(20)
+            ->through(fn (User $user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role->label(),
+                'category' => $user->category?->label(),
+                'family_name' => $user->family?->name,
+                'family_id' => $user->family_id,
+                'is_active' => $user->archived_at === null,
+                'created_at' => $user->created_at->toDateString(),
+            ]);
+
+        return Inertia::render('Platform/Users', [
+            'users' => $users,
+        ]);
+    }
+
     public function showFamily(Family $family): Response
     {
         $family->load(['owner', 'categories', 'members' => fn ($q) => $q->orderBy('name')]);
+
+        $totalContributions = Contribution::query()
+            ->whereIn('user_id', $family->members->pluck('id'))
+            ->count();
+
+        $totalCollected = (int) Payment::query()
+            ->whereHas('contribution', fn ($q) => $q->whereIn('user_id', $family->members->pluck('id')))
+            ->sum('amount');
+
+        $totalExpected = (int) Contribution::query()
+            ->whereIn('user_id', $family->members->pluck('id'))
+            ->sum('expected_amount');
+
+        $activeMembers = $family->members->filter(fn ($m) => $m->archived_at === null)->count();
+        $archivedMembers = $family->members->filter(fn ($m) => $m->archived_at !== null)->count();
 
         return Inertia::render('Platform/FamilyDetail', [
             'family' => [
@@ -97,7 +157,18 @@ class PlatformAdminController extends Controller
                     'name' => $m->name,
                     'email' => $m->email,
                     'role' => $m->role->label(),
+                    'is_active' => $m->archived_at === null,
                 ]),
+                'financial_summary' => [
+                    'total_contributions' => $totalContributions,
+                    'total_collected' => $totalCollected,
+                    'total_expected' => $totalExpected,
+                    'collection_rate' => $totalExpected > 0
+                        ? round(($totalCollected / $totalExpected) * 100, 1)
+                        : 0,
+                    'active_members' => $activeMembers,
+                    'archived_members' => $archivedMembers,
+                ],
                 'created_at' => $family->created_at->toDateString(),
             ],
         ]);

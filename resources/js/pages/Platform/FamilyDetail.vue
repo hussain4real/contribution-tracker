@@ -20,7 +20,16 @@ interface Props {
             name: string;
             email: string;
             role: string;
+            is_active: boolean;
         }>;
+        financial_summary: {
+            total_contributions: number;
+            total_collected: number;
+            total_expected: number;
+            collection_rate: number;
+            active_members: number;
+            archived_members: number;
+        };
         created_at: string;
     };
 }
@@ -35,6 +44,14 @@ const props = withDefaults(defineProps<Props>(), {
         owner: null,
         categories: [],
         members: [],
+        financial_summary: {
+            total_contributions: 0,
+            total_collected: 0,
+            total_expected: 0,
+            collection_rate: 0,
+            active_members: 0,
+            archived_members: 0,
+        },
         created_at: '',
     }),
 });
@@ -80,6 +97,65 @@ function formatCurrency(amount: number): string {
                     </p>
                 </div>
             </div>
+
+            <!-- Financial Summary -->
+            <section>
+                <HeadingSmall
+                    title="Financial Summary"
+                    description="Overall contribution and payment statistics."
+                />
+                <div class="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <div class="rounded-lg border p-4">
+                        <p class="text-sm text-muted-foreground">
+                            Total Expected
+                        </p>
+                        <p class="text-lg font-semibold">
+                            {{
+                                formatCurrency(
+                                    family.financial_summary.total_expected,
+                                )
+                            }}
+                        </p>
+                    </div>
+                    <div class="rounded-lg border p-4">
+                        <p class="text-sm text-muted-foreground">
+                            Total Collected
+                        </p>
+                        <p class="text-lg font-semibold">
+                            {{
+                                formatCurrency(
+                                    family.financial_summary.total_collected,
+                                )
+                            }}
+                        </p>
+                    </div>
+                    <div class="rounded-lg border p-4">
+                        <p class="text-sm text-muted-foreground">
+                            Collection Rate
+                        </p>
+                        <p class="text-lg font-semibold">
+                            {{ family.financial_summary.collection_rate }}%
+                        </p>
+                    </div>
+                    <div class="rounded-lg border p-4">
+                        <p class="text-sm text-muted-foreground">Members</p>
+                        <p class="text-lg font-semibold">
+                            {{ family.financial_summary.active_members }} active
+                            <span
+                                v-if="
+                                    family.financial_summary.archived_members >
+                                    0
+                                "
+                                class="text-sm font-normal text-muted-foreground"
+                            >
+                                ·
+                                {{ family.financial_summary.archived_members }}
+                                archived
+                            </span>
+                        </p>
+                    </div>
+                </div>
+            </section>
 
             <!-- Categories -->
             <section>
@@ -133,6 +209,11 @@ function formatCurrency(amount: number): string {
                                 >
                                     Role
                                 </th>
+                                <th
+                                    class="px-4 py-2 text-center text-sm font-medium"
+                                >
+                                    Status
+                                </th>
                             </tr>
                         </thead>
                         <tbody class="divide-y">
@@ -150,6 +231,22 @@ function formatCurrency(amount: number): string {
                                 </td>
                                 <td class="px-4 py-2 text-sm">
                                     {{ member.role }}
+                                </td>
+                                <td class="px-4 py-2 text-center">
+                                    <span
+                                        class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+                                        :class="
+                                            member.is_active
+                                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                                : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                                        "
+                                    >
+                                        {{
+                                            member.is_active
+                                                ? 'Active'
+                                                : 'Archived'
+                                        }}
+                                    </span>
                                 </td>
                             </tr>
                         </tbody>

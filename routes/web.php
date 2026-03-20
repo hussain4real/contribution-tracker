@@ -103,6 +103,7 @@ Route::middleware(['auth', 'verified', EnsurePlatformSuperAdmin::class])
         Route::get('/', [PlatformAdminController::class, 'index'])->name('dashboard');
         Route::get('families', [PlatformAdminController::class, 'families'])->name('families');
         Route::get('families/{family}', [PlatformAdminController::class, 'showFamily'])->name('families.show');
+        Route::get('users', [PlatformAdminController::class, 'users'])->name('users');
     });
 
 require __DIR__.'/settings.php';
