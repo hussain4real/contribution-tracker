@@ -54,20 +54,7 @@ class PaymentController extends Controller
     {
         $this->authorize('create', Payment::class);
 
-        // Generate available months (current + next 6 months) per FR-018
-        $availableMonths = collect();
-        $currentDate = now()->startOfMonth();
-
-        for ($i = 0; $i <= 6; $i++) {
-            $date = $currentDate->copy()->addMonths($i);
-            $availableMonths->push([
-                'year' => $date->year,
-                'month' => $date->month,
-                'label' => $date->format('F Y'),
-            ]);
-        }
-
-        // Get member's pending contributions with computed fields
+        // Get member's pending (incomplete) contributions
         $pendingContributions = $member->contributions()
             ->incomplete()
             ->oldestFirst()
@@ -85,7 +72,6 @@ class PaymentController extends Controller
 
         return Inertia::render('Payments/Create', [
             'member' => $member->only(['id', 'name', 'email', 'category']),
-            'available_months' => $availableMonths,
             'pending_contributions' => $pendingContributions,
             'category_amount' => $member->category?->monthlyAmount(),
             'formatted_amount' => $member->category?->formattedAmount(),
@@ -109,8 +95,8 @@ class PaymentController extends Controller
             paidAt: $request->paid_at,
             recordedBy: $request->user(),
             notes: $request->notes,
-            targetYear: $request->target_year,
-            targetMonth: $request->target_month,
+            targetYear: $request->target_year ? (int) $request->target_year : null,
+            targetMonth: $request->target_month ? (int) $request->target_month : null,
         );
 
         $totalAllocated = $payments->sum('amount');

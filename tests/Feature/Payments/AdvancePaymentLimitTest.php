@@ -59,7 +59,7 @@ describe('Advance Payment Limit (FR-018)', function () {
             ->assertRedirect();
     });
 
-    it('rejects payment for past months', function () {
+    it('allows payment for past months with unpaid contributions', function () {
         $pastMonth = now()->subMonth();
 
         $this->actingAs($this->financialSecretary)
@@ -70,6 +70,7 @@ describe('Advance Payment Limit (FR-018)', function () {
                 'target_year' => $pastMonth->year,
                 'target_month' => $pastMonth->month,
             ])
-            ->assertSessionHasErrors('target_month');
+            ->assertSessionDoesntHaveErrors('target_month')
+            ->assertRedirect();
     });
 });

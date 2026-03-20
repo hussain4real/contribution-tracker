@@ -26,12 +26,6 @@ interface Member {
     category: string;
 }
 
-interface AvailableMonth {
-    year: number;
-    month: number;
-    label: string;
-}
-
 interface PendingContribution {
     id: number;
     year: number;
@@ -50,7 +44,6 @@ interface Category {
 
 interface Props {
     member: Member;
-    available_months: AvailableMonth[];
     pending_contributions: PendingContribution[];
     category_amount: number;
     formatted_amount: string;
@@ -95,13 +88,13 @@ const setQuickAmount = (value: number) => {
 
 // Parse selected month
 const targetYear = computed(() => {
-    if (!selectedMonth.value || selectedMonth.value === 'current') return null;
+    if (!selectedMonth.value) return null;
     const [year] = selectedMonth.value.split('-');
     return parseInt(year);
 });
 
 const targetMonth = computed(() => {
-    if (!selectedMonth.value || selectedMonth.value === 'current') return null;
+    if (!selectedMonth.value) return null;
     const [, month] = selectedMonth.value.split('-');
     return parseInt(month);
 });
@@ -222,31 +215,29 @@ const targetMonth = computed(() => {
                 </div>
 
                 <!-- Target Month Field -->
-                <div class="grid gap-2">
+                <div v-if="pending_contributions.length > 0" class="grid gap-2">
                     <Label for="target_month">Target Month (Optional)</Label>
                     <Select v-model="selectedMonth">
                         <SelectTrigger>
                             <SelectValue
-                                placeholder="Select target month (or leave empty for current)"
+                                placeholder="Auto-allocate to oldest unpaid month"
                             />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="current"
-                                >Current Month</SelectItem
-                            >
                             <SelectItem
-                                v-for="month in available_months"
-                                :key="`${month.year}-${month.month}`"
-                                :value="`${month.year}-${month.month}`"
+                                v-for="contribution in pending_contributions"
+                                :key="`${contribution.year}-${contribution.month}`"
+                                :value="`${contribution.year}-${contribution.month}`"
                             >
-                                {{ month.label }}
+                                {{ contribution.period_label }} —
+                                {{ formatAmount(contribution.balance) }}
+                                remaining
                             </SelectItem>
                         </SelectContent>
                     </Select>
                     <InputError :message="errors.target_month" />
                     <p class="text-xs text-muted-foreground">
-                        Leave empty to pay for current month, or select a future
-                        month (up to 6 months ahead).
+                        Leave empty to auto-allocate to the oldest unpaid month.
                     </p>
                 </div>
 
