@@ -84,9 +84,9 @@ const testimonials = [
     // },
     {
         quote: 'The different member categories are perfect for our family. Flexible amounts mean everyone can contribute fairly.',
-        name: 'The Johnsons',
-        role: 'Family Group',
-        initials: 'TJ',
+        name: 'The Hussains',
+        role: 'Financial Secretary',
+        initials: 'TH',
     },
 ];
 
