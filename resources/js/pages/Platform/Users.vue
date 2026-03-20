@@ -66,12 +66,16 @@ function promptImpersonate(user: UserRow): void {
 function confirmImpersonate(): void {
     if (!targetUser.value) return;
     processing.value = true;
-    router.post(impersonate(targetUser.value.id).url, {}, {
-        onFinish: () => {
-            processing.value = false;
-            showImpersonateDialog.value = false;
+    router.post(
+        impersonate(targetUser.value.id).url,
+        {},
+        {
+            onFinish: () => {
+                processing.value = false;
+                showImpersonateDialog.value = false;
+            },
         },
-    });
+    );
 }
 
 function promptReset(user: UserRow): void {
@@ -82,12 +86,16 @@ function promptReset(user: UserRow): void {
 function confirmReset(): void {
     if (!targetUser.value) return;
     processing.value = true;
-    router.post(sendPasswordReset(targetUser.value.id).url, {}, {
-        onFinish: () => {
-            processing.value = false;
-            showResetDialog.value = false;
+    router.post(
+        sendPasswordReset(targetUser.value.id).url,
+        {},
+        {
+            onFinish: () => {
+                processing.value = false;
+                showResetDialog.value = false;
+            },
         },
-    });
+    );
 }
 </script>
 
@@ -193,7 +201,9 @@ function confirmReset(): void {
                                 {{ user.created_at }}
                             </td>
                             <td class="px-4 py-3 text-center">
-                                <div class="flex items-center justify-center gap-1">
+                                <div
+                                    class="flex items-center justify-center gap-1"
+                                >
                                     <Button
                                         variant="ghost"
                                         size="sm"
@@ -289,10 +299,7 @@ function confirmReset(): void {
                     </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
-                    <Button
-                        variant="outline"
-                        @click="showResetDialog = false"
-                    >
+                    <Button variant="outline" @click="showResetDialog = false">
                         Cancel
                     </Button>
                     <Button :disabled="processing" @click="confirmReset">

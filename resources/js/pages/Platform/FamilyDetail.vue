@@ -94,12 +94,16 @@ function toggleSuspend(): void {
         ? unsuspendFamily(props.family.id)
         : suspendFamily(props.family.id);
 
-    router.post(route.url, {}, {
-        onFinish: () => {
-            processing.value = false;
-            showSuspendDialog.value = false;
+    router.post(
+        route.url,
+        {},
+        {
+            onFinish: () => {
+                processing.value = false;
+                showSuspendDialog.value = false;
+            },
         },
-    });
+    );
 }
 </script>
 
@@ -120,7 +124,9 @@ function toggleSuspend(): void {
             >
                 <div class="flex items-center gap-2">
                     <Ban class="h-5 w-5 text-red-600 dark:text-red-400" />
-                    <span class="text-sm font-medium text-red-700 dark:text-red-300">
+                    <span
+                        class="text-sm font-medium text-red-700 dark:text-red-300"
+                    >
                         This family was suspended on {{ family.suspended_at }}.
                     </span>
                 </div>
@@ -153,10 +159,7 @@ function toggleSuspend(): void {
             </div>
 
             <!-- Suspend / Unsuspend Action -->
-            <div
-                v-if="!family.suspended_at"
-                class="flex justify-end"
-            >
+            <div v-if="!family.suspended_at" class="flex justify-end">
                 <Button
                     variant="destructive"
                     size="sm"
@@ -358,7 +361,9 @@ function toggleSuspend(): void {
                         Cancel
                     </Button>
                     <Button
-                        :variant="family.suspended_at ? 'default' : 'destructive'"
+                        :variant="
+                            family.suspended_at ? 'default' : 'destructive'
+                        "
                         :disabled="processing"
                         @click="toggleSuspend"
                     >
