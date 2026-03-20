@@ -77,7 +77,7 @@ interface MemberProps {
 type Props = Partial<AdminProps & MemberProps> & {
     fund_balance?: number;
     can_generate_contributions?: boolean;
-    contributions_generated?: boolean;
+    has_pending_contributions?: boolean;
 };
 
 const props = defineProps<Props>();
@@ -147,7 +147,7 @@ function formatCurrency(amount: number): string {
                 <!-- Generate Contributions Banner -->
                 <div
                     v-if="
-                        can_generate_contributions && !contributions_generated
+                        can_generate_contributions && has_pending_contributions
                     "
                     class="flex flex-col items-start justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 p-6 sm:flex-row sm:items-center dark:border-amber-800 dark:bg-amber-900/20"
                 >
@@ -155,13 +155,13 @@ function formatCurrency(amount: number): string {
                         <h3
                             class="font-semibold text-amber-800 dark:text-amber-200"
                         >
-                            No contributions generated this month
+                            Members without contributions this month
                         </h3>
                         <p
                             class="mt-1 text-sm text-amber-700 dark:text-amber-300"
                         >
-                            Generate contribution records for all active family
-                            members to start tracking payments.
+                            Some active members don't have contribution records
+                            yet. Generate them to start tracking payments.
                         </p>
                     </div>
                     <button
