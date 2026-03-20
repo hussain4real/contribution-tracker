@@ -1,9 +1,14 @@
 <script setup lang="ts">
-import { families as familiesRoute } from '@/actions/App/Http/Controllers/PlatformAdminController';
+import {
+    exportFamilies,
+    families as familiesRoute,
+} from '@/actions/App/Http/Controllers/PlatformAdminController';
 import Heading from '@/components/Heading.vue';
+import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/vue3';
+import { Download } from 'lucide-vue-next';
 
 interface FamilyRow {
     id: number;
@@ -13,6 +18,7 @@ interface FamilyRow {
     due_day: number;
     members_count: number;
     owner_name: string | null;
+    is_suspended: boolean;
     created_at: string;
 }
 
@@ -42,10 +48,18 @@ const breadcrumbs: BreadcrumbItem[] = [
         <Head title="All Families" />
 
         <div class="space-y-6 p-6">
-            <Heading
-                title="All Families"
-                description="Browse and manage all family groups on the platform."
-            />
+            <div class="flex items-center justify-between">
+                <Heading
+                    title="All Families"
+                    description="Browse and manage all family groups on the platform."
+                />
+                <a :href="exportFamilies().url">
+                    <Button variant="outline" size="sm">
+                        <Download class="mr-2 h-4 w-4" />
+                        Export CSV
+                    </Button>
+                </a>
+            </div>
 
             <div class="overflow-x-auto rounded-lg border">
                 <table class="min-w-full divide-y">
@@ -66,6 +80,11 @@ const breadcrumbs: BreadcrumbItem[] = [
                                 class="px-4 py-3 text-center text-sm font-medium"
                             >
                                 Currency
+                            </th>
+                            <th
+                                class="px-4 py-3 text-center text-sm font-medium"
+                            >
+                                Status
                             </th>
                             <th class="px-4 py-3 text-left text-sm font-medium">
                                 Created
@@ -94,6 +113,22 @@ const breadcrumbs: BreadcrumbItem[] = [
                             </td>
                             <td class="px-4 py-3 text-center text-sm">
                                 {{ family.currency }}
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                <span
+                                    class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+                                    :class="
+                                        family.is_suspended
+                                            ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                                            : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                    "
+                                >
+                                    {{
+                                        family.is_suspended
+                                            ? 'Suspended'
+                                            : 'Active'
+                                    }}
+                                </span>
                             </td>
                             <td class="px-4 py-3 text-sm text-muted-foreground">
                                 {{ family.created_at }}

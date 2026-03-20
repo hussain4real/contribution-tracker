@@ -5,7 +5,11 @@ import { edit as familySettings } from '@/actions/App/Http/Controllers/FamilySet
 import { index as fundAdjustmentsIndex } from '@/actions/App/Http/Controllers/FundAdjustmentController';
 import { index as invitationsIndex } from '@/actions/App/Http/Controllers/InvitationController';
 import { index as membersIndex } from '@/actions/App/Http/Controllers/MemberController';
-import { index as platformDashboard } from '@/actions/App/Http/Controllers/PlatformAdminController';
+import {
+    index as platformDashboard,
+    families as platformFamilies,
+    users as platformUsers,
+} from '@/actions/App/Http/Controllers/PlatformAdminController';
 import { index as reportsIndex } from '@/actions/App/Http/Controllers/ReportController';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -23,6 +27,7 @@ import { dashboard } from '@/routes';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
 import {
+    Building2,
     FileBarChart2,
     FileText,
     Globe,
@@ -34,6 +39,7 @@ import {
     Settings,
     Shield,
     Users,
+    UsersRound,
     Wallet,
 } from 'lucide-vue-next';
 import { computed } from 'vue';
@@ -114,12 +120,26 @@ const mainNavItems = computed<NavItem[]>(() => {
 
     // Platform Admin - super admin only
     if (page.props.auth?.user?.is_super_admin) {
-        items.push({
-            title: 'Platform Admin',
-            href: platformDashboard(),
-            icon: Globe,
-            component: 'Platform/Dashboard',
-        });
+        items.push(
+            {
+                title: 'Platform Admin',
+                href: platformDashboard(),
+                icon: Globe,
+                component: 'Platform/Dashboard',
+            },
+            {
+                title: 'All Families',
+                href: platformFamilies(),
+                icon: Building2,
+                component: 'Platform/Families',
+            },
+            {
+                title: 'All Users',
+                href: platformUsers(),
+                icon: UsersRound,
+                component: 'Platform/Users',
+            },
+        );
     }
 
     // What's New - visible to all authenticated users

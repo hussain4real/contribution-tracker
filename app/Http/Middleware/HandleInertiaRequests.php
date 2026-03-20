@@ -68,6 +68,7 @@ class HandleInertiaRequests extends Middleware
                 'warning' => fn () => $request->hasSession() ? $request->session()->get('warning') : null,
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+            'impersonating' => $request->hasSession() && $request->session()->has('impersonating_from'),
         ];
     }
 }

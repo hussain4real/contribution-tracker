@@ -102,7 +102,19 @@ Route::middleware(['auth', 'verified', EnsurePlatformSuperAdmin::class])
     ->group(function () {
         Route::get('/', [PlatformAdminController::class, 'index'])->name('dashboard');
         Route::get('families', [PlatformAdminController::class, 'families'])->name('families');
+        Route::get('families/export', [PlatformAdminController::class, 'exportFamilies'])->name('families.export');
         Route::get('families/{family}', [PlatformAdminController::class, 'showFamily'])->name('families.show');
+        Route::post('families/{family}/suspend', [PlatformAdminController::class, 'suspendFamily'])->name('families.suspend');
+        Route::post('families/{family}/unsuspend', [PlatformAdminController::class, 'unsuspendFamily'])->name('families.unsuspend');
+        Route::get('users', [PlatformAdminController::class, 'users'])->name('users');
+        Route::get('users/export', [PlatformAdminController::class, 'exportUsers'])->name('users.export');
+        Route::post('users/{user}/impersonate', [PlatformAdminController::class, 'impersonate'])->name('users.impersonate');
+        Route::post('users/{user}/send-reset', [PlatformAdminController::class, 'sendPasswordReset'])->name('users.send-reset');
     });
+
+// Stop impersonating route — accessible by the impersonated session (not behind super admin middleware)
+Route::middleware(['auth'])
+    ->post('platform/stop-impersonating', [PlatformAdminController::class, 'stopImpersonating'])
+    ->name('platform.stop-impersonating');
 
 require __DIR__.'/settings.php';

@@ -30,6 +30,7 @@ class Family extends Model
         'plan',
         'trial_ends_at',
         'max_members',
+        'suspended_at',
     ];
 
     /**
@@ -43,7 +44,20 @@ class Family extends Model
             'due_day' => 'integer',
             'trial_ends_at' => 'datetime',
             'max_members' => 'integer',
+            'suspended_at' => 'datetime',
         ];
+    }
+
+    // =========================================================================
+    // Helper Methods
+    // =========================================================================
+
+    /**
+     * Check if the family is currently suspended.
+     */
+    public function isSuspended(): bool
+    {
+        return $this->suspended_at !== null;
     }
 
     // =========================================================================

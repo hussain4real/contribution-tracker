@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureFamilyIsNotSuspended;
 use App\Http\Middleware\EnsureUserIsNotArchived;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -28,6 +29,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Ensure authenticated users are not archived
         $middleware->appendToGroup('auth', [
             EnsureUserIsNotArchived::class,
+            EnsureFamilyIsNotSuspended::class,
             SetFamilyContext::class,
         ]);
     })
