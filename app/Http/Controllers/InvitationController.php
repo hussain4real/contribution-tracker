@@ -66,6 +66,16 @@ class InvitationController extends Controller
             'role' => ['required', new Enum(Role::class)],
         ]);
 
+        // Check if the email already belongs to a member of this family
+        $existingMember = User::query()
+            ->where('family_id', $user->family_id)
+            ->where('email', $validated['email'])
+            ->first();
+
+        if ($existingMember) {
+            return redirect()->back()->with('error', 'This user is already a member of your family.');
+        }
+
         // Check if there's already a pending invitation for this email in this family
         $existingInvitation = FamilyInvitation::query()
             ->where('family_id', $user->family_id)
