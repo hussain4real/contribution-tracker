@@ -47,4 +47,14 @@ class FamilyFactory extends Factory
             'due_day' => $dueDay,
         ]);
     }
+
+    /**
+     * Mark the family as suspended.
+     */
+    public function suspended(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'suspended_at' => now(),
+        ]);
+    }
 }

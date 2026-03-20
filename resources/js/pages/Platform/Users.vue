@@ -1,9 +1,25 @@
 <script setup lang="ts">
-import { users as usersRoute } from '@/actions/App/Http/Controllers/PlatformAdminController';
+import {
+    exportUsers,
+    impersonate,
+    sendPasswordReset,
+    users as usersRoute,
+} from '@/actions/App/Http/Controllers/PlatformAdminController';
 import Heading from '@/components/Heading.vue';
+import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { Download, KeyRound, UserCheck } from 'lucide-vue-next';
+import { ref } from 'vue';
 
 interface UserRow {
     id: number;
@@ -36,6 +52,43 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Platform Admin', href: '/platform' },
     { title: 'Users', href: usersRoute().url },
 ];
+
+const showImpersonateDialog = ref(false);
+const showResetDialog = ref(false);
+const targetUser = ref<UserRow | null>(null);
+const processing = ref(false);
+
+function promptImpersonate(user: UserRow): void {
+    targetUser.value = user;
+    showImpersonateDialog.value = true;
+}
+
+function confirmImpersonate(): void {
+    if (!targetUser.value) return;
+    processing.value = true;
+    router.post(impersonate(targetUser.value.id).url, {}, {
+        onFinish: () => {
+            processing.value = false;
+            showImpersonateDialog.value = false;
+        },
+    });
+}
+
+function promptReset(user: UserRow): void {
+    targetUser.value = user;
+    showResetDialog.value = true;
+}
+
+function confirmReset(): void {
+    if (!targetUser.value) return;
+    processing.value = true;
+    router.post(sendPasswordReset(targetUser.value.id).url, {}, {
+        onFinish: () => {
+            processing.value = false;
+            showResetDialog.value = false;
+        },
+    });
+}
 </script>
 
 <template>
@@ -43,10 +96,18 @@ const breadcrumbs: BreadcrumbItem[] = [
         <Head title="All Users" />
 
         <div class="space-y-6 p-6">
-            <Heading
-                title="All Users"
-                description="Browse all users across the platform."
-            />
+            <div class="flex items-center justify-between">
+                <Heading
+                    title="All Users"
+                    description="Browse all users across the platform."
+                />
+                <a :href="exportUsers().url">
+                    <Button variant="outline" size="sm">
+                        <Download class="mr-2 h-4 w-4" />
+                        Export CSV
+                    </Button>
+                </a>
+            </div>
 
             <div class="overflow-x-auto rounded-lg border">
                 <table class="min-w-full divide-y">
@@ -78,6 +139,11 @@ const breadcrumbs: BreadcrumbItem[] = [
                             </th>
                             <th class="px-4 py-3 text-left text-sm font-medium">
                                 Joined
+                            </th>
+                            <th
+                                class="px-4 py-3 text-center text-sm font-medium"
+                            >
+                                Actions
                             </th>
                         </tr>
                     </thead>
@@ -126,10 +192,30 @@ const breadcrumbs: BreadcrumbItem[] = [
                             <td class="px-4 py-3 text-sm text-muted-foreground">
                                 {{ user.created_at }}
                             </td>
+                            <td class="px-4 py-3 text-center">
+                                <div class="flex items-center justify-center gap-1">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        title="Impersonate"
+                                        @click="promptImpersonate(user)"
+                                    >
+                                        <UserCheck class="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        title="Send Password Reset"
+                                        @click="promptReset(user)"
+                                    >
+                                        <KeyRound class="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            </td>
                         </tr>
                         <tr v-if="props.users.data.length === 0">
                             <td
-                                colspan="7"
+                                colspan="8"
                                 class="px-4 py-8 text-center text-sm text-muted-foreground"
                             >
                                 No users found.
@@ -164,5 +250,56 @@ const breadcrumbs: BreadcrumbItem[] = [
                 </template>
             </div>
         </div>
+
+        <!-- Impersonate Dialog -->
+        <Dialog v-model:open="showImpersonateDialog">
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Impersonate User</DialogTitle>
+                    <DialogDescription>
+                        You will be logged in as
+                        <strong>{{ targetUser?.name }}</strong>
+                        ({{ targetUser?.email }}). You can stop impersonating
+                        from the banner at the top of the page.
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                    <Button
+                        variant="outline"
+                        @click="showImpersonateDialog = false"
+                    >
+                        Cancel
+                    </Button>
+                    <Button :disabled="processing" @click="confirmImpersonate">
+                        {{ processing ? 'Switching...' : 'Impersonate' }}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
+        <!-- Password Reset Dialog -->
+        <Dialog v-model:open="showResetDialog">
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Send Password Reset</DialogTitle>
+                    <DialogDescription>
+                        A password reset email will be sent to
+                        <strong>{{ targetUser?.email }}</strong
+                        >.
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                    <Button
+                        variant="outline"
+                        @click="showResetDialog = false"
+                    >
+                        Cancel
+                    </Button>
+                    <Button :disabled="processing" @click="confirmReset">
+                        {{ processing ? 'Sending...' : 'Send Reset Email' }}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </AppLayout>
 </template>

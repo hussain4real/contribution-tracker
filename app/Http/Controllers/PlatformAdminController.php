@@ -9,8 +9,13 @@ use App\Models\Expense;
 use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Password;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PlatformAdminController extends Controller
 {
@@ -85,6 +90,7 @@ class PlatformAdminController extends Controller
                 'due_day' => $family->due_day,
                 'members_count' => $family->members_count,
                 'owner_name' => $family->owner?->name,
+                'is_suspended' => $family->isSuspended(),
                 'created_at' => $family->created_at->toDateString(),
             ]);
 
@@ -170,7 +176,135 @@ class PlatformAdminController extends Controller
                     'archived_members' => $archivedMembers,
                 ],
                 'created_at' => $family->created_at->toDateString(),
+                'suspended_at' => $family->suspended_at?->toDateString(),
             ],
         ]);
+    }
+
+    // =========================================================================
+    // CSV Exports
+    // =========================================================================
+
+    public function exportFamilies(): StreamedResponse
+    {
+        $families = Family::query()
+            ->withCount('members')
+            ->with('owner')
+            ->latest()
+            ->get();
+
+        return response()->streamDownload(function () use ($families): void {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['ID', 'Name', 'Slug', 'Currency', 'Due Day', 'Owner', 'Members', 'Suspended', 'Created']);
+
+            foreach ($families as $family) {
+                fputcsv($handle, [
+                    $family->id,
+                    $family->name,
+                    $family->slug,
+                    $family->currency,
+                    $family->due_day,
+                    $family->owner?->name ?? '',
+                    $family->members_count,
+                    $family->suspended_at ? 'Yes' : 'No',
+                    $family->created_at->toDateString(),
+                ]);
+            }
+
+            fclose($handle);
+        }, 'families-'.now()->format('Y-m-d').'.csv', [
+            'Content-Type' => 'text/csv',
+        ]);
+    }
+
+    public function exportUsers(): StreamedResponse
+    {
+        $users = User::query()
+            ->with('family')
+            ->latest()
+            ->get();
+
+        return response()->streamDownload(function () use ($users): void {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['ID', 'Name', 'Email', 'Family', 'Role', 'Category', 'Status', 'Joined']);
+
+            foreach ($users as $user) {
+                fputcsv($handle, [
+                    $user->id,
+                    $user->name,
+                    $user->email,
+                    $user->family?->name ?? '',
+                    $user->role->label(),
+                    $user->category?->label() ?? '',
+                    $user->archived_at === null ? 'Active' : 'Archived',
+                    $user->created_at->toDateString(),
+                ]);
+            }
+
+            fclose($handle);
+        }, 'users-'.now()->format('Y-m-d').'.csv', [
+            'Content-Type' => 'text/csv',
+        ]);
+    }
+
+    // =========================================================================
+    // Suspend / Unsuspend Families
+    // =========================================================================
+
+    public function suspendFamily(Family $family): RedirectResponse
+    {
+        $family->update(['suspended_at' => now()]);
+
+        return back()->with('success', "Family \"{$family->name}\" has been suspended.");
+    }
+
+    public function unsuspendFamily(Family $family): RedirectResponse
+    {
+        $family->update(['suspended_at' => null]);
+
+        return back()->with('success', "Family \"{$family->name}\" has been unsuspended.");
+    }
+
+    // =========================================================================
+    // Impersonate Users
+    // =========================================================================
+
+    public function impersonate(Request $request, User $user): RedirectResponse
+    {
+        if ($user->isSuperAdmin()) {
+            return back()->with('error', 'Cannot impersonate another super admin.');
+        }
+
+        $request->session()->put('impersonating_from', $request->user()->id);
+
+        Auth::login($user);
+
+        return redirect()->route('dashboard')->with('success', "Now impersonating {$user->name}.");
+    }
+
+    public function stopImpersonating(Request $request): RedirectResponse
+    {
+        $originalUserId = $request->session()->pull('impersonating_from');
+
+        if (! $originalUserId) {
+            return redirect()->route('dashboard');
+        }
+
+        $originalUser = User::findOrFail($originalUserId);
+
+        Auth::login($originalUser);
+
+        return redirect()->route('platform.dashboard')->with('success', 'Stopped impersonating.');
+    }
+
+    // =========================================================================
+    // Password Reset
+    // =========================================================================
+
+    public function sendPasswordReset(User $user): RedirectResponse
+    {
+        Password::sendResetLink(['email' => $user->email]);
+
+        return back()->with('success', "Password reset email sent to {$user->email}.");
     }
 }
