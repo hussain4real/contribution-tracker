@@ -4,11 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { toUrl, urlIsActive } from '@/lib/utils';
 import { edit as editAppearance } from '@/routes/appearance';
+import { show as showPasskeys } from '@/routes/passkeys';
 import { edit as editProfile } from '@/routes/profile';
 import { show } from '@/routes/two-factor';
 import { edit as editPassword } from '@/routes/user-password';
 import { type NavItem } from '@/types';
-import { Link } from '@inertiajs/vue3';
+import { Link, usePage } from '@inertiajs/vue3';
 
 const sidebarNavItems: NavItem[] = [
     {
@@ -27,14 +28,18 @@ const sidebarNavItems: NavItem[] = [
         component: 'settings/TwoFactor',
     },
     {
+        title: 'Passkeys',
+        href: showPasskeys(),
+        component: 'settings/Passkeys',
+    },
+    {
         title: 'Appearance',
         href: editAppearance(),
         component: 'settings/Appearance',
     },
 ];
 
-const currentPath =
-    typeof window !== 'undefined' ? window.location.pathname : '';
+const page = usePage();
 </script>
 
 <template>
@@ -53,7 +58,7 @@ const currentPath =
                         variant="ghost"
                         :class="[
                             'w-full justify-start',
-                            { 'bg-muted': urlIsActive(item.href, currentPath) },
+                            { 'bg-muted': urlIsActive(item.href, page.url) },
                         ]"
                         as-child
                     >
