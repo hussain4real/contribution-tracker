@@ -111,6 +111,14 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasManyThrough(Payment::class, Contribution::class);
     }
 
+    /**
+     * User's registered passkeys for WebAuthn authentication.
+     */
+    public function passkeys(): HasMany
+    {
+        return $this->hasMany(Passkey::class);
+    }
+
     // =========================================================================
     // Scopes
     // =========================================================================

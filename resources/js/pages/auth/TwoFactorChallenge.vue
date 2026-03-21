@@ -7,10 +7,14 @@ import {
     InputOTPGroup,
     InputOTPSlot,
 } from '@/components/ui/input-otp';
+import { Separator } from '@/components/ui/separator';
+import { Spinner } from '@/components/ui/spinner';
+import { useWebAuthn } from '@/composables/useWebAuthn';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import { store } from '@/routes/two-factor/login';
-import { Form, Head } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { Form, Head, router } from '@inertiajs/vue3';
+import { Fingerprint } from 'lucide-vue-next';
+import { computed, onMounted, ref } from 'vue';
 
 interface AuthConfigContent {
     title: string;
@@ -45,6 +49,29 @@ const toggleRecoveryMode = (clearErrors: () => void): void => {
 };
 
 const code = ref<string>('');
+
+const {
+    isSupported,
+    isProcessing: passkeyProcessing,
+    error: passkeyError,
+    verifyTwoFactorWithPasskey,
+    checkUserHasPasskeys,
+} = useWebAuthn();
+
+const userHasPasskeys = ref<boolean>(false);
+
+onMounted(async () => {
+    if (isSupported.value) {
+        userHasPasskeys.value = await checkUserHasPasskeys();
+    }
+});
+
+const handlePasskeyVerify = async (): Promise<void> => {
+    const result = await verifyTwoFactorWithPasskey();
+    if (result?.redirect) {
+        router.visit(result.redirect);
+    }
+};
 </script>
 
 <template>
@@ -55,6 +82,44 @@ const code = ref<string>('');
         <Head title="Two-Factor Authentication" />
 
         <div class="space-y-6">
+            <div
+                v-if="isSupported && userHasPasskeys"
+                class="space-y-4"
+            >
+                <Button
+                    variant="outline"
+                    class="w-full"
+                    :disabled="passkeyProcessing"
+                    @click="handlePasskeyVerify"
+                    data-test="passkey-2fa-button"
+                >
+                    <Spinner v-if="passkeyProcessing" />
+                    <Fingerprint v-else class="h-4 w-4" />
+                    Verify with biometrics
+                </Button>
+
+                <div
+                    v-if="passkeyError"
+                    class="text-center text-sm text-destructive"
+                >
+                    {{ passkeyError }}
+                </div>
+
+                <div class="relative">
+                    <div class="absolute inset-0 flex items-center">
+                        <Separator class="w-full" />
+                    </div>
+                    <div
+                        class="relative flex justify-center text-xs uppercase"
+                    >
+                        <span
+                            class="bg-background px-2 text-muted-foreground"
+                            >Or use a code</span
+                        >
+                    </div>
+                </div>
+            </div>
+
             <template v-if="!showRecoveryInput">
                 <Form
                     v-bind="store.form()"
