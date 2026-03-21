@@ -44,8 +44,14 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-const { isSupported, isProcessing, error, clearError, registerPasskey, deletePasskey } =
-    useWebAuthn();
+const {
+    isSupported,
+    isProcessing,
+    error,
+    clearError,
+    registerPasskey,
+    deletePasskey,
+} = useWebAuthn();
 
 const isMounted = ref(false);
 
@@ -126,8 +132,8 @@ const formatDate = (dateString: string | null): string => {
                     v-if="isMounted && !isSupported"
                     class="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800 dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200"
                 >
-                    Your browser does not support passkeys. Please use a
-                    modern browser like Chrome, Safari, Firefox, or Edge.
+                    Your browser does not support passkeys. Please use a modern
+                    browser like Chrome, Safari, Firefox, or Edge.
                 </div>
 
                 <template v-else>
@@ -140,7 +146,10 @@ const formatDate = (dateString: string | null): string => {
                     </div>
 
                     <div>
-                        <Button @click="openRegisterDialog" :disabled="isProcessing">
+                        <Button
+                            @click="openRegisterDialog"
+                            :disabled="isProcessing"
+                        >
                             <Fingerprint class="h-4 w-4" />
                             Register new passkey
                         </Button>
@@ -189,9 +198,7 @@ const formatDate = (dateString: string | null): string => {
                                         <span
                                             >Last used:
                                             {{
-                                                formatDate(
-                                                    passkey.last_used_at,
-                                                )
+                                                formatDate(passkey.last_used_at)
                                             }}</span
                                         >
                                     </div>
@@ -267,10 +274,8 @@ const formatDate = (dateString: string | null): string => {
                         <DialogTitle>Remove passkey</DialogTitle>
                         <DialogDescription>
                             Are you sure you want to remove
-                            <strong>{{
-                                passkeyToDelete?.name
-                            }}</strong>? You will no longer be able to use it to
-                            sign in.
+                            <strong>{{ passkeyToDelete?.name }}</strong
+                            >? You will no longer be able to use it to sign in.
                         </DialogDescription>
                     </DialogHeader>
 

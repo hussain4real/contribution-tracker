@@ -3,14 +3,14 @@ import {
     login as passkeyLogin,
 } from '@/actions/App/Http/Controllers/Auth/PasskeyLoginController';
 import {
+    hasPasskeys as checkHasPasskeys,
     challengeOptions as twoFactorChallengeOptions,
     verify as twoFactorVerify,
-    hasPasskeys as checkHasPasskeys,
 } from '@/actions/App/Http/Controllers/Auth/PasskeyTwoFactorController';
 import {
     createOptions,
-    store as storePasskey,
     destroy as destroyPasskey,
+    store as storePasskey,
 } from '@/actions/App/Http/Controllers/Settings/PasskeyController';
 import {
     startAuthentication,
@@ -20,7 +20,10 @@ import { ref } from 'vue';
 
 const isSupported = ref<boolean>(false);
 
-if (typeof window !== 'undefined' && typeof window.PublicKeyCredential !== 'undefined') {
+if (
+    typeof window !== 'undefined' &&
+    typeof window.PublicKeyCredential !== 'undefined'
+) {
     isSupported.value = true;
 }
 
@@ -60,7 +63,7 @@ async function jsonRequest<T = any>(
     if (!response.ok) {
         const err: any = new Error(
             responseData?.message ||
-            `Request failed with status ${response.status} (${url})`,
+                `Request failed with status ${response.status} (${url})`,
         );
         err.response = { data: responseData, status: response.status };
         throw err;
@@ -83,7 +86,9 @@ export const useWebAuthn = () => {
         try {
             const options = await jsonRequest(createOptions.url());
 
-            const credential = await startRegistration({ optionsJSON: options });
+            const credential = await startRegistration({
+                optionsJSON: options,
+            });
 
             const result = await jsonRequest(storePasskey.url(), 'POST', {
                 name,
@@ -108,77 +113,73 @@ export const useWebAuthn = () => {
         }
     };
 
-    const loginWithPasskey =
-        async (): Promise<{ redirect: string } | null> => {
-            clearError();
-            isProcessing.value = true;
+    const loginWithPasskey = async (): Promise<{ redirect: string } | null> => {
+        clearError();
+        isProcessing.value = true;
 
-            try {
-                const options = await jsonRequest(
-                    loginChallengeOptions.url(),
-                );
+        try {
+            const options = await jsonRequest(loginChallengeOptions.url());
 
-                const assertion = await startAuthentication({
-                    optionsJSON: options,
-                });
+            const assertion = await startAuthentication({
+                optionsJSON: options,
+            });
 
-                const result = await jsonRequest(passkeyLogin.url(), 'POST', {
-                    assertion,
-                });
+            const result = await jsonRequest(passkeyLogin.url(), 'POST', {
+                assertion,
+            });
 
-                return result;
-            } catch (e: any) {
-                if (e.name === 'NotAllowedError') {
-                    error.value =
-                        'Authentication was cancelled or not allowed by the browser.';
-                } else {
-                    error.value =
-                        e.response?.data?.message ||
-                        e.message ||
-                        'Passkey authentication failed.';
-                }
-
-                return null;
-            } finally {
-                isProcessing.value = false;
+            return result;
+        } catch (e: any) {
+            if (e.name === 'NotAllowedError') {
+                error.value =
+                    'Authentication was cancelled or not allowed by the browser.';
+            } else {
+                error.value =
+                    e.response?.data?.message ||
+                    e.message ||
+                    'Passkey authentication failed.';
             }
-        };
 
-    const verifyTwoFactorWithPasskey =
-        async (): Promise<{ redirect: string } | null> => {
-            clearError();
-            isProcessing.value = true;
+            return null;
+        } finally {
+            isProcessing.value = false;
+        }
+    };
 
-            try {
-                const options = await jsonRequest(
-                    twoFactorChallengeOptions.url(),
-                );
+    const verifyTwoFactorWithPasskey = async (): Promise<{
+        redirect: string;
+    } | null> => {
+        clearError();
+        isProcessing.value = true;
 
-                const assertion = await startAuthentication({
-                    optionsJSON: options,
-                });
+        try {
+            const options = await jsonRequest(twoFactorChallengeOptions.url());
 
-                const result = await jsonRequest(twoFactorVerify.url(), 'POST', {
-                    assertion,
-                });
+            const assertion = await startAuthentication({
+                optionsJSON: options,
+            });
 
-                return result;
-            } catch (e: any) {
-                if (e.name === 'NotAllowedError') {
-                    error.value =
-                        'Biometric verification was cancelled or not allowed.';
-                } else {
-                    error.value =
-                        e.response?.data?.message ||
-                        e.message ||
-                        'Biometric verification failed.';
-                }
+            const result = await jsonRequest(twoFactorVerify.url(), 'POST', {
+                assertion,
+            });
 
-                return null;
-            } finally {
-                isProcessing.value = false;
+            return result;
+        } catch (e: any) {
+            if (e.name === 'NotAllowedError') {
+                error.value =
+                    'Biometric verification was cancelled or not allowed.';
+            } else {
+                error.value =
+                    e.response?.data?.message ||
+                    e.message ||
+                    'Biometric verification failed.';
             }
-        };
+
+            return null;
+        } finally {
+            isProcessing.value = false;
+        }
+    };
 
     const deletePasskey = async (passkeyId: number): Promise<boolean> => {
         clearError();

@@ -27,8 +27,12 @@ onMounted(() => {
     isMounted.value = true;
 });
 
-const { isSupported, isProcessing: passkeyProcessing, error: passkeyError, loginWithPasskey } =
-    useWebAuthn();
+const {
+    isSupported,
+    isProcessing: passkeyProcessing,
+    error: passkeyError,
+    loginWithPasskey,
+} = useWebAuthn();
 
 const handlePasskeyLogin = async (): Promise<void> => {
     const result = await loginWithPasskey();

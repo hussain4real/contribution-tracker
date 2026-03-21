@@ -82,10 +82,7 @@ const handlePasskeyVerify = async (): Promise<void> => {
         <Head title="Two-Factor Authentication" />
 
         <div class="space-y-6">
-            <div
-                v-if="isSupported && userHasPasskeys"
-                class="space-y-4"
-            >
+            <div v-if="isSupported && userHasPasskeys" class="space-y-4">
                 <Button
                     variant="outline"
                     class="w-full"
@@ -109,11 +106,8 @@ const handlePasskeyVerify = async (): Promise<void> => {
                     <div class="absolute inset-0 flex items-center">
                         <Separator class="w-full" />
                     </div>
-                    <div
-                        class="relative flex justify-center text-xs uppercase"
-                    >
-                        <span
-                            class="bg-background px-2 text-muted-foreground"
+                    <div class="relative flex justify-center text-xs uppercase">
+                        <span class="bg-background px-2 text-muted-foreground"
                             >Or use a code</span
                         >
                     </div>
