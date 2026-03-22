@@ -32,6 +32,26 @@ export interface Family {
     due_day: number;
 }
 
+export interface AppNotification {
+    id: string;
+    type: string;
+    data: {
+        contribution_id: number;
+        family_name: string;
+        period_label: string;
+        amount_owed: number;
+        due_date: string;
+        type: 'reminder' | 'follow_up';
+    };
+    read_at: string | null;
+    created_at: string;
+}
+
+export interface Notifications {
+    unread_count: number;
+    recent: AppNotification[];
+}
+
 export type AppPageProps<
     T extends Record<string, unknown> = Record<string, unknown>,
 > = T & {
@@ -40,6 +60,7 @@ export type AppPageProps<
     auth: Auth;
     family: Family | null;
     sidebarOpen: boolean;
+    notifications: Notifications | null;
 };
 
 export interface User {
