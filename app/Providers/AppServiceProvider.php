@@ -3,6 +3,8 @@
 namespace App\Providers;
 
 use App\Models\User;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\LazyLoadingViolationException;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Inertia\ExceptionResponse;
@@ -22,6 +24,20 @@ class AppServiceProvider extends ServiceProvider
                 return $response->render('ErrorPage', [
                     'status' => $response->statusCode(),
                 ])->withSharedData();
+            }
+        });
+
+        Model::automaticallyEagerLoadRelationships();
+        Model::preventLazyLoading(! $this->app->isProduction());
+
+        Model::handleLazyLoadingViolationUsing(function (Model $model, string $relation): void {
+            $class = $model::class;
+            $message = "Attempted to lazy load [{$relation}] on model [{$class}].";
+
+            if ($this->app->isProduction()) {
+                info($message);
+            } else {
+                throw new LazyLoadingViolationException($model, $relation);
             }
         });
     }
