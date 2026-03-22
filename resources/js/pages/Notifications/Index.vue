@@ -24,7 +24,7 @@ interface Props {
     notifications: PaginatedNotifications;
 }
 
-const props = defineProps<Props>();
+defineProps<Props>();
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: dashboard().url },
