@@ -75,7 +75,7 @@ class ReportController extends Controller
             ->where('family_id', $familyId)
             ->where('year', $year)
             ->where('month', $month)
-            ->with('payments')
+            ->with(['payments', 'user'])
             ->get();
 
         $totalExpected = $allContributions->sum('expected_amount');
@@ -155,6 +155,13 @@ class ReportController extends Controller
         $currentUser = $request->user();
         $familyId = $currentUser->family_id;
 
+        // Fetch all contributions for the year in a single query
+        $allContributions = Contribution::query()
+            ->where('family_id', $familyId)
+            ->where('year', $year)
+            ->with(['payments', 'user'])
+            ->get();
+
         // Generate monthly breakdown for all 12 months
         $monthlyBreakdown = [];
         $yearlyTotal = [
@@ -163,15 +170,12 @@ class ReportController extends Controller
             'outstanding' => 0,
         ];
 
+        $contributionsByMonth = $allContributions->groupBy('month');
+
         for ($month = 1; $month <= 12; $month++) {
             $monthDate = Carbon::create($year, $month, 1);
 
-            $contributions = Contribution::query()
-                ->where('family_id', $familyId)
-                ->where('year', $year)
-                ->where('month', $month)
-                ->with('payments')
-                ->get();
+            $contributions = $contributionsByMonth->get($month, collect());
 
             $expected = $contributions->sum('expected_amount');
             $collected = $contributions->sum(fn ($c) => $c->payments->sum('amount'));
@@ -199,15 +203,12 @@ class ReportController extends Controller
             ? round(($yearlyTotal['collected'] / $yearlyTotal['expected']) * 100, 1)
             : 0;
 
-        // Calculate by category for the year
+        // Calculate by category for the year using already-loaded data
         $byCategory = [];
         foreach (MemberCategory::cases() as $category) {
-            $categoryContributions = Contribution::query()
-                ->where('family_id', $familyId)
-                ->where('year', $year)
-                ->whereHas('user', fn ($q) => $q->where('category', $category))
-                ->with('payments')
-                ->get();
+            $categoryContributions = $allContributions->filter(function ($c) use ($category) {
+                return $c->user && $c->user->category === $category;
+            });
 
             $categoryExpected = $categoryContributions->sum('expected_amount');
             $categoryCollected = $categoryContributions->sum(fn ($c) => $c->payments->sum('amount'));
