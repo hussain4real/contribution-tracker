@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\User;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Inertia\ExceptionResponse;
@@ -23,6 +24,15 @@ class AppServiceProvider extends ServiceProvider
                     'status' => $response->statusCode(),
                 ])->withSharedData();
             }
+        });
+
+        Model::automaticallyEagerLoadRelationships();
+        Model::preventLazyLoading(! $this->app->isProduction());
+
+        Model::handleLazyLoadingViolationUsing(function (Model $model, string $relation) {
+            $class = $model::class;
+
+            info("Attempted to lazy load [{$relation}] on model [{$class}].");
         });
     }
 }
