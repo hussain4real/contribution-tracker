@@ -31,21 +31,15 @@ class DashboardController extends Controller
         $canSeeAllMembers = $user->canViewAllMembers();
         $canRecordPayments = $user->canRecordPayments();
 
-        // Get current month contributions with payments for calculations
-        $currentMonthContributions = Contribution::query()
-            ->where('family_id', $user->family_id)
-            ->with(['user', 'payments'])
-            ->whereHas('user', fn ($q) => $q->whereNull('archived_at'))
-            ->where('year', $currentYear)
-            ->where('month', $currentMonth)
-            ->get();
-
-        // Get all contributions to count overdue (FR-006: past 28th of their month)
         $allContributions = Contribution::query()
             ->where('family_id', $user->family_id)
-            ->with(['user', 'payments'])
+            ->with(['user', 'payments.recorder'])
             ->whereHas('user', fn ($q) => $q->whereNull('archived_at'))
             ->get();
+
+        $currentMonthContributions = $allContributions
+            ->where('year', $currentYear)
+            ->where('month', $currentMonth);
 
         $membersWithContributions = $currentMonthContributions->pluck('user_id');
         $membersNeedingContributions = User::query()
@@ -66,7 +60,7 @@ class DashboardController extends Controller
             // Admin/Financial Secretary view
             $props['summary'] = $this->calculateSummary($currentMonthContributions, $allContributions);
             $props['member_statuses'] = $this->getMemberStatuses($currentMonthContributions, $allContributions);
-            $props['recent_payments'] = $this->getRecentPayments();
+            $props['recent_payments'] = $this->getRecentPayments($allContributions);
         } else {
             // Member view (FR-015, FR-016)
             $props['family_aggregate'] = $this->calculateFamilyAggregate($currentMonthContributions);
@@ -140,30 +134,28 @@ class DashboardController extends Controller
     }
 
     /**
-     * Get recent payments (last 10).
+     * Get recent payments (last 10) from already-loaded contributions.
+     *
+     * @param  Collection<int, Contribution>  $allContributions
      */
-    private function getRecentPayments(): array
+    private function getRecentPayments(Collection $allContributions): array
     {
-        /** @var User $user */
-        $user = Auth::user();
-
-        return Payment::query()
-            ->whereHas('contribution', fn ($q) => $q->where('family_id', $user->family_id))
-            ->with(['contribution.user', 'recorder'])
-            ->latest('paid_at')
-            ->latest('id')
-            ->limit(10)
-            ->get()
-            ->map(fn ($payment) => [
-                'id' => $payment->id,
-                'amount' => $payment->amount,
-                'paid_at' => $payment->paid_at->toDateString(),
-                'member_name' => $payment->contribution->user->name,
-                'category' => $payment->contribution->user->category,
-                'recorded_by' => $payment->recorder?->name,
-                'month' => $payment->contribution->month,
-                'year' => $payment->contribution->year,
-            ])
+        return $allContributions
+            ->flatMap(fn ($contribution) => $contribution->payments->map(
+                fn ($payment) => [
+                    'id' => $payment->id,
+                    'amount' => $payment->amount,
+                    'paid_at' => $payment->paid_at->toDateString(),
+                    'member_name' => $contribution->user->name,
+                    'category' => $contribution->user->category,
+                    'recorded_by' => $payment->recorder?->name,
+                    'month' => $contribution->month,
+                    'year' => $contribution->year,
+                ]
+            ))
+            ->sortByDesc('paid_at')
+            ->take(10)
+            ->values()
             ->toArray();
     }
 
