@@ -1,0 +1,70 @@
+name: Publish Release
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  publish:
+    if: >-
+      github.event.label.name == 'publish-release' &&
+      contains(github.event.issue.labels.*.name, 'release-draft')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract version from issue title
+        id: version
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: |
+          VERSION=$(echo "$ISSUE_TITLE" | grep -oP 'v\d+\.\d+\.\d+')
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not extract version from issue title: $ISSUE_TITLE"
+            exit 1
+          fi
+          echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Extract release notes from issue body
+        id: notes
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          # Write the issue body to a file for processing
+          echo "$ISSUE_BODY" > /tmp/issue_body.txt
+
+          # Extract everything between "## What's New" and "### ⚠️ Review Checklist"
+          # Fall back to the full body if markers aren't found
+          NOTES=$(awk '/^## What'\''s New/,/^### ⚠️ Review Checklist/' /tmp/issue_body.txt | head -n -1)
+
+          if [ -z "$NOTES" ]; then
+            NOTES="$ISSUE_BODY"
+          fi
+
+          # Write to file for the next step (avoids shell escaping issues)
+          echo "$NOTES" > /tmp/release_notes.txt
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e1cc45afe35dbb7bed808ca6aa2c48b0a # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes-file /tmp/release_notes.txt \
+            --target main
+
+          gh issue close "$ISSUE_NUMBER" \
+            --comment "🚀 Release **$TAG** has been published! [View release](https://github.com/${{ github.repository }}/releases/tag/$TAG)"
+
+          gh issue edit "$ISSUE_NUMBER" \
+            --add-label "published" \
+            --remove-label "publish-release"
