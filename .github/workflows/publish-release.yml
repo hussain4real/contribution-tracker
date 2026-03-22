@@ -65,6 +65,9 @@ jobs:
           gh issue close "$ISSUE_NUMBER" \
             --comment "🚀 Release **$TAG** has been published! [View release](https://github.com/${{ github.repository }}/releases/tag/$TAG)"
 
+          # Ensure the 'published' label exists before applying it
+          gh label create "published" --color "0E8A16" --description "Release has been published" 2>/dev/null || true
+
           gh issue edit "$ISSUE_NUMBER" \
             --add-label "published" \
             --remove-label "publish-release"
