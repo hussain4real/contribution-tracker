@@ -138,10 +138,17 @@ class Contribution extends Model
 
     /**
      * Get the total amount paid toward this contribution.
+     *
+     * Uses the eager-loaded collection when available, otherwise
+     * falls back to a database aggregate query.
      */
     public function getTotalPaidAttribute(): int
     {
-        return (int) $this->payments->sum('amount');
+        if ($this->relationLoaded('payments')) {
+            return (int) $this->payments->sum('amount');
+        }
+
+        return (int) $this->payments()->sum('amount');
     }
 
     /**
