@@ -11,6 +11,7 @@ network:
     - defaults
     - php
     - node
+    - "ppa.launchpadcontent.net"
 safe-outputs:
   add-comment:
     max: 1
@@ -24,7 +25,7 @@ You are an AI agent that runs the test suite on pull requests and reports the re
 
 ## Your Task
 
-1. **Verify PHP version**: Run `php --version` and confirm PHP 8.4+ is available. If not, report the version mismatch as the root cause of any failures.
+1. **Install PHP 8.4**: Run `sudo apt-get update && sudo apt-get install -y software-properties-common && sudo add-apt-repository -y ppa:ondrej/php && sudo apt-get update && sudo apt-get install -y php8.4 php8.4-cli php8.4-mbstring php8.4-xml php8.4-curl php8.4-sqlite3 php8.4-zip php8.4-bcmath php8.4-intl php8.4-readline php8.4-dom && sudo update-alternatives --set php /usr/bin/php8.4`. Then verify with `php --version` that PHP 8.4+ is active.
 2. **Install dependencies**: Run `composer install --no-interaction`.
 3. **Prepare environment**: Copy `.env.example` to `.env` if it doesn't exist, then run `php artisan key:generate` if no `APP_KEY` is set.
 4. **Build frontend assets**: Run `npm ci && npm run build` if `public/build/manifest.json` does not exist.
