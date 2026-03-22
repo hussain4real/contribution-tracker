@@ -21,6 +21,7 @@
         "web-auth/cose-lib": "^4.5"
     },
     "require-dev": {
+        "barryvdh/laravel-debugbar": "^4.1",
         "fakerphp/faker": "^1.23",
         "laravel/boost": "^2.3",
         "laravel/pail": "^1.2.2",
