@@ -141,7 +141,7 @@ class Contribution extends Model
      */
     public function getTotalPaidAttribute(): int
     {
-        return (int) $this->payments()->sum('amount');
+        return (int) $this->payments->sum('amount');
     }
 
     /**

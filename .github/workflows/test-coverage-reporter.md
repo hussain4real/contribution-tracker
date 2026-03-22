@@ -24,10 +24,13 @@ You are an AI agent that runs the test suite on pull requests and reports the re
 
 ## Your Task
 
-1. **Install dependencies**: Run `composer install --no-interaction`.
-2. **Run the test suite**: Execute `php artisan test --compact` to run all Pest tests.
-3. **Analyze the results**: Parse test output for passes, failures, and errors.
-4. **Post a comment** on the PR with the test results summary.
+1. **Verify PHP version**: Run `php --version` and confirm PHP 8.4+ is available. If not, report the version mismatch as the root cause of any failures.
+2. **Install dependencies**: Run `composer install --no-interaction`.
+3. **Prepare environment**: Copy `.env.example` to `.env` if it doesn't exist, then run `php artisan key:generate` if no `APP_KEY` is set.
+4. **Build frontend assets**: Run `npm ci && npm run build` if `public/build/manifest.json` does not exist.
+5. **Run the test suite**: Execute `php artisan test --compact` to run all Pest tests.
+6. **Analyze the results**: Parse test output for passes, failures, and errors.
+7. **Post a comment** on the PR with the test results summary.
 
 ## Report Format
 
