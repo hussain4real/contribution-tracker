@@ -20,7 +20,9 @@ class ContributionReminderNotification extends Notification implements ShouldQue
     public function __construct(
         public Contribution $contribution,
         public string $type = 'reminder',
-    ) {}
+    ) {
+        $this->contribution->loadMissing(['family', 'payments']);
+    }
 
     /**
      * Get the notification's delivery channels.

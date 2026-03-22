@@ -19,7 +19,7 @@ This is a friendly reminder that your **{{ $contribution->period_label }}** cont
 | **Remaining Balance** | {{ $contribution->formattedBalance() }} |
 | **Due Date** | {{ $contribution->due_date->toFormattedDateString() }} |
 
-<x-mail::button :url="url('/contributions/my')">
+<x-mail::button :url="route('contributions.my')">
 View My Contributions
 </x-mail::button>
 
