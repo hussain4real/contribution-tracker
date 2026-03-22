@@ -153,7 +153,7 @@ class DashboardController extends Controller
                     'year' => $contribution->year,
                 ]
             ))
-            ->sortByDesc('paid_at')
+            ->sortByDesc(fn ($p) => [$p['paid_at'], $p['id']])
             ->take(10)
             ->values()
             ->toArray();
