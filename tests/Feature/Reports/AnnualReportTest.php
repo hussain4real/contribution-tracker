@@ -5,6 +5,7 @@ use App\Models\Contribution;
 use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
@@ -161,5 +162,43 @@ describe('Annual Report', function () {
                 ->where('monthly_breakdown', fn ($breakdown) => collect($breakdown)->every(fn ($month) => isset($month['collection_rate'])
                 ))
             );
+    });
+
+    it('loads annual report with a fixed query count regardless of months with data', function () {
+        $admin = User::factory()->admin()->create();
+        $year = now()->year;
+
+        // Seed contributions across all 12 months for multiple members
+        $employed = User::factory()->employed()->create();
+        $student = User::factory()->student()->create();
+
+        foreach ([$employed, $student] as $member) {
+            for ($month = 1; $month <= 12; $month++) {
+                $contribution = Contribution::factory()
+                    ->forUser($member)
+                    ->forMonth($year, $month)
+                    ->create(['expected_amount' => $member->category->monthlyAmount()]);
+
+                Payment::factory()->create([
+                    'contribution_id' => $contribution->id,
+                    'amount' => $member->category->monthlyAmount(),
+                    'recorded_by' => $admin->id,
+                ]);
+            }
+        }
+
+        DB::enableQueryLog();
+
+        $this->actingAs($admin)
+            ->get('/reports/annual?year='.$year)
+            ->assertOk();
+
+        $queryCount = count(DB::getQueryLog());
+
+        DB::disableQueryLog();
+
+        // The annual report should use a fixed number of queries (auth + single contribution query
+        // with eager-loaded payments and users), not scale with the number of months or categories.
+        expect($queryCount)->toBeLessThanOrEqual(5);
     });
 });
