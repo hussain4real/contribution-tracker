@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Models\Contribution;
-use App\Models\Family;
 use App\Notifications\ContributionReminderNotification;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -26,25 +25,22 @@ class SendContributionReminders extends Command
 
         $this->info("Sending {$type} notifications for {$month}/{$year}...");
 
-        $families = Family::query()->has('members')->get();
+        $contributions = Contribution::query()
+            ->whereHas('family', fn ($q) => $q->has('members'))
+            ->forMonth($year, $month)
+            ->incomplete()
+            ->with(['user', 'family', 'payments'])
+            ->get();
+
         $totalSent = 0;
 
-        foreach ($families as $family) {
-            $contributions = Contribution::query()
-                ->where('family_id', $family->id)
-                ->forMonth($year, $month)
-                ->incomplete()
-                ->with(['user', 'family', 'payments'])
-                ->get();
-
-            foreach ($contributions as $contribution) {
-                if (! $contribution->user || $contribution->user->isArchived()) {
-                    continue;
-                }
-
-                $contribution->user->notify(new ContributionReminderNotification($contribution, $type));
-                $totalSent++;
+        foreach ($contributions as $contribution) {
+            if (! $contribution->user || $contribution->user->isArchived()) {
+                continue;
             }
+
+            $contribution->user->notify(new ContributionReminderNotification($contribution, $type));
+            $totalSent++;
         }
 
         $this->info("Sent {$totalSent} {$type} notifications.");

@@ -46,6 +46,16 @@ function formatNotificationMessage(notification: AppNotification): string {
     }
     return `Reminder: Your ${data.period_label} contribution of ₦${Number(data.amount_owed).toLocaleString()} is due soon`;
 }
+
+function formatDate(dateString: string): string {
+    return new Date(dateString).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+    });
+}
 </script>
 
 <template>
@@ -126,7 +136,7 @@ function formatNotificationMessage(notification: AppNotification): string {
                                 >&middot;</span
                             >
                             <span class="text-xs text-muted-foreground">
-                                {{ notification.created_at }}
+                                {{ formatDate(notification.created_at) }}
                             </span>
                             <Badge
                                 v-if="notification.data.type === 'follow_up'"

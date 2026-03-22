@@ -30,7 +30,7 @@ class NotificationController extends Controller
      */
     public function markAsRead(Request $request, DatabaseNotification $notification): RedirectResponse
     {
-        abort_unless($notification->notifiable_id === $request->user()->id, 403);
+        abort_unless((int) $notification->notifiable_id === $request->user()->id, 403);
 
         $notification->markAsRead();
 
