@@ -20,11 +20,11 @@
 #
 # For more information: https://github.github.com/gh-aw/introduction/overview/
 #
-# Runs tests on pull requests and reports coverage changes as a PR comment.
+# Runs tests on pull requests and reports results as a PR comment.
 #
-# gh-aw-metadata: {"schema_version":"v3","frontmatter_hash":"6fd1c74807682266ae5463ea48b068e9265ac55129a161f46331a7bf2cc580eb","compiler_version":"v0.62.5","strict":true,"agent_id":"copilot"}
+# gh-aw-metadata: {"schema_version":"v3","frontmatter_hash":"cdbfb11d4715a066d17af8c7e5171b785a4cc67fa0951565c4517a76c5d85e5b","compiler_version":"v0.62.5","strict":true,"agent_id":"copilot"}
 
-name: "Test Coverage Reporter"
+name: "Test Results Reporter"
 "on":
   pull_request:
     types:
@@ -37,7 +37,7 @@ concurrency:
   group: "gh-aw-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref || github.run_id }}"
   cancel-in-progress: true
 
-run-name: "Test Coverage Reporter"
+run-name: "Test Results Reporter"
 
 jobs:
   activation:
@@ -70,7 +70,7 @@ jobs:
           GH_AW_INFO_VERSION: ""
           GH_AW_INFO_AGENT_VERSION: "latest"
           GH_AW_INFO_CLI_VERSION: "v0.62.5"
-          GH_AW_INFO_WORKFLOW_NAME: "Test Coverage Reporter"
+          GH_AW_INFO_WORKFLOW_NAME: "Test Results Reporter"
           GH_AW_INFO_EXPERIMENTAL: "false"
           GH_AW_INFO_SUPPORTS_TOOLS_ALLOWLIST: "true"
           GH_AW_INFO_STAGED: "false"
@@ -748,8 +748,8 @@ jobs:
         if: always() && steps.detection_guard.outputs.run_detection == 'true'
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
-          WORKFLOW_NAME: "Test Coverage Reporter"
-          WORKFLOW_DESCRIPTION: "Runs tests on pull requests and reports coverage changes as a PR comment."
+          WORKFLOW_NAME: "Test Results Reporter"
+          WORKFLOW_DESCRIPTION: "Runs tests on pull requests and reports results as a PR comment."
           HAS_PATCH: ${{ steps.collect_output.outputs.has_patch }}
         with:
           script: |
@@ -880,7 +880,7 @@ jobs:
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
           GH_AW_NOOP_MAX: "1"
-          GH_AW_WORKFLOW_NAME: "Test Coverage Reporter"
+          GH_AW_WORKFLOW_NAME: "Test Results Reporter"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -893,7 +893,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Test Coverage Reporter"
+          GH_AW_WORKFLOW_NAME: "Test Results Reporter"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -907,7 +907,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Test Coverage Reporter"
+          GH_AW_WORKFLOW_NAME: "Test Results Reporter"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_AW_AGENT_CONCLUSION: ${{ needs.agent.result }}
           GH_AW_WORKFLOW_ID: "test-coverage-reporter"
@@ -930,7 +930,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Test Coverage Reporter"
+          GH_AW_WORKFLOW_NAME: "Test Results Reporter"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_AW_AGENT_CONCLUSION: ${{ needs.agent.result }}
           GH_AW_NOOP_MESSAGE: ${{ steps.noop.outputs.noop_message }}
@@ -981,7 +981,7 @@ jobs:
       GH_AW_CALLER_WORKFLOW_ID: "${{ github.repository }}/test-coverage-reporter"
       GH_AW_ENGINE_ID: "copilot"
       GH_AW_WORKFLOW_ID: "test-coverage-reporter"
-      GH_AW_WORKFLOW_NAME: "Test Coverage Reporter"
+      GH_AW_WORKFLOW_NAME: "Test Results Reporter"
     outputs:
       code_push_failure_count: ${{ steps.process_safe_outputs.outputs.code_push_failure_count }}
       code_push_failure_errors: ${{ steps.process_safe_outputs.outputs.code_push_failure_errors }}

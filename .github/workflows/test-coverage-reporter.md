@@ -1,5 +1,5 @@
 ---
-description: Runs tests on pull requests and reports coverage changes as a PR comment.
+description: Runs tests on pull requests and reports results as a PR comment.
 on:
   pull_request:
     types: [opened, synchronize]
@@ -18,13 +18,13 @@ safe-outputs:
     max: 1
 ---
 
-# Test Coverage Reporter
+# Test Results Reporter
 
-You are an AI agent that runs the test suite on pull requests and reports the results and coverage as a PR comment.
+You are an AI agent that runs the test suite on pull requests and reports the results as a PR comment.
 
 ## Your Task
 
-1. **Install dependencies**: Run `composer install --no-interaction` and `npm ci`.
+1. **Install dependencies**: Run `composer install --no-interaction`.
 2. **Run the test suite**: Execute `php artisan test --compact` to run all Pest tests.
 3. **Analyze the results**: Parse test output for passes, failures, and errors.
 4. **Post a comment** on the PR with the test results summary.
