@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import {
+    index,
+    markAllAsRead,
+    markAsRead,
+} from '@/actions/App/Http/Controllers/NotificationController';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -12,7 +17,6 @@ import type { AppNotification } from '@/types';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { Bell } from 'lucide-vue-next';
 import { computed } from 'vue';
-import { index, markAllAsRead, markAsRead } from '@/actions/App/Http/Controllers/NotificationController';
 
 const page = usePage();
 
@@ -42,11 +46,7 @@ function formatNotificationMessage(notification: AppNotification): string {
 <template>
     <DropdownMenu>
         <DropdownMenuTrigger as-child>
-            <Button
-                variant="ghost"
-                size="icon"
-                class="relative h-8 w-8"
-            >
+            <Button variant="ghost" size="icon" class="relative h-8 w-8">
                 <Bell class="h-4 w-4" />
                 <span
                     v-if="unreadCount > 0"
@@ -70,9 +70,14 @@ function formatNotificationMessage(notification: AppNotification): string {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
 
-            <div v-if="recentNotifications.length === 0" class="px-4 py-6 text-center">
+            <div
+                v-if="recentNotifications.length === 0"
+                class="px-4 py-6 text-center"
+            >
                 <Bell class="mx-auto mb-2 h-8 w-8 text-muted-foreground/50" />
-                <p class="text-sm text-muted-foreground">No new notifications</p>
+                <p class="text-sm text-muted-foreground">
+                    No new notifications
+                </p>
             </div>
 
             <template v-else>
@@ -86,7 +91,8 @@ function formatNotificationMessage(notification: AppNotification): string {
                         {{ formatNotificationMessage(notification) }}
                     </p>
                     <p class="text-xs text-muted-foreground">
-                        {{ notification.data.family_name }} &middot; {{ notification.created_at }}
+                        {{ notification.data.family_name }} &middot;
+                        {{ notification.created_at }}
                     </p>
                 </DropdownMenuItem>
             </template>
