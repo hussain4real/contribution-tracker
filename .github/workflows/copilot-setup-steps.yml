@@ -24,6 +24,20 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: "8.4"
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+      - name: Build frontend assets
+        run: |
+          npm ci
+          npm run build
       - name: Install gh-aw extension
         uses: github/gh-aw-actions/setup-cli@dc50be57c94373431b49d3d0927f318ac2bb5c4c # v0.62.5
         with:
