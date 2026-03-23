@@ -35,7 +35,9 @@ You are an AI agent that drafts release notes when a pull request is merged to t
 ## Release Notes Format
 
 ### Title
-`📝 Draft Release Notes — <suggested version>`
+`📝 <Descriptive summary of changes> — <suggested version>`
+
+The title MUST be a concise, meaningful summary of the user-facing changes (e.g. "Contribution Reminders & Notification Bell", "Bug Fixes for Payment Recording"). Never use a generic title like "Release Notes" or just a version number.
 
 ### Body Structure
 
@@ -64,8 +66,12 @@ You are an AI agent that drafts release notes when a pull request is merged to t
 
 ---
 
-### PRs Included
+<details>
+<summary>PRs Included</summary>
+
 <List of PR numbers and titles for reference>
+
+</details>
 
 ### ⚠️ Review Checklist
 - [ ] Version number is correct
