@@ -64,10 +64,17 @@ class MemberController extends Controller
         /** @var User $user */
         $user = Auth::user();
 
+        $family = $user->family;
+        $plan = $family?->platformPlan;
+        $memberCount = $members->count();
+        $maxMembers = $plan?->hasUnlimitedMembers() ? null : $plan?->max_members;
+
         return Inertia::render('Members/Index', [
             'members' => $members,
             'archivedMembers' => $archivedMembers,
             'canManageMembers' => $user->canManageMembers(),
+            'member_count' => $memberCount,
+            'max_members' => $maxMembers,
         ]);
     }
 

@@ -33,13 +33,12 @@ class EnsureFamilySubscription
             return $next($request);
         }
 
-        // Check member limit
+        // Check member limit on member-adding routes
         if (! $plan->hasUnlimitedMembers()) {
-            $memberCount = $family->members()->count();
+            if ($request->routeIs('members.store', 'members.create', 'invitations.store', 'family.invitations.store')) {
+                $memberCount = $family->members()->count();
 
-            if ($memberCount > $plan->max_members) {
-                // Only block member-adding routes, not general access
-                if ($request->routeIs('members.store', 'invitations.store', 'family.invitations.store')) {
+                if ($memberCount >= $plan->max_members) {
                     if ($request->expectsJson()) {
                         return response()->json([
                             'message' => "Your plan allows up to {$plan->max_members} members. Please upgrade to add more.",

@@ -76,7 +76,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('changelog', ChangelogController::class)->name('changelog');
 
     // Members (Admin only for management, all can view list)
-    Route::resource('members', MemberController::class);
+    Route::resource('members', MemberController::class)->middleware('subscription');
     Route::post('members/{member}/restore', [MemberController::class, 'restore'])->name('members.restore');
 
     // Contributions
@@ -119,7 +119,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('fund-adjustments/{fund_adjustment}', [FundAdjustmentController::class, 'destroy'])->name('fund-adjustments.destroy');
 
     // Reports (Financial Secretary and Admin only)
-    Route::prefix('reports')->name('reports.')->middleware('can:generate-reports')->group(function () {
+    Route::prefix('reports')->name('reports.')->middleware(['can:generate-reports', 'subscription:reports'])->group(function () {
         Route::get('/', [ReportController::class, 'index'])->name('index');
         Route::get('monthly', [ReportController::class, 'monthly'])->name('monthly');
         Route::get('annual', [ReportController::class, 'annual'])->name('annual');
@@ -135,7 +135,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('banks', [FamilySettingsController::class, 'banks'])->name('banks');
 
         Route::get('invitations', [InvitationController::class, 'index'])->name('invitations');
-        Route::post('invitations', [InvitationController::class, 'store'])->name('invitations.store');
+        Route::post('invitations', [InvitationController::class, 'store'])->name('invitations.store')->middleware('subscription');
         Route::delete('invitations/{invitation}', [InvitationController::class, 'destroy'])->name('invitations.destroy');
     });
 });

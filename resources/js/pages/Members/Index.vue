@@ -25,12 +25,16 @@ interface Props {
     members?: Member[];
     archivedMembers?: Member[];
     canManageMembers?: boolean;
+    member_count?: number;
+    max_members?: number | null;
 }
 
 const props = withDefaults(defineProps<Props>(), {
     members: () => [],
     archivedMembers: () => [],
     canManageMembers: false,
+    member_count: 0,
+    max_members: null,
 });
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -44,6 +48,11 @@ const showArchived = ref(false);
 
 const displayedMembers = computed(() => {
     return showArchived.value ? props.archivedMembers : props.members;
+});
+
+const canAddMore = computed(() => {
+    if (props.max_members === null) return true;
+    return props.member_count < props.max_members;
 });
 </script>
 
@@ -78,12 +87,18 @@ const displayedMembers = computed(() => {
                             showArchived ? 'Active' : 'Archived'
                         }}</span>
                     </Button>
-                    <Link v-if="canManageMembers" :href="create().url">
+                    <Link v-if="canManageMembers && canAddMore" :href="create().url">
                         <Button size="sm">
                             <Plus class="mr-1 h-4 w-4 sm:mr-2" />
                             Add Member
                         </Button>
                     </Link>
+                    <span
+                        v-else-if="canManageMembers && !canAddMore"
+                        class="text-xs text-muted-foreground"
+                    >
+                        {{ member_count }}/{{ max_members }} members (upgrade to add more)
+                    </span>
                 </div>
             </div>
 

@@ -144,3 +144,80 @@ it('allows dashboard access for cancelled paid plan', function () {
 
     expect($response->getContent())->toBe('OK');
 });
+
+it('blocks adding members when at the plan limit', function () {
+    $plan = PlatformPlan::create([
+        'name' => 'Free',
+        'slug' => 'free',
+        'price' => 0,
+        'max_members' => 2,
+        'features' => ['basic_contributions', 'manual_payments'],
+        'is_active' => true,
+        'sort_order' => 0,
+    ]);
+
+    $family = Family::factory()->create(['platform_plan_id' => $plan->id]);
+    $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+    User::factory()->create(['family_id' => $family->id]);
+
+    // 2 members now — at the limit
+    $this->actingAs($admin)
+        ->post(route('members.store'), [
+            'name' => 'New Member',
+            'email' => 'new@test.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+            'role' => 'member',
+            'category' => 'employed',
+        ])
+        ->assertRedirect(route('subscription.index'));
+});
+
+it('allows adding members when under the plan limit', function () {
+    $plan = PlatformPlan::create([
+        'name' => 'Free',
+        'slug' => 'free',
+        'price' => 0,
+        'max_members' => 5,
+        'features' => ['basic_contributions', 'manual_payments'],
+        'is_active' => true,
+        'sort_order' => 0,
+    ]);
+
+    $family = Family::factory()->create(['platform_plan_id' => $plan->id]);
+    $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+
+    // 1 member — well under the limit
+    $this->actingAs($admin)
+        ->post(route('members.store'), [
+            'name' => 'New Member',
+            'email' => 'new@test.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+            'role' => 'member',
+            'category' => 'employed',
+        ])
+        ->assertRedirect(route('members.index'));
+
+    expect(User::where('email', 'new@test.com')->exists())->toBeTrue();
+});
+
+it('blocks access to create member page when at the plan limit', function () {
+    $plan = PlatformPlan::create([
+        'name' => 'Free',
+        'slug' => 'free',
+        'price' => 0,
+        'max_members' => 1,
+        'features' => ['basic_contributions', 'manual_payments'],
+        'is_active' => true,
+        'sort_order' => 0,
+    ]);
+
+    $family = Family::factory()->create(['platform_plan_id' => $plan->id]);
+    $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+
+    // 1 member — at the limit
+    $this->actingAs($admin)
+        ->get(route('members.create'))
+        ->assertRedirect(route('subscription.index'));
+});
