@@ -51,7 +51,9 @@ const selectedCategoryAmount = computed(() => {
 });
 
 const page = usePage();
-const canAddMore = computed(() => page.props.subscription?.can_add_members ?? true);
+const canAddMore = computed(
+    () => page.props.subscription?.can_add_members ?? true,
+);
 const subscription = computed(() => page.props.subscription);
 
 function formatCurrency(amount: number): string {
@@ -73,9 +75,16 @@ function formatCurrency(amount: number): string {
                     v-if="!canAddMore"
                     class="rounded-xl border border-amber-200 bg-amber-50 p-6 dark:border-amber-800 dark:bg-amber-950"
                 >
-                    <h2 class="text-lg font-semibold text-amber-800 dark:text-amber-200">Member Limit Reached</h2>
+                    <h2
+                        class="text-lg font-semibold text-amber-800 dark:text-amber-200"
+                    >
+                        Member Limit Reached
+                    </h2>
                     <p class="mt-2 text-sm text-amber-700 dark:text-amber-300">
-                        Your plan allows up to {{ subscription?.max_members }} members and you currently have {{ subscription?.member_count }}. Upgrade your plan to add more members.
+                        Your plan allows up to
+                        {{ subscription?.max_members }} members and you
+                        currently have {{ subscription?.member_count }}. Upgrade
+                        your plan to add more members.
                     </p>
                     <div class="mt-4 flex gap-3">
                         <Link href="/subscription">

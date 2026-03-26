@@ -82,7 +82,10 @@ const canAddMore = computed(() => subscription.value?.can_add_members ?? true);
                             showArchived ? 'Active' : 'Archived'
                         }}</span>
                     </Button>
-                    <Link v-if="canManageMembers && canAddMore" :href="create().url">
+                    <Link
+                        v-if="canManageMembers && canAddMore"
+                        :href="create().url"
+                    >
                         <Button size="sm">
                             <Plus class="mr-1 h-4 w-4 sm:mr-2" />
                             Add Member
@@ -97,10 +100,17 @@ const canAddMore = computed(() => subscription.value?.can_add_members ?? true);
                 class="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950"
             >
                 <p class="text-sm text-amber-800 dark:text-amber-200">
-                    {{ subscription?.member_count }}/{{ subscription?.max_members }} members — upgrade your plan to add more.
+                    {{ subscription?.member_count }}/{{
+                        subscription?.max_members
+                    }}
+                    members — upgrade your plan to add more.
                 </p>
                 <Link href="/subscription">
-                    <Button size="sm" variant="outline" class="shrink-0 border-amber-300 text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900">
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        class="shrink-0 border-amber-300 text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900"
+                    >
                         <ArrowUpCircle class="mr-1 h-4 w-4" />
                         Upgrade
                     </Button>
