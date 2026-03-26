@@ -15,6 +15,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PaystackWebhookController;
 use App\Http\Controllers\PlatformAdminController;
+use App\Http\Controllers\PlatformPlanController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Middleware\EnsurePlatformSuperAdmin;
@@ -157,6 +158,12 @@ Route::middleware(['auth', 'verified', EnsurePlatformSuperAdmin::class])
         Route::get('users/export', [PlatformAdminController::class, 'exportUsers'])->name('users.export');
         Route::post('users/{user}/impersonate', [PlatformAdminController::class, 'impersonate'])->name('users.impersonate');
         Route::post('users/{user}/send-reset', [PlatformAdminController::class, 'sendPasswordReset'])->name('users.send-reset');
+
+        Route::get('plans', [PlatformPlanController::class, 'index'])->name('plans');
+        Route::post('plans', [PlatformPlanController::class, 'store'])->name('plans.store');
+        Route::put('plans/{plan}', [PlatformPlanController::class, 'update'])->name('plans.update');
+        Route::post('plans/{plan}/toggle-active', [PlatformPlanController::class, 'toggleActive'])->name('plans.toggle-active');
+        Route::delete('plans/{plan}', [PlatformPlanController::class, 'destroy'])->name('plans.destroy');
     });
 
 // Stop impersonating route — accessible by the impersonated session (not behind super admin middleware)

@@ -11,6 +11,7 @@ import {
     families as platformFamilies,
     users as platformUsers,
 } from '@/actions/App/Http/Controllers/PlatformAdminController';
+import { index as platformPlans } from '@/actions/App/Http/Controllers/PlatformPlanController';
 import { index as reportsIndex } from '@/actions/App/Http/Controllers/ReportController';
 import { index as subscriptionIndex } from '@/actions/App/Http/Controllers/SubscriptionController';
 import NavFooter from '@/components/NavFooter.vue';
@@ -35,6 +36,7 @@ import {
     FileText,
     Globe,
     Landmark,
+    Layers,
     LayoutGrid,
     Mail,
     Receipt,
@@ -157,6 +159,12 @@ const mainNavItems = computed<NavItem[]>(() => {
                 href: platformUsers(),
                 icon: UsersRound,
                 component: 'Platform/Users',
+            },
+            {
+                title: 'Plans',
+                href: platformPlans(),
+                icon: Layers,
+                component: 'Platform/Plans',
             },
         );
     }
