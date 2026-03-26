@@ -2,11 +2,9 @@
 
 use App\Enums\Role;
 use App\Models\Contribution;
+use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-
-uses(RefreshDatabase::class);
 
 beforeEach(function () {
     config()->set('app.admin_email', null);
@@ -27,8 +25,13 @@ it('creates a super admin account with environment variables', function () {
     expect($admin)->not->toBeNull();
     expect($admin->name)->toBe('Family Admin');
     expect($admin->role)->toBe(Role::Admin);
+    expect($admin->is_super_admin)->toBeTrue();
     expect($admin->category)->toBeNull();
     expect($admin->email_verified_at)->not->toBeNull();
+
+    $family = Family::query()->first();
+    expect($family)->not->toBeNull();
+    expect($family->platform_plan_id)->not->toBeNull();
 });
 
 it('uses default name when ADMIN_NAME is not set', function () {
@@ -40,7 +43,7 @@ it('uses default name when ADMIN_NAME is not set', function () {
 
     $admin = User::query()->where('email', 'admin@production.test')->first();
 
-    expect($admin->name)->toBe('Admin');
+    expect($admin->name)->toBe('Super Admin');
 });
 
 it('fails when email is not provided', function () {

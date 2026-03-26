@@ -4,17 +4,26 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Models\Family;
 use App\Models\FamilyCategory;
 use App\Models\User;
+use App\Services\PaystackService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class FamilySettingsController extends Controller
 {
+    public function __construct(
+        private PaystackService $paystack
+    ) {}
+
     public function edit(): Response
     {
         /** @var User $user */
@@ -46,6 +55,8 @@ class FamilySettingsController extends Controller
                 'bank_name' => $family->bank_name,
                 'account_name' => $family->account_name,
                 'account_number' => $family->account_number,
+                'bank_code' => $family->bank_code,
+                'has_paystack_subaccount' => $family->hasPaystackSubaccount(),
             ],
             'categories' => $categories,
         ]);
@@ -67,9 +78,19 @@ class FamilySettingsController extends Controller
             'bank_name' => ['nullable', 'string', 'max:255'],
             'account_name' => ['nullable', 'string', 'max:255'],
             'account_number' => ['nullable', 'string', 'max:50'],
+            'bank_code' => ['nullable', 'string', 'max:10'],
         ]);
 
-        $user->family->update($validated);
+        $family = $user->family;
+        $bankDetailsChanged = $family->bank_code !== ($validated['bank_code'] ?? null)
+            || $family->account_number !== ($validated['account_number'] ?? null);
+
+        $family->update($validated);
+
+        // Auto-create/update Paystack subaccount when bank details are complete
+        if ($bankDetailsChanged && $family->hasBankDetails()) {
+            $this->syncPaystackSubaccount($family);
+        }
 
         return redirect()->back()->with('success', 'Family settings updated.');
     }
@@ -141,5 +162,68 @@ class FamilySettingsController extends Controller
         $category->delete();
 
         return redirect()->back()->with('success', 'Category deleted.');
+    }
+
+    /**
+     * List available banks from Paystack (cached for 24 hours).
+     */
+    public function banks(): JsonResponse
+    {
+        /** @var User $user */
+        $user = Auth::user();
+
+        if (! $user->isAdmin()) {
+            abort(403);
+        }
+
+        $banks = Cache::remember('paystack_banks', 86400, function () {
+            $response = $this->paystack->listBanks();
+
+            if (! ($response['status'] ?? false)) {
+                return [];
+            }
+
+            return collect($response['data'])
+                ->filter(fn (array $bank) => $bank['active'] ?? false)
+                ->map(fn (array $bank) => [
+                    'name' => $bank['name'],
+                    'code' => $bank['code'],
+                ])
+                ->sortBy('name')
+                ->values()
+                ->all();
+        });
+
+        return response()->json($banks);
+    }
+
+    private function syncPaystackSubaccount(Family $family): void
+    {
+        try {
+            if ($family->paystack_subaccount_code) {
+                $this->paystack->updateSubaccount($family->paystack_subaccount_code, [
+                    'business_name' => $family->name,
+                    'bank_code' => $family->bank_code,
+                    'account_number' => $family->account_number,
+                    'percentage_charge' => 0,
+                ]);
+            } else {
+                $response = $this->paystack->createSubaccount([
+                    'business_name' => $family->name,
+                    'bank_code' => $family->bank_code,
+                    'account_number' => $family->account_number,
+                    'percentage_charge' => 0,
+                ]);
+
+                $family->update([
+                    'paystack_subaccount_code' => $response['data']['subaccount_code'],
+                ]);
+            }
+        } catch (\RuntimeException $e) {
+            Log::error('Failed to sync Paystack subaccount', [
+                'family_id' => $family->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

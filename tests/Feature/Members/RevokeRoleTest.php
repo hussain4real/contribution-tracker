@@ -3,9 +3,6 @@
 use App\Enums\MemberCategory;
 use App\Enums\Role;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-
-uses(RefreshDatabase::class);
 
 /**
  * T070 [US4] Feature test for revoking Financial Secretary role

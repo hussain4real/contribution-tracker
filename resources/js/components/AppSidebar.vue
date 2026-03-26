@@ -5,11 +5,13 @@ import { edit as familySettings } from '@/actions/App/Http/Controllers/FamilySet
 import { index as fundAdjustmentsIndex } from '@/actions/App/Http/Controllers/FundAdjustmentController';
 import { index as invitationsIndex } from '@/actions/App/Http/Controllers/InvitationController';
 import { index as membersIndex } from '@/actions/App/Http/Controllers/MemberController';
+import { show as payContributions } from '@/actions/App/Http/Controllers/MemberPaymentController';
 import {
     index as platformDashboard,
     families as platformFamilies,
     users as platformUsers,
 } from '@/actions/App/Http/Controllers/PlatformAdminController';
+import { index as subscriptionIndex } from '@/actions/App/Http/Controllers/SubscriptionController';
 import { index as reportsIndex } from '@/actions/App/Http/Controllers/ReportController';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -28,6 +30,7 @@ import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
 import {
     Building2,
+    CreditCard,
     FileBarChart2,
     FileText,
     Globe,
@@ -38,6 +41,7 @@ import {
     Rocket,
     Settings,
     Shield,
+    Sparkles,
     Users,
     UsersRound,
     Wallet,
@@ -73,6 +77,14 @@ const mainNavItems = computed<NavItem[]>(() => {
         href: myContributions(),
         icon: Wallet,
         component: 'Contributions/My',
+    });
+
+    // Pay Contributions - visible to all authenticated users
+    items.push({
+        title: 'Pay Contributions',
+        href: payContributions(),
+        icon: CreditCard,
+        component: 'Pay/Index',
     });
 
     // Expenses - visible to all authenticated users
@@ -115,6 +127,13 @@ const mainNavItems = computed<NavItem[]>(() => {
             href: invitationsIndex(),
             icon: Mail,
             component: 'Family/Invitations',
+        });
+
+        items.push({
+            title: 'Subscription',
+            href: subscriptionIndex(),
+            icon: Sparkles,
+            component: 'Subscription/Index',
         });
     }
 

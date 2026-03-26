@@ -5,10 +5,7 @@ use App\Enums\PaymentStatus;
 use App\Models\Contribution;
 use App\Models\Payment;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
-
-uses(RefreshDatabase::class);
 
 describe('Monthly Report', function () {
     it('displays monthly report page for financial secretary', function () {

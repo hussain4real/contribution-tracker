@@ -3,9 +3,6 @@
 use App\Models\Contribution;
 use App\Models\User;
 use Carbon\Carbon;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-
-uses(RefreshDatabase::class);
 
 describe('Contribution Due Date', function () {
     it('due_date accessor always returns 28th of contribution month', function () {

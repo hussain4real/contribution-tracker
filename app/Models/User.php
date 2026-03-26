@@ -35,6 +35,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'family_category_id',
         'is_super_admin',
         'archived_at',
+        'paystack_customer_code',
     ];
 
     /**

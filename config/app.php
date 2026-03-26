@@ -139,4 +139,6 @@ return [
 
     'admin_name' => env('ADMIN_NAME', 'Super Admin'),
 
+    'family_name' => env('FAMILY_NAME', 'My Family'),
+
 ];

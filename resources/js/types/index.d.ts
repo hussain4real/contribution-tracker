@@ -52,6 +52,12 @@ export interface Notifications {
     recent: AppNotification[];
 }
 
+export interface Flash {
+    success?: string | null;
+    error?: string | null;
+    warning?: string | null;
+}
+
 export type AppPageProps<
     T extends Record<string, unknown> = Record<string, unknown>,
 > = T & {
@@ -61,6 +67,7 @@ export type AppPageProps<
     family: Family | null;
     sidebarOpen: boolean;
     notifications: Notifications | null;
+    flash?: Flash;
 };
 
 export interface User {
