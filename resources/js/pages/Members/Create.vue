@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Form, Head, Link } from '@inertiajs/vue3';
+import { Form, Head, Link, usePage } from '@inertiajs/vue3';
+import { ArrowUpCircle } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 interface CategoryOption {
@@ -49,6 +50,10 @@ const selectedCategoryAmount = computed(() => {
     return category ? category.amount : 0;
 });
 
+const page = usePage();
+const canAddMore = computed(() => page.props.subscription?.can_add_members ?? true);
+const subscription = computed(() => page.props.subscription);
+
 function formatCurrency(amount: number): string {
     return new Intl.NumberFormat('en-NG', {
         style: 'currency',
@@ -63,7 +68,30 @@ function formatCurrency(amount: number): string {
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
             <div class="mx-auto w-full max-w-2xl">
+                <!-- Member limit reached -->
                 <div
+                    v-if="!canAddMore"
+                    class="rounded-xl border border-amber-200 bg-amber-50 p-6 dark:border-amber-800 dark:bg-amber-950"
+                >
+                    <h2 class="text-lg font-semibold text-amber-800 dark:text-amber-200">Member Limit Reached</h2>
+                    <p class="mt-2 text-sm text-amber-700 dark:text-amber-300">
+                        Your plan allows up to {{ subscription?.max_members }} members and you currently have {{ subscription?.member_count }}. Upgrade your plan to add more members.
+                    </p>
+                    <div class="mt-4 flex gap-3">
+                        <Link href="/subscription">
+                            <Button>
+                                <ArrowUpCircle class="mr-2 h-4 w-4" />
+                                Upgrade Plan
+                            </Button>
+                        </Link>
+                        <Link :href="index().url">
+                            <Button variant="outline">Back to Members</Button>
+                        </Link>
+                    </div>
+                </div>
+
+                <div
+                    v-else
                     class="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border dark:bg-neutral-900"
                 >
                     <HeadingSmall

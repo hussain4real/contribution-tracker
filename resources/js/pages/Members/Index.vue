@@ -4,8 +4,8 @@ import MemberListItem from '@/components/contributions/MemberListItem.vue';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link } from '@inertiajs/vue3';
-import { Archive, Plus, Users } from 'lucide-vue-next';
+import { Head, Link, usePage } from '@inertiajs/vue3';
+import { Archive, ArrowUpCircle, Plus, Users } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 interface Member {
@@ -25,16 +25,12 @@ interface Props {
     members?: Member[];
     archivedMembers?: Member[];
     canManageMembers?: boolean;
-    member_count?: number;
-    max_members?: number | null;
 }
 
 const props = withDefaults(defineProps<Props>(), {
     members: () => [],
     archivedMembers: () => [],
     canManageMembers: false,
-    member_count: 0,
-    max_members: null,
 });
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -50,10 +46,9 @@ const displayedMembers = computed(() => {
     return showArchived.value ? props.archivedMembers : props.members;
 });
 
-const canAddMore = computed(() => {
-    if (props.max_members === null) return true;
-    return props.member_count < props.max_members;
-});
+const page = usePage();
+const subscription = computed(() => page.props.subscription);
+const canAddMore = computed(() => subscription.value?.can_add_members ?? true);
 </script>
 
 <template>
@@ -93,13 +88,23 @@ const canAddMore = computed(() => {
                             Add Member
                         </Button>
                     </Link>
-                    <span
-                        v-else-if="canManageMembers && !canAddMore"
-                        class="text-xs text-muted-foreground"
-                    >
-                        {{ member_count }}/{{ max_members }} members (upgrade to add more)
-                    </span>
                 </div>
+            </div>
+
+            <!-- Member limit banner -->
+            <div
+                v-if="canManageMembers && !canAddMore"
+                class="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950"
+            >
+                <p class="text-sm text-amber-800 dark:text-amber-200">
+                    {{ subscription?.member_count }}/{{ subscription?.max_members }} members — upgrade your plan to add more.
+                </p>
+                <Link href="/subscription">
+                    <Button size="sm" variant="outline" class="shrink-0 border-amber-300 text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900">
+                        <ArrowUpCircle class="mr-1 h-4 w-4" />
+                        Upgrade
+                    </Button>
+                </Link>
             </div>
 
             <!-- Members Table -->
