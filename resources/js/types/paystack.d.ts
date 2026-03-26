@@ -7,7 +7,12 @@ declare module '@paystack/inline-js' {
     }
 
     export default class PaystackPop {
-        newTransaction(options: Record<string, unknown> & PaystackCallbacks): void;
-        resumeTransaction(accessCode: string, callbacks?: PaystackCallbacks): void;
+        newTransaction(
+            options: Record<string, unknown> & PaystackCallbacks,
+        ): void;
+        resumeTransaction(
+            accessCode: string,
+            callbacks?: PaystackCallbacks,
+        ): void;
     }
 }

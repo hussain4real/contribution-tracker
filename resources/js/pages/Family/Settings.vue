@@ -218,24 +218,36 @@ function cancelEdit(): void {
                                             class="w-full bg-transparent outline-none placeholder:text-muted-foreground"
                                             placeholder="Search banks..."
                                         />
-                                        <ChevronsUpDown class="h-4 w-4 shrink-0 opacity-50" />
+                                        <ChevronsUpDown
+                                            class="h-4 w-4 shrink-0 opacity-50"
+                                        />
                                     </ComboboxAnchor>
 
                                     <ComboboxContent
                                         class="absolute z-50 mt-1 max-h-60 w-full overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md"
                                     >
-                                        <ComboboxViewport class="max-h-60 overflow-y-auto p-1">
-                                            <ComboboxEmpty class="px-2 py-4 text-center text-sm text-muted-foreground">
-                                                <template v-if="banksLoading">Loading banks...</template>
-                                                <template v-else>No banks found.</template>
+                                        <ComboboxViewport
+                                            class="max-h-60 overflow-y-auto p-1"
+                                        >
+                                            <ComboboxEmpty
+                                                class="px-2 py-4 text-center text-sm text-muted-foreground"
+                                            >
+                                                <template v-if="banksLoading"
+                                                    >Loading banks...</template
+                                                >
+                                                <template v-else
+                                                    >No banks found.</template
+                                                >
                                             </ComboboxEmpty>
                                             <ComboboxItem
                                                 v-for="bank in filteredBanks"
                                                 :key="bank.code"
                                                 :value="bank.name"
-                                                class="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50"
+                                                class="relative flex w-full cursor-default items-center rounded-sm py-1.5 pr-2 pl-8 text-sm outline-none select-none data-disabled:pointer-events-none data-disabled:opacity-50 data-highlighted:bg-accent data-highlighted:text-accent-foreground"
                                             >
-                                                <ComboboxItemIndicator class="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+                                                <ComboboxItemIndicator
+                                                    class="absolute left-2 flex h-3.5 w-3.5 items-center justify-center"
+                                                >
                                                     <Check class="h-4 w-4" />
                                                 </ComboboxItemIndicator>
                                                 {{ bank.name }}
@@ -243,8 +255,16 @@ function cancelEdit(): void {
                                         </ComboboxViewport>
                                     </ComboboxContent>
                                 </ComboboxRoot>
-                                <input type="hidden" name="bank_name" :value="selectedBank" />
-                                <input type="hidden" name="bank_code" :value="selectedBankCode" />
+                                <input
+                                    type="hidden"
+                                    name="bank_name"
+                                    :value="selectedBank"
+                                />
+                                <input
+                                    type="hidden"
+                                    name="bank_code"
+                                    :value="selectedBankCode"
+                                />
                                 <InputError :message="errors.bank_name" />
                             </div>
                             <div class="grid gap-2">

@@ -11,8 +11,8 @@ import {
     families as platformFamilies,
     users as platformUsers,
 } from '@/actions/App/Http/Controllers/PlatformAdminController';
-import { index as subscriptionIndex } from '@/actions/App/Http/Controllers/SubscriptionController';
 import { index as reportsIndex } from '@/actions/App/Http/Controllers/ReportController';
+import { index as subscriptionIndex } from '@/actions/App/Http/Controllers/SubscriptionController';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';

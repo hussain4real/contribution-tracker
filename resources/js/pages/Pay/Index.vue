@@ -118,9 +118,7 @@ const payWithPaystack = async () => {
         }
 
         // Open Paystack Popup (dynamic import to avoid SSR window error)
-        const { default: PaystackPop } = await import(
-            '@paystack/inline-js'
-        );
+        const { default: PaystackPop } = await import('@paystack/inline-js');
         const popup = new PaystackPop();
         popup.resumeTransaction(data.access_code, {
             onSuccess: () => {

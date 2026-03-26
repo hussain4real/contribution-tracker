@@ -137,7 +137,9 @@ const subscribeToPlan = async (planId: number) => {
         const popup = new PaystackPop();
         popup.resumeTransaction(data.access_code, {
             onSuccess: () => {
-                router.visit('/subscription/callback?reference=' + data.reference);
+                router.visit(
+                    '/subscription/callback?reference=' + data.reference,
+                );
             },
             onCancel: () => {
                 processing.value = false;
@@ -148,7 +150,9 @@ const subscribeToPlan = async (planId: number) => {
                 if (processing.value) {
                     processing.value = false;
                     processingPlanId.value = null;
-                    router.visit('/subscription/callback?reference=' + data.reference);
+                    router.visit(
+                        '/subscription/callback?reference=' + data.reference,
+                    );
                 }
             },
         });
