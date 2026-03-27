@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Actions\SubscribeFamilyToPlan;
+use App\Enums\TransactionStatus;
 use App\Http\Requests\SubscribePlanRequest;
 use App\Models\Family;
 use App\Models\PaystackTransaction;
@@ -120,7 +121,7 @@ class SubscriptionController extends Controller
 
             if ($verification['data']['status'] === 'success') {
                 $transaction->update([
-                    'status' => 'success',
+                    'status' => TransactionStatus::Success,
                     'paystack_response' => $verification['data'],
                 ]);
 
@@ -171,7 +172,7 @@ class SubscriptionController extends Controller
         try {
             $this->paystack->disableSubscription([
                 'code' => $family->paystack_subscription_code,
-                'token' => $family->paystack_customer_code,
+                'token' => $family->paystack_subscription_email_token,
             ]);
 
             $family->update([

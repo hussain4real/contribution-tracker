@@ -17,7 +17,7 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->foreignId('family_id')->constrained()->cascadeOnDelete();
             $table->string('type');
-            $table->unsignedInteger('amount');
+            $table->unsignedBigInteger('amount');
             $table->string('status')->default('pending');
             $table->json('paystack_response')->nullable();
             $table->json('metadata')->nullable();

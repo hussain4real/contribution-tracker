@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -195,7 +196,7 @@ class PaystackService
             ->acceptJson()
             ->connectTimeout(10)
             ->timeout(30)
-            ->retry(3, 100, throw: false);
+            ->retry(3, 100, fn (\Exception $e) => $e instanceof ConnectionException, throw: false);
     }
 
     /**

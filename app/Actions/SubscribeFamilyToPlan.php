@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\Enums\TransactionStatus;
+use App\Enums\TransactionType;
 use App\Models\Family;
 use App\Models\PaystackTransaction;
 use App\Models\PlatformPlan;
@@ -36,9 +38,9 @@ class SubscribeFamilyToPlan
             'reference' => $reference,
             'user_id' => $user->id,
             'family_id' => $family->id,
-            'type' => 'subscription',
+            'type' => TransactionType::Subscription,
             'amount' => $plan->price,
-            'status' => 'pending',
+            'status' => TransactionStatus::Pending,
             'metadata' => [
                 'plan_id' => $plan->id,
                 'plan_slug' => $plan->slug,

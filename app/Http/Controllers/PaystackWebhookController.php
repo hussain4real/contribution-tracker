@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Enums\TransactionStatus;
+use App\Enums\TransactionType;
 use App\Models\Family;
 use App\Models\PaystackTransaction;
 use App\Models\User;
@@ -65,7 +67,7 @@ class PaystackWebhookController extends Controller
         }
 
         // Prevent double processing
-        if ($transaction->status === 'success') {
+        if ($transaction->status === TransactionStatus::Success) {
             return response()->json(['message' => 'Already processed']);
         }
 
@@ -80,19 +82,19 @@ class PaystackWebhookController extends Controller
             ]);
 
             $transaction->update([
-                'status' => 'failed',
+                'status' => TransactionStatus::Failed,
                 'paystack_response' => $data,
             ]);
 
             return response()->json(['message' => 'Amount mismatch'], 400);
         }
 
-        if ($transaction->type === 'contribution') {
+        if ($transaction->type === TransactionType::Contribution) {
             $this->allocateContributionPayment($transaction, $data);
         }
 
         $transaction->update([
-            'status' => 'success',
+            'status' => TransactionStatus::Success,
             'paystack_response' => $data,
         ]);
 
@@ -146,6 +148,7 @@ class PaystackWebhookController extends Controller
 
         $family->update([
             'paystack_subscription_code' => $subscriptionCode,
+            'paystack_subscription_email_token' => $data['email_token'] ?? null,
             'subscription_status' => 'active',
             'current_period_end' => $data['next_payment_date'] ?? null,
         ]);

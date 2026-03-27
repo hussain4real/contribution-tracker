@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Enums\TransactionStatus;
+use App\Enums\TransactionType;
 use App\Http\Requests\InitiatePaymentRequest;
 use App\Models\PaystackTransaction;
 use App\Models\User;
@@ -107,9 +109,9 @@ class MemberPaymentController extends Controller
             'reference' => $reference,
             'user_id' => $user->id,
             'family_id' => $family->id,
-            'type' => 'contribution',
+            'type' => TransactionType::Contribution,
             'amount' => $totalAmount,
-            'status' => 'pending',
+            'status' => TransactionStatus::Pending,
             'metadata' => [
                 'contribution_ids' => $contributions->pluck('id')->toArray(),
                 'target_year' => $oldest->year,
@@ -154,7 +156,7 @@ class MemberPaymentController extends Controller
                 'reference' => $reference,
             ]);
         } catch (\RuntimeException $e) {
-            $transaction->update(['status' => 'failed']);
+            $transaction->update(['status' => TransactionStatus::Failed]);
 
             return response()->json([
                 'message' => 'Failed to initialize payment. Please try again.',
@@ -186,7 +188,7 @@ class MemberPaymentController extends Controller
 
             if ($status === 'success' && $transaction->isPending()) {
                 $transaction->update([
-                    'status' => 'success',
+                    'status' => TransactionStatus::Success,
                     'paystack_response' => $response['data'],
                 ]);
 

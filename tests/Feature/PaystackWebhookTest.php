@@ -1,5 +1,7 @@
 <?php
 
+use App\Enums\TransactionStatus;
+use App\Enums\TransactionType;
 use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\PaystackTransaction;
@@ -45,9 +47,9 @@ it('processes charge.success for contribution payment', function () {
         'reference' => 'TXN_TEST001',
         'user_id' => $member->id,
         'family_id' => $family->id,
-        'type' => 'contribution',
+        'type' => TransactionType::Contribution,
         'amount' => 4000,
-        'status' => 'pending',
+        'status' => TransactionStatus::Pending,
         'metadata' => [
             'contribution_ids' => [$contribution->id],
             'target_year' => $contribution->year,
@@ -70,7 +72,7 @@ it('processes charge.success for contribution payment', function () {
     ])->assertSuccessful();
 
     $transaction->refresh();
-    expect($transaction->status)->toBe('success');
+    expect($transaction->status)->toBe(TransactionStatus::Success);
 });
 
 it('prevents double processing of charge.success', function () {
@@ -81,9 +83,9 @@ it('prevents double processing of charge.success', function () {
         'reference' => 'TXN_DOUBLE',
         'user_id' => $member->id,
         'family_id' => $family->id,
-        'type' => 'contribution',
+        'type' => TransactionType::Contribution,
         'amount' => 4000,
-        'status' => 'success', // already processed
+        'status' => TransactionStatus::Success, // already processed
     ]);
 
     $payload = json_encode([
@@ -100,7 +102,7 @@ it('prevents double processing of charge.success', function () {
 
     // Should still be success, not re-processed
     $transaction->refresh();
-    expect($transaction->status)->toBe('success');
+    expect($transaction->status)->toBe(TransactionStatus::Success);
 });
 
 it('rejects charge.success with amount mismatch', function () {
@@ -111,9 +113,9 @@ it('rejects charge.success with amount mismatch', function () {
         'reference' => 'TXN_MISMATCH',
         'user_id' => $member->id,
         'family_id' => $family->id,
-        'type' => 'contribution',
+        'type' => TransactionType::Contribution,
         'amount' => 4000,
-        'status' => 'pending',
+        'status' => TransactionStatus::Pending,
     ]);
 
     $payload = json_encode([
@@ -138,6 +140,7 @@ it('handles subscription.create event', function () {
         'event' => 'subscription.create',
         'data' => [
             'subscription_code' => 'SUB_abc123',
+            'email_token' => 'tok_test456',
             'customer' => [
                 'customer_code' => 'CUS_test123',
             ],
@@ -151,6 +154,7 @@ it('handles subscription.create event', function () {
 
     $family->refresh();
     expect($family->paystack_subscription_code)->toBe('SUB_abc123')
+        ->and($family->paystack_subscription_email_token)->toBe('tok_test456')
         ->and($family->subscription_status)->toBe('active');
 });
 

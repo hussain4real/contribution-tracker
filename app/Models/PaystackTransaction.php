@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\TransactionStatus;
+use App\Enums\TransactionType;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -29,6 +31,8 @@ class PaystackTransaction extends Model
     protected function casts(): array
     {
         return [
+            'type' => TransactionType::class,
+            'status' => TransactionStatus::class,
             'amount' => 'integer',
             'paystack_response' => 'array',
             'metadata' => 'array',
@@ -55,16 +59,16 @@ class PaystackTransaction extends Model
 
     public function isPending(): bool
     {
-        return $this->status === 'pending';
+        return $this->status === TransactionStatus::Pending;
     }
 
     public function isSuccessful(): bool
     {
-        return $this->status === 'success';
+        return $this->status === TransactionStatus::Success;
     }
 
     public function isFailed(): bool
     {
-        return $this->status === 'failed';
+        return $this->status === TransactionStatus::Failed;
     }
 }
