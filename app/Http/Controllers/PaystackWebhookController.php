@@ -89,14 +89,23 @@ class PaystackWebhookController extends Controller
             return response()->json(['message' => 'Amount mismatch'], 400);
         }
 
+        // Atomic update to prevent race condition with callback
+        $updated = PaystackTransaction::where('reference', $reference)
+            ->where('status', TransactionStatus::Pending)
+            ->update([
+                'status' => TransactionStatus::Success,
+                'paystack_response' => json_encode($data),
+            ]);
+
+        if ($updated === 0) {
+            return response()->json(['message' => 'Already processed']);
+        }
+
+        $transaction->refresh();
+
         if ($transaction->type === TransactionType::Contribution) {
             $this->allocateContributionPayment($transaction, $data);
         }
-
-        $transaction->update([
-            'status' => TransactionStatus::Success,
-            'paystack_response' => $data,
-        ]);
 
         return response()->json(['message' => 'Success']);
     }

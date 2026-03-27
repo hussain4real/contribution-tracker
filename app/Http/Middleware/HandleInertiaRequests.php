@@ -92,8 +92,11 @@ class HandleInertiaRequests extends Middleware
     private function subscriptionData(User $user): array
     {
         $family = $user->family;
+        $family->loadCount('members');
+        $family->loadMissing('platformPlan');
+
         $plan = $family->platformPlan;
-        $memberCount = $family->members()->count();
+        $memberCount = $family->members_count;
 
         return [
             'plan_name' => $plan?->name,

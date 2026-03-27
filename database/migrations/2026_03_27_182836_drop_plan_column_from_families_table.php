@@ -16,7 +16,10 @@ return new class extends Migration
     public function up(): void
     {
         $nonDefaultCount = DB::table('families')
-            ->where('plan', '!=', 'free')
+            ->where(function ($q) {
+                $q->where('plan', '!=', 'free')
+                    ->orWhereNull('plan');
+            })
             ->count();
 
         if ($nonDefaultCount > 0) {
@@ -37,7 +40,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('families', function (Blueprint $table) {
-            $table->string('plan')->default('free')->after('due_day');
+            $table->string('plan')->default('free');
         });
     }
 };

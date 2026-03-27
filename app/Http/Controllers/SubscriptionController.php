@@ -133,6 +133,7 @@ class SubscriptionController extends Controller
                     $family->update([
                         'platform_plan_id' => $planId,
                         'subscription_status' => 'active',
+                        'current_period_end' => now()->addMonth(),
                     ]);
                 }
 

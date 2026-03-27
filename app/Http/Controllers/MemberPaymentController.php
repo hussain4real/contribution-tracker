@@ -186,27 +186,37 @@ class MemberPaymentController extends Controller
             $response = $this->paystack->verifyTransaction($reference);
             $status = $response['data']['status'] ?? 'failed';
 
-            if ($status === 'success' && $transaction->isPending()) {
-                $transaction->update([
-                    'status' => TransactionStatus::Success,
-                    'paystack_response' => $response['data'],
-                ]);
+            if ($status === 'success') {
+                // Atomic update to prevent race condition with webhook
+                $updated = PaystackTransaction::where('reference', $reference)
+                    ->where('status', TransactionStatus::Pending)
+                    ->update([
+                        'status' => TransactionStatus::Success,
+                        'paystack_response' => json_encode($response['data']),
+                    ]);
 
-                // Allocate payment to contributions (webhook may not reach local dev)
-                $member = auth()->user();
-                $metadata = $transaction->metadata ?? [];
-                $targetYear = $metadata['target_year'] ?? null;
-                $targetMonth = $metadata['target_month'] ?? null;
+                if ($updated > 0) {
+                    $transaction->refresh();
 
-                $this->allocationService->allocate(
-                    member: $member,
-                    amount: $transaction->amount,
-                    paidAt: $response['data']['paid_at'] ?? now()->toDateString(),
-                    recordedBy: $member,
-                    notes: "Online payment via Paystack (Ref: {$transaction->reference})",
-                    targetYear: $targetYear,
-                    targetMonth: $targetMonth,
-                );
+                    // Use the transaction's user_id (not session user) to handle shared devices
+                    $member = User::find($transaction->user_id);
+
+                    if ($member) {
+                        $metadata = $transaction->metadata ?? [];
+                        $targetYear = $metadata['target_year'] ?? null;
+                        $targetMonth = $metadata['target_month'] ?? null;
+
+                        $this->allocationService->allocate(
+                            member: $member,
+                            amount: $transaction->amount,
+                            paidAt: $response['data']['paid_at'] ?? now()->toDateString(),
+                            recordedBy: $member,
+                            notes: "Online payment via Paystack (Ref: {$transaction->reference})",
+                            targetYear: $targetYear,
+                            targetMonth: $targetMonth,
+                        );
+                    }
+                }
 
                 return redirect()->route('pay.index')->with('success', 'Payment successful! Your contributions have been updated.');
             }
