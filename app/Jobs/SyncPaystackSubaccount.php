@@ -41,6 +41,10 @@ class SyncPaystackSubaccount implements ShouldQueue
                 'percentage_charge' => 0,
             ]);
 
+            if (empty($response['data']['subaccount_code'])) {
+                throw new \RuntimeException('Paystack createSubaccount returned no subaccount_code: '.json_encode($response));
+            }
+
             $family->update([
                 'paystack_subaccount_code' => $response['data']['subaccount_code'],
             ]);

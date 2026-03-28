@@ -13,6 +13,11 @@ enum TransactionStatus: string
 
     public function label(): string
     {
-        return $this->name;
+        return match ($this) {
+            self::Pending => 'Pending',
+            self::Success => 'Successful',
+            self::Failed => 'Failed',
+            self::Abandoned => 'Abandoned',
+        };
     }
 }

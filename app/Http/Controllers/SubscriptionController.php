@@ -139,10 +139,12 @@ class SubscriptionController extends Controller
                 $planId = $transaction->metadata['plan_id'] ?? null;
 
                 if ($family && $planId) {
+                    $paidAt = $verification['data']['paid_at'] ?? null;
+
                     $family->update([
                         'platform_plan_id' => $planId,
                         'subscription_status' => 'active',
-                        'current_period_end' => now()->addMonth(),
+                        'current_period_end' => $paidAt ? now()->parse($paidAt)->addMonth() : null,
                     ]);
                 }
 
