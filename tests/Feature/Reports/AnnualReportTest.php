@@ -4,11 +4,8 @@ use App\Enums\MemberCategory;
 use App\Models\Contribution;
 use App\Models\Payment;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
-
-uses(RefreshDatabase::class);
 
 describe('Annual Report', function () {
     it('displays annual report page for financial secretary', function () {

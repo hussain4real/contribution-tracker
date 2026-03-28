@@ -6,9 +6,6 @@ use App\Models\Family;
 use App\Models\FundAdjustment;
 use App\Models\Payment;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-
-uses(RefreshDatabase::class);
 
 beforeEach(function () {
     $this->family = Family::factory()->create();

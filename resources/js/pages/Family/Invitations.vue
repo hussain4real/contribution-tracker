@@ -18,9 +18,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Form, Head, router } from '@inertiajs/vue3';
-import { Mail, Plus, Trash2 } from 'lucide-vue-next';
-import { ref } from 'vue';
+import { Form, Head, Link, router, usePage } from '@inertiajs/vue3';
+import { ArrowUpCircle, Mail, Plus, Trash2 } from 'lucide-vue-next';
+import { computed, ref } from 'vue';
 
 interface Invitation {
     id: number;
@@ -53,6 +53,10 @@ const showInviteForm = ref(false);
 const showDeleteDialog = ref(false);
 const deletingInvitation = ref<Invitation | null>(null);
 const deleting = ref(false);
+
+const page = usePage();
+const subscription = computed(() => page.props.subscription);
+const canAddMore = computed(() => subscription.value?.can_add_members ?? true);
 
 function promptDelete(invitation: Invitation): void {
     deletingInvitation.value = invitation;
@@ -101,10 +105,36 @@ function statusBadge(invitation: Invitation): { text: string; class: string } {
                     title="Invitations"
                     :description="`Invite new members to join ${props.family_name}.`"
                 />
-                <Button v-if="!showInviteForm" @click="showInviteForm = true">
+                <Button
+                    v-if="!showInviteForm && canAddMore"
+                    @click="showInviteForm = true"
+                >
                     <Plus class="mr-1 h-4 w-4" />
                     Invite Member
                 </Button>
+            </div>
+
+            <!-- Member limit banner -->
+            <div
+                v-if="!canAddMore"
+                class="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950"
+            >
+                <p class="text-sm text-amber-800 dark:text-amber-200">
+                    {{ subscription?.member_count }}/{{
+                        subscription?.max_members
+                    }}
+                    members — upgrade your plan to invite more.
+                </p>
+                <Link href="/subscription">
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        class="shrink-0 border-amber-300 text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900"
+                    >
+                        <ArrowUpCircle class="mr-1 h-4 w-4" />
+                        Upgrade
+                    </Button>
+                </Link>
             </div>
 
             <!-- Invite Form -->

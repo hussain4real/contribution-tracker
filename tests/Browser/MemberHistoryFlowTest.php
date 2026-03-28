@@ -3,9 +3,6 @@
 use App\Models\Contribution;
 use App\Models\Payment;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-
-uses(RefreshDatabase::class);
 
 /**
  * T078 [US5] Browser test for member contribution history navigation

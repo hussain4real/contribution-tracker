@@ -10,10 +10,14 @@ use App\Http\Controllers\FamilySettingsController;
 use App\Http\Controllers\FundAdjustmentController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\MemberController;
+use App\Http\Controllers\MemberPaymentController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\PaystackWebhookController;
 use App\Http\Controllers\PlatformAdminController;
+use App\Http\Controllers\PlatformPlanController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\SubscriptionController;
 use App\Http\Middleware\EnsurePlatformSuperAdmin;
 use Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests;
 use Illuminate\Support\Facades\Route;
@@ -32,6 +36,12 @@ Route::get('/data-deletion', fn () => Inertia::render('Legal/DataDeletion'))->na
 
 // Public invitation acceptance
 Route::get('invitations/{token}/accept', [InvitationController::class, 'accept'])->name('invitations.accept');
+
+// =========================================================================
+// Paystack Webhooks (no CSRF)
+// =========================================================================
+
+Route::post('webhooks/paystack', [PaystackWebhookController::class, 'handle'])->name('webhooks.paystack');
 
 // =========================================================================
 // Passkey Authentication (Guest)
@@ -66,7 +76,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('changelog', ChangelogController::class)->name('changelog');
 
     // Members (Admin only for management, all can view list)
-    Route::resource('members', MemberController::class);
+    Route::resource('members', MemberController::class)->middleware('subscription');
     Route::post('members/{member}/restore', [MemberController::class, 'restore'])->name('members.restore');
 
     // Contributions
@@ -82,6 +92,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware([HandlePrecognitiveRequests::class]);
     Route::delete('payments/{payment}', [PaymentController::class, 'destroy'])->name('payments.destroy');
 
+    // Member Self-Pay (Paystack)
+    Route::middleware('subscription:online_payments')->group(function () {
+        Route::get('pay', [MemberPaymentController::class, 'show'])->name('pay.index');
+        Route::post('pay/initiate', [MemberPaymentController::class, 'initiate'])->name('pay.initiate');
+        Route::get('pay/callback', [MemberPaymentController::class, 'callback'])->name('pay.callback');
+    });
+
+    // Subscription Management
+    Route::get('subscription', [SubscriptionController::class, 'index'])->name('subscription.index');
+    Route::post('subscription/subscribe', [SubscriptionController::class, 'subscribe'])->name('subscription.subscribe');
+    Route::get('subscription/callback', [SubscriptionController::class, 'callback'])->name('subscription.callback');
+    Route::post('subscription/cancel', [SubscriptionController::class, 'cancel'])->name('subscription.cancel');
+
     // Expenses
     Route::get('expenses', [ExpenseController::class, 'index'])->name('expenses.index');
     Route::get('expenses/create', [ExpenseController::class, 'create'])->name('expenses.create');
@@ -96,7 +119,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('fund-adjustments/{fund_adjustment}', [FundAdjustmentController::class, 'destroy'])->name('fund-adjustments.destroy');
 
     // Reports (Financial Secretary and Admin only)
-    Route::prefix('reports')->name('reports.')->middleware('can:generate-reports')->group(function () {
+    Route::prefix('reports')->name('reports.')->middleware(['can:generate-reports', 'subscription:reports'])->group(function () {
         Route::get('/', [ReportController::class, 'index'])->name('index');
         Route::get('monthly', [ReportController::class, 'monthly'])->name('monthly');
         Route::get('annual', [ReportController::class, 'annual'])->name('annual');
@@ -109,9 +132,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('categories', [FamilySettingsController::class, 'storeCategory'])->name('categories.store');
         Route::put('categories/{category}', [FamilySettingsController::class, 'updateCategory'])->name('categories.update');
         Route::delete('categories/{category}', [FamilySettingsController::class, 'destroyCategory'])->name('categories.destroy');
+        Route::get('banks', [FamilySettingsController::class, 'banks'])->name('banks');
 
         Route::get('invitations', [InvitationController::class, 'index'])->name('invitations');
-        Route::post('invitations', [InvitationController::class, 'store'])->name('invitations.store');
+        Route::post('invitations', [InvitationController::class, 'store'])->name('invitations.store')->middleware('subscription');
         Route::delete('invitations/{invitation}', [InvitationController::class, 'destroy'])->name('invitations.destroy');
     });
 });
@@ -134,6 +158,12 @@ Route::middleware(['auth', 'verified', EnsurePlatformSuperAdmin::class])
         Route::get('users/export', [PlatformAdminController::class, 'exportUsers'])->name('users.export');
         Route::post('users/{user}/impersonate', [PlatformAdminController::class, 'impersonate'])->name('users.impersonate');
         Route::post('users/{user}/send-reset', [PlatformAdminController::class, 'sendPasswordReset'])->name('users.send-reset');
+
+        Route::get('plans', [PlatformPlanController::class, 'index'])->name('plans');
+        Route::post('plans', [PlatformPlanController::class, 'store'])->name('plans.store');
+        Route::put('plans/{plan}', [PlatformPlanController::class, 'update'])->name('plans.update');
+        Route::post('plans/{plan}/toggle-active', [PlatformPlanController::class, 'toggleActive'])->name('plans.toggle-active');
+        Route::delete('plans/{plan}', [PlatformPlanController::class, 'destroy'])->name('plans.destroy');
     });
 
 // Stop impersonating route — accessible by the impersonated session (not behind super admin middleware)

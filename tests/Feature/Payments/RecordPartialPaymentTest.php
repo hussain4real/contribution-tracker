@@ -5,10 +5,7 @@ use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
-
-uses(RefreshDatabase::class);
 
 describe('Record Partial Payment', function () {
     beforeEach(function () {

@@ -4,11 +4,11 @@
         "gemini"
     ],
     "guidelines": true,
-    "herd_mcp": false,
     "mcp": true,
     "nightwatch_mcp": true,
     "sail": false,
     "skills": [
+        "laravel-best-practices",
         "wayfinder-development",
         "pest-testing",
         "inertia-vue-development",

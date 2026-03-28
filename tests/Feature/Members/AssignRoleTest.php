@@ -2,9 +2,6 @@
 
 use App\Enums\Role;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-
-uses(RefreshDatabase::class);
 
 /**
  * T069 [US4] Feature test for assigning Financial Secretary role

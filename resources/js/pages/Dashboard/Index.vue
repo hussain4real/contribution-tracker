@@ -40,6 +40,7 @@ interface RecentPayment {
     amount: number;
     paid_at: string;
     member_name: string;
+    category: string;
     recorded_by: string | null;
     month: number;
     year: number;

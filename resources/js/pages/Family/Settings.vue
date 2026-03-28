@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { edit } from '@/actions/App/Http/Controllers/FamilySettingsController';
+import {
+    banks as banksRoute,
+    destroyCategory,
+    edit,
+} from '@/actions/App/Http/Controllers/FamilySettingsController';
 import Heading from '@/components/Heading.vue';
 import HeadingSmall from '@/components/HeadingSmall.vue';
 import InputError from '@/components/InputError.vue';
@@ -9,8 +13,23 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Form, Head, router } from '@inertiajs/vue3';
-import { Pencil, Plus, Trash2 } from 'lucide-vue-next';
-import { ref } from 'vue';
+import { Check, ChevronsUpDown, Pencil, Plus, Trash2 } from 'lucide-vue-next';
+import {
+    ComboboxAnchor,
+    ComboboxContent,
+    ComboboxEmpty,
+    ComboboxInput,
+    ComboboxItem,
+    ComboboxItemIndicator,
+    ComboboxRoot,
+    ComboboxViewport,
+} from 'reka-ui';
+import { computed, onMounted, ref } from 'vue';
+
+interface Bank {
+    name: string;
+    code: string;
+}
 
 interface Category {
     id: number;
@@ -29,6 +48,7 @@ interface Props {
         bank_name: string | null;
         account_name: string | null;
         account_number: string | null;
+        bank_code: string | null;
     };
     categories?: Category[];
 }
@@ -42,9 +62,47 @@ const props = withDefaults(defineProps<Props>(), {
         bank_name: null,
         account_name: null,
         account_number: null,
+        bank_code: null,
     }),
     categories: () => [],
 });
+
+const banksList = ref<Bank[]>([]);
+const banksLoading = ref(false);
+const selectedBank = ref<string>(props.family.bank_name ?? '');
+const selectedBankCode = ref<string>(props.family.bank_code ?? '');
+const bankSearchTerm = ref('');
+
+const filteredBanks = computed(() => {
+    if (!bankSearchTerm.value) {
+        return banksList.value;
+    }
+    const term = bankSearchTerm.value.toLowerCase();
+    return banksList.value.filter((bank) =>
+        bank.name.toLowerCase().includes(term),
+    );
+});
+
+async function fetchBanks(): Promise<void> {
+    banksLoading.value = true;
+    try {
+        const response = await fetch(banksRoute().url);
+        banksList.value = await response.json();
+    } catch {
+        banksList.value = [];
+    } finally {
+        banksLoading.value = false;
+    }
+}
+
+function onBankSelect(bankName: string): void {
+    selectedBank.value = bankName;
+    const bank = banksList.value.find((b) => b.name === bankName);
+    selectedBankCode.value = bank?.code ?? '';
+    bankSearchTerm.value = '';
+}
+
+onMounted(fetchBanks);
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Family Settings', href: edit().url },
@@ -59,7 +117,7 @@ function formatCurrency(amount: number): string {
 
 function deleteCategory(id: number): void {
     if (confirm('Are you sure you want to delete this category?')) {
-        router.delete(route('family.categories.destroy', id));
+        router.delete(destroyCategory(id).url);
     }
 }
 
@@ -145,13 +203,67 @@ function cancelEdit(): void {
                         </p>
                         <div class="grid gap-4 sm:grid-cols-3">
                             <div class="grid gap-2">
-                                <Label for="bank_name">Bank Name</Label>
-                                <Input
-                                    id="bank_name"
+                                <Label>Bank Name</Label>
+                                <ComboboxRoot
+                                    v-model="selectedBank"
+                                    v-model:search-term="bankSearchTerm"
+                                    :display-value="(val: string) => val ?? ''"
+                                    class="relative"
+                                    @update:model-value="onBankSelect"
+                                >
+                                    <ComboboxAnchor
+                                        class="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
+                                    >
+                                        <ComboboxInput
+                                            class="w-full bg-transparent outline-none placeholder:text-muted-foreground"
+                                            placeholder="Search banks..."
+                                        />
+                                        <ChevronsUpDown
+                                            class="h-4 w-4 shrink-0 opacity-50"
+                                        />
+                                    </ComboboxAnchor>
+
+                                    <ComboboxContent
+                                        class="absolute z-50 mt-1 max-h-60 w-full overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md"
+                                    >
+                                        <ComboboxViewport
+                                            class="max-h-60 overflow-y-auto p-1"
+                                        >
+                                            <ComboboxEmpty
+                                                class="px-2 py-4 text-center text-sm text-muted-foreground"
+                                            >
+                                                <template v-if="banksLoading"
+                                                    >Loading banks...</template
+                                                >
+                                                <template v-else
+                                                    >No banks found.</template
+                                                >
+                                            </ComboboxEmpty>
+                                            <ComboboxItem
+                                                v-for="bank in filteredBanks"
+                                                :key="bank.code"
+                                                :value="bank.name"
+                                                class="relative flex w-full cursor-default items-center rounded-sm py-1.5 pr-2 pl-8 text-sm outline-none select-none data-disabled:pointer-events-none data-disabled:opacity-50 data-highlighted:bg-accent data-highlighted:text-accent-foreground"
+                                            >
+                                                <ComboboxItemIndicator
+                                                    class="absolute left-2 flex h-3.5 w-3.5 items-center justify-center"
+                                                >
+                                                    <Check class="h-4 w-4" />
+                                                </ComboboxItemIndicator>
+                                                {{ bank.name }}
+                                            </ComboboxItem>
+                                        </ComboboxViewport>
+                                    </ComboboxContent>
+                                </ComboboxRoot>
+                                <input
+                                    type="hidden"
                                     name="bank_name"
-                                    type="text"
-                                    :default-value="family.bank_name ?? ''"
-                                    placeholder="e.g. GTBank"
+                                    :value="selectedBank"
+                                />
+                                <input
+                                    type="hidden"
+                                    name="bank_code"
+                                    :value="selectedBankCode"
                                 />
                                 <InputError :message="errors.bank_name" />
                             </div>

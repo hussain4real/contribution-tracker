@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\User;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -67,6 +68,7 @@ class HandleInertiaRequests extends Middleware
                 'error' => fn () => $request->hasSession() ? $request->session()->get('error') : null,
                 'warning' => fn () => $request->hasSession() ? $request->session()->get('warning') : null,
             ],
+            'subscription' => $user?->family ? fn () => $this->subscriptionData($user) : null,
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'impersonating' => $request->hasSession() && $request->session()->has('impersonating_from'),
             'notifications' => $user ? [
@@ -79,6 +81,29 @@ class HandleInertiaRequests extends Middleware
                     'created_at' => $n->created_at->diffForHumans(),
                 ]),
             ] : null,
+        ];
+    }
+
+    /**
+     * Get the subscription/plan data for a user's family.
+     *
+     * @return array<string, mixed>
+     */
+    private function subscriptionData(User $user): array
+    {
+        $family = $user->family;
+        $family->loadCount('members');
+        $family->loadMissing('platformPlan');
+
+        $plan = $family->platformPlan;
+        $memberCount = $family->members_count;
+
+        return [
+            'plan_name' => $plan?->name,
+            'member_count' => $memberCount,
+            'max_members' => $plan && ! $plan->hasUnlimitedMembers() ? $plan->max_members : null,
+            'can_add_members' => ! $plan || $plan->hasUnlimitedMembers() || $memberCount < $plan->max_members,
+            'features' => $plan?->features ?? [],
         ];
     }
 }

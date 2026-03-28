@@ -26,11 +26,18 @@ class Family extends Model
         'bank_name',
         'account_name',
         'account_number',
+        'bank_code',
         'created_by',
-        'plan',
         'trial_ends_at',
         'max_members',
         'suspended_at',
+        'paystack_subaccount_code',
+        'paystack_customer_code',
+        'paystack_subscription_code',
+        'paystack_subscription_email_token',
+        'subscription_status',
+        'current_period_end',
+        'platform_plan_id',
     ];
 
     /**
@@ -45,6 +52,7 @@ class Family extends Model
             'trial_ends_at' => 'datetime',
             'max_members' => 'integer',
             'suspended_at' => 'datetime',
+            'current_period_end' => 'datetime',
         ];
     }
 
@@ -60,6 +68,30 @@ class Family extends Model
         return $this->suspended_at !== null;
     }
 
+    /**
+     * Check if the family has an active Paystack subaccount.
+     */
+    public function hasPaystackSubaccount(): bool
+    {
+        return $this->paystack_subaccount_code !== null;
+    }
+
+    /**
+     * Check if the family has an active subscription.
+     */
+    public function hasActiveSubscription(): bool
+    {
+        return $this->subscription_status === 'active';
+    }
+
+    /**
+     * Check if the family has bank details configured.
+     */
+    public function hasBankDetails(): bool
+    {
+        return filled($this->bank_code) && filled($this->account_number);
+    }
+
     // =========================================================================
     // Relationships
     // =========================================================================
@@ -70,6 +102,14 @@ class Family extends Model
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * The platform plan this family is subscribed to.
+     */
+    public function platformPlan(): BelongsTo
+    {
+        return $this->belongsTo(PlatformPlan::class);
     }
 
     /**

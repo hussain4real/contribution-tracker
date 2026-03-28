@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureFamilyIsNotSuspended;
+use App\Http\Middleware\EnsureFamilySubscription;
 use App\Http\Middleware\EnsureUserIsNotArchived;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -20,6 +21,10 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
+        $middleware->validateCsrfTokens(except: [
+            'webhooks/paystack',
+        ]);
+
         $middleware->web(append: [
             HandleAppearance::class,
             HandleInertiaRequests::class,
@@ -31,6 +36,10 @@ return Application::configure(basePath: dirname(__DIR__))
             EnsureUserIsNotArchived::class,
             EnsureFamilyIsNotSuspended::class,
             SetFamilyContext::class,
+        ]);
+
+        $middleware->alias([
+            'subscription' => EnsureFamilySubscription::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

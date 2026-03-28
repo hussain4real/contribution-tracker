@@ -9,10 +9,12 @@ use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\FamilyCategory;
 use App\Models\Payment;
+use App\Models\PlatformPlan;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 
 class FamilyMemberSeeder extends Seeder
 {
@@ -21,12 +23,16 @@ class FamilyMemberSeeder extends Seeder
      */
     public function run(): void
     {
-        // Create a family
+        $familyName = config('app.family_name') ?: 'Hussain Family';
+        $freePlan = PlatformPlan::query()->where('slug', 'free')->first();
+
+        // Create a family with the free plan
         $family = Family::create([
-            'name' => 'Demo Family',
-            'slug' => 'demo-family',
+            'name' => $familyName,
+            'slug' => Str::slug($familyName),
             'currency' => '₦',
             'due_day' => 28,
+            'platform_plan_id' => $freePlan?->id,
         ]);
 
         // Create family categories
@@ -54,12 +60,17 @@ class FamilyMemberSeeder extends Seeder
             'sort_order' => 2,
         ]);
 
-        // Create Admin
+        // Create Admin (Super Admin)
+        $adminEmail = config('app.admin_email') ?: 'admin@family.test';
+        $adminPassword = config('app.admin_password') ?: 'password';
+        $adminName = config('app.admin_name') ?: 'Super Admin';
+
         $admin = User::factory()->create([
-            'name' => 'Admin',
-            'email' => 'admin@family.test',
-            'password' => Hash::make('password'),
+            'name' => $adminName,
+            'email' => $adminEmail,
+            'password' => Hash::make($adminPassword),
             'role' => Role::Admin,
+            'is_super_admin' => true,
             'category' => null,
             'family_id' => $family->id,
             'family_category_id' => null,

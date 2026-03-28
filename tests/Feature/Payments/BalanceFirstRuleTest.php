@@ -4,9 +4,6 @@ use App\Enums\PaymentStatus;
 use App\Models\Contribution;
 use App\Models\Payment;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-
-uses(RefreshDatabase::class);
 
 /**
  * FR-020: Balance-First Rule
