@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import {
+    subscribe as subscribeAction,
+    callback as subscriptionCallback,
+} from '@/actions/App/Http/Controllers/SubscriptionController';
 import HeadingSmall from '@/components/HeadingSmall.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,7 +18,6 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/vue3';
-import { subscribe as subscribeAction, callback as subscriptionCallback } from '@/actions/App/Http/Controllers/SubscriptionController';
 import { computed, ref } from 'vue';
 
 interface Plan {
@@ -139,7 +142,9 @@ const subscribeToPlan = async (planId: number) => {
         popup.resumeTransaction(data.access_code, {
             onSuccess: () => {
                 router.visit(
-                    subscriptionCallback.url({ query: { reference: data.reference } }),
+                    subscriptionCallback.url({
+                        query: { reference: data.reference },
+                    }),
                 );
             },
             onCancel: () => {
@@ -152,7 +157,9 @@ const subscribeToPlan = async (planId: number) => {
                     processing.value = false;
                     processingPlanId.value = null;
                     router.visit(
-                        subscriptionCallback.url({ query: { reference: data.reference } }),
+                        subscriptionCallback.url({
+                            query: { reference: data.reference },
+                        }),
                     );
                 }
             },
