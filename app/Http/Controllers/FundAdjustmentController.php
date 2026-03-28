@@ -38,7 +38,7 @@ class FundAdjustmentController extends Controller
 
         return Inertia::render('FundAdjustments/Index', [
             'adjustments' => $adjustments,
-            'can_create' => request()->user()->isAdmin(),
+            'can_create' => request()->user()->canRecordPayments(),
         ]);
     }
 

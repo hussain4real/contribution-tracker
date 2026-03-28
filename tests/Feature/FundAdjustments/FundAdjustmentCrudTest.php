@@ -38,10 +38,10 @@ it('shows can_create as true for super admin', function () {
         ->assertInertia(fn ($page) => $page->where('can_create', true));
 });
 
-it('shows can_create as false for financial secretary', function () {
+it('shows can_create as true for financial secretary', function () {
     $this->actingAs($this->financialSecretary)
         ->get(route('fund-adjustments.index'))
-        ->assertInertia(fn ($page) => $page->where('can_create', false));
+        ->assertInertia(fn ($page) => $page->where('can_create', true));
 });
 
 it('shows can_create as false for regular member', function () {
@@ -71,16 +71,18 @@ it('allows super admin to store a fund adjustment', function () {
     expect($adjustment->recorded_by)->toBe($this->admin->id);
 });
 
-it('denies financial secretary from storing a fund adjustment', function () {
+it('allows financial secretary to store a fund adjustment', function () {
     $this->actingAs($this->financialSecretary)
         ->post(route('fund-adjustments.store'), [
             'amount' => 200000,
             'description' => 'Opening balance',
             'recorded_at' => '2026-03-15',
         ])
-        ->assertForbidden();
+        ->assertRedirect(route('fund-adjustments.index'));
 
-    expect(FundAdjustment::count())->toBe(0);
+    $adjustment = FundAdjustment::first();
+    expect($adjustment)->not->toBeNull();
+    expect($adjustment->recorded_by)->toBe($this->financialSecretary->id);
 });
 
 it('denies regular member from storing a fund adjustment', function () {
@@ -133,14 +135,14 @@ it('allows super admin to delete a fund adjustment', function () {
     expect(FundAdjustment::count())->toBe(0);
 });
 
-it('denies financial secretary from deleting a fund adjustment', function () {
-    $adjustment = FundAdjustment::factory()->recordedBy($this->admin)->create();
+it('allows financial secretary to delete a fund adjustment', function () {
+    $adjustment = FundAdjustment::factory()->recordedBy($this->financialSecretary)->create();
 
     $this->actingAs($this->financialSecretary)
         ->delete(route('fund-adjustments.destroy', $adjustment))
-        ->assertForbidden();
+        ->assertRedirect(route('fund-adjustments.index'));
 
-    expect(FundAdjustment::count())->toBe(1);
+    expect(FundAdjustment::count())->toBe(0);
 });
 
 it('denies regular member from deleting a fund adjustment', function () {

@@ -19,26 +19,26 @@ class FundAdjustmentPolicy
 
     public function create(User $user): bool
     {
-        return $user->isAdmin();
+        return $user->canRecordPayments();
     }
 
     public function update(User $user, FundAdjustment $fundAdjustment): bool
     {
-        return $user->isAdmin() && $user->family_id === $fundAdjustment->family_id;
+        return $user->canRecordPayments() && $user->family_id === $fundAdjustment->family_id;
     }
 
     public function delete(User $user, FundAdjustment $fundAdjustment): bool
     {
-        return $user->isAdmin() && $user->family_id === $fundAdjustment->family_id;
+        return $user->canRecordPayments() && $user->family_id === $fundAdjustment->family_id;
     }
 
     public function restore(User $user, FundAdjustment $fundAdjustment): bool
     {
-        return $user->isAdmin() && $user->family_id === $fundAdjustment->family_id;
+        return $user->canRecordPayments() && $user->family_id === $fundAdjustment->family_id;
     }
 
     public function forceDelete(User $user, FundAdjustment $fundAdjustment): bool
     {
-        return $user->isAdmin() && $user->family_id === $fundAdjustment->family_id;
+        return $user->canRecordPayments() && $user->family_id === $fundAdjustment->family_id;
     }
 }
