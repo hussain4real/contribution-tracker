@@ -14,6 +14,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/vue3';
+import { subscribe as subscribeAction, callback as subscriptionCallback } from '@/actions/App/Http/Controllers/SubscriptionController';
 import { computed, ref } from 'vue';
 
 interface Plan {
@@ -108,7 +109,7 @@ const subscribeToPlan = async (planId: number) => {
     errorMessage.value = '';
 
     try {
-        const response = await fetch('/subscription/subscribe', {
+        const response = await fetch(subscribeAction.url(), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -138,7 +139,7 @@ const subscribeToPlan = async (planId: number) => {
         popup.resumeTransaction(data.access_code, {
             onSuccess: () => {
                 router.visit(
-                    '/subscription/callback?reference=' + data.reference,
+                    subscriptionCallback.url({ query: { reference: data.reference } }),
                 );
             },
             onCancel: () => {
@@ -151,7 +152,7 @@ const subscribeToPlan = async (planId: number) => {
                     processing.value = false;
                     processingPlanId.value = null;
                     router.visit(
-                        '/subscription/callback?reference=' + data.reference,
+                        subscriptionCallback.url({ query: { reference: data.reference } }),
                     );
                 }
             },

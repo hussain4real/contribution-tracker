@@ -28,6 +28,7 @@ beforeEach(function () {
 it('shows the pay page for authenticated member', function () {
     $family = Family::factory()->create([
         'bank_name' => 'Kuda Bank',
+        'bank_code' => '090267',
         'account_number' => '1234567890',
     ]);
     $member = User::factory()->create(['family_id' => $family->id]);
@@ -58,6 +59,7 @@ it('initiates a payment for selected contributions', function () {
     $family = Family::factory()->create([
         'paystack_subaccount_code' => 'ACCT_test',
         'bank_name' => 'Kuda Bank',
+        'bank_code' => '090267',
         'account_number' => '1234567890',
     ]);
     $member = User::factory()->create(['family_id' => $family->id]);
@@ -101,6 +103,7 @@ it('fails to initiate without bank details', function () {
 it('validates contribution_ids are required', function () {
     $family = Family::factory()->create([
         'bank_name' => 'Kuda Bank',
+        'bank_code' => '090267',
         'account_number' => '1234567890',
     ]);
     $member = User::factory()->create(['family_id' => $family->id]);

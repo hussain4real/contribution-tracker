@@ -89,7 +89,7 @@ class Family extends Model
      */
     public function hasBankDetails(): bool
     {
-        return ($this->bank_name || $this->bank_code) && $this->account_number;
+        return filled($this->bank_code) && filled($this->account_number);
     }
 
     // =========================================================================

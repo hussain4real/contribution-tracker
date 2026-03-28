@@ -120,10 +120,19 @@ class SubscriptionController extends Controller
             $verification = $this->paystack->verifyTransaction($reference);
 
             if ($verification['data']['status'] === 'success') {
-                $transaction->update([
-                    'status' => TransactionStatus::Success,
-                    'paystack_response' => $verification['data'],
-                ]);
+                // Atomic conditional update to prevent race condition with webhook
+                $updated = PaystackTransaction::where('reference', $reference)
+                    ->where('status', TransactionStatus::Pending)
+                    ->update([
+                        'status' => TransactionStatus::Success,
+                        'paystack_response' => json_encode($verification['data']),
+                    ]);
+
+                if ($updated === 0) {
+                    // Already processed by webhook — redirect gracefully
+                    return redirect()->route('subscription.index')
+                        ->with('success', 'Subscription is already active.');
+                }
 
                 // Update family subscription
                 $family = Family::find($transaction->family_id);

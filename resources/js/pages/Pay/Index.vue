@@ -7,6 +7,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/vue3';
+import { initiate, callback as payCallback } from '@/actions/App/Http/Controllers/MemberPaymentController';
 import { computed, ref } from 'vue';
 
 interface PendingContribution {
@@ -91,7 +92,7 @@ const payWithPaystack = async () => {
     successMessage.value = '';
 
     try {
-        const response = await fetch('/pay/initiate', {
+        const response = await fetch(initiate.url(), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -122,7 +123,7 @@ const payWithPaystack = async () => {
         const popup = new PaystackPop();
         popup.resumeTransaction(data.access_code, {
             onSuccess: () => {
-                router.visit(`/pay/callback?reference=${data.reference}`);
+                router.visit(payCallback.url({ query: { reference: data.reference } }));
             },
             onCancel: () => {
                 processing.value = false;
@@ -132,7 +133,7 @@ const payWithPaystack = async () => {
                 if (processing.value) {
                     processing.value = false;
                     // If still processing when popup closes, check via callback
-                    router.visit(`/pay/callback?reference=${data.reference}`);
+                    router.visit(payCallback.url({ query: { reference: data.reference } }));
                 }
             },
         });
