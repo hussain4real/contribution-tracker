@@ -113,10 +113,12 @@ The application is developed using Laravel (PHP) for the backend, Vue.js with In
   - [1.1 Background of the Study](chapter-1.md#11-background-of-the-study)
   - [1.2 Statement of the Problem](chapter-1.md#12-statement-of-the-problem)
   - [1.3 Aim and Objectives of the Study](chapter-1.md#13-aim-and-objectives-of-the-study)
-  - [1.4 Significance of the Study](chapter-1.md#14-significance-of-the-study)
-  - [1.5 Scope of the Study](chapter-1.md#15-scope-of-the-study)
-  - [1.6 Limitations of the Study](chapter-1.md#16-limitations-of-the-study)
-  - [1.7 Definition of Terms](chapter-1.md#17-definition-of-terms)
+  - [1.4 Scope of the Study](chapter-1.md#14-scope-of-the-study)
+  - [1.5 Significance of the Study](chapter-1.md#15-significance-of-the-study)
+  - [1.6 Motivation for the Study](chapter-1.md#16-motivation-for-the-study)
+  - [1.7 Limitations of the Study](chapter-1.md#17-limitations-of-the-study)
+  - [1.8 Definition of Terms](chapter-1.md#18-definition-of-terms)
+  - [1.9 Organization of the Report](chapter-1.md#19-organization-of-the-report)
 - Chapter Two: Literature Review
   - 2.1 Historical Perspectives of Family Fund Management Systems
   - 2.2 Theoretical Framework

@@ -64,19 +64,7 @@ The specific objectives of this study are to:
 | 4 | Predictive analytics for payment behaviour | Implement | ML-based default likelihood and trend forecasting |
 | 5 | Intelligent reporting and security | Deploy | LLM narrative reports, WebAuthn, and 2FA |
 
-### 1.4 Significance of the Study
-
-This study holds significance across multiple dimensions encompassing practical utility, academic contribution, industry relevance, and research advancement.
-
-**Significance to Families and Cooperative Groups.** At its most fundamental level, this project addresses a tangible, everyday problem faced by millions of Nigerian families. By providing a dedicated platform for managing family contributions, the system replaces error-prone manual methods with automated, auditable, and transparent financial tracking. The role-based access control ensures that responsibilities are clearly delineated—administrators manage family settings and membership, financial secretaries record payments and expenses, and members view their personal contribution history and make online payments. This structured governance reduces disputes, enhances accountability, and strengthens the trust that is essential for the continued functioning of family financial cooperation (Nnama-Okechukwu & Okoye, 2019). While the system is designed for the family fund use case, its multi-tenant architecture makes it readily extensible to other informal cooperative groups such as workplace savings clubs, religious organisation funds, and community development associations.
-
-**Academic and Research Contribution.** From an academic perspective, this project contributes to the body of knowledge on the application of artificial intelligence to informal financial management—an area that has received limited scholarly attention despite the economic significance of informal finance in developing economies (Aryeetey, 2008). The integration of predictive analytics to forecast payment behaviour within a non-commercial, family-oriented context represents a novel application of machine learning that differs substantively from traditional credit scoring models which operate on formal lending data (Lessmann et al., 2015). Similarly, the use of Large Language Models for generating narrative financial reports in a low-stakes, non-regulatory context provides an empirical case study for the application of natural language generation in financial communication (Brown et al., 2020). The project also serves as a practical demonstration of multi-tenant SaaS architecture principles as taught in software engineering curricula, providing a replicable reference implementation for future students and researchers.
-
-**Industry and Technological Relevance.** The multi-tenant architecture implemented in this project—employing application-level tenant isolation through middleware-enforced family context binding, policy-based authorisation, and query-scoped data access—demonstrates a production-grade approach to building SaaS platforms on the Laravel framework. The integration of the Paystack payment gateway, WebAuthn passwordless authentication, and two-factor authentication reflects current industry best practices in fintech application development within the Nigerian and broader African technology ecosystem (Paystack, 2024). The project thus serves as a reference architecture for developers building similar multi-tenant financial applications in the Laravel and Vue.js ecosystem.
-
-**Social Impact.** By lowering the barrier to effective fund management, the system has the potential to strengthen the financial resilience of families, particularly those with members spread across different geographical locations. The automated reminder system, predictive default detection, and transparent reporting collectively address the social friction points that cause many informal family funds to collapse, thereby preserving a vital mechanism of mutual financial support.
-
-### 1.5 Scope of the Study
+### 1.4 Scope of the Study
 
 This section defines the boundaries of the system in terms of functionality, technology, and exclusions.
 
@@ -138,7 +126,31 @@ The following are explicitly outside the scope of this study:
 - Multi-language or localisation support beyond English.
 - Integration with banking APIs beyond Paystack (e.g., direct bank transfer APIs, USSD payment channels).
 
-### 1.6 Limitations of the Study
+### 1.5 Significance of the Study
+
+This study holds significance across multiple dimensions encompassing practical utility, academic contribution, industry relevance, and research advancement.
+
+**Significance to Families and Cooperative Groups.** At its most fundamental level, this project addresses a tangible, everyday problem faced by millions of Nigerian families. By providing a dedicated platform for managing family contributions, the system replaces error-prone manual methods with automated, auditable, and transparent financial tracking. The role-based access control ensures that responsibilities are clearly delineated—administrators manage family settings and membership, financial secretaries record payments and expenses, and members view their personal contribution history and make online payments. This structured governance reduces disputes, enhances accountability, and strengthens the trust that is essential for the continued functioning of family financial cooperation (Nnama-Okechukwu & Okoye, 2019). While the system is designed for the family fund use case, its multi-tenant architecture makes it readily extensible to other informal cooperative groups such as workplace savings clubs, religious organisation funds, and community development associations.
+
+**Academic and Research Contribution.** From an academic perspective, this project contributes to the body of knowledge on the application of artificial intelligence to informal financial management—an area that has received limited scholarly attention despite the economic significance of informal finance in developing economies (Aryeetey, 2008). The integration of predictive analytics to forecast payment behaviour within a non-commercial, family-oriented context represents a novel application of machine learning that differs substantively from traditional credit scoring models which operate on formal lending data (Lessmann et al., 2015). Similarly, the use of Large Language Models for generating narrative financial reports in a low-stakes, non-regulatory context provides an empirical case study for the application of natural language generation in financial communication (Brown et al., 2020). The project also serves as a practical demonstration of multi-tenant SaaS architecture principles as taught in software engineering curricula, providing a replicable reference implementation for future students and researchers.
+
+**Industry and Technological Relevance.** The multi-tenant architecture implemented in this project—employing application-level tenant isolation through middleware-enforced family context binding, policy-based authorisation, and query-scoped data access—demonstrates a production-grade approach to building SaaS platforms on the Laravel framework. The integration of the Paystack payment gateway, WebAuthn passwordless authentication, and two-factor authentication reflects current industry best practices in fintech application development within the Nigerian and broader African technology ecosystem (Paystack, 2024). The project thus serves as a reference architecture for developers building similar multi-tenant financial applications in the Laravel and Vue.js ecosystem.
+
+**Social Impact.** By lowering the barrier to effective fund management, the system has the potential to strengthen the financial resilience of families, particularly those with members spread across different geographical locations. The automated reminder system, predictive default detection, and transparent reporting collectively address the social friction points that cause many informal family funds to collapse, thereby preserving a vital mechanism of mutual financial support.
+
+### 1.6 Motivation for the Study
+
+The motivation for this project is rooted in a personal and lived experience. The researcher belongs to a Nigerian family that practises monthly financial contributions into a shared family purse. As with many such families, the management of this fund has historically relied on manual methods—handwritten records, informal WhatsApp group announcements, and verbal confirmations of payments. Over time, this approach has led to recurring challenges: disputes over who has paid and who has not, confusion about partial payments and outstanding balances, difficulty producing clear financial summaries for family meetings, and the absence of any mechanism to hold the fund manager accountable.
+
+These challenges are not unique to the researcher's family. Conversations with peers, classmates, and community members have revealed that similar frustrations are widespread across Nigerian families and extended family networks that operate collective contribution funds. The problem is both common and consequential—when trust erodes due to poor record-keeping, families may abandon their contribution arrangements entirely, losing a valuable mechanism of collective financial support.
+
+The researcher's background in software engineering presented an opportunity to address this problem through technology. Rather than proposing a purely theoretical project, the decision was made to design and build a functional system that solves a real problem the researcher and their family actively face. This personal stake ensures that the project is grounded in genuine user needs and informed by first-hand understanding of the domain.
+
+Furthermore, the project presented an opportunity to explore the intersection of two rapidly advancing fields: **multi-tenant SaaS architecture** and **artificial intelligence in financial technology**. The integration of predictive analytics and Large Language Model-based report generation into a family fund management context represents an intellectually stimulating challenge that extends the project beyond a standard CRUD application into the domain of intelligent systems. The prospect of building a system that not only tracks contributions but also anticipates payment behaviour and communicates financial insights in natural language served as a strong intellectual motivation.
+
+Finally, the multi-tenant architecture requirement—ensuring that multiple independent families can operate securely on a single platform—aligned well with the software engineering principles of scalability, data isolation, and security that the researcher sought to demonstrate as part of a 400-level capstone project.
+
+### 1.7 Limitations of the Study
 
 While the system is designed to be comprehensive and functional, several constraints bound its current implementation and deployment:
 
@@ -156,9 +168,9 @@ While the system is designed to be comprehensive and functional, several constra
 
 7. **Scalability Boundaries.** While the multi-tenant architecture supports multiple families on a single platform instance, the system has not been subjected to large-scale load testing with thousands of concurrent tenants. Performance under high concurrency remains an area for future evaluation.
 
-### 1.7 Definition of Terms
+### 1.8 Definition of Terms
 
-*Table 1.4: Definition of Key Terms*
+*Table 1.5: Definition of Key Terms*
 
 | Term | Definition | Reference |
 | --- | --- | --- |
@@ -176,6 +188,16 @@ While the system is designed to be comprehensive and functional, several constra
 | **Inertia.js** | A library that enables the creation of server-driven single-page applications by connecting server-side frameworks (such as Laravel) directly to client-side frameworks (such as Vue.js) without requiring a separate API layer. | Reinink (2024) |
 | **Application Programming Interface (API)** | A set of defined protocols, routines, and tools that enable different software systems to communicate and exchange data with one another. In this project, APIs are used for payment gateway integration and LLM service communication. | Fielding (2000) |
 | **Payment Gateway** | A technology service that authorises and processes electronic payment transactions between a buyer, a seller, and their respective financial institutions. Paystack is the payment gateway integrated in this system. | Paystack (2024) |
+
+### 1.9 Organization of the Report
+
+This project report is organised into three chapters, each addressing a distinct phase of the research and development process.
+
+**Chapter One: Introduction.** This chapter provides the background and context for the study, articulates the problem statement, defines the aim and objectives, delineates the scope and significance of the project, presents the researcher's motivation, identifies limitations, and defines key terms used throughout the report.
+
+**Chapter Two: Literature Review.** This chapter examines the historical perspectives of family fund management and informal financial systems, establishes the theoretical framework underpinning the system design, reviews related work from at least fifty scholarly sources, identifies gaps in existing research, and summarises how this project addresses those gaps.
+
+**Chapter Three: System Design and Methodology.** This chapter presents the proposed system design, specifies functional and non-functional requirements, describes the software development methodology adopted, details the system architecture and database design, documents the programming languages and tools used, explains the key software modules and components, and outlines the security measures implemented in the system.
 
 ---
 
