@@ -131,13 +131,30 @@ function createStream() {
                 parsedStreamContent.value = '';
             }
             clearData();
-            router.reload({ only: ['conversations'] });
-        },
-        onResponse: (response: Response) => {
-            const convId = response.headers.get('X-Conversation-Id');
-            if (convId) {
-                currentConversationId.value = convId;
-            }
+
+            // Reload conversations and pick up the new conversation ID
+            router.reload({
+                only: ['conversations', 'activeConversationId'],
+                onSuccess: (page) => {
+                    const updatedConversations = (page.props as Record<string, unknown>)
+                        .conversations as Conversation[] | undefined;
+
+                    if (updatedConversations?.length) {
+                        const currentExists = currentConversationId.value &&
+                            updatedConversations.some((c) => c.id === currentConversationId.value);
+
+                        if (!currentExists) {
+                            // Current ID is stale or null — set to the most recent conversation
+                            currentConversationId.value = updatedConversations[0].id;
+                            window.history.replaceState(
+                                {},
+                                '',
+                                `${aiIndex().url}?conversation=${updatedConversations[0].id}`,
+                            );
+                        }
+                    }
+                },
+            });
         },
     });
 }

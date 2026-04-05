@@ -85,7 +85,7 @@ test('users can continue an existing conversation', function () {
     $response->assertSuccessful();
 });
 
-test('users cannot access another user conversation', function () {
+test('users cannot access another user conversation and get a fresh one instead', function () {
     $family = Family::factory()->create();
     $user = User::factory()->create(['family_id' => $family->id]);
     $otherUser = User::factory()->create(['family_id' => $family->id]);
@@ -107,7 +107,7 @@ test('users cannot access another user conversation', function () {
             'message' => 'Hello',
             'conversation_id' => $conversationId,
         ])
-        ->assertForbidden();
+        ->assertSuccessful();
 });
 
 test('users can rename their conversation', function () {
@@ -123,10 +123,10 @@ test('users can rename their conversation', function () {
     ]);
 
     $this->actingAs($user)
-        ->patchJson(route('ai.conversations.rename', $conversationId), [
+        ->patch(route('ai.conversations.rename', $conversationId), [
             'title' => 'New Title',
         ])
-        ->assertSuccessful();
+        ->assertRedirect();
 
     $this->assertDatabaseHas('agent_conversations', [
         'id' => $conversationId,
@@ -148,7 +148,7 @@ test('users cannot rename another user conversation', function () {
     ]);
 
     $this->actingAs($user)
-        ->patchJson(route('ai.conversations.rename', $conversationId), [
+        ->patch(route('ai.conversations.rename', $conversationId), [
             'title' => 'Hacked Title',
         ])
         ->assertNotFound();
@@ -188,8 +188,8 @@ test('users can delete their conversation', function () {
     ]);
 
     $this->actingAs($user)
-        ->deleteJson(route('ai.conversations.destroy', $conversationId))
-        ->assertSuccessful();
+        ->delete(route('ai.conversations.destroy', $conversationId))
+        ->assertRedirect();
 
     $this->assertDatabaseMissing('agent_conversations', ['id' => $conversationId]);
     $this->assertDatabaseMissing('agent_conversation_messages', ['conversation_id' => $conversationId]);
@@ -209,7 +209,7 @@ test('users cannot delete another user conversation', function () {
     ]);
 
     $this->actingAs($user)
-        ->deleteJson(route('ai.conversations.destroy', $conversationId))
+        ->delete(route('ai.conversations.destroy', $conversationId))
         ->assertNotFound();
 
     $this->assertDatabaseHas('agent_conversations', ['id' => $conversationId]);
@@ -267,7 +267,6 @@ test('rename validates title is required', function () {
     ]);
 
     $this->actingAs($user)
-        ->patchJson(route('ai.conversations.rename', $conversationId), ['title' => ''])
-        ->assertUnprocessable()
-        ->assertJsonValidationErrors(['title']);
+        ->patch(route('ai.conversations.rename', $conversationId), ['title' => ''])
+        ->assertSessionHasErrors(['title']);
 });

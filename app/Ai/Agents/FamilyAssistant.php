@@ -8,7 +8,12 @@ use App\Ai\Tools\GetExpenseSummary;
 use App\Ai\Tools\GetMemberOverview;
 use App\Models\User;
 use Laravel\Ai\Attributes\MaxSteps;
+use Laravel\Ai\Attributes\Model;
 use Laravel\Ai\Attributes\Provider;
+use Laravel\Ai\Attributes\Temperature;
+use Laravel\Ai\Attributes\Timeout;
+use Laravel\Ai\Attributes\UseCheapestModel;
+use Laravel\Ai\Attributes\UseSmartestModel;
 use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
@@ -20,7 +25,11 @@ use Laravel\Ai\Promptable;
 use Stringable;
 
 #[Provider(Lab::Ollama)]
-#[MaxSteps(5)]
+#[MaxSteps(10)]
+#[Temperature(0.7)]
+#[Timeout(120)]
+// #[UseSmartestModel]
+// #[UseCheapestModel]
 class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasTools
 {
     use Promptable, RemembersConversations;

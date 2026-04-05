@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Ai\Agents\FamilyAssistant;
 use App\Models\User;
-use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -63,6 +63,8 @@ class AiChatController extends Controller
      */
     public function stream(Request $request)
     {
+        set_time_limit(120);
+
         $request->validate([
             'message' => ['required', 'string', 'max:5000'],
             'conversation_id' => ['nullable', 'string', 'max:36'],
@@ -80,7 +82,10 @@ class AiChatController extends Controller
                 ->exists();
 
             if (! $exists) {
-                abort(403);
+                // Conversation not found or doesn't belong to user — start fresh
+                return $agent
+                    ->forUser($user)
+                    ->stream($request->input('message'));
             }
 
             return $agent
@@ -96,7 +101,7 @@ class AiChatController extends Controller
     /**
      * Rename a conversation.
      */
-    public function rename(Request $request, string $conversation): JsonResponse
+    public function rename(Request $request, string $conversation): RedirectResponse
     {
         $request->validate([
             'title' => ['required', 'string', 'max:255'],
@@ -114,13 +119,13 @@ class AiChatController extends Controller
             abort(404);
         }
 
-        return response()->json(['success' => true]);
+        return back();
     }
 
     /**
      * Delete a conversation and its messages.
      */
-    public function destroy(string $conversation): JsonResponse
+    public function destroy(string $conversation): RedirectResponse
     {
         /** @var User $user */
         $user = Auth::user();
@@ -143,6 +148,6 @@ class AiChatController extends Controller
             ->where('user_id', $user->id)
             ->delete();
 
-        return response()->json(['success' => true]);
+        return back();
     }
 }
