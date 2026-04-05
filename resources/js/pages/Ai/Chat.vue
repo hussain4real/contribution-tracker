@@ -36,6 +36,17 @@ import {
     User,
 } from 'lucide-vue-next';
 import { computed, nextTick, ref, watch } from 'vue';
+import { marked } from 'marked';
+
+// Configure marked for safe rendering
+marked.setOptions({
+    breaks: true,
+    gfm: true,
+});
+
+function renderMarkdown(content: string): string {
+    return marked.parse(content, { async: false }) as string;
+}
 
 interface Conversation {
     id: string;
@@ -415,9 +426,17 @@ function confirmDelete(): void {
                                         : 'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100'
                                 "
                             >
-                                <div class="whitespace-pre-wrap">
+                                <div
+                                    v-if="msg.role === 'user'"
+                                    class="whitespace-pre-wrap"
+                                >
                                     {{ msg.content }}
                                 </div>
+                                <div
+                                    v-else
+                                    class="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-2 prose-pre:my-2"
+                                    v-html="renderMarkdown(msg.content)"
+                                />
                             </div>
 
                             <div
@@ -443,10 +462,9 @@ function confirmDelete(): void {
                             >
                                 <div
                                     v-if="streamingContent"
-                                    class="whitespace-pre-wrap"
-                                >
-                                    {{ streamingContent }}
-                                </div>
+                                    class="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-2 prose-pre:my-2"
+                                    v-html="renderMarkdown(streamingContent)"
+                                />
                                 <div v-else class="flex flex-col gap-2">
                                     <Skeleton class="h-4 w-48" />
                                     <Skeleton class="h-4 w-36" />
