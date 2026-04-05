@@ -35,9 +35,27 @@ You are an AI agent that drafts release notes when a pull request is merged to t
 ## Release Notes Format
 
 ### Title
-`📝 <Descriptive summary of changes> — <suggested version>`
 
-The title MUST be a concise, meaningful summary of the user-facing changes (e.g. "Contribution Reminders & Notification Bell", "Bug Fixes for Payment Recording"). Never use a generic title like "Release Notes" or just a version number.
+**CRITICAL — The issue title determines what users see in the changelog. A version-only title is a failure.**
+
+Format: `📝 <Descriptive summary>`
+
+The `<Descriptive summary>` MUST summarize the main user-facing changes in 3-8 words. Do NOT include the version number in the title — the tag badge already displays it. Read through the PRs and commits to understand what actually changed for users, then distill that into a concise phrase.
+
+**❌ BAD titles (NEVER do this):**
+- `📝 v0.7.0`
+- `📝 Release Notes — v0.6.1`
+- `📝 Updates — v0.6.0`
+- `📝 Bug Fixes and Improvements — v0.5.0`
+- `📝 Overdue Members Modal — v0.7.0` (don't append version)
+
+**✅ GOOD titles (always aim for this specificity):**
+- `📝 Overdue Members Modal & Accrued Balances`
+- `📝 Contribution Reminders & Notification Bell`
+- `📝 Passkeys, Suspension & Admin Power-ups`
+- `📝 Family Management & Invitations`
+
+If you cannot identify any user-facing changes to summarize, call `noop` instead of creating an issue with a generic title.
 
 ### Body Structure
 
