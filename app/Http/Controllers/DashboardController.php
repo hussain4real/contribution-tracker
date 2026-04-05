@@ -61,6 +61,7 @@ class DashboardController extends Controller
             $props['summary'] = $this->calculateSummary($currentMonthContributions, $allContributions);
             $props['member_statuses'] = $this->getMemberStatuses($currentMonthContributions, $allContributions);
             $props['recent_payments'] = $this->getRecentPayments($allContributions);
+            $props['overdue_members'] = $this->getOverdueMembers($allContributions);
         } else {
             // Member view (FR-015, FR-016)
             $props['family_aggregate'] = $this->calculateFamilyAggregate($currentMonthContributions);
@@ -210,6 +211,35 @@ class DashboardController extends Controller
             'current_month_balance' => $balance,
             'current_month_status' => $contribution->status->value,
         ];
+    }
+
+    /**
+     * Get detailed list of overdue members with their overdue contributions.
+     *
+     * @param  Collection<int, Contribution>  $allContributions
+     */
+    private function getOverdueMembers(Collection $allContributions): array
+    {
+        return $allContributions
+            ->filter(fn ($c) => $c->status->value === 'overdue')
+            ->map(function ($contribution) {
+                $totalPaid = $contribution->payments->sum('amount');
+
+                return [
+                    'id' => $contribution->user->id,
+                    'name' => $contribution->user->name,
+                    'category' => $contribution->user->category?->value,
+                    'month' => $contribution->month,
+                    'year' => $contribution->year,
+                    'expected_amount' => $contribution->expected_amount,
+                    'total_paid' => $totalPaid,
+                    'balance' => $contribution->expected_amount - $totalPaid,
+                    'contribution_id' => $contribution->id,
+                ];
+            })
+            ->sortBy([['name', 'asc'], ['year', 'desc'], ['month', 'desc']])
+            ->values()
+            ->toArray();
     }
 
     /**

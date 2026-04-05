@@ -12,6 +12,10 @@ defineProps<{
     canRecordPayments: boolean;
 }>();
 
+const emit = defineEmits<{
+    overdueClick: [];
+}>();
+
 // Format currency in Naira
 function formatCurrency(amount: number): string {
     return new Intl.NumberFormat('en-NG', {
@@ -129,8 +133,16 @@ function formatCurrency(amount: number): string {
         </div>
 
         <!-- Overdue Count -->
-        <div
-            class="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border dark:bg-neutral-900"
+        <button
+            type="button"
+            :disabled="overdueCount === 0"
+            class="rounded-xl border border-sidebar-border/70 bg-white p-6 text-left transition-all duration-200 dark:border-sidebar-border dark:bg-neutral-900"
+            :class="
+                overdueCount > 0
+                    ? 'cursor-pointer hover:border-red-300 hover:shadow-md active:scale-[0.98] dark:hover:border-red-700'
+                    : 'cursor-default'
+            "
+            @click="overdueCount > 0 && emit('overdueClick')"
         >
             <div class="flex items-center gap-3">
                 <div
@@ -176,7 +188,7 @@ function formatCurrency(amount: number): string {
                     </p>
                 </div>
             </div>
-        </div>
+        </button>
     </div>
 
     <!-- Collection Rate Bar -->
