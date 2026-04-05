@@ -51,9 +51,9 @@ interface Message {
 }
 
 interface Props {
-    conversations: Conversation[];
-    messages: Message[];
-    activeConversationId: string | null;
+    conversations?: Conversation[];
+    messages?: Message[];
+    activeConversationId?: string | null;
 }
 
 const props = withDefaults(defineProps<Props>(), {
