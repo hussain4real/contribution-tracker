@@ -142,7 +142,7 @@ function formatCurrency(amount: number): string {
                     ? 'cursor-pointer hover:border-red-300 hover:shadow-md active:scale-[0.98] dark:hover:border-red-700'
                     : 'cursor-default'
             "
-            @click="overdueCount > 0 && emit('overdueClick')"
+            @click="emit('overdueClick')"
         >
             <div class="flex items-center gap-3">
                 <div

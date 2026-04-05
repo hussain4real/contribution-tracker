@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\PaymentStatus;
 use App\Models\Contribution;
 use App\Models\Expense;
 use App\Models\FundAdjustment;
@@ -34,7 +35,7 @@ class DashboardController extends Controller
         $allContributions = Contribution::query()
             ->where('family_id', $user->family_id)
             ->with(['user', 'payments.recorder'])
-            ->whereIn('user_id', User::where('family_id', $user->family_id)->whereNull('archived_at')->select('id'))
+            ->whereHas('user', fn ($q) => $q->whereNull('archived_at'))
             ->get();
 
         $currentMonthContributions = $allContributions
@@ -87,7 +88,7 @@ class DashboardController extends Controller
         $totalOutstanding = $totalExpected - $totalCollected;
 
         // Count all overdue contributions across all months (FR-006)
-        $overdueCount = $allContributions->filter(fn ($c) => $c->status->value === 'overdue')->count();
+        $overdueCount = $allContributions->filter(fn ($c) => $c->status === PaymentStatus::Overdue)->count();
 
         return [
             'total_members' => $totalMembers,
@@ -111,7 +112,7 @@ class DashboardController extends Controller
     {
         // Group all contributions by user to check for overdue
         $overdueByUser = $allContributions
-            ->filter(fn ($c) => $c->status->value === 'overdue')
+            ->filter(fn ($c) => $c->status === PaymentStatus::Overdue)
             ->groupBy('user_id')
             ->map(fn ($contributions) => $contributions->isNotEmpty());
 
@@ -230,7 +231,7 @@ class DashboardController extends Controller
     private function getOverdueMembers(Collection $allContributions): array
     {
         return $allContributions
-            ->filter(fn ($c) => $c->status->value === 'overdue')
+            ->filter(fn ($c) => $c->status === PaymentStatus::Overdue)
             ->map(function ($contribution) {
                 $totalPaid = $contribution->payments->sum('amount');
 
