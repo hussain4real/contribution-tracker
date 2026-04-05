@@ -3,8 +3,8 @@ import { generate } from '@/actions/App/Http/Controllers/ContributionController'
 import AccountDetails from '@/components/AccountDetails.vue';
 import AggregateStats from '@/components/contributions/AggregateStats.vue';
 import MemberContributionStatus from '@/components/dashboard/MemberContributionStatus.vue';
-import OverdueMembersModal from '@/components/dashboard/OverdueMembersModal.vue';
 import type { OverdueMember } from '@/components/dashboard/OverdueMembersModal.vue';
+import OverdueMembersModal from '@/components/dashboard/OverdueMembersModal.vue';
 import RecentPayments from '@/components/dashboard/RecentPayments.vue';
 import SummaryCards from '@/components/dashboard/SummaryCards.vue';
 import AppLayout from '@/layouts/AppLayout.vue';

@@ -57,9 +57,7 @@ const categoryColors: Record<string, string> = {
 
 <template>
     <Dialog v-model:open="isOpen">
-        <DialogContent
-            class="sm:max-w-xl"
-        >
+        <DialogContent class="sm:max-w-xl">
             <DialogHeader>
                 <DialogTitle class="flex items-center gap-2">
                     <span
@@ -83,7 +81,9 @@ const categoryColors: Record<string, string> = {
                 </DialogTitle>
                 <DialogDescription>
                     {{ members.length }} overdue
-                    {{ members.length === 1 ? 'contribution' : 'contributions' }}
+                    {{
+                        members.length === 1 ? 'contribution' : 'contributions'
+                    }}
                     requiring attention.
                 </DialogDescription>
             </DialogHeader>
@@ -124,7 +124,9 @@ const categoryColors: Record<string, string> = {
                             <div
                                 class="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400"
                             >
-                                <span>{{ formatMonth(member.month, member.year) }}</span>
+                                <span>{{
+                                    formatMonth(member.month, member.year)
+                                }}</span>
                                 <span>&middot;</span>
                                 <StatusBadge status="overdue" />
                             </div>
