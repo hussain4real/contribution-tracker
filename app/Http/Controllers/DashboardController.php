@@ -34,7 +34,7 @@ class DashboardController extends Controller
         $allContributions = Contribution::query()
             ->where('family_id', $user->family_id)
             ->with(['user', 'payments.recorder'])
-            ->whereHas('user', fn ($q) => $q->whereNull('archived_at'))
+            ->whereIn('user_id', User::where('family_id', $user->family_id)->whereNull('archived_at')->select('id'))
             ->get();
 
         $currentMonthContributions = $allContributions
@@ -115,10 +115,18 @@ class DashboardController extends Controller
             ->groupBy('user_id')
             ->map(fn ($contributions) => $contributions->isNotEmpty());
 
-        return $currentMonthContributions->map(function ($contribution) use ($overdueByUser) {
+        // Calculate total outstanding balance across all months per user
+        $accruedByUser = $allContributions
+            ->groupBy('user_id')
+            ->map(fn ($contributions) => $contributions->sum(
+                fn ($c) => max(0, $c->expected_amount - $c->payments->sum('amount'))
+            ));
+
+        return $currentMonthContributions->map(function ($contribution) use ($overdueByUser, $accruedByUser) {
             $totalPaid = $contribution->payments->sum('amount');
             $balance = $contribution->expected_amount - $totalPaid;
             $hasOverdue = $overdueByUser->get($contribution->user_id, false);
+            $accruedBalance = $accruedByUser->get($contribution->user_id, 0);
 
             return [
                 'id' => $contribution->user->id,
@@ -128,6 +136,7 @@ class DashboardController extends Controller
                 'total_paid' => $totalPaid,
                 'current_month_status' => $contribution->status->value,
                 'current_month_balance' => $balance,
+                'accrued_balance' => $accruedBalance,
                 'contribution_id' => $contribution->id,
                 'has_overdue' => $hasOverdue,
             ];

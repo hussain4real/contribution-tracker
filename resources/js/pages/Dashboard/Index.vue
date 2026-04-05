@@ -34,6 +34,7 @@ interface MemberStatus {
     total_paid: number;
     current_month_status: string;
     current_month_balance: number;
+    accrued_balance: number;
     contribution_id: number;
 }
 

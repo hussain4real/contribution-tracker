@@ -56,3 +56,25 @@ test('admin dashboard overdue_members is empty when no overdue contributions exi
         ->has('overdue_members', 0)
     );
 });
+
+test('member_statuses accrued_balance sums outstanding across all months', function () {
+    $family = Family::factory()->create();
+    $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+    $member = User::factory()->member()->create(['family_id' => $family->id]);
+
+    // Current month contribution (unpaid) — ₦4,000
+    Contribution::factory()->forUser($member)->currentMonth()->create();
+
+    // Past month contribution (overdue, unpaid) — ₦4,000
+    Contribution::factory()->forUser($member)->forMonth(2025, 1)->create();
+
+    $response = $this->actingAs($admin)->get(route('dashboard'));
+
+    $response->assertSuccessful();
+    $response->assertInertia(fn ($page) => $page
+        ->component('Dashboard/Index')
+        ->has('member_statuses', 1)
+        ->where('member_statuses.0.accrued_balance', $member->getMonthlyAmount() * 2)
+        ->where('member_statuses.0.current_month_balance', $member->getMonthlyAmount())
+    );
+});
