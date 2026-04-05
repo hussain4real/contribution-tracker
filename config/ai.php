@@ -22,6 +22,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Agent Model
+    |--------------------------------------------------------------------------
+    |
+    | The model to use for the AI agent. This should match a model available
+    | on your configured AI provider (e.g. llama3.2, llama3.1, mistral).
+    |
+    */
+
+    'agent_model' => env('AI_AGENT_MODEL', 'gemma4:31b'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Caching
     |--------------------------------------------------------------------------
     |
@@ -102,7 +114,7 @@ return [
         'ollama' => [
             'driver' => 'ollama',
             'key' => env('OLLAMA_API_KEY', ''),
-            'url' => env('OLLAMA_BASE_URL', 'http://localhost:11434'),
+            'url' => env('OLLAMA_BASE_URL'),
         ],
 
         'openai' => [

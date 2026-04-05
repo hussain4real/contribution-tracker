@@ -1,0 +1,531 @@
+<script setup lang="ts">
+import {
+    index as aiIndex,
+    destroy,
+    rename,
+} from '@/actions/App/Http/Controllers/AiChatController';
+import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import AppLayout from '@/layouts/AppLayout.vue';
+import type { BreadcrumbItem } from '@/types';
+import { Head, router } from '@inertiajs/vue3';
+import { useStream } from '@laravel/stream-vue';
+import {
+    Bot,
+    EllipsisVertical,
+    MessageSquarePlus,
+    Pencil,
+    Send,
+    Trash2,
+    User,
+} from 'lucide-vue-next';
+import { computed, nextTick, ref, watch } from 'vue';
+
+interface Conversation {
+    id: string;
+    title: string;
+    updated_at: string;
+}
+
+interface Message {
+    id: string;
+    role: string;
+    content: string;
+    created_at: string;
+}
+
+interface Props {
+    conversations: Conversation[];
+    messages: Message[];
+    activeConversationId: string | null;
+}
+
+const props = withDefaults(defineProps<Props>(), {
+    conversations: () => [],
+    messages: () => [],
+    activeConversationId: null,
+});
+
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'AI Assistant', href: aiIndex().url },
+];
+
+// Chat state
+const messageInput = ref('');
+const chatMessages = ref<{ role: string; content: string }[]>([
+    ...props.messages,
+]);
+const currentConversationId = ref<string | null>(props.activeConversationId);
+const messagesContainer = ref<HTMLElement | null>(null);
+
+// Parsed streaming text (extracted from SSE text_delta events)
+const parsedStreamContent = ref('');
+
+/**
+ * Parse raw SSE chunk and extract text deltas from AI SDK stream events.
+ * The AI SDK sends events like: data: {"type":"text_delta","delta":"Hello!"}
+ */
+function parseSSEChunk(rawChunk: string): void {
+    const lines = rawChunk.split('\n');
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data:')) continue;
+
+        const payload = trimmed.slice(5).trim();
+        if (payload === '[DONE]') continue;
+
+        try {
+            const event = JSON.parse(payload);
+            if (event.type === 'text_delta' && event.delta) {
+                parsedStreamContent.value += event.delta;
+            }
+        } catch {
+            // skip non-JSON lines
+        }
+    }
+}
+
+// Stream hook — guarded for SSR (useStream requires browser APIs)
+function createStream() {
+    if (typeof window === 'undefined') {
+        return {
+            data: ref<string | null>(null),
+            isFetching: ref(false),
+            isStreaming: ref(false),
+            send: (_body: Record<string, unknown>) => {},
+            cancel: () => {},
+            clearData: () => {},
+            id: ref<string | null>(null),
+        };
+    }
+
+    return useStream<{
+        message: string;
+        conversation_id?: string;
+    }>('/ai/chat', {
+        onData: (chunk: string) => {
+            parseSSEChunk(chunk);
+        },
+        onFinish: () => {
+            if (parsedStreamContent.value) {
+                chatMessages.value.push({
+                    role: 'assistant',
+                    content: parsedStreamContent.value,
+                });
+                parsedStreamContent.value = '';
+            }
+            clearData();
+            router.reload({ only: ['conversations'] });
+        },
+        onResponse: (response: Response) => {
+            const convId = response.headers.get('X-Conversation-Id');
+            if (convId) {
+                currentConversationId.value = convId;
+            }
+        },
+    });
+}
+
+const {
+    data,
+    isFetching,
+    isStreaming,
+    send,
+    cancel,
+    clearData,
+    id: streamId,
+} = createStream();
+
+// Computed streaming message for display
+const streamingContent = computed(() => parsedStreamContent.value || '');
+const isProcessing = computed(() => isFetching.value || isStreaming.value);
+
+// Scroll to bottom when messages update
+function scrollToBottom(): void {
+    nextTick(() => {
+        if (messagesContainer.value) {
+            messagesContainer.value.scrollTop =
+                messagesContainer.value.scrollHeight;
+        }
+    });
+}
+
+watch([chatMessages, parsedStreamContent], () => scrollToBottom(), {
+    deep: true,
+});
+
+// Send message
+function sendMessage(): void {
+    const message = messageInput.value.trim();
+    if (!message || isProcessing.value) return;
+
+    chatMessages.value.push({ role: 'user', content: message });
+    messageInput.value = '';
+    parsedStreamContent.value = '';
+
+    send({
+        message,
+        ...(currentConversationId.value
+            ? { conversation_id: currentConversationId.value }
+            : {}),
+    });
+}
+
+// Handle Enter key
+function handleKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+    }
+}
+
+// New conversation
+function startNewConversation(): void {
+    currentConversationId.value = null;
+    chatMessages.value = [];
+    clearData();
+    cancel();
+    router.visit(aiIndex().url);
+}
+
+// Load conversation
+function loadConversation(conversationId: string): void {
+    router.visit(`${aiIndex().url}?conversation=${conversationId}`);
+}
+
+// Rename conversation
+const renamingConversation = ref<Conversation | null>(null);
+const renameTitle = ref('');
+
+function openRenameDialog(conversation: Conversation): void {
+    renamingConversation.value = conversation;
+    renameTitle.value = conversation.title;
+}
+
+function submitRename(): void {
+    if (!renamingConversation.value || !renameTitle.value.trim()) return;
+
+    router.patch(
+        rename(renamingConversation.value.id).url,
+        { title: renameTitle.value.trim() },
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                renamingConversation.value = null;
+                renameTitle.value = '';
+            },
+        },
+    );
+}
+
+// Delete conversation
+const deletingConversation = ref<Conversation | null>(null);
+
+function openDeleteDialog(conversation: Conversation): void {
+    deletingConversation.value = conversation;
+}
+
+function confirmDelete(): void {
+    if (!deletingConversation.value) return;
+
+    const conversationId = deletingConversation.value.id;
+
+    router.delete(destroy(conversationId).url, {
+        preserveScroll: true,
+        onSuccess: () => {
+            deletingConversation.value = null;
+            if (currentConversationId.value === conversationId) {
+                startNewConversation();
+            }
+        },
+    });
+}
+</script>
+
+<template>
+    <Head title="AI Assistant" />
+
+    <AppLayout :breadcrumbs="breadcrumbs">
+        <div class="flex h-[calc(100vh-8rem)] gap-4 p-4 lg:p-6">
+            <!-- Conversation Sidebar -->
+            <div
+                class="hidden w-64 shrink-0 flex-col rounded-lg border border-gray-200 bg-white lg:flex dark:border-gray-700 dark:bg-gray-900"
+            >
+                <div
+                    class="flex items-center justify-between border-b border-gray-200 p-3 dark:border-gray-700"
+                >
+                    <h3
+                        class="text-sm font-semibold text-gray-900 dark:text-gray-100"
+                    >
+                        Conversations
+                    </h3>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        @click="startNewConversation"
+                    >
+                        <MessageSquarePlus class="h-4 w-4" />
+                    </Button>
+                </div>
+
+                <div class="flex-1 overflow-y-auto p-2">
+                    <div
+                        v-if="conversations.length === 0"
+                        class="px-2 py-4 text-center text-xs text-gray-500 dark:text-gray-400"
+                    >
+                        No conversations yet
+                    </div>
+
+                    <div
+                        v-for="conversation in conversations"
+                        :key="conversation.id"
+                        class="group mb-1"
+                    >
+                        <div
+                            class="flex cursor-pointer items-center justify-between rounded-md px-2 py-2 text-sm transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+                            :class="{
+                                'bg-gray-100 dark:bg-gray-800':
+                                    activeConversationId === conversation.id,
+                            }"
+                            @click="loadConversation(conversation.id)"
+                        >
+                            <span
+                                class="truncate text-gray-700 dark:text-gray-300"
+                                >{{ conversation.title }}</span
+                            >
+
+                            <DropdownMenu>
+                                <DropdownMenuTrigger as-child>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        class="h-6 w-6 shrink-0 p-0 opacity-0 group-hover:opacity-100"
+                                        @click.stop
+                                    >
+                                        <EllipsisVertical class="h-3 w-3" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                        @click.stop="
+                                            openRenameDialog(conversation)
+                                        "
+                                    >
+                                        <Pencil class="mr-2 h-3 w-3" />
+                                        Rename
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                        class="text-red-600 dark:text-red-400"
+                                        @click.stop="
+                                            openDeleteDialog(conversation)
+                                        "
+                                    >
+                                        <Trash2 class="mr-2 h-3 w-3" />
+                                        Delete
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Area -->
+            <div
+                class="flex min-w-0 flex-1 flex-col rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900"
+            >
+                <!-- Messages -->
+                <div ref="messagesContainer" class="flex-1 overflow-y-auto p-4">
+                    <!-- Empty state -->
+                    <div
+                        v-if="chatMessages.length === 0 && !isProcessing"
+                        class="flex h-full flex-col items-center justify-center text-gray-500 dark:text-gray-400"
+                    >
+                        <Bot class="mb-4 h-12 w-12" />
+                        <h3
+                            class="mb-2 text-lg font-medium text-gray-900 dark:text-gray-100"
+                        >
+                            Family AI Assistant
+                        </h3>
+                        <p class="max-w-md text-center text-sm">
+                            Ask me about contributions, expenses, member
+                            payments, or request financial reports and analysis.
+                        </p>
+                    </div>
+
+                    <!-- Messages list -->
+                    <div class="space-y-4">
+                        <div
+                            v-for="(msg, idx) in chatMessages"
+                            :key="idx"
+                            class="flex gap-3"
+                            :class="
+                                msg.role === 'user'
+                                    ? 'justify-end'
+                                    : 'justify-start'
+                            "
+                        >
+                            <div
+                                v-if="msg.role !== 'user'"
+                                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900"
+                            >
+                                <Bot
+                                    class="h-4 w-4 text-indigo-600 dark:text-indigo-400"
+                                />
+                            </div>
+
+                            <div
+                                class="max-w-[75%] rounded-lg px-4 py-2 text-sm"
+                                :class="
+                                    msg.role === 'user'
+                                        ? 'bg-indigo-600 text-white'
+                                        : 'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100'
+                                "
+                            >
+                                <div class="whitespace-pre-wrap">
+                                    {{ msg.content }}
+                                </div>
+                            </div>
+
+                            <div
+                                v-if="msg.role === 'user'"
+                                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-600"
+                            >
+                                <User class="h-4 w-4 text-white" />
+                            </div>
+                        </div>
+
+                        <!-- Streaming response -->
+                        <div v-if="isProcessing" class="flex gap-3">
+                            <div
+                                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900"
+                            >
+                                <Bot
+                                    class="h-4 w-4 text-indigo-600 dark:text-indigo-400"
+                                />
+                            </div>
+
+                            <div
+                                class="max-w-[75%] rounded-lg bg-gray-100 px-4 py-2 text-sm text-gray-900 dark:bg-gray-800 dark:text-gray-100"
+                            >
+                                <div
+                                    v-if="streamingContent"
+                                    class="whitespace-pre-wrap"
+                                >
+                                    {{ streamingContent }}
+                                </div>
+                                <div v-else class="flex flex-col gap-2">
+                                    <Skeleton class="h-4 w-48" />
+                                    <Skeleton class="h-4 w-36" />
+                                    <Skeleton class="h-4 w-24" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Input area -->
+                <div class="border-t border-gray-200 p-4 dark:border-gray-700">
+                    <div class="flex gap-2">
+                        <Input
+                            v-model="messageInput"
+                            type="text"
+                            placeholder="Ask about contributions, expenses, or reports..."
+                            class="flex-1"
+                            :disabled="isProcessing"
+                            @keydown="handleKeydown"
+                        />
+                        <Button
+                            :disabled="!messageInput.trim() || isProcessing"
+                            @click="sendMessage"
+                        >
+                            <Send class="h-4 w-4" />
+                        </Button>
+                        <Button
+                            v-if="isProcessing"
+                            variant="outline"
+                            @click="cancel"
+                        >
+                            Cancel
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rename Dialog -->
+        <Dialog
+            :open="!!renamingConversation"
+            @update:open="(v: boolean) => !v && (renamingConversation = null)"
+        >
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Rename Conversation</DialogTitle>
+                    <DialogDescription
+                        >Enter a new title for this
+                        conversation.</DialogDescription
+                    >
+                </DialogHeader>
+
+                <Input
+                    v-model="renameTitle"
+                    placeholder="Conversation title"
+                    @keydown.enter="submitRename"
+                />
+
+                <DialogFooter>
+                    <DialogClose as-child>
+                        <Button variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <Button
+                        :disabled="!renameTitle.trim()"
+                        @click="submitRename"
+                        >Save</Button
+                    >
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
+        <!-- Delete Dialog -->
+        <Dialog
+            :open="!!deletingConversation"
+            @update:open="(v: boolean) => !v && (deletingConversation = null)"
+        >
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Delete Conversation</DialogTitle>
+                    <DialogDescription>
+                        Are you sure you want to delete "{{
+                            deletingConversation?.title
+                        }}"? This action cannot be undone.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <DialogFooter>
+                    <DialogClose as-child>
+                        <Button variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <Button variant="destructive" @click="confirmDelete"
+                        >Delete</Button
+                    >
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    </AppLayout>
+</template>
