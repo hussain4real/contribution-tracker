@@ -3,6 +3,8 @@ import { generate } from '@/actions/App/Http/Controllers/ContributionController'
 import AccountDetails from '@/components/AccountDetails.vue';
 import AggregateStats from '@/components/contributions/AggregateStats.vue';
 import MemberContributionStatus from '@/components/dashboard/MemberContributionStatus.vue';
+import type { OverdueMember } from '@/components/dashboard/OverdueMembersModal.vue';
+import OverdueMembersModal from '@/components/dashboard/OverdueMembersModal.vue';
 import RecentPayments from '@/components/dashboard/RecentPayments.vue';
 import SummaryCards from '@/components/dashboard/SummaryCards.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -32,6 +34,7 @@ interface MemberStatus {
     total_paid: number;
     current_month_status: string;
     current_month_balance: number;
+    accrued_balance: number;
     contribution_id: number;
 }
 
@@ -79,6 +82,7 @@ type Props = Partial<AdminProps & MemberProps> & {
     fund_balance?: number;
     can_generate_contributions?: boolean;
     has_pending_contributions?: boolean;
+    overdue_members?: OverdueMember[];
 };
 
 const props = defineProps<Props>();
@@ -95,6 +99,7 @@ const isAdminView = computed(() => !!props.summary);
 
 // Generate contributions
 const generating = ref(false);
+const showOverdueModal = ref(false);
 
 function generateContributions() {
     generating.value = true;
@@ -187,6 +192,7 @@ function formatCurrency(amount: number): string {
                     :overdue-count="summary.overdue_count"
                     :collection-rate="summary.collection_rate"
                     :can-record-payments="can_record_payments"
+                    @overdue-click="showOverdueModal = true"
                 />
 
                 <div class="grid gap-6 lg:grid-cols-2">
@@ -357,5 +363,11 @@ function formatCurrency(amount: number): string {
                 />
             </template>
         </div>
+
+        <OverdueMembersModal
+            v-if="overdue_members"
+            v-model:is-open="showOverdueModal"
+            :members="overdue_members"
+        />
     </AppLayout>
 </template>

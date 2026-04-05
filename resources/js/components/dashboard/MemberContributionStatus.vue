@@ -12,6 +12,7 @@ interface Member {
     total_paid: number;
     current_month_status: string;
     current_month_balance: number;
+    accrued_balance: number;
     contribution_id: number;
 }
 
@@ -69,17 +70,17 @@ function formatCategory(category: string): string {
                 class="font-medium"
                 :class="{
                     'text-neutral-900 dark:text-neutral-100':
-                        member.current_month_balance === 0,
+                        member.accrued_balance === 0,
                     'text-amber-600 dark:text-amber-400':
-                        member.current_month_balance > 0 &&
+                        member.accrued_balance > 0 &&
                         member.current_month_status !== 'overdue',
                     'text-red-600 dark:text-red-400':
                         member.current_month_status === 'overdue',
                 }"
             >
                 {{
-                    member.current_month_balance > 0
-                        ? formatCurrency(member.current_month_balance)
+                    member.accrued_balance > 0
+                        ? formatCurrency(member.accrued_balance)
                         : '-'
                 }}
             </span>

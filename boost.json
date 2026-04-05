@@ -6,12 +6,20 @@
     "guidelines": true,
     "mcp": true,
     "nightwatch_mcp": true,
+    "packages": [
+        "laravel/nightwatch",
+        "barryvdh/laravel-debugbar",
+        "laravel/fortify"
+    ],
     "sail": false,
     "skills": [
         "laravel-best-practices",
         "wayfinder-development",
         "pest-testing",
         "inertia-vue-development",
-        "tailwindcss-development"
+        "tailwindcss-development",
+        "fortify-development",
+        "configure-nightwatch",
+        "debug-using-debugbar"
     ]
 }
