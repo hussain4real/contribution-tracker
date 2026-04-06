@@ -13,7 +13,7 @@ class LogPrompts
     /**
      * Handle the incoming prompt.
      */
-    public function handle(AgentPrompt $prompt, Closure $next)
+    public function handle(AgentPrompt $prompt, Closure $next): mixed
     {
         Log::info('AI Agent prompted', [
             'agent' => $prompt->agent::class,

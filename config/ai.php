@@ -22,15 +22,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Agent Model
+    | Agent Configuration
     |--------------------------------------------------------------------------
     |
-    | The model to use for the AI agent. This should match a model available
-    | on your configured AI provider (e.g. llama3.2, llama3.1, mistral).
+    | Configure the AI provider and model for the family assistant agent.
+    | The provider should match a key in the 'providers' array below.
+    | The model should be available on the configured provider.
     |
     */
 
-    'agent_model' => env('AI_AGENT_MODEL', 'gemma4:31b'),
+    'agent' => [
+        'provider' => env('AI_AGENT_PROVIDER', 'ollama'),
+        'model' => env('AI_AGENT_MODEL', 'llama3.2'),
+    ],
 
     /*
     |--------------------------------------------------------------------------

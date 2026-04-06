@@ -8,28 +8,20 @@ use App\Ai\Tools\GetExpenseSummary;
 use App\Ai\Tools\GetMemberOverview;
 use App\Models\User;
 use Laravel\Ai\Attributes\MaxSteps;
-use Laravel\Ai\Attributes\Model;
-use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Attributes\Timeout;
-use Laravel\Ai\Attributes\UseCheapestModel;
-use Laravel\Ai\Attributes\UseSmartestModel;
 use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Stringable;
 
-#[Provider(Lab::Ollama)]
 #[MaxSteps(10)]
 #[Temperature(0.7)]
 #[Timeout(120)]
-// #[UseSmartestModel]
-// #[UseCheapestModel]
 class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasTools
 {
     use Promptable, RemembersConversations;
@@ -37,11 +29,19 @@ class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasTools
     public function __construct(public User $user) {}
 
     /**
+     * Get the provider to use for this agent.
+     */
+    public function provider(): string
+    {
+        return config('ai.agent.provider', 'ollama');
+    }
+
+    /**
      * Get the model to use for this agent.
      */
     public function model(): string
     {
-        return config('ai.agent_model', 'llama3.2');
+        return config('ai.agent.model', 'llama3.2');
     }
 
     /**

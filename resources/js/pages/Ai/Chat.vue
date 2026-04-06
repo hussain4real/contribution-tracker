@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
     index as aiIndex,
+    stream as aiStream,
     destroy,
     rename,
 } from '@/actions/App/Http/Controllers/AiChatController';
@@ -131,7 +132,7 @@ function createStream() {
     return useStream<{
         message: string;
         conversation_id?: string;
-    }>('/ai/chat', {
+    }>(aiStream().url, {
         onData: (chunk: string) => {
             parseSSEChunk(chunk);
         },

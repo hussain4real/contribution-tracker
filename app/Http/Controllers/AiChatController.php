@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
+use Laravel\Ai\Responses\StreamableAgentResponse;
 
 class AiChatController extends Controller
 {
@@ -59,7 +60,7 @@ class AiChatController extends Controller
     /**
      * Stream an AI response for the given message.
      */
-    public function stream(StreamAiChatRequest $request)
+    public function stream(StreamAiChatRequest $request): StreamableAgentResponse
     {
         set_time_limit(120);
 
@@ -120,18 +121,20 @@ class AiChatController extends Controller
         /** @var User $user */
         $user = Auth::user();
 
-        $deleted = DB::table('agent_conversations')
-            ->where('id', $conversation)
-            ->where('user_id', $user->id)
-            ->delete();
+        DB::transaction(function () use ($conversation, $user) {
+            $deleted = DB::table('agent_conversations')
+                ->where('id', $conversation)
+                ->where('user_id', $user->id)
+                ->delete();
 
-        if (! $deleted) {
-            abort(404);
-        }
+            if (! $deleted) {
+                abort(404);
+            }
 
-        DB::table('agent_conversation_messages')
-            ->where('conversation_id', $conversation)
-            ->delete();
+            DB::table('agent_conversation_messages')
+                ->where('conversation_id', $conversation)
+                ->delete();
+        });
 
         return back();
     }
