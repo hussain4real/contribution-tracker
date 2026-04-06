@@ -5,6 +5,7 @@ namespace App\Ai\Agents;
 use App\Ai\Middleware\LogPrompts;
 use App\Ai\Tools\GetContributionSummary;
 use App\Ai\Tools\GetExpenseSummary;
+use App\Ai\Tools\GetFundBalance;
 use App\Ai\Tools\GetMemberOverview;
 use App\Models\User;
 use Laravel\Ai\Attributes\MaxSteps;
@@ -87,6 +88,7 @@ class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasTools
         return [
             new GetContributionSummary($this->user),
             new GetExpenseSummary($this->user),
+            new GetFundBalance($this->user),
             new GetMemberOverview($this->user),
         ];
     }
