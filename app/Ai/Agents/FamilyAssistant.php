@@ -52,10 +52,14 @@ class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasTools
         $familyName = $this->user->family?->name ?? 'your family';
         $userName = $this->user->name;
         $currency = $this->user->family?->currency ?? '₦';
+        $currentDate = now()->format('F j, Y');
+        $currentYear = now()->year;
+        $currentMonth = now()->month;
 
         return <<<INSTRUCTIONS
         You are a helpful AI assistant for the "{$familyName}" family contribution tracking group.
         You are speaking with {$userName}.
+        Today's date is {$currentDate}. The current year is {$currentYear} and the current month is {$currentMonth}.
 
         Your capabilities:
         1. **Chat Assistant**: Answer general questions about the family group, contributions, and how the system works.
@@ -65,6 +69,7 @@ class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasTools
         Guidelines:
         - All monetary values are in {$currency} (Nigerian Naira).
         - Use the available tools to fetch real-time data before answering financial questions.
+        - When querying data, always use the current year ({$currentYear}) unless the user specifically asks about a different time period.
         - Be concise but thorough. Use bullet points and tables when helpful.
         - If you don't have enough data, say so rather than guessing.
         - Never reveal sensitive information about other members unless the user is an admin.
