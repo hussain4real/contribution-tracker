@@ -2,7 +2,7 @@ name: Publish Release
 
 on:
   issues:
-    types: [labeled]
+    types: [ labeled ]
 
 permissions:
   contents: write
@@ -15,17 +15,33 @@ jobs:
       contains(github.event.issue.labels.*.name, 'release-draft')
     runs-on: ubuntu-latest
     steps:
-      - name: Extract version from issue title
+      - name: Extract version from issue body
         id: version
         env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
           ISSUE_TITLE: ${{ github.event.issue.title }}
         run: |
-          VERSION=$(echo "$ISSUE_TITLE" | grep -oP 'v\d+\.\d+\.\d+')
+          VERSION=$(echo "$ISSUE_BODY" | grep -oP 'v\d+\.\d+\.\d+' | head -1)
           if [ -z "$VERSION" ]; then
-            echo "::error::Could not extract version from issue title: $ISSUE_TITLE"
+            VERSION=$(echo "$ISSUE_TITLE" | grep -oP 'v\d+\.\d+\.\d+')
+          fi
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not extract version from issue body or title"
             exit 1
           fi
           echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Extract release title from issue title
+        id: title
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: |
+          # Strip leading emoji and whitespace (e.g., "📝 AI Assistant" -> "AI Assistant")
+          RELEASE_TITLE=$(echo "$ISSUE_TITLE" | sed 's/^[^[:alnum:]]*//')
+          if [ -z "$RELEASE_TITLE" ]; then
+            RELEASE_TITLE="$ISSUE_TITLE"
+          fi
+          echo "release_title=$RELEASE_TITLE" >> "$GITHUB_OUTPUT"
 
       - name: Extract release notes from issue body
         id: notes
@@ -55,10 +71,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.version.outputs.tag }}
+          RELEASE_TITLE: ${{ steps.title.outputs.release_title }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           gh release create "$TAG" \
-            --title "$TAG" \
+            --title "$RELEASE_TITLE" \
             --notes-file /tmp/release_notes.txt \
             --target main
 
