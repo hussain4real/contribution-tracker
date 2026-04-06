@@ -35,8 +35,8 @@ import {
     Trash2,
     User,
 } from 'lucide-vue-next';
-import { computed, nextTick, ref, watch } from 'vue';
 import { marked } from 'marked';
+import { computed, nextTick, ref, watch } from 'vue';
 
 // Configure marked for safe rendering
 marked.setOptions({
@@ -147,16 +147,21 @@ function createStream() {
             router.reload({
                 only: ['conversations', 'activeConversationId'],
                 onSuccess: (page) => {
-                    const updatedConversations = (page.props as Record<string, unknown>)
-                        .conversations as Conversation[] | undefined;
+                    const updatedConversations = (
+                        page.props as Record<string, unknown>
+                    ).conversations as Conversation[] | undefined;
 
                     if (updatedConversations?.length) {
-                        const currentExists = currentConversationId.value &&
-                            updatedConversations.some((c) => c.id === currentConversationId.value);
+                        const currentExists =
+                            currentConversationId.value &&
+                            updatedConversations.some(
+                                (c) => c.id === currentConversationId.value,
+                            );
 
                         if (!currentExists) {
                             // Current ID is stale or null — set to the most recent conversation
-                            currentConversationId.value = updatedConversations[0].id;
+                            currentConversationId.value =
+                                updatedConversations[0].id;
                             window.history.replaceState(
                                 {},
                                 '',
@@ -434,7 +439,7 @@ function confirmDelete(): void {
                                 </div>
                                 <div
                                     v-else
-                                    class="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-2 prose-pre:my-2"
+                                    class="prose prose-sm max-w-none dark:prose-invert prose-headings:my-2 prose-p:my-1 prose-pre:my-2 prose-ol:my-1 prose-ul:my-1 prose-li:my-0.5"
                                     v-html="renderMarkdown(msg.content)"
                                 />
                             </div>
@@ -462,7 +467,7 @@ function confirmDelete(): void {
                             >
                                 <div
                                     v-if="streamingContent"
-                                    class="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-2 prose-pre:my-2"
+                                    class="prose prose-sm max-w-none dark:prose-invert prose-headings:my-2 prose-p:my-1 prose-pre:my-2 prose-ol:my-1 prose-ul:my-1 prose-li:my-0.5"
                                     v-html="renderMarkdown(streamingContent)"
                                 />
                                 <div v-else class="flex flex-col gap-2">
