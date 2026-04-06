@@ -28,13 +28,11 @@ class GetFundBalance implements Tool
      */
     public function handle(Request $request): Stringable|string
     {
-        $family = $this->user->family;
-        $familyId = $family?->id;
-
-        if (! $familyId) {
+        if (! $this->user->family_id) {
             return json_encode(['error' => 'User is not associated with a family.'], JSON_THROW_ON_ERROR);
         }
 
+        $familyId = $this->user->family_id;
         $includeBreakdown = $request['include_breakdown'] ?? false;
 
         // Amounts are stored as integers (whole currency units) across all models
@@ -55,7 +53,7 @@ class GetFundBalance implements Tool
 
         $result = [
             'fund_balance' => $balance,
-            'currency' => $family->currency ?? '₦',
+            'currency' => $this->user->family?->currency ?? '₦',
         ];
 
         if ($includeBreakdown) {
