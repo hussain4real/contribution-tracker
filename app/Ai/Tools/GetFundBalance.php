@@ -33,6 +33,7 @@ class GetFundBalance implements Tool
         }
 
         $familyId = $this->user->family_id;
+        $family = $this->user->family;
         $includeBreakdown = $request['include_breakdown'] ?? false;
 
         // Amounts are stored as integers (whole currency units) across all models
@@ -53,7 +54,7 @@ class GetFundBalance implements Tool
 
         $result = [
             'fund_balance' => $balance,
-            'currency' => $this->user->family?->currency ?? '₦',
+            'currency' => $family?->currency ?? '₦',
         ];
 
         if ($includeBreakdown) {
@@ -66,7 +67,7 @@ class GetFundBalance implements Tool
                 ->map(fn (FundAdjustment $adj) => [
                     'amount' => $adj->amount,
                     'description' => $adj->description,
-                    'recorded_at' => $adj->recorded_at->format('Y-m-d'),
+                    'recorded_at' => $adj->recorded_at?->format('Y-m-d'),
                     'recorded_by' => $adj->recorder?->name ?? 'Unknown',
                 ])->toArray();
 
