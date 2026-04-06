@@ -32,6 +32,7 @@ class DashboardController extends Controller
         $canSeeAllMembers = $user->canViewAllMembers();
         $canRecordPayments = $user->canRecordPayments();
 
+        // Eager-load payments (used for sum calculations) and user (for member filtering)
         $allContributions = Contribution::query()
             ->where('family_id', $user->family_id)
             ->with(['user', 'payments.recorder'])
@@ -84,8 +85,25 @@ class DashboardController extends Controller
         $user = Auth::user();
         $totalMembers = User::where('family_id', $user->family_id)->active()->count();
         $totalExpected = $currentMonthContributions->sum('expected_amount');
-        $totalCollected = $currentMonthContributions->sum(fn ($c) => $c->payments->sum('amount'));
-        $totalOutstanding = $totalExpected - $totalCollected;
+        $currentMonthCollected = $currentMonthContributions->sum(fn ($c) => $c->payments->sum('amount'));
+        $totalOutstanding = $totalExpected - $currentMonthCollected;
+
+        // All-time collected across all months
+        $allTimeCollected = $allContributions->sum(fn ($c) => $c->payments->sum('amount'));
+
+        // Monthly breakdown for the modal (grouped by year-month, sorted descending)
+        $monthlyBreakdown = $allContributions
+            ->groupBy(fn ($c) => $c->year.'-'.str_pad((string) $c->month, 2, '0', STR_PAD_LEFT))
+            ->map(fn ($contributions, $key) => [
+                'period' => $key,
+                'year' => $contributions->first()->year,
+                'month' => $contributions->first()->month,
+                'expected' => $contributions->sum('expected_amount'),
+                'collected' => $contributions->sum(fn ($c) => $c->payments->sum('amount')),
+            ])
+            ->sortByDesc('period')
+            ->values()
+            ->all();
 
         // Count all overdue contributions across all months (FR-006)
         $overdueCount = $allContributions->filter(fn ($c) => $c->status === PaymentStatus::Overdue)->count();
@@ -93,11 +111,13 @@ class DashboardController extends Controller
         return [
             'total_members' => $totalMembers,
             'total_expected' => $totalExpected,
-            'total_collected' => $totalCollected,
+            'total_collected' => $allTimeCollected,
+            'current_month_collected' => $currentMonthCollected,
             'total_outstanding' => $totalOutstanding,
+            'monthly_breakdown' => $monthlyBreakdown,
             'overdue_count' => $overdueCount,
-            'collection_rate' => $totalExpected > 0
-                ? round(($totalCollected / $totalExpected) * 100, 1)
+            'current_month_collection_rate' => $totalExpected > 0
+                ? round(($currentMonthCollected / $totalExpected) * 100, 1)
                 : 0,
         ];
     }

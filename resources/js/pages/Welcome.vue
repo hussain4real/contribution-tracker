@@ -206,10 +206,10 @@ onUnmounted(() => {
             <!-- Background decoration -->
             <div class="absolute inset-0 -z-10 overflow-hidden">
                 <div
-                    class="absolute -top-40 right-0 h-[500px] w-[500px] rounded-full bg-linear-to-br from-emerald-400/20 to-teal-500/20 blur-3xl dark:from-emerald-400/10 dark:to-teal-500/10"
+                    class="absolute -top-40 right-0 h-125 w-125 rounded-full bg-linear-to-br from-emerald-400/20 to-teal-500/20 blur-3xl dark:from-emerald-400/10 dark:to-teal-500/10"
                 />
                 <div
-                    class="absolute top-40 -left-20 h-[400px] w-[400px] rounded-full bg-linear-to-br from-blue-400/20 to-indigo-500/20 blur-3xl dark:from-blue-400/10 dark:to-indigo-500/10"
+                    class="absolute top-40 -left-20 h-100 w-100 rounded-full bg-linear-to-br from-blue-400/20 to-indigo-500/20 blur-3xl dark:from-blue-400/10 dark:to-indigo-500/10"
                 />
             </div>
 

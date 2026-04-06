@@ -5,6 +5,7 @@ import {
     destroy,
     rename,
 } from '@/actions/App/Http/Controllers/AiChatController';
+import ConversationList from '@/components/ai/ConversationList.vue';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -15,27 +16,13 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
 import { useStream } from '@laravel/stream-vue';
-import {
-    Bot,
-    EllipsisVertical,
-    MessageSquarePlus,
-    Pencil,
-    Send,
-    Trash2,
-    User,
-} from 'lucide-vue-next';
+import { Bot, Menu, MessageSquarePlus, Send, User, X } from 'lucide-vue-next';
 import { marked } from 'marked';
 import { computed, nextTick, ref, watch } from 'vue';
 
@@ -85,6 +72,7 @@ const chatMessages = ref<{ role: string; content: string }[]>([
 ]);
 const currentConversationId = ref<string | null>(props.activeConversationId);
 const messagesContainer = ref<HTMLElement | null>(null);
+const showMobileSidebar = ref(false);
 
 // Parsed streaming text (extracted from SSE text_delta events)
 const parsedStreamContent = ref('');
@@ -234,6 +222,7 @@ function startNewConversation(): void {
 
 // Load conversation
 function loadConversation(conversationId: string): void {
+    showMobileSidebar.value = false;
     router.visit(`${aiIndex().url}?conversation=${conversationId}`);
 }
 
@@ -291,7 +280,61 @@ function confirmDelete(): void {
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-[calc(100vh-8rem)] gap-4 p-4 lg:p-6">
-            <!-- Conversation Sidebar -->
+            <!-- Mobile Sidebar Overlay -->
+            <Teleport to="body">
+                <Transition name="fade">
+                    <div
+                        v-if="showMobileSidebar"
+                        class="fixed inset-0 z-40 bg-black/50 lg:hidden"
+                        @click="showMobileSidebar = false"
+                    />
+                </Transition>
+                <Transition name="slide">
+                    <div
+                        v-if="showMobileSidebar"
+                        class="fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-gray-200 bg-white lg:hidden dark:border-gray-700 dark:bg-gray-900"
+                    >
+                        <div
+                            class="flex items-center justify-between border-b border-gray-200 p-3 dark:border-gray-700"
+                        >
+                            <h3
+                                class="text-sm font-semibold text-gray-900 dark:text-gray-100"
+                            >
+                                Conversations
+                            </h3>
+                            <div class="flex items-center gap-1">
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    @click="
+                                        showMobileSidebar = false;
+                                        startNewConversation();
+                                    "
+                                >
+                                    <MessageSquarePlus class="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    @click="showMobileSidebar = false"
+                                >
+                                    <X class="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
+
+                        <ConversationList
+                            :conversations="conversations"
+                            :active-id="activeConversationId"
+                            @load="loadConversation"
+                            @rename="openRenameDialog"
+                            @delete="openDeleteDialog"
+                        />
+                    </div>
+                </Transition>
+            </Teleport>
+
+            <!-- Desktop Conversation Sidebar -->
             <div
                 class="hidden w-64 shrink-0 flex-col rounded-lg border border-gray-200 bg-white lg:flex dark:border-gray-700 dark:bg-gray-900"
             >
@@ -312,72 +355,41 @@ function confirmDelete(): void {
                     </Button>
                 </div>
 
-                <div class="flex-1 overflow-y-auto p-2">
-                    <div
-                        v-if="conversations.length === 0"
-                        class="px-2 py-4 text-center text-xs text-gray-500 dark:text-gray-400"
-                    >
-                        No conversations yet
-                    </div>
-
-                    <div
-                        v-for="conversation in conversations"
-                        :key="conversation.id"
-                        class="group mb-1"
-                    >
-                        <div
-                            class="flex cursor-pointer items-center justify-between rounded-md px-2 py-2 text-sm transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
-                            :class="{
-                                'bg-gray-100 dark:bg-gray-800':
-                                    activeConversationId === conversation.id,
-                            }"
-                            @click="loadConversation(conversation.id)"
-                        >
-                            <span
-                                class="truncate text-gray-700 dark:text-gray-300"
-                                >{{ conversation.title }}</span
-                            >
-
-                            <DropdownMenu>
-                                <DropdownMenuTrigger as-child>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        class="h-6 w-6 shrink-0 p-0 opacity-0 group-hover:opacity-100"
-                                        @click.stop
-                                    >
-                                        <EllipsisVertical class="h-3 w-3" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuItem
-                                        @click.stop="
-                                            openRenameDialog(conversation)
-                                        "
-                                    >
-                                        <Pencil class="mr-2 h-3 w-3" />
-                                        Rename
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                        class="text-red-600 dark:text-red-400"
-                                        @click.stop="
-                                            openDeleteDialog(conversation)
-                                        "
-                                    >
-                                        <Trash2 class="mr-2 h-3 w-3" />
-                                        Delete
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </div>
-                    </div>
-                </div>
+                <ConversationList
+                    :conversations="conversations"
+                    :active-id="activeConversationId"
+                    @load="loadConversation"
+                    @rename="openRenameDialog"
+                    @delete="openDeleteDialog"
+                />
             </div>
 
             <!-- Chat Area -->
             <div
                 class="flex min-w-0 flex-1 flex-col rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900"
             >
+                <!-- Mobile header -->
+                <div
+                    class="flex items-center gap-2 border-b border-gray-200 p-3 lg:hidden dark:border-gray-700"
+                >
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        @click="showMobileSidebar = true"
+                    >
+                        <Menu class="h-4 w-4" />
+                    </Button>
+                    <span
+                        class="truncate text-sm font-medium text-gray-900 dark:text-gray-100"
+                    >
+                        {{
+                            conversations.find(
+                                (c) => c.id === activeConversationId,
+                            )?.title ?? 'New Conversation'
+                        }}
+                    </span>
+                </div>
+
                 <!-- Messages -->
                 <div ref="messagesContainer" class="flex-1 overflow-y-auto p-4">
                     <!-- Empty state -->
@@ -411,10 +423,10 @@ function confirmDelete(): void {
                         >
                             <div
                                 v-if="msg.role !== 'user'"
-                                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900"
+                                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-100 dark:bg-teal-900"
                             >
                                 <Bot
-                                    class="h-4 w-4 text-indigo-600 dark:text-indigo-400"
+                                    class="h-4 w-4 text-teal-600 dark:text-teal-400"
                                 />
                             </div>
 
@@ -422,7 +434,7 @@ function confirmDelete(): void {
                                 class="max-w-[75%] rounded-lg px-4 py-2 text-sm"
                                 :class="
                                     msg.role === 'user'
-                                        ? 'bg-indigo-600 text-white'
+                                        ? 'bg-teal-600 text-white'
                                         : 'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100'
                                 "
                             >
@@ -441,7 +453,7 @@ function confirmDelete(): void {
 
                             <div
                                 v-if="msg.role === 'user'"
-                                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-600"
+                                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-600"
                             >
                                 <User class="h-4 w-4 text-white" />
                             </div>
@@ -450,10 +462,10 @@ function confirmDelete(): void {
                         <!-- Streaming response -->
                         <div v-if="isProcessing" class="flex gap-3">
                             <div
-                                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900"
+                                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-100 dark:bg-teal-900"
                             >
                                 <Bot
-                                    class="h-4 w-4 text-indigo-600 dark:text-indigo-400"
+                                    class="h-4 w-4 text-teal-600 dark:text-teal-400"
                                 />
                             </div>
 
@@ -564,3 +576,22 @@ function confirmDelete(): void {
         </Dialog>
     </AppLayout>
 </template>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+    transition: opacity 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+    opacity: 0;
+}
+.slide-enter-active,
+.slide-leave-active {
+    transition: transform 0.2s ease;
+}
+.slide-enter-from,
+.slide-leave-to {
+    transform: translateX(-100%);
+}
+</style>
