@@ -119,7 +119,9 @@ function createStream() {
             data: ref<string | null>(null),
             isFetching: ref(false),
             isStreaming: ref(false),
-            send: (_body: Record<string, unknown>) => {},
+            send: (_body: Record<string, unknown>) => {
+                void _body;
+            },
             cancel: () => {},
             clearData: () => {},
             id: ref<string | null>(null),
@@ -175,15 +177,7 @@ function createStream() {
     });
 }
 
-const {
-    data,
-    isFetching,
-    isStreaming,
-    send,
-    cancel,
-    clearData,
-    id: streamId,
-} = createStream();
+const { isFetching, isStreaming, send, cancel, clearData } = createStream();
 
 // Computed streaming message for display
 const streamingContent = computed(() => parsedStreamContent.value || '');
