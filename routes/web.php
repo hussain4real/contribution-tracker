@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AiChatController;
 use App\Http\Controllers\Auth\PasskeyLoginController;
 use App\Http\Controllers\Auth\PasskeyTwoFactorController;
 use App\Http\Controllers\ChangelogController;
@@ -71,6 +72,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::patch('notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
     Route::post('notifications/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('notifications.mark-all-read');
+
+    // AI Assistant
+    Route::get('ai', [AiChatController::class, 'index'])->name('ai.index');
+    Route::post('ai/chat', [AiChatController::class, 'stream'])->name('ai.chat')->middleware('throttle:30,1');
+    Route::patch('ai/conversations/{conversation}', [AiChatController::class, 'rename'])->name('ai.conversations.rename');
+    Route::delete('ai/conversations/{conversation}', [AiChatController::class, 'destroy'])->name('ai.conversations.destroy');
 
     // Changelog
     Route::get('changelog', ChangelogController::class)->name('changelog');

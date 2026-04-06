@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { index as aiIndex } from '@/actions/App/Http/Controllers/AiChatController';
 import { my as myContributions } from '@/actions/App/Http/Controllers/ContributionController';
 import { index as expensesIndex } from '@/actions/App/Http/Controllers/ExpenseController';
 import { edit as familySettings } from '@/actions/App/Http/Controllers/FamilySettingsController';
@@ -39,6 +40,7 @@ import {
     Layers,
     LayoutGrid,
     Mail,
+    MessageSquare,
     Receipt,
     Rocket,
     Settings,
@@ -92,6 +94,12 @@ const mainNavItems = computed<NavItem[]>(() => {
             href: fundAdjustmentsIndex(),
             icon: Landmark,
             component: 'FundAdjustments/Index',
+        },
+        {
+            title: 'AI Assistant',
+            href: aiIndex(),
+            icon: MessageSquare,
+            component: 'Ai/Chat',
         },
     ];
 
