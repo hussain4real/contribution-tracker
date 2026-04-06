@@ -32,6 +32,7 @@ class DashboardController extends Controller
         $canSeeAllMembers = $user->canViewAllMembers();
         $canRecordPayments = $user->canRecordPayments();
 
+        // Eager-load payments (used for sum calculations) and user (for member filtering)
         $allContributions = Contribution::query()
             ->where('family_id', $user->family_id)
             ->with(['user', 'payments.recorder'])
@@ -115,7 +116,7 @@ class DashboardController extends Controller
             'total_outstanding' => $totalOutstanding,
             'monthly_breakdown' => $monthlyBreakdown,
             'overdue_count' => $overdueCount,
-            'collection_rate' => $totalExpected > 0
+            'current_month_collection_rate' => $totalExpected > 0
                 ? round(($currentMonthCollected / $totalExpected) * 100, 1)
                 : 0,
         ];

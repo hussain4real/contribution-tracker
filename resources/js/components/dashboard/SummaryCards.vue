@@ -7,16 +7,9 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import type { MonthlyBreakdown } from '@/types/dashboard';
 import { Link } from '@inertiajs/vue3';
 import { ref } from 'vue';
-
-interface MonthlyBreakdown {
-    period: string;
-    year: number;
-    month: number;
-    expected: number;
-    collected: number;
-}
 
 defineProps<{
     totalMembers: number;
@@ -121,6 +114,12 @@ function formatMonth(month: number, year: number): string {
                         class="text-2xl font-semibold text-green-600 dark:text-green-400"
                     >
                         {{ formatCurrency(totalCollected) }}
+                    </p>
+                    <p
+                        class="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400"
+                    >
+                        This month:
+                        {{ formatCurrency(currentMonthCollected) }}
                     </p>
                 </div>
             </div>

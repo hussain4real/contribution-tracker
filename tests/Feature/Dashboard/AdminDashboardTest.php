@@ -58,7 +58,7 @@ describe('Admin Dashboard', function () {
                     ->has('total_collected')
                     ->has('total_outstanding')
                     ->has('overdue_count')
-                    ->has('collection_rate')
+                    ->has('current_month_collection_rate')
                     ->etc()
                 )
             );

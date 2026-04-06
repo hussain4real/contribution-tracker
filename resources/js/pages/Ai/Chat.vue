@@ -5,6 +5,7 @@ import {
     destroy,
     rename,
 } from '@/actions/App/Http/Controllers/AiChatController';
+import ConversationList from '@/components/ai/ConversationList.vue';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -15,29 +16,13 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
 import { useStream } from '@laravel/stream-vue';
-import {
-    Bot,
-    EllipsisVertical,
-    Menu,
-    MessageSquarePlus,
-    Pencil,
-    Send,
-    Trash2,
-    User,
-    X,
-} from 'lucide-vue-next';
+import { Bot, Menu, MessageSquarePlus, Send, User, X } from 'lucide-vue-next';
 import { marked } from 'marked';
 import { computed, nextTick, ref, watch } from 'vue';
 
@@ -338,73 +323,13 @@ function confirmDelete(): void {
                             </div>
                         </div>
 
-                        <div class="flex-1 overflow-y-auto p-2">
-                            <div
-                                v-if="conversations.length === 0"
-                                class="px-2 py-4 text-center text-xs text-gray-500 dark:text-gray-400"
-                            >
-                                No conversations yet
-                            </div>
-
-                            <div
-                                v-for="conversation in conversations"
-                                :key="conversation.id"
-                                class="group mb-1"
-                            >
-                                <div
-                                    class="flex cursor-pointer items-center justify-between rounded-md px-2 py-2 text-sm transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
-                                    :class="{
-                                        'bg-gray-100 dark:bg-gray-800':
-                                            activeConversationId ===
-                                            conversation.id,
-                                    }"
-                                    @click="loadConversation(conversation.id)"
-                                >
-                                    <span
-                                        class="truncate text-gray-700 dark:text-gray-300"
-                                        >{{ conversation.title }}</span
-                                    >
-
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger as-child>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                class="h-6 w-6 shrink-0 p-0 opacity-0 group-hover:opacity-100"
-                                                @click.stop
-                                            >
-                                                <EllipsisVertical
-                                                    class="h-3 w-3"
-                                                />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                            <DropdownMenuItem
-                                                @click.stop="
-                                                    openRenameDialog(
-                                                        conversation,
-                                                    )
-                                                "
-                                            >
-                                                <Pencil class="mr-2 h-3 w-3" />
-                                                Rename
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem
-                                                class="text-red-600 dark:text-red-400"
-                                                @click.stop="
-                                                    openDeleteDialog(
-                                                        conversation,
-                                                    )
-                                                "
-                                            >
-                                                <Trash2 class="mr-2 h-3 w-3" />
-                                                Delete
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                </div>
-                            </div>
-                        </div>
+                        <ConversationList
+                            :conversations="conversations"
+                            :active-id="activeConversationId"
+                            @load="loadConversation"
+                            @rename="openRenameDialog"
+                            @delete="openDeleteDialog"
+                        />
                     </div>
                 </Transition>
             </Teleport>
@@ -430,66 +355,13 @@ function confirmDelete(): void {
                     </Button>
                 </div>
 
-                <div class="flex-1 overflow-y-auto p-2">
-                    <div
-                        v-if="conversations.length === 0"
-                        class="px-2 py-4 text-center text-xs text-gray-500 dark:text-gray-400"
-                    >
-                        No conversations yet
-                    </div>
-
-                    <div
-                        v-for="conversation in conversations"
-                        :key="conversation.id"
-                        class="group mb-1"
-                    >
-                        <div
-                            class="flex cursor-pointer items-center justify-between rounded-md px-2 py-2 text-sm transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
-                            :class="{
-                                'bg-gray-100 dark:bg-gray-800':
-                                    activeConversationId === conversation.id,
-                            }"
-                            @click="loadConversation(conversation.id)"
-                        >
-                            <span
-                                class="truncate text-gray-700 dark:text-gray-300"
-                                >{{ conversation.title }}</span
-                            >
-
-                            <DropdownMenu>
-                                <DropdownMenuTrigger as-child>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        class="h-6 w-6 shrink-0 p-0 opacity-0 group-hover:opacity-100"
-                                        @click.stop
-                                    >
-                                        <EllipsisVertical class="h-3 w-3" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuItem
-                                        @click.stop="
-                                            openRenameDialog(conversation)
-                                        "
-                                    >
-                                        <Pencil class="mr-2 h-3 w-3" />
-                                        Rename
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                        class="text-red-600 dark:text-red-400"
-                                        @click.stop="
-                                            openDeleteDialog(conversation)
-                                        "
-                                    >
-                                        <Trash2 class="mr-2 h-3 w-3" />
-                                        Delete
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </div>
-                    </div>
-                </div>
+                <ConversationList
+                    :conversations="conversations"
+                    :active-id="activeConversationId"
+                    @load="loadConversation"
+                    @rename="openRenameDialog"
+                    @delete="openDeleteDialog"
+                />
             </div>
 
             <!-- Chat Area -->
@@ -551,10 +423,10 @@ function confirmDelete(): void {
                         >
                             <div
                                 v-if="msg.role !== 'user'"
-                                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900"
+                                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-100 dark:bg-teal-900"
                             >
                                 <Bot
-                                    class="h-4 w-4 text-indigo-600 dark:text-indigo-400"
+                                    class="h-4 w-4 text-teal-600 dark:text-teal-400"
                                 />
                             </div>
 
@@ -562,7 +434,7 @@ function confirmDelete(): void {
                                 class="max-w-[75%] rounded-lg px-4 py-2 text-sm"
                                 :class="
                                     msg.role === 'user'
-                                        ? 'bg-indigo-600 text-white'
+                                        ? 'bg-teal-600 text-white'
                                         : 'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100'
                                 "
                             >
@@ -581,7 +453,7 @@ function confirmDelete(): void {
 
                             <div
                                 v-if="msg.role === 'user'"
-                                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-600"
+                                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-600"
                             >
                                 <User class="h-4 w-4 text-white" />
                             </div>
@@ -590,10 +462,10 @@ function confirmDelete(): void {
                         <!-- Streaming response -->
                         <div v-if="isProcessing" class="flex gap-3">
                             <div
-                                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900"
+                                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-100 dark:bg-teal-900"
                             >
                                 <Bot
-                                    class="h-4 w-4 text-indigo-600 dark:text-indigo-400"
+                                    class="h-4 w-4 text-teal-600 dark:text-teal-400"
                                 />
                             </div>
 
