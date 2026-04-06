@@ -33,7 +33,7 @@ class GetFundBalance implements Tool
         }
 
         $familyId = $this->user->family_id;
-        $family = $this->user->family;
+        $this->user->loadMissing('family');
         $includeBreakdown = $request['include_breakdown'] ?? false;
 
         // Amounts are stored as integers (whole currency units) across all models
@@ -54,7 +54,7 @@ class GetFundBalance implements Tool
 
         $result = [
             'fund_balance' => $balance,
-            'currency' => $family?->currency ?? '₦',
+            'currency' => $this->user->family?->currency ?? '₦',
         ];
 
         if ($includeBreakdown) {
