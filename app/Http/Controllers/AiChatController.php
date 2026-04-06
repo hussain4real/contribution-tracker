@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Ai\Agents\FamilyAssistant;
+use App\Http\Requests\RenameAiConversationRequest;
+use App\Http\Requests\StreamAiChatRequest;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -31,23 +33,19 @@ class AiChatController extends Controller
         $activeConversationId = $request->query('conversation');
 
         if ($activeConversationId) {
-            $conversation = DB::table('agent_conversations')
+            $ownsConversation = DB::table('agent_conversations')
                 ->where('id', $activeConversationId)
                 ->where('user_id', $user->id)
-                ->first();
+                ->exists();
 
-            if ($conversation) {
+            if ($ownsConversation) {
                 $messages = DB::table('agent_conversation_messages')
                     ->where('conversation_id', $activeConversationId)
                     ->orderBy('created_at')
                     ->get(['id', 'role', 'content', 'created_at'])
-                    ->map(fn ($m) => [
-                        'id' => $m->id,
-                        'role' => $m->role,
-                        'content' => $m->content,
-                        'created_at' => $m->created_at,
-                    ])
                     ->toArray();
+            } else {
+                $activeConversationId = null;
             }
         }
 
@@ -61,59 +59,51 @@ class AiChatController extends Controller
     /**
      * Stream an AI response for the given message.
      */
-    public function stream(Request $request)
+    public function stream(StreamAiChatRequest $request)
     {
         set_time_limit(120);
 
-        $request->validate([
-            'message' => ['required', 'string', 'max:5000'],
-            'conversation_id' => ['nullable', 'string', 'max:36'],
-        ]);
+        $validated = $request->validated();
 
         /** @var User $user */
         $user = Auth::user();
         $agent = new FamilyAssistant($user);
-        $conversationId = $request->input('conversation_id');
+        $conversationId = $validated['conversation_id'] ?? null;
 
         if ($conversationId) {
-            $exists = DB::table('agent_conversations')
+            $ownsConversation = DB::table('agent_conversations')
                 ->where('id', $conversationId)
                 ->where('user_id', $user->id)
                 ->exists();
 
-            if (! $exists) {
-                // Conversation not found or doesn't belong to user — start fresh
+            if (! $ownsConversation) {
                 return $agent
                     ->forUser($user)
-                    ->stream($request->input('message'));
+                    ->stream($validated['message']);
             }
 
             return $agent
                 ->continue($conversationId, as: $user)
-                ->stream($request->input('message'));
+                ->stream($validated['message']);
         }
 
         return $agent
             ->forUser($user)
-            ->stream($request->input('message'));
+            ->stream($validated['message']);
     }
 
     /**
      * Rename a conversation.
      */
-    public function rename(Request $request, string $conversation): RedirectResponse
+    public function rename(RenameAiConversationRequest $request, string $conversation): RedirectResponse
     {
-        $request->validate([
-            'title' => ['required', 'string', 'max:255'],
-        ]);
-
         /** @var User $user */
         $user = Auth::user();
 
         $updated = DB::table('agent_conversations')
             ->where('id', $conversation)
             ->where('user_id', $user->id)
-            ->update(['title' => $request->input('title')]);
+            ->update(['title' => $request->validated('title')]);
 
         if (! $updated) {
             abort(404);
@@ -130,22 +120,17 @@ class AiChatController extends Controller
         /** @var User $user */
         $user = Auth::user();
 
-        $exists = DB::table('agent_conversations')
+        $deleted = DB::table('agent_conversations')
             ->where('id', $conversation)
             ->where('user_id', $user->id)
-            ->exists();
+            ->delete();
 
-        if (! $exists) {
+        if (! $deleted) {
             abort(404);
         }
 
         DB::table('agent_conversation_messages')
             ->where('conversation_id', $conversation)
-            ->delete();
-
-        DB::table('agent_conversations')
-            ->where('id', $conversation)
-            ->where('user_id', $user->id)
             ->delete();
 
         return back();

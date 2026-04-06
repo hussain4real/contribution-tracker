@@ -28,11 +28,12 @@ class GetMemberOverview implements Tool
         $members = User::query()
             ->where('family_id', $this->user->family_id)
             ->active()
-            ->with(['familyCategory', 'contributions' => function ($q) {
+            ->with(['familyCategory:id,name', 'contributions' => function ($q) {
                 $q->where('year', now()->year)
                     ->where('month', now()->month)
-                    ->with('payments');
+                    ->with('payments:id,contribution_id,amount');
             }])
+            ->orderBy('name')
             ->get();
 
         $memberData = $members->map(function (User $member) {

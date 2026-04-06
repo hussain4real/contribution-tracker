@@ -26,19 +26,21 @@ class GetExpenseSummary implements Tool
      */
     public function handle(Request $request): Stringable|string
     {
-        $query = Expense::query()
-            ->where('family_id', $this->user->family_id)
-            ->with('recorder')
-            ->latestFirst();
-
         $startDate = $request['start_date'] ?? now()->startOfMonth()->toDateString();
         $endDate = $request['end_date'] ?? now()->endOfMonth()->toDateString();
 
-        $query->spentBetween($startDate, $endDate);
+        $baseQuery = Expense::query()
+            ->where('family_id', $this->user->family_id)
+            ->spentBetween($startDate, $endDate);
 
-        $expenses = $query->limit(50)->get();
+        $totalAmount = (clone $baseQuery)->sum('amount');
+        $totalCount = (clone $baseQuery)->count();
 
-        $totalAmount = $expenses->sum('amount');
+        $expenses = $baseQuery
+            ->with('recorder:id,name')
+            ->latestFirst()
+            ->limit(50)
+            ->get();
 
         $expenseList = $expenses->map(fn (Expense $expense) => [
             'description' => $expense->description,
@@ -50,7 +52,7 @@ class GetExpenseSummary implements Tool
         return json_encode([
             'period' => "{$startDate} to {$endDate}",
             'total_amount' => $totalAmount,
-            'expense_count' => $expenses->count(),
+            'expense_count' => $totalCount,
             'expenses' => $expenseList,
         ], JSON_THROW_ON_ERROR);
     }

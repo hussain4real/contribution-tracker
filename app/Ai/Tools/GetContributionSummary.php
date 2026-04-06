@@ -32,7 +32,7 @@ class GetContributionSummary implements Tool
         $query = Contribution::query()
             ->where('family_id', $this->user->family_id)
             ->where('year', $year)
-            ->with(['user', 'payments'])
+            ->with(['user:id,name', 'payments:id,contribution_id,amount'])
             ->whereHas('user', fn ($q) => $q->whereNull('archived_at'));
 
         if ($month) {
