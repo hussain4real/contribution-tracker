@@ -1,14 +1,32 @@
 <script setup lang="ts">
 import { index as paymentsIndex } from '@/actions/App/Http/Controllers/PaymentController';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Link } from '@inertiajs/vue3';
+import { ref } from 'vue';
+
+interface MonthlyBreakdown {
+    period: string;
+    year: number;
+    month: number;
+    expected: number;
+    collected: number;
+}
 
 defineProps<{
     totalMembers: number;
     totalExpected: number;
     totalCollected: number;
+    currentMonthCollected: number;
     totalOutstanding: number;
     overdueCount: number;
     collectionRate: number;
+    monthlyBreakdown: MonthlyBreakdown[];
     canRecordPayments: boolean;
 }>();
 
@@ -16,12 +34,21 @@ const emit = defineEmits<{
     overdueClick: [];
 }>();
 
+const showBreakdownModal = ref(false);
+
 // Format currency in Naira
 function formatCurrency(amount: number): string {
     return new Intl.NumberFormat('en-NG', {
         style: 'currency',
         currency: 'NGN',
     }).format(amount);
+}
+
+function formatMonth(month: number, year: number): string {
+    return new Date(year, month - 1).toLocaleDateString('en-NG', {
+        month: 'short',
+        year: 'numeric',
+    });
 }
 </script>
 
@@ -63,8 +90,10 @@ function formatCurrency(amount: number): string {
         </div>
 
         <!-- Total Collected -->
-        <div
-            class="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border dark:bg-neutral-900"
+        <button
+            type="button"
+            class="cursor-pointer rounded-xl border border-sidebar-border/70 bg-white p-6 text-left transition-all duration-200 hover:border-green-300 hover:shadow-md active:scale-[0.98] dark:border-sidebar-border dark:bg-neutral-900 dark:hover:border-green-700"
+            @click="showBreakdownModal = true"
         >
             <div class="flex items-center gap-3">
                 <div
@@ -95,7 +124,7 @@ function formatCurrency(amount: number): string {
                     </p>
                 </div>
             </div>
-        </div>
+        </button>
 
         <!-- Outstanding -->
         <div
@@ -230,4 +259,78 @@ function formatCurrency(amount: number): string {
             />
         </div>
     </div>
+
+    <!-- Monthly Breakdown Modal -->
+    <Dialog v-model:open="showBreakdownModal">
+        <DialogContent class="max-h-[80vh] sm:max-w-lg">
+            <DialogHeader>
+                <DialogTitle>Monthly Collection Breakdown</DialogTitle>
+                <DialogDescription>
+                    All-time total:
+                    {{ formatCurrency(totalCollected) }}
+                </DialogDescription>
+            </DialogHeader>
+
+            <div class="max-h-[60vh] overflow-y-auto">
+                <table class="w-full text-left text-sm">
+                    <thead class="sticky top-0 bg-white dark:bg-neutral-950">
+                        <tr
+                            class="border-b border-neutral-200 dark:border-neutral-700"
+                        >
+                            <th
+                                class="px-3 py-2 font-medium text-neutral-600 dark:text-neutral-400"
+                            >
+                                Month
+                            </th>
+                            <th
+                                class="px-3 py-2 text-right font-medium text-neutral-600 dark:text-neutral-400"
+                            >
+                                Expected
+                            </th>
+                            <th
+                                class="px-3 py-2 text-right font-medium text-neutral-600 dark:text-neutral-400"
+                            >
+                                Collected
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr
+                            v-for="row in monthlyBreakdown"
+                            :key="row.period"
+                            class="border-b border-neutral-100 dark:border-neutral-800"
+                        >
+                            <td
+                                class="px-3 py-2 text-neutral-900 dark:text-neutral-100"
+                            >
+                                {{ formatMonth(row.month, row.year) }}
+                            </td>
+                            <td
+                                class="px-3 py-2 text-right text-neutral-600 dark:text-neutral-400"
+                            >
+                                {{ formatCurrency(row.expected) }}
+                            </td>
+                            <td
+                                class="px-3 py-2 text-right font-medium"
+                                :class="
+                                    row.collected >= row.expected
+                                        ? 'text-green-600 dark:text-green-400'
+                                        : 'text-amber-600 dark:text-amber-400'
+                                "
+                            >
+                                {{ formatCurrency(row.collected) }}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div
+                    v-if="monthlyBreakdown.length === 0"
+                    class="py-8 text-center text-sm text-neutral-500 dark:text-neutral-400"
+                >
+                    No collection data available yet.
+                </div>
+            </div>
+        </DialogContent>
+    </Dialog>
 </template>

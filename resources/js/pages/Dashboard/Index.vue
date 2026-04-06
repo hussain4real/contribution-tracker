@@ -17,13 +17,23 @@ import { computed, ref } from 'vue';
 usePoll(30000);
 
 // Props types
+interface MonthlyBreakdown {
+    period: string;
+    year: number;
+    month: number;
+    expected: number;
+    collected: number;
+}
+
 interface Summary {
     total_members: number;
     total_expected: number;
     total_collected: number;
+    current_month_collected: number;
     total_outstanding: number;
     overdue_count: number;
     collection_rate: number;
+    monthly_breakdown: MonthlyBreakdown[];
 }
 
 interface MemberStatus {
@@ -188,9 +198,11 @@ function formatCurrency(amount: number): string {
                     :total-members="summary.total_members"
                     :total-expected="summary.total_expected"
                     :total-collected="summary.total_collected"
+                    :current-month-collected="summary.current_month_collected"
                     :total-outstanding="summary.total_outstanding"
                     :overdue-count="summary.overdue_count"
                     :collection-rate="summary.collection_rate"
+                    :monthly-breakdown="summary.monthly_breakdown"
                     :can-record-payments="can_record_payments"
                     @overdue-click="showOverdueModal = true"
                 />
