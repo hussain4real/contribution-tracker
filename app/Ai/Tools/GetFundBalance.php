@@ -39,8 +39,9 @@ class GetFundBalance implements Tool
 
         // Amounts are stored as integers (whole currency units) across all models
         $totalPayments = (int) Payment::query()
-            ->whereHas('contribution', fn ($q) => $q->where('family_id', $familyId))
-            ->sum('amount');
+            ->join('contributions', 'contributions.id', '=', 'payments.contribution_id')
+            ->where('contributions.family_id', $familyId)
+            ->sum('payments.amount');
 
         $totalAdjustments = (int) FundAdjustment::query()
             ->where('family_id', $familyId)
