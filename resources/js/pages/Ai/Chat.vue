@@ -24,7 +24,7 @@ import { Head, router } from '@inertiajs/vue3';
 import { useStream } from '@laravel/stream-vue';
 import { Bot, Menu, MessageSquarePlus, Send, User, X } from 'lucide-vue-next';
 import { marked } from 'marked';
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 
 // Configure marked for safe rendering
 marked.setOptions({
@@ -73,6 +73,12 @@ const chatMessages = ref<{ role: string; content: string }[]>([
 const currentConversationId = ref<string | null>(props.activeConversationId);
 const messagesContainer = ref<HTMLElement | null>(null);
 const showMobileSidebar = ref(false);
+
+// Defer Teleport rendering to avoid SSR hydration mismatch
+const isMounted = ref(false);
+onMounted(() => {
+    isMounted.value = true;
+});
 
 // Parsed streaming text (extracted from SSE text_delta events)
 const parsedStreamContent = ref('');
@@ -281,7 +287,7 @@ function confirmDelete(): void {
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-[calc(100vh-8rem)] gap-4 p-4 lg:p-6">
             <!-- Mobile Sidebar Overlay -->
-            <Teleport to="body">
+            <Teleport v-if="isMounted" to="body">
                 <Transition name="fade">
                     <div
                         v-if="showMobileSidebar"
