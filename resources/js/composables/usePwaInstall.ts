@@ -12,6 +12,7 @@ const dismissed = ref(false);
 
 const DISMISS_KEY = 'pwa-install-dismissed';
 const DISMISS_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+let initialized = false;
 
 function isDismissed(): boolean {
     const raw = localStorage.getItem(DISMISS_KEY);
@@ -25,6 +26,8 @@ function isDismissed(): boolean {
 }
 
 function init(): void {
+    if (initialized) return;
+    initialized = true;
     // Check if already installed (standalone mode)
     if (
         window.matchMedia('(display-mode: standalone)').matches ||
