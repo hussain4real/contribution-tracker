@@ -33,7 +33,7 @@ export default defineConfig({
                 enabled: true,
                 type: 'module',
             },
-            includeAssets: ['favicon.ico', 'favicon.svg', 'apple-touch-icon.png'],
+            includeAssets: ['favicon.ico', 'favicon.svg', 'apple-touch-icon.png', 'offline.html'],
             manifest: {
                 name: 'FamilyFunds',
                 short_name: 'FamilyFunds',
@@ -55,7 +55,7 @@ export default defineConfig({
                         type: 'image/png',
                     },
                     {
-                        src: '/pwa-512x512.png',
+                        src: '/pwa-512x512-maskable.png',
                         sizes: '512x512',
                         type: 'image/png',
                         purpose: 'maskable',

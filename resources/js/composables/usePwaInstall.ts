@@ -61,6 +61,10 @@ async function install(): Promise<boolean> {
     deferredPrompt.value = null;
     isInstallable.value = false;
 
+    if (outcome === 'dismissed') {
+        dismiss();
+    }
+
     return outcome === 'accepted';
 }
 
