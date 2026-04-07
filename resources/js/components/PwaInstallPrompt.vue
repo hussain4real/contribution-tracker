@@ -63,7 +63,11 @@ function handleDismiss(): void {
 <template>
     <Dialog
         v-model:open="open"
-        @update:open="(val: boolean) => { if (!val) handleDismiss(); }"
+        @update:open="
+            (val: boolean) => {
+                if (!val) handleDismiss();
+            }
+        "
     >
         <DialogContent class="sm:max-w-md">
             <DialogHeader>
