@@ -74,7 +74,7 @@ const currentConversationId = ref<string | null>(props.activeConversationId);
 const messagesContainer = ref<HTMLElement | null>(null);
 const showMobileSidebar = ref(false);
 
-// Defer Teleport rendering to avoid SSR hydration mismatch
+// Skip Teleport during SSR to prevent hydration mismatch
 const isMounted = ref(false);
 onMounted(() => {
     isMounted.value = true;
