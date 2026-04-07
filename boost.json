@@ -7,21 +7,18 @@
     "mcp": true,
     "nightwatch_mcp": true,
     "packages": [
-        "laravel/nightwatch",
-        "barryvdh/laravel-debugbar",
-        "laravel/fortify",
-        "laravel/ai"
+        "barryvdh/laravel-debugbar"
     ],
     "sail": false,
     "skills": [
+        "ai-sdk-development",
+        "fortify-development",
         "laravel-best-practices",
+        "configure-nightwatch",
         "wayfinder-development",
         "pest-testing",
         "inertia-vue-development",
         "tailwindcss-development",
-        "ai-sdk-development",
-        "fortify-development",
-        "configure-nightwatch",
         "debug-using-debugbar"
     ]
 }

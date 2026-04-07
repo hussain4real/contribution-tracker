@@ -8,16 +8,16 @@
     "packages": [
         {
             "name": "bacon/bacon-qr-code",
-            "version": "v3.0.4",
+            "version": "v3.1.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/Bacon/BaconQrCode.git",
-                "reference": "3feed0e212b8412cc5d2612706744789b0615824"
+                "reference": "4da2233e72eeecd9be3b62e0dc2cc9ed8e2e31c2"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/Bacon/BaconQrCode/zipball/3feed0e212b8412cc5d2612706744789b0615824",
-                "reference": "3feed0e212b8412cc5d2612706744789b0615824",
+                "url": "https://api.github.com/repos/Bacon/BaconQrCode/zipball/4da2233e72eeecd9be3b62e0dc2cc9ed8e2e31c2",
+                "reference": "4da2233e72eeecd9be3b62e0dc2cc9ed8e2e31c2",
                 "shasum": ""
             },
             "require": {
@@ -57,9 +57,9 @@
             "homepage": "https://github.com/Bacon/BaconQrCode",
             "support": {
                 "issues": "https://github.com/Bacon/BaconQrCode/issues",
-                "source": "https://github.com/Bacon/BaconQrCode/tree/v3.0.4"
+                "source": "https://github.com/Bacon/BaconQrCode/tree/v3.1.1"
             },
-            "time": "2026-03-16T01:01:30+00:00"
+            "time": "2026-04-05T21:06:35+00:00"
         },
         {
             "name": "brick/math",
@@ -1160,16 +1160,16 @@
         },
         {
             "name": "inertiajs/inertia-laravel",
-            "version": "v3.0.1",
+            "version": "v3.0.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/inertiajs/inertia-laravel.git",
-                "reference": "4675331c428c0f77b2539684835c5e0fd27ee023"
+                "reference": "25fe835d0fadf988d2cd8974d4a7b64048f84eda"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/inertiajs/inertia-laravel/zipball/4675331c428c0f77b2539684835c5e0fd27ee023",
-                "reference": "4675331c428c0f77b2539684835c5e0fd27ee023",
+                "url": "https://api.github.com/repos/inertiajs/inertia-laravel/zipball/25fe835d0fadf988d2cd8974d4a7b64048f84eda",
+                "reference": "25fe835d0fadf988d2cd8974d4a7b64048f84eda",
                 "shasum": ""
             },
             "require": {
@@ -1227,22 +1227,22 @@
             ],
             "support": {
                 "issues": "https://github.com/inertiajs/inertia-laravel/issues",
-                "source": "https://github.com/inertiajs/inertia-laravel/tree/v3.0.1"
+                "source": "https://github.com/inertiajs/inertia-laravel/tree/v3.0.2"
             },
-            "time": "2026-03-25T21:07:46+00:00"
+            "time": "2026-04-07T14:00:22+00:00"
         },
         {
             "name": "laravel/ai",
-            "version": "v0.4.3",
+            "version": "v0.4.4",
             "source": {
                 "type": "git",
                 "url": "https://github.com/laravel/ai.git",
-                "reference": "48fbf714458f93f22ec39ed3d4bb65a4bdfd163b"
+                "reference": "c905c3816a9fa2ef9c6a419566d4b420676f629c"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/laravel/ai/zipball/48fbf714458f93f22ec39ed3d4bb65a4bdfd163b",
-                "reference": "48fbf714458f93f22ec39ed3d4bb65a4bdfd163b",
+                "url": "https://api.github.com/repos/laravel/ai/zipball/c905c3816a9fa2ef9c6a419566d4b420676f629c",
+                "reference": "c905c3816a9fa2ef9c6a419566d4b420676f629c",
                 "shasum": ""
             },
             "require": {
@@ -1295,7 +1295,7 @@
                 "issues": "https://github.com/laravel/ai/issues",
                 "source": "https://github.com/laravel/ai"
             },
-            "time": "2026-04-01T07:35:26+00:00"
+            "time": "2026-04-06T14:02:31+00:00"
         },
         {
             "name": "laravel/fortify",
@@ -1362,16 +1362,16 @@
         },
         {
             "name": "laravel/framework",
-            "version": "v13.3.0",
+            "version": "v13.4.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/laravel/framework.git",
-                "reference": "118b7063c44a2f3421d1646f5ddf08defcfd1db3"
+                "reference": "912de244f88a69742b76e8a2807f6765947776da"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/laravel/framework/zipball/118b7063c44a2f3421d1646f5ddf08defcfd1db3",
-                "reference": "118b7063c44a2f3421d1646f5ddf08defcfd1db3",
+                "url": "https://api.github.com/repos/laravel/framework/zipball/912de244f88a69742b76e8a2807f6765947776da",
+                "reference": "912de244f88a69742b76e8a2807f6765947776da",
                 "shasum": ""
             },
             "require": {
@@ -1580,7 +1580,7 @@
                 "issues": "https://github.com/laravel/framework/issues",
                 "source": "https://github.com/laravel/framework"
             },
-            "time": "2026-04-01T15:39:53+00:00"
+            "time": "2026-04-07T13:38:26+00:00"
         },
         {
             "name": "laravel/nightwatch",
@@ -1737,16 +1737,16 @@
         },
         {
             "name": "laravel/serializable-closure",
-            "version": "v2.0.10",
+            "version": "v2.0.11",
             "source": {
                 "type": "git",
                 "url": "https://github.com/laravel/serializable-closure.git",
-                "reference": "870fc81d2f879903dfc5b60bf8a0f94a1609e669"
+                "reference": "d1af40ac4a6ccc12bd062a7184f63c9995a63bdd"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/laravel/serializable-closure/zipball/870fc81d2f879903dfc5b60bf8a0f94a1609e669",
-                "reference": "870fc81d2f879903dfc5b60bf8a0f94a1609e669",
+                "url": "https://api.github.com/repos/laravel/serializable-closure/zipball/d1af40ac4a6ccc12bd062a7184f63c9995a63bdd",
+                "reference": "d1af40ac4a6ccc12bd062a7184f63c9995a63bdd",
                 "shasum": ""
             },
             "require": {
@@ -1794,7 +1794,7 @@
                 "issues": "https://github.com/laravel/serializable-closure/issues",
                 "source": "https://github.com/laravel/serializable-closure"
             },
-            "time": "2026-02-20T19:59:49+00:00"
+            "time": "2026-04-07T13:32:18+00:00"
         },
         {
             "name": "laravel/tinker",
@@ -2592,16 +2592,16 @@
         },
         {
             "name": "nesbot/carbon",
-            "version": "3.11.3",
+            "version": "3.11.4",
             "source": {
                 "type": "git",
                 "url": "https://github.com/CarbonPHP/carbon.git",
-                "reference": "6a7e652845bb018c668220c2a545aded8594fbbf"
+                "reference": "e890471a3494740f7d9326d72ce6a8c559ffee60"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/CarbonPHP/carbon/zipball/6a7e652845bb018c668220c2a545aded8594fbbf",
-                "reference": "6a7e652845bb018c668220c2a545aded8594fbbf",
+                "url": "https://api.github.com/repos/CarbonPHP/carbon/zipball/e890471a3494740f7d9326d72ce6a8c559ffee60",
+                "reference": "e890471a3494740f7d9326d72ce6a8c559ffee60",
                 "shasum": ""
             },
             "require": {
@@ -2693,7 +2693,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-03-11T17:23:39+00:00"
+            "time": "2026-04-07T09:57:54+00:00"
         },
         {
             "name": "nette/schema",
@@ -7749,24 +7749,27 @@
         },
         {
             "name": "amphp/serialization",
-            "version": "v1.0.0",
+            "version": "v1.1.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/amphp/serialization.git",
-                "reference": "693e77b2fb0b266c3c7d622317f881de44ae94a1"
+                "reference": "fdf2834d78cebb0205fb2672676c1b1eb84371f0"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/amphp/serialization/zipball/693e77b2fb0b266c3c7d622317f881de44ae94a1",
-                "reference": "693e77b2fb0b266c3c7d622317f881de44ae94a1",
+                "url": "https://api.github.com/repos/amphp/serialization/zipball/fdf2834d78cebb0205fb2672676c1b1eb84371f0",
+                "reference": "fdf2834d78cebb0205fb2672676c1b1eb84371f0",
                 "shasum": ""
             },
             "require": {
-                "php": ">=7.1"
+                "php": ">=7.4"
             },
             "require-dev": {
-                "amphp/php-cs-fixer-config": "dev-master",
-                "phpunit/phpunit": "^9 || ^8 || ^7"
+                "amphp/php-cs-fixer-config": "^2",
+                "ext-json": "*",
+                "ext-zlib": "*",
+                "phpunit/phpunit": "^9",
+                "psalm/phar": "6.16.1"
             },
             "type": "library",
             "autoload": {
@@ -7801,9 +7804,15 @@
             ],
             "support": {
                 "issues": "https://github.com/amphp/serialization/issues",
-                "source": "https://github.com/amphp/serialization/tree/master"
+                "source": "https://github.com/amphp/serialization/tree/v1.1.0"
             },
-            "time": "2020-03-25T21:39:07+00:00"
+            "funding": [
+                {
+                    "url": "https://github.com/amphp",
+                    "type": "github"
+                }
+            ],
+            "time": "2026-04-05T15:59:53+00:00"
         },
         {
             "name": "amphp/socket",
@@ -8131,16 +8140,16 @@
         },
         {
             "name": "barryvdh/laravel-debugbar",
-            "version": "v4.2.3",
+            "version": "v4.2.4",
             "source": {
                 "type": "git",
                 "url": "https://github.com/fruitcake/laravel-debugbar.git",
-                "reference": "19b1d385cd5302aa4bf18737689e4e7115603e35"
+                "reference": "3c70910acfb35850b9304278b4af97fecb1128f4"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/fruitcake/laravel-debugbar/zipball/19b1d385cd5302aa4bf18737689e4e7115603e35",
-                "reference": "19b1d385cd5302aa4bf18737689e4e7115603e35",
+                "url": "https://api.github.com/repos/fruitcake/laravel-debugbar/zipball/3c70910acfb35850b9304278b4af97fecb1128f4",
+                "reference": "3c70910acfb35850b9304278b4af97fecb1128f4",
                 "shasum": ""
             },
             "require": {
@@ -8148,7 +8157,7 @@
                 "illuminate/session": "^11|^12|^13.0",
                 "illuminate/support": "^11|^12|^13.0",
                 "php": "^8.2",
-                "php-debugbar/php-debugbar": "^3.6",
+                "php-debugbar/php-debugbar": "^3.7",
                 "php-debugbar/symfony-bridge": "^1.1"
             },
             "require-dev": {
@@ -8214,7 +8223,7 @@
             ],
             "support": {
                 "issues": "https://github.com/fruitcake/laravel-debugbar/issues",
-                "source": "https://github.com/fruitcake/laravel-debugbar/tree/v4.2.3"
+                "source": "https://github.com/fruitcake/laravel-debugbar/tree/v4.2.4"
             },
             "funding": [
                 {
@@ -8226,7 +8235,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-04-03T12:11:29+00:00"
+            "time": "2026-04-04T08:05:27+00:00"
         },
         {
             "name": "brianium/paratest",
@@ -8779,16 +8788,16 @@
         },
         {
             "name": "laravel/boost",
-            "version": "v2.4.1",
+            "version": "v2.4.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/laravel/boost.git",
-                "reference": "f6241df9fd81a86d79a051851177d4ffe3e28506"
+                "reference": "74fedf18048d382e04eded004abe2ad1ee1d9a97"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/laravel/boost/zipball/f6241df9fd81a86d79a051851177d4ffe3e28506",
-                "reference": "f6241df9fd81a86d79a051851177d4ffe3e28506",
+                "url": "https://api.github.com/repos/laravel/boost/zipball/74fedf18048d382e04eded004abe2ad1ee1d9a97",
+                "reference": "74fedf18048d382e04eded004abe2ad1ee1d9a97",
                 "shasum": ""
             },
             "require": {
@@ -8841,7 +8850,7 @@
                 "issues": "https://github.com/laravel/boost/issues",
                 "source": "https://github.com/laravel/boost"
             },
-            "time": "2026-03-25T16:37:40+00:00"
+            "time": "2026-04-07T14:34:49+00:00"
         },
         {
             "name": "laravel/mcp",
@@ -9417,16 +9426,16 @@
         },
         {
             "name": "nunomaduro/collision",
-            "version": "v8.9.2",
+            "version": "v8.9.3",
             "source": {
                 "type": "git",
                 "url": "https://github.com/nunomaduro/collision.git",
-                "reference": "6eb16883e74fd725ac64dbe81544c961ab448ba5"
+                "reference": "b0d8ab95b29c3189aeeb902d81215231df4c1b64"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/nunomaduro/collision/zipball/6eb16883e74fd725ac64dbe81544c961ab448ba5",
-                "reference": "6eb16883e74fd725ac64dbe81544c961ab448ba5",
+                "url": "https://api.github.com/repos/nunomaduro/collision/zipball/b0d8ab95b29c3189aeeb902d81215231df4c1b64",
+                "reference": "b0d8ab95b29c3189aeeb902d81215231df4c1b64",
                 "shasum": ""
             },
             "require": {
@@ -9509,7 +9518,7 @@
                     "type": "patreon"
                 }
             ],
-            "time": "2026-03-31T21:51:27+00:00"
+            "time": "2026-04-06T19:25:53+00:00"
         },
         {
             "name": "pestphp/pest",
@@ -10176,16 +10185,16 @@
         },
         {
             "name": "php-debugbar/php-debugbar",
-            "version": "v3.6.4",
+            "version": "v3.7.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/php-debugbar/php-debugbar.git",
-                "reference": "9b25a64b07a1d6820a3c33e0d59338d30fe1d683"
+                "reference": "032dd5a385f528fcf0c8676af49559b2d1a0bea6"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/php-debugbar/php-debugbar/zipball/9b25a64b07a1d6820a3c33e0d59338d30fe1d683",
-                "reference": "9b25a64b07a1d6820a3c33e0d59338d30fe1d683",
+                "url": "https://api.github.com/repos/php-debugbar/php-debugbar/zipball/032dd5a385f528fcf0c8676af49559b2d1a0bea6",
+                "reference": "032dd5a385f528fcf0c8676af49559b2d1a0bea6",
                 "shasum": ""
             },
             "require": {
@@ -10262,7 +10271,7 @@
             ],
             "support": {
                 "issues": "https://github.com/php-debugbar/php-debugbar/issues",
-                "source": "https://github.com/php-debugbar/php-debugbar/tree/v3.6.4"
+                "source": "https://github.com/php-debugbar/php-debugbar/tree/v3.7.2"
             },
             "funding": [
                 {
@@ -10274,7 +10283,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-04-03T12:04:25+00:00"
+            "time": "2026-04-07T10:37:03+00:00"
         },
         {
             "name": "php-debugbar/symfony-bridge",
