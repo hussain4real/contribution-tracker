@@ -62,7 +62,9 @@ async function install(): Promise<boolean> {
     isInstallable.value = false;
 
     if (outcome === 'dismissed') {
-        dismiss();
+        // Shorter 1-hour cooldown for native dialog dismissal (user showed intent to install)
+        dismissed.value = true;
+        localStorage.setItem(DISMISS_KEY, (Date.now() - DISMISS_DURATION_MS + 60 * 60 * 1000).toString());
     }
 
     return outcome === 'accepted';

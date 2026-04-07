@@ -61,7 +61,10 @@ function handleDismiss(): void {
 </script>
 
 <template>
-    <Dialog v-model:open="open">
+    <Dialog
+        v-model:open="open"
+        @update:open="(val: boolean) => { if (!val) handleDismiss(); }"
+    >
         <DialogContent class="sm:max-w-md">
             <DialogHeader>
                 <div class="flex items-center gap-3">
