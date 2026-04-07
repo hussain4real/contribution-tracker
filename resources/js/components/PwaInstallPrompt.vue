@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { usePwaInstall } from '@/composables/usePwaInstall';
 import { Download } from 'lucide-vue-next';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
 const { isInstallable, isInstalled, dismissed, init, install, dismiss } =
     usePwaInstall();
@@ -28,11 +28,14 @@ const shouldShow = computed(
 );
 
 // Show the dialog 3 seconds after the app becomes installable
+let showTimer: ReturnType<typeof setTimeout> | undefined;
+
 watch(
     shouldShow,
     (canShow) => {
+        clearTimeout(showTimer);
         if (canShow) {
-            setTimeout(() => {
+            showTimer = setTimeout(() => {
                 if (shouldShow.value) {
                     open.value = true;
                 }
@@ -41,6 +44,8 @@ watch(
     },
     { immediate: true },
 );
+
+onUnmounted(() => clearTimeout(showTimer));
 
 async function handleInstall(): Promise<void> {
     installing.value = true;

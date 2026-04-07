@@ -58,13 +58,10 @@ async function install(): Promise<boolean> {
     await deferredPrompt.value.prompt();
     const { outcome } = await deferredPrompt.value.userChoice;
 
-    if (outcome === 'accepted') {
-        deferredPrompt.value = null;
-        isInstallable.value = false;
-        return true;
-    }
+    deferredPrompt.value = null;
+    isInstallable.value = false;
 
-    return false;
+    return outcome === 'accepted';
 }
 
 function dismiss(): void {

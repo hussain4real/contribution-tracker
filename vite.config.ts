@@ -63,7 +63,7 @@ export default defineConfig({
                 ],
             },
             workbox: {
-                navigateFallback: '/offline',
+                navigateFallback: '/offline.html',
                 navigateFallbackDenylist: [/^\/build\//, /^\/api\//],
                 runtimeCaching: [
                     {

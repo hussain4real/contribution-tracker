@@ -31,8 +31,6 @@ Route::get('/', function () {
     ]);
 })->name('home');
 
-Route::get('/offline', fn () => Inertia::render('Offline'))->name('offline');
-
 Route::get('/privacy', fn () => Inertia::render('Legal/Privacy'))->name('privacy');
 Route::get('/terms', fn () => Inertia::render('Legal/Terms'))->name('terms');
 Route::get('/data-deletion', fn () => Inertia::render('Legal/DataDeletion'))->name('data-deletion');
