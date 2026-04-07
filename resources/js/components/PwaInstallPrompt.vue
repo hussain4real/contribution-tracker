@@ -49,9 +49,12 @@ onUnmounted(() => clearTimeout(showTimer));
 
 async function handleInstall(): Promise<void> {
     installing.value = true;
-    await install();
-    installing.value = false;
-    open.value = false;
+    try {
+        await install();
+    } finally {
+        installing.value = false;
+        open.value = false;
+    }
 }
 
 function handleDismiss(): void {
