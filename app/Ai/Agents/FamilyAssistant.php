@@ -15,15 +15,17 @@ use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasMiddleware;
+use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Stringable;
 
 #[MaxSteps(10)]
-#[Temperature(0.7)]
+#[Temperature(1.0)]
 #[Timeout(120)]
-class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasTools
+class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasProviderOptions, HasTools
 {
     use Promptable, RemembersConversations;
 
@@ -103,5 +105,16 @@ class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasTools
         return [
             new LogPrompts,
         ];
+    }
+
+    public function providerOptions(Lab|string $provider): array
+    {
+        return match ($provider) {
+            Lab::Ollama => [
+                'top_p' => 0.95,
+                'top_k' => 64,
+            ],
+            default => [],
+        };
     }
 }
