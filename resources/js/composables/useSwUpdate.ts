@@ -2,8 +2,12 @@ import { ref } from 'vue';
 
 const needRefresh = ref(false);
 let updateSW: ((reloadPage?: boolean) => Promise<void>) | undefined;
+let initialized = false;
 
 function init(): void {
+    if (initialized) return;
+    initialized = true;
+
     if (typeof window === 'undefined' || !('serviceWorker' in navigator))
         return;
 

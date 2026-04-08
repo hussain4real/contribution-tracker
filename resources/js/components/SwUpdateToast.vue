@@ -35,6 +35,7 @@ onMounted(() => {
                 Reload
             </Button>
             <button
+                type="button"
                 class="text-muted-foreground hover:text-foreground"
                 aria-label="Dismiss update notification"
                 @click="dismissUpdate"
