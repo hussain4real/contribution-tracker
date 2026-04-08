@@ -19,8 +19,10 @@ function init(): void {
                 },
             });
         })
-        .catch(() => {
-            // virtual:pwa-register may not resolve in dev without Vite dev server
+        .catch((err: unknown) => {
+            if (import.meta.env.DEV) {
+                console.warn('[PWA] SW registration skipped in dev:', err);
+            }
         });
 }
 
