@@ -29,6 +29,8 @@ function init(): void {
     if (initialized) return;
     initialized = true;
 
+    if (typeof window === 'undefined') return;
+
     // Check if already installed (standalone mode)
     if (
         window.matchMedia('(display-mode: standalone)').matches ||

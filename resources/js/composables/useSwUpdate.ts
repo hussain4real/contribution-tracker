@@ -26,7 +26,11 @@ function init(): void {
 
 async function applyUpdate(): Promise<void> {
     if (updateSW) {
-        await updateSW(true);
+        try {
+            await updateSW(true);
+        } catch {
+            needRefresh.value = false;
+        }
     }
 }
 
