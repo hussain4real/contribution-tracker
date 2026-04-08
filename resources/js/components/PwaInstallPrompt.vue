@@ -68,7 +68,7 @@ function handleDismiss(): void {
         v-model:open="open"
         @update:open="
             (val: boolean) => {
-                if (!val && !dismissed) handleDismiss();
+                if (!val && !dismissed && !isInstalled) handleDismiss();
             }
         "
     >

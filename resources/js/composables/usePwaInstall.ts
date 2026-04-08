@@ -28,6 +28,10 @@ function isDismissed(): boolean {
 function init(): void {
     if (initialized) return;
     initialized = true;
+
+    const controller = new AbortController();
+    const { signal } = controller;
+
     // Check if already installed (standalone mode)
     if (
         window.matchMedia('(display-mode: standalone)').matches ||
@@ -39,17 +43,29 @@ function init(): void {
 
     dismissed.value = isDismissed();
 
-    window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        deferredPrompt.value = e as BeforeInstallPromptEvent;
-        isInstallable.value = true;
-    });
+    window.addEventListener(
+        'beforeinstallprompt',
+        (e) => {
+            // If the user already dismissed our custom prompt, let the browser
+            // show its native install banner instead of suppressing everything.
+            if (dismissed.value) return;
 
-    window.addEventListener('appinstalled', () => {
-        isInstalled.value = true;
-        isInstallable.value = false;
-        deferredPrompt.value = null;
-    });
+            e.preventDefault();
+            deferredPrompt.value = e as BeforeInstallPromptEvent;
+            isInstallable.value = true;
+        },
+        { signal },
+    );
+
+    window.addEventListener(
+        'appinstalled',
+        () => {
+            isInstalled.value = true;
+            isInstallable.value = false;
+            deferredPrompt.value = null;
+        },
+        { signal },
+    );
 }
 
 async function install(): Promise<boolean> {
