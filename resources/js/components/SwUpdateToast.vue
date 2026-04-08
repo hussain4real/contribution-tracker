@@ -36,9 +36,10 @@ onMounted(() => {
             </Button>
             <button
                 class="text-muted-foreground hover:text-foreground"
+                aria-label="Dismiss update notification"
                 @click="dismissUpdate"
             >
-                <X class="h-4 w-4" />
+                <X class="h-4 w-4" aria-hidden="true" />
             </button>
         </div>
     </Transition>
