@@ -5,6 +5,8 @@ import AppShell from '@/components/AppShell.vue';
 import AppSidebar from '@/components/AppSidebar.vue';
 import AppSidebarHeader from '@/components/AppSidebarHeader.vue';
 import FlashMessages from '@/components/FlashMessages.vue';
+import PwaInstallPrompt from '@/components/PwaInstallPrompt.vue';
+import SwUpdateToast from '@/components/SwUpdateToast.vue';
 import { Button } from '@/components/ui/button';
 import type { BreadcrumbItemType } from '@/types';
 import { router, usePage } from '@inertiajs/vue3';
@@ -66,5 +68,7 @@ function stopImpersonation(): void {
             <slot />
         </AppContent>
         <FlashMessages />
+        <PwaInstallPrompt />
+        <SwUpdateToast />
     </AppShell>
 </template>

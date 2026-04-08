@@ -13,6 +13,8 @@ declare module 'vite/client' {
     }
 }
 
+/// <reference types="vite-plugin-pwa/client" />
+
 declare module '@inertiajs/core' {
     interface PageProps extends InertiaPageProps, AppPageProps {}
 }
