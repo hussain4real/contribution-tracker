@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { index as platformAdminIndex } from '@/actions/App/Http/Controllers/PlatformAdminController';
 import {
     activateForEveryone,
     activateForUser,
@@ -6,7 +7,6 @@ import {
     deactivateForUser,
     index as featureFlagsIndex,
 } from '@/actions/App/Http/Controllers/PlatformFeatureFlagController';
-import { index as platformAdminIndex } from '@/actions/App/Http/Controllers/PlatformAdminController';
 import Heading from '@/components/Heading.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

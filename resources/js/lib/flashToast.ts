@@ -1,6 +1,6 @@
+import type { FlashToast } from '@/types/ui';
 import { router } from '@inertiajs/vue3';
 import { toast } from 'vue-sonner';
-import type { FlashToast } from '@/types/ui';
 
 export function initializeFlashToast(): void {
     // Handle new Inertia::flash('toast', ...) events
@@ -20,7 +20,11 @@ export function initializeFlashToast(): void {
     // with the page object containing the latest props.
     router.on('success', (event) => {
         const flash = (event as CustomEvent).detail?.page?.props?.flash as
-            | { success?: string | null; error?: string | null; warning?: string | null }
+            | {
+                  success?: string | null;
+                  error?: string | null;
+                  warning?: string | null;
+              }
             | undefined;
 
         if (flash?.success) {
