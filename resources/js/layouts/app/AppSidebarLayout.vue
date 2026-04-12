@@ -4,10 +4,10 @@ import AppContent from '@/components/AppContent.vue';
 import AppShell from '@/components/AppShell.vue';
 import AppSidebar from '@/components/AppSidebar.vue';
 import AppSidebarHeader from '@/components/AppSidebarHeader.vue';
-import FlashMessages from '@/components/FlashMessages.vue';
 import PwaInstallPrompt from '@/components/PwaInstallPrompt.vue';
 import SwUpdateToast from '@/components/SwUpdateToast.vue';
 import { Button } from '@/components/ui/button';
+import { Toaster } from '@/components/ui/sonner';
 import type { BreadcrumbItemType } from '@/types';
 import { router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
@@ -67,7 +67,7 @@ function stopImpersonation(): void {
             <AppSidebarHeader :breadcrumbs="breadcrumbs" />
             <slot />
         </AppContent>
-        <FlashMessages />
+        <Toaster />
         <PwaInstallPrompt />
         <SwUpdateToast />
     </AppShell>

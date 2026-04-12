@@ -2,10 +2,12 @@
 
 namespace App\Http\Middleware;
 
+use App\Features\AiAssistant;
 use App\Models\User;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
+use Laravel\Pennant\Feature;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -71,6 +73,9 @@ class HandleInertiaRequests extends Middleware
             'subscription' => $user?->family ? fn () => $this->subscriptionData($user) : null,
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'impersonating' => $request->hasSession() && $request->session()->has('impersonating_from'),
+            'featureFlags' => $user ? [
+                'ai_assistant' => fn () => Feature::for($user)->active(AiAssistant::class),
+            ] : null,
             'notifications' => $user ? [
                 'unread_count' => fn () => $user->unreadNotifications()->count(),
                 'recent' => fn () => $user->unreadNotifications()->latest()->limit(10)->get()->map(fn ($n) => [

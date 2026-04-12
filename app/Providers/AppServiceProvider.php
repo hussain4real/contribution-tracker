@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Inertia\ExceptionResponse;
 use Inertia\Inertia;
+use Laravel\Pennant\Middleware\EnsureFeaturesAreActive;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -28,6 +29,12 @@ class AppServiceProvider extends ServiceProvider
         });
 
         Model::automaticallyEagerLoadRelationships();
+
+        EnsureFeaturesAreActive::whenInactive(function ($request, array $features) {
+            return redirect()->route('dashboard')
+                ->with('warning', 'This feature is not currently available for your account.');
+        });
+
         Model::preventLazyLoading(! $this->app->isProduction());
 
         Model::handleLazyLoadingViolationUsing(function (Model $model, string $relation): void {

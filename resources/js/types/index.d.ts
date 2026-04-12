@@ -58,6 +58,10 @@ export interface Flash {
     warning?: string | null;
 }
 
+export interface FeatureFlags {
+    ai_assistant: boolean;
+}
+
 export interface Subscription {
     plan_name: string | null;
     member_count: number;
@@ -76,6 +80,7 @@ export type AppPageProps<
     sidebarOpen: boolean;
     notifications: Notifications | null;
     flash?: Flash;
+    featureFlags?: FeatureFlags | null;
     subscription?: Subscription | null;
 };
 
