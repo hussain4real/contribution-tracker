@@ -31,6 +31,7 @@ interface FeatureFlag {
     status: 'active' | 'partial' | 'inactive';
     activated_count: number;
     total_resolved: number;
+    activated_user_ids: number[];
 }
 
 interface UserEntry {
@@ -72,6 +73,19 @@ const filteredUsers = computed(() => {
 const userForm = useForm({
     user_id: null as number | null,
 });
+
+function isUserActivated(userId: number): boolean {
+    if (!selectedFeature.value) return false;
+    // Find the live feature data from props (stays in sync after Inertia reloads)
+    const liveFeature = props.features.find(
+        (f) => f.key === selectedFeature.value?.key,
+    );
+    if (!liveFeature) return false;
+    return (
+        liveFeature.status === 'active' ||
+        liveFeature.activated_user_ids.includes(userId)
+    );
+}
 
 function statusVariant(
     status: string,
@@ -120,9 +134,6 @@ function handleActivateForUser(userId: number): void {
     if (!selectedFeature.value) return;
     userForm.user_id = userId;
     userForm.post(activateForUser(selectedFeature.value.key).url, {
-        onSuccess: () => {
-            showUserDialog.value = false;
-        },
         preserveScroll: true,
     });
 }
@@ -131,9 +142,6 @@ function handleDeactivateForUser(userId: number): void {
     if (!selectedFeature.value) return;
     userForm.user_id = userId;
     userForm.post(deactivateForUser(selectedFeature.value.key).url, {
-        onSuccess: () => {
-            showUserDialog.value = false;
-        },
         preserveScroll: true,
     });
 }
@@ -196,7 +204,28 @@ function handleDeactivateForUser(userId: number): void {
                                 </Badge>
                             </td>
                             <td class="px-4 py-3 text-center text-sm">
-                                {{ feature.activated_count }}
+                                <span
+                                    v-if="feature.status === 'active'"
+                                    class="font-medium text-green-600"
+                                    >All</span
+                                >
+                                <span
+                                    v-else-if="feature.activated_count > 0"
+                                    class="font-medium"
+                                    >{{
+                                        feature.activated_count
+                                    }}
+                                    user{{
+                                        feature.activated_count !== 1
+                                            ? 's'
+                                            : ''
+                                    }}</span
+                                >
+                                <span
+                                    v-else
+                                    class="text-muted-foreground"
+                                    >&mdash;</span
+                                >
                             </td>
                             <td class="px-4 py-3 text-right">
                                 <div
@@ -264,6 +293,14 @@ function handleDeactivateForUser(userId: number): void {
                 </DialogDescription>
 
                 <div class="space-y-4">
+                    <p
+                        v-if="selectedFeature?.status === 'active'"
+                        class="rounded-md bg-green-50 px-3 py-2 text-sm text-green-700 dark:bg-green-950/30 dark:text-green-400"
+                    >
+                        This feature is currently active for everyone. Use
+                        "Deactivate All" first to manage per-user access.
+                    </p>
+
                     <Input
                         v-model="userSearch"
                         placeholder="Search users by name or email..."
@@ -275,17 +312,32 @@ function handleDeactivateForUser(userId: number): void {
                             v-for="user in filteredUsers"
                             :key="user.id"
                             class="flex items-center justify-between rounded-md px-3 py-2 hover:bg-muted/50"
+                            :class="{
+                                'bg-green-50 dark:bg-green-950/20':
+                                    isUserActivated(user.id),
+                            }"
                         >
-                            <div>
-                                <p class="text-sm font-medium">
-                                    {{ user.name }}
-                                </p>
-                                <p class="text-xs text-muted-foreground">
-                                    {{ user.email }}
-                                </p>
+                            <div class="flex items-center gap-2">
+                                <span
+                                    class="inline-block h-2 w-2 shrink-0 rounded-full"
+                                    :class="
+                                        isUserActivated(user.id)
+                                            ? 'bg-green-500'
+                                            : 'bg-gray-300 dark:bg-gray-600'
+                                    "
+                                />
+                                <div>
+                                    <p class="text-sm font-medium">
+                                        {{ user.name }}
+                                    </p>
+                                    <p class="text-xs text-muted-foreground">
+                                        {{ user.email }}
+                                    </p>
+                                </div>
                             </div>
                             <div class="flex gap-1">
                                 <Button
+                                    v-if="!isUserActivated(user.id)"
                                     variant="ghost"
                                     size="icon"
                                     title="Activate for this user"
@@ -295,10 +347,14 @@ function handleDeactivateForUser(userId: number): void {
                                     <UserCheck class="h-4 w-4 text-green-600" />
                                 </Button>
                                 <Button
+                                    v-if="isUserActivated(user.id)"
                                     variant="ghost"
                                     size="icon"
                                     title="Deactivate for this user"
-                                    :disabled="userForm.processing"
+                                    :disabled="
+                                        userForm.processing ||
+                                        selectedFeature?.status === 'active'
+                                    "
                                     @click="handleDeactivateForUser(user.id)"
                                 >
                                     <UserX class="h-4 w-4 text-red-500" />

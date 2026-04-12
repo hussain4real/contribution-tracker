@@ -52,6 +52,16 @@ class PlatformFeatureFlagController extends Controller
                 default => 'inactive',
             };
 
+            // Collect user IDs with explicit 'true' activation records
+            $activatedUserIds = DB::table('features')
+                ->where('name', $featureClass)
+                ->where('scope', '!=', '')
+                ->where('value', 'true')
+                ->pluck('scope')
+                ->map(fn (string $scope) => (int) str($scope)->afterLast('|')->toString())
+                ->values()
+                ->all();
+
             return [
                 'key' => $key,
                 'name' => $meta['name'],
@@ -59,6 +69,7 @@ class PlatformFeatureFlagController extends Controller
                 'status' => $status,
                 'activated_count' => $activatedCount,
                 'total_resolved' => $totalResolved,
+                'activated_user_ids' => $activatedUserIds,
             ];
         })->values()->all();
 
@@ -105,10 +116,9 @@ class PlatformFeatureFlagController extends Controller
     {
         $meta = $this->resolveFeature($feature);
 
-        // Remove the global activation record only — preserves per-user records
+        // Remove ALL feature records — global sentinel and per-user records
         DB::table('features')
             ->where('name', $meta['class'])
-            ->where('scope', '')
             ->delete();
 
         // Flush the in-memory cache so the deactivation takes effect

@@ -22,6 +22,23 @@ describe('Platform Feature Flags', function () {
             );
     });
 
+    it('returns activated user ids for each feature', function () {
+        $family = Family::factory()->create();
+        $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
+        $member = User::factory()->member()->create(['family_id' => $family->id]);
+
+        Feature::for($member)->activate(AiAssistant::class);
+
+        $this->actingAs($superAdmin)
+            ->get('/platform/feature-flags')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Platform/FeatureFlags')
+                ->where('features.0.activated_user_ids', [$member->id])
+                ->where('features.0.status', 'partial')
+            );
+    });
+
     it('denies access to non-super-admin users', function () {
         $family = Family::factory()->create();
         $admin = User::factory()->admin()->create(['family_id' => $family->id]);
@@ -88,13 +105,10 @@ describe('Platform Feature Flags', function () {
         $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
         $member = User::factory()->member()->create(['family_id' => $family->id]);
 
-        // Set up global activation first
+        // Set up global activation and a per-user record
         DB::table('features')->insert([
-            'name' => AiAssistant::class,
-            'scope' => '',
-            'value' => 'true',
-            'created_at' => now(),
-            'updated_at' => now(),
+            ['name' => AiAssistant::class, 'scope' => '', 'value' => 'true', 'created_at' => now(), 'updated_at' => now()],
+            ['name' => AiAssistant::class, 'scope' => 'App\Models\User|'.$member->id, 'value' => 'true', 'created_at' => now(), 'updated_at' => now()],
         ]);
 
         $this->actingAs($superAdmin)
@@ -103,7 +117,25 @@ describe('Platform Feature Flags', function () {
 
         Feature::flushCache();
 
+        // Both the member and the global flag should be deactivated
         expect(Feature::for($member)->active(AiAssistant::class))->toBeFalse();
+
+        // Verify the global sentinel was removed
+        expect(
+            DB::table('features')
+                ->where('name', AiAssistant::class)
+                ->where('scope', '')
+                ->exists()
+        )->toBeFalse();
+
+        // Verify the per-user 'true' activation record was removed
+        expect(
+            DB::table('features')
+                ->where('name', AiAssistant::class)
+                ->where('scope', 'App\Models\User|'.$member->id)
+                ->where('value', 'true')
+                ->exists()
+        )->toBeFalse();
     });
 
     it('can activate a feature for a specific user', function () {
