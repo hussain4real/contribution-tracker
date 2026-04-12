@@ -212,18 +212,11 @@ function handleDeactivateForUser(userId: number): void {
                                 <span
                                     v-else-if="feature.activated_count > 0"
                                     class="font-medium"
-                                    >{{
-                                        feature.activated_count
-                                    }}
-                                    user{{
-                                        feature.activated_count !== 1
-                                            ? 's'
-                                            : ''
+                                    >{{ feature.activated_count }} user{{
+                                        feature.activated_count !== 1 ? 's' : ''
                                     }}</span
                                 >
-                                <span
-                                    v-else
-                                    class="text-muted-foreground"
+                                <span v-else class="text-muted-foreground"
                                     >&mdash;</span
                                 >
                             </td>
