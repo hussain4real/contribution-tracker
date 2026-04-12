@@ -33,22 +33,18 @@ class PlatformFeatureFlagController extends Controller
         $features = collect(self::FEATURES)->map(function (array $meta, string $key) {
             $featureClass = $meta['class'];
 
-            $activatedCount = DB::table('features')
+            $row = DB::table('features')
                 ->where('name', $featureClass)
-                ->where('scope', '!=', '')
-                ->where('value', 'true')
-                ->count();
+                ->selectRaw("
+                    SUM(CASE WHEN scope != '' AND value = 'true' THEN 1 ELSE 0 END) AS activated_count,
+                    SUM(CASE WHEN scope != '' THEN 1 ELSE 0 END)                     AS total_resolved,
+                    MAX(CASE WHEN scope = ''  AND value = 'true' THEN 1 ELSE 0 END)  AS is_global
+                ")
+                ->first();
 
-            $totalResolved = DB::table('features')
-                ->where('name', $featureClass)
-                ->where('scope', '!=', '')
-                ->count();
-
-            $isGlobal = DB::table('features')
-                ->where('name', $featureClass)
-                ->where('scope', '')
-                ->where('value', 'true')
-                ->exists();
+            $activatedCount = (int) ($row->activated_count ?? 0);
+            $totalResolved = (int) ($row->total_resolved ?? 0);
+            $isGlobal = (bool) ($row->is_global ?? false);
 
             $status = match (true) {
                 $isGlobal => 'active',
@@ -67,7 +63,7 @@ class PlatformFeatureFlagController extends Controller
         })->values()->all();
 
         $users = User::query()
-            ->select('id', 'name', 'email', 'is_super_admin')
+            ->select('id', 'name', 'email')
             ->orderBy('name')
             ->get()
             ->map(fn (User $user) => [
