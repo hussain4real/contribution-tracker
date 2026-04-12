@@ -86,17 +86,14 @@ class PlatformFeatureFlagController extends Controller
     {
         $meta = $this->resolveFeature($feature);
 
-        // Purge per-user cached values so they re-resolve via the global flag
-        Feature::purge($meta['class']);
+        // Upsert the global activation record (empty scope) — preserves per-user records
+        DB::table('features')->updateOrInsert(
+            ['name' => $meta['class'], 'scope' => ''],
+            ['value' => 'true', 'created_at' => now(), 'updated_at' => now()]
+        );
 
-        // Insert a global activation record (empty scope) — after purge
-        DB::table('features')->insert([
-            'name' => $meta['class'],
-            'scope' => '',
-            'value' => 'true',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        // Flush the in-memory cache so the new global state takes effect
+        Feature::flushCache();
 
         return redirect()->back()->with('success', "\"{$meta['name']}\" has been activated for everyone.");
     }
@@ -105,14 +102,14 @@ class PlatformFeatureFlagController extends Controller
     {
         $meta = $this->resolveFeature($feature);
 
-        // Remove the global activation record
+        // Remove the global activation record only — preserves per-user records
         DB::table('features')
             ->where('name', $meta['class'])
             ->where('scope', '')
             ->delete();
 
-        // Purge per-user cached values so they re-resolve as inactive
-        Feature::purge($meta['class']);
+        // Flush the in-memory cache so the deactivation takes effect
+        Feature::flushCache();
 
         return redirect()->back()->with('success', "\"{$meta['name']}\" has been deactivated for everyone.");
     }

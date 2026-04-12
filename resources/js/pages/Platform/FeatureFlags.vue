@@ -6,6 +6,7 @@ import {
     deactivateForUser,
     index as featureFlagsIndex,
 } from '@/actions/App/Http/Controllers/PlatformFeatureFlagController';
+import { index as platformAdminIndex } from '@/actions/App/Http/Controllers/PlatformAdminController';
 import Heading from '@/components/Heading.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -48,7 +49,7 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Platform Admin', href: '/platform' },
+    { title: 'Platform Admin', href: platformAdminIndex().url },
     { title: 'Feature Flags', href: featureFlagsIndex().url },
 ];
 

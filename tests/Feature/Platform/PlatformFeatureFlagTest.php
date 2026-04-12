@@ -148,7 +148,8 @@ describe('AI Assistant Feature Flag Route Gating', function () {
 
         $this->actingAs($user)
             ->get('/ai')
-            ->assertStatus(400);
+            ->assertRedirect(route('dashboard'))
+            ->assertSessionHas('warning');
     });
 
     it('grants access when feature is activated for everyone', function () {
