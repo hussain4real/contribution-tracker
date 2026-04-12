@@ -10,8 +10,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
-import { Head, router, usePage } from '@inertiajs/vue3';
+import { Head, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import { toast } from 'vue-sonner';
 
 interface PendingContribution {
     id: number;
@@ -45,12 +46,8 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Pay Contributions', href: '#' },
 ];
 
-const page = usePage();
-
 const selectedIds = ref<number[]>([]);
 const processing = ref(false);
-const errorMessage = ref('');
-const successMessage = ref('');
 
 const formatAmount = (amount: number): string => {
     return `₦${amount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
@@ -86,13 +83,11 @@ const allSelected = computed(
 
 const payWithPaystack = async () => {
     if (selectedIds.value.length === 0) {
-        errorMessage.value = 'Please select at least one contribution to pay.';
+        toast.error('Please select at least one contribution to pay.');
         return;
     }
 
     processing.value = true;
-    errorMessage.value = '';
-    successMessage.value = '';
 
     try {
         const response = await fetch(initiate.url(), {
@@ -115,8 +110,7 @@ const payWithPaystack = async () => {
         const data = await response.json();
 
         if (!response.ok) {
-            errorMessage.value =
-                data.message || 'Failed to initialize payment.';
+            toast.error(data.message || 'Failed to initialize payment.');
             processing.value = false;
             return;
         }
@@ -132,7 +126,7 @@ const payWithPaystack = async () => {
             },
             onCancel: () => {
                 processing.value = false;
-                errorMessage.value = 'Payment was cancelled.';
+                toast.error('Payment was cancelled.');
             },
             onClose: () => {
                 if (processing.value) {
@@ -147,7 +141,7 @@ const payWithPaystack = async () => {
             },
         });
     } catch {
-        errorMessage.value = 'An error occurred. Please try again.';
+        toast.error('An error occurred. Please try again.');
         processing.value = false;
     }
 };
@@ -162,21 +156,6 @@ const payWithPaystack = async () => {
                 title="Pay Contributions"
                 :description="`Monthly contribution: ${formatted_amount}`"
             />
-
-            <!-- Flash Messages -->
-            <div
-                v-if="page.props.flash?.success || successMessage"
-                class="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200"
-            >
-                {{ page.props.flash?.success || successMessage }}
-            </div>
-
-            <div
-                v-if="page.props.flash?.error || errorMessage"
-                class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200"
-            >
-                {{ page.props.flash?.error || errorMessage }}
-            </div>
 
             <!-- No Paystack Setup -->
             <div

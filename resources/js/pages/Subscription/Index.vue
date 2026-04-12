@@ -17,8 +17,9 @@ import {
 import AppLayout from '@/layouts/AppLayout.vue';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
-import { Head, router, usePage } from '@inertiajs/vue3';
+import { Head, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import { toast } from 'vue-sonner';
 
 interface Plan {
     id: number;
@@ -61,11 +62,8 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Subscription', href: '#' },
 ];
 
-const page = usePage();
-
 const processing = ref(false);
 const processingPlanId = ref<number | null>(null);
-const errorMessage = ref('');
 
 const featureLabels: Record<string, string> = {
     basic_contributions: 'Monthly contributions',
@@ -103,13 +101,12 @@ const statusVariant = computed(() => {
 
 const subscribeToPlan = async (planId: number) => {
     if (!props.is_admin) {
-        errorMessage.value = 'Only family admins can manage subscriptions.';
+        toast.error('Only family admins can manage subscriptions.');
         return;
     }
 
     processing.value = true;
     processingPlanId.value = planId;
-    errorMessage.value = '';
 
     try {
         const response = await fetch(subscribeAction.url(), {
@@ -130,8 +127,7 @@ const subscribeToPlan = async (planId: number) => {
         const data = await response.json();
 
         if (!response.ok) {
-            errorMessage.value =
-                data.message || 'Failed to initialize subscription.';
+            toast.error(data.message || 'Failed to initialize subscription.');
             processing.value = false;
             processingPlanId.value = null;
             return;
@@ -150,7 +146,7 @@ const subscribeToPlan = async (planId: number) => {
             onCancel: () => {
                 processing.value = false;
                 processingPlanId.value = null;
-                errorMessage.value = 'Subscription was cancelled.';
+                toast.error('Subscription was cancelled.');
             },
             onClose: () => {
                 if (processing.value) {
@@ -165,7 +161,7 @@ const subscribeToPlan = async (planId: number) => {
             },
         });
     } catch {
-        errorMessage.value = 'An error occurred. Please try again.';
+        toast.error('An error occurred. Please try again.');
         processing.value = false;
         processingPlanId.value = null;
     }
@@ -185,21 +181,6 @@ const subscribeToPlan = async (planId: number) => {
                 <Badge :variant="statusVariant">
                     {{ statusLabel }}
                 </Badge>
-            </div>
-
-            <!-- Flash Messages -->
-            <div
-                v-if="page.props.flash?.success"
-                class="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200"
-            >
-                {{ page.props.flash?.success }}
-            </div>
-
-            <div
-                v-if="page.props.flash?.error || errorMessage"
-                class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200"
-            >
-                {{ page.props.flash?.error || errorMessage }}
             </div>
 
             <!-- Current Plan Info -->
