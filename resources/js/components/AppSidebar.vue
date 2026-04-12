@@ -12,6 +12,7 @@ import {
     families as platformFamilies,
     users as platformUsers,
 } from '@/actions/App/Http/Controllers/PlatformAdminController';
+import { index as platformFeatureFlags } from '@/actions/App/Http/Controllers/PlatformFeatureFlagController';
 import { index as platformPlans } from '@/actions/App/Http/Controllers/PlatformPlanController';
 import { index as reportsIndex } from '@/actions/App/Http/Controllers/ReportController';
 import { index as subscriptionIndex } from '@/actions/App/Http/Controllers/SubscriptionController';
@@ -35,6 +36,7 @@ import {
     CreditCard,
     FileBarChart2,
     FileText,
+    Flag,
     Globe,
     Landmark,
     Layers,
@@ -46,6 +48,7 @@ import {
     Settings,
     Shield,
     Sparkles,
+    ToggleLeft,
     Users,
     UsersRound,
     Wallet,
@@ -95,13 +98,16 @@ const mainNavItems = computed<NavItem[]>(() => {
             icon: Landmark,
             component: 'FundAdjustments/Index',
         },
-        {
+    ];
+
+    if (page.props.features?.ai_assistant) {
+        items.push({
             title: 'AI Assistant',
             href: aiIndex(),
             icon: MessageSquare,
             component: 'Ai/Chat',
-        },
-    ];
+        });
+    }
 
     if (can.value?.generate_reports) {
         items.push({
@@ -174,6 +180,18 @@ const platformNavItems = computed<NavItem[]>(() => {
             href: platformPlans(),
             icon: Layers,
             component: 'Platform/Plans',
+        },
+        {
+            title: 'Feature Flags',
+            href: platformFeatureFlags(),
+            icon: ToggleLeft,
+            component: 'Platform/FeatureFlags',
+        },
+        {
+            title: 'Feature Flags',
+            href: platformFeatureFlags(),
+            icon: Flag,
+            component: 'Platform/FeatureFlags',
         },
     ];
 });

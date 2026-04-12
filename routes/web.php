@@ -1,5 +1,6 @@
 <?php
 
+use App\Features\AiAssistant;
 use App\Http\Controllers\AiChatController;
 use App\Http\Controllers\Auth\PasskeyLoginController;
 use App\Http\Controllers\Auth\PasskeyTwoFactorController;
@@ -16,6 +17,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PaystackWebhookController;
 use App\Http\Controllers\PlatformAdminController;
+use App\Http\Controllers\PlatformFeatureFlagController;
 use App\Http\Controllers\PlatformPlanController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SubscriptionController;
@@ -24,6 +26,7 @@ use Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
+use Laravel\Pennant\Middleware\EnsureFeaturesAreActive;
 
 Route::get('/', function () {
     return Inertia::render('Welcome', [
@@ -73,11 +76,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
     Route::post('notifications/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('notifications.mark-all-read');
 
-    // AI Assistant
-    Route::get('ai', [AiChatController::class, 'index'])->name('ai.index');
-    Route::post('ai/chat', [AiChatController::class, 'stream'])->name('ai.chat')->middleware('throttle:30,1');
-    Route::patch('ai/conversations/{conversation}', [AiChatController::class, 'rename'])->name('ai.conversations.rename');
-    Route::delete('ai/conversations/{conversation}', [AiChatController::class, 'destroy'])->name('ai.conversations.destroy');
+    // AI Assistant (gated by Pennant feature flag)
+    Route::middleware(EnsureFeaturesAreActive::using(AiAssistant::class))->group(function () {
+        Route::get('ai', [AiChatController::class, 'index'])->name('ai.index');
+        Route::post('ai/chat', [AiChatController::class, 'stream'])->name('ai.chat')->middleware('throttle:30,1');
+        Route::patch('ai/conversations/{conversation}', [AiChatController::class, 'rename'])->name('ai.conversations.rename');
+        Route::delete('ai/conversations/{conversation}', [AiChatController::class, 'destroy'])->name('ai.conversations.destroy');
+    });
 
     // Changelog
     Route::get('changelog', ChangelogController::class)->name('changelog');
@@ -171,6 +176,13 @@ Route::middleware(['auth', 'verified', EnsurePlatformSuperAdmin::class])
         Route::put('plans/{plan}', [PlatformPlanController::class, 'update'])->name('plans.update');
         Route::post('plans/{plan}/toggle-active', [PlatformPlanController::class, 'toggleActive'])->name('plans.toggle-active');
         Route::delete('plans/{plan}', [PlatformPlanController::class, 'destroy'])->name('plans.destroy');
+
+        // Feature Flags
+        Route::get('feature-flags', [PlatformFeatureFlagController::class, 'index'])->name('feature-flags');
+        Route::post('feature-flags/{feature}/activate-all', [PlatformFeatureFlagController::class, 'activateForEveryone'])->name('feature-flags.activate-all');
+        Route::post('feature-flags/{feature}/deactivate-all', [PlatformFeatureFlagController::class, 'deactivateForEveryone'])->name('feature-flags.deactivate-all');
+        Route::post('feature-flags/{feature}/activate', [PlatformFeatureFlagController::class, 'activateForUser'])->name('feature-flags.activate');
+        Route::post('feature-flags/{feature}/deactivate', [PlatformFeatureFlagController::class, 'deactivateForUser'])->name('feature-flags.deactivate');
     });
 
 // Stop impersonating route — accessible by the impersonated session (not behind super admin middleware)

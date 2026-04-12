@@ -1,10 +1,21 @@
 <?php
 
 use App\Ai\Agents\FamilyAssistant;
+use App\Features\AiAssistant;
 use App\Models\Family;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+
+beforeEach(function () {
+    DB::table('features')->insert([
+        'name' => AiAssistant::class,
+        'scope' => '',
+        'value' => 'true',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+});
 
 test('guests are redirected from the AI chat page', function () {
     $this->get(route('ai.index'))->assertRedirect();
