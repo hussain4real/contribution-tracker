@@ -54,6 +54,35 @@ describe('Platform Feature Flags', function () {
         expect(Feature::for($member)->active(AiAssistant::class))->toBeTrue();
     });
 
+    it('clears stale false records when activating for everyone', function () {
+        $family = Family::factory()->create();
+        $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
+        $member = User::factory()->member()->create(['family_id' => $family->id]);
+
+        // Simulate a user who was previously deactivated (stored 'false' record)
+        Feature::for($member)->deactivate(AiAssistant::class);
+        Feature::flushCache();
+        expect(Feature::for($member)->active(AiAssistant::class))->toBeFalse();
+
+        // Now activate for everyone — should clear the stale 'false' record
+        $this->actingAs($superAdmin)
+            ->post('/platform/feature-flags/ai-assistant/activate-all')
+            ->assertRedirect();
+
+        Feature::flushCache();
+
+        expect(Feature::for($member)->active(AiAssistant::class))->toBeTrue();
+
+        // Verify the stale record was actually removed from DB
+        expect(
+            DB::table('features')
+                ->where('name', AiAssistant::class)
+                ->where('scope', '!=', '')
+                ->where('value', 'false')
+                ->exists()
+        )->toBeFalse();
+    });
+
     it('can deactivate a feature for everyone', function () {
         $family = Family::factory()->create();
         $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);

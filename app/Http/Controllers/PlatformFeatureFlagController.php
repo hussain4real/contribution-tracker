@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Features\AiAssistant;
+use App\Http\Requests\FeatureFlagUserRequest;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -82,6 +82,13 @@ class PlatformFeatureFlagController extends Controller
     {
         $meta = $this->resolveFeature($feature);
 
+        // Delete cached 'false' rows so existing users get re-resolved against the global flag
+        DB::table('features')
+            ->where('name', $meta['class'])
+            ->where('scope', '!=', '')
+            ->where('value', 'false')
+            ->delete();
+
         // Upsert the global activation record (empty scope) — preserves per-user records
         DB::table('features')->updateOrInsert(
             ['name' => $meta['class'], 'scope' => ''],
@@ -110,30 +117,22 @@ class PlatformFeatureFlagController extends Controller
         return redirect()->back()->with('success', "\"{$meta['name']}\" has been deactivated for everyone.");
     }
 
-    public function activateForUser(Request $request, string $feature): RedirectResponse
+    public function activateForUser(FeatureFlagUserRequest $request, string $feature): RedirectResponse
     {
         $meta = $this->resolveFeature($feature);
 
-        $validated = $request->validate([
-            'user_id' => ['required', 'exists:users,id'],
-        ]);
-
-        $user = User::findOrFail($validated['user_id']);
+        $user = User::findOrFail($request->validated('user_id'));
 
         Feature::for($user)->activate($meta['class']);
 
         return redirect()->back()->with('success', "\"{$meta['name']}\" has been activated for {$user->name}.");
     }
 
-    public function deactivateForUser(Request $request, string $feature): RedirectResponse
+    public function deactivateForUser(FeatureFlagUserRequest $request, string $feature): RedirectResponse
     {
         $meta = $this->resolveFeature($feature);
 
-        $validated = $request->validate([
-            'user_id' => ['required', 'exists:users,id'],
-        ]);
-
-        $user = User::findOrFail($validated['user_id']);
+        $user = User::findOrFail($request->validated('user_id'));
 
         Feature::for($user)->deactivate($meta['class']);
 

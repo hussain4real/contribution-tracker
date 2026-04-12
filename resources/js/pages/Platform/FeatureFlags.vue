@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogFooter,
     DialogTitle,
 } from '@/components/ui/dialog';
@@ -56,6 +57,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 const showUserDialog = ref(false);
 const selectedFeature = ref<FeatureFlag | null>(null);
 const userSearch = ref('');
+const globalProcessing = ref(false);
 
 const filteredUsers = computed(() => {
     if (!userSearch.value) return props.users;
@@ -86,11 +88,25 @@ function statusLabel(status: string): string {
 }
 
 function handleActivateAll(feature: FeatureFlag): void {
-    router.post(activateForEveryone(feature.key).url);
+    globalProcessing.value = true;
+    router.post(
+        activateForEveryone(feature.key).url,
+        {},
+        {
+            onFinish: () => (globalProcessing.value = false),
+        },
+    );
 }
 
 function handleDeactivateAll(feature: FeatureFlag): void {
-    router.post(deactivateForEveryone(feature.key).url);
+    globalProcessing.value = true;
+    router.post(
+        deactivateForEveryone(feature.key).url,
+        {},
+        {
+            onFinish: () => (globalProcessing.value = false),
+        },
+    );
 }
 
 function openUserDialog(feature: FeatureFlag): void {
@@ -191,6 +207,7 @@ function handleDeactivateForUser(userId: number): void {
                                         variant="ghost"
                                         size="sm"
                                         title="Activate for Everyone"
+                                        :disabled="globalProcessing"
                                         @click="handleActivateAll(feature)"
                                     >
                                         <Power
@@ -203,6 +220,7 @@ function handleDeactivateForUser(userId: number): void {
                                         variant="ghost"
                                         size="sm"
                                         title="Deactivate for Everyone"
+                                        :disabled="globalProcessing"
                                         @click="handleDeactivateAll(feature)"
                                     >
                                         <Power
@@ -241,6 +259,9 @@ function handleDeactivateForUser(userId: number): void {
                 <DialogTitle>
                     Manage "{{ selectedFeature?.name }}" per User
                 </DialogTitle>
+                <DialogDescription>
+                    Activate or deactivate this feature for individual users.
+                </DialogDescription>
 
                 <div class="space-y-4">
                     <Input
