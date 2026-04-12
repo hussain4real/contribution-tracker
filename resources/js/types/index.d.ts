@@ -80,7 +80,7 @@ export type AppPageProps<
     sidebarOpen: boolean;
     notifications: Notifications | null;
     flash?: Flash;
-    features?: FeatureFlags | null;
+    featureFlags?: FeatureFlags | null;
     subscription?: Subscription | null;
 };
 

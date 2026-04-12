@@ -36,7 +36,6 @@ import {
     CreditCard,
     FileBarChart2,
     FileText,
-    Flag,
     Globe,
     Landmark,
     Layers,
@@ -100,7 +99,7 @@ const mainNavItems = computed<NavItem[]>(() => {
         },
     ];
 
-    if (page.props.features?.ai_assistant) {
+    if (page.props.featureFlags?.ai_assistant) {
         items.push({
             title: 'AI Assistant',
             href: aiIndex(),
@@ -185,12 +184,6 @@ const platformNavItems = computed<NavItem[]>(() => {
             title: 'Feature Flags',
             href: platformFeatureFlags(),
             icon: ToggleLeft,
-            component: 'Platform/FeatureFlags',
-        },
-        {
-            title: 'Feature Flags',
-            href: platformFeatureFlags(),
-            icon: Flag,
             component: 'Platform/FeatureFlags',
         },
     ];

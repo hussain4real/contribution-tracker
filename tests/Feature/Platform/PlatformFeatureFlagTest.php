@@ -180,7 +180,7 @@ describe('AI Assistant Feature Flag Route Gating', function () {
             ->get('/dashboard')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->where('features.ai_assistant', true)
+                ->where('featureFlags.ai_assistant', true)
             );
     });
 
@@ -192,7 +192,7 @@ describe('AI Assistant Feature Flag Route Gating', function () {
             ->get('/dashboard')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->where('features.ai_assistant', false)
+                ->where('featureFlags.ai_assistant', false)
             );
     });
 });

@@ -73,10 +73,7 @@ class HandleInertiaRequests extends Middleware
             'subscription' => $user?->family ? fn () => $this->subscriptionData($user) : null,
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'impersonating' => $request->hasSession() && $request->session()->has('impersonating_from'),
-            'features' => $user ? [
-                'ai_assistant' => fn () => Feature::for($user)->active(AiAssistant::class),
-            ] : null,
-            'features' => $user ? [
+            'featureFlags' => $user ? [
                 'ai_assistant' => fn () => Feature::for($user)->active(AiAssistant::class),
             ] : null,
             'notifications' => $user ? [
