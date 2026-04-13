@@ -88,7 +88,7 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
     },
     {
         title: `${props.month_name} ${props.year}`,
-        href: monthly({ year: props.year, month: props.month }).url,
+        href: monthly({ query: { year: props.year, month: props.month } }).url,
     },
 ]);
 
@@ -117,7 +117,7 @@ function formatCurrency(amount: number): string {
 
 // Navigate to a different month
 function navigateToMonth(year: number, month: number) {
-    router.get(monthly({ year, month }).url);
+    router.get(monthly().url, { year, month });
 }
 
 // Navigate to previous month

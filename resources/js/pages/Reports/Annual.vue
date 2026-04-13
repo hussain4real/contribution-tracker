@@ -63,7 +63,7 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
     },
     {
         title: `${props.year} Annual`,
-        href: annual({ year: props.year }).url,
+        href: annual({ query: { year: props.year } }).url,
     },
 ]);
 
@@ -77,7 +77,7 @@ function formatCurrency(amount: number): string {
 
 // Navigate to a different year
 function navigateToYear(year: number) {
-    router.get(annual({ year }).url);
+    router.get(annual().url, { year });
 }
 
 // Navigate to previous year
@@ -320,7 +320,9 @@ function getBarHeight(amount: number): string {
                         </div>
                         <Link
                             :href="
-                                monthly({ year, month: monthData.month }).url
+                                monthly({
+                                    query: { year, month: monthData.month },
+                                }).url
                             "
                             class="text-xs text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100"
                         >
@@ -404,12 +406,10 @@ function getBarHeight(amount: number): string {
                                     :key="monthData.month"
                                     class="cursor-pointer border-b border-neutral-100 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-800/50"
                                     @click="
-                                        router.get(
-                                            monthly({
-                                                year,
-                                                month: monthData.month,
-                                            }).url,
-                                        )
+                                        router.get(monthly().url, {
+                                            year,
+                                            month: monthData.month,
+                                        })
                                     "
                                 >
                                     <td
