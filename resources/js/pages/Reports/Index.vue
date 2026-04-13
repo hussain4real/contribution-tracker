@@ -96,8 +96,10 @@ const monthNames = [
                     <Link
                         :href="
                             monthly({
-                                year: current_year,
-                                month: current_month,
+                                query: {
+                                    year: current_year,
+                                    month: current_month,
+                                },
                             }).url
                         "
                     >
@@ -140,7 +142,7 @@ const monthNames = [
                         See yearly trends, monthly breakdowns, and category-wise
                         contribution analysis for any year.
                     </p>
-                    <Link :href="annual({ year: current_year }).url">
+                    <Link :href="annual({ query: { year: current_year } }).url">
                         <Button variant="outline" class="w-full">
                             <CalendarDays class="mr-2 h-4 w-4" />
                             View {{ current_year }} Annual Report
@@ -170,7 +172,10 @@ const monthNames = [
                             {{ year }}
                         </h3>
                         <div class="flex gap-2">
-                            <Link :href="annual({ year }).url" class="flex-1">
+                            <Link
+                                :href="annual({ query: { year } }).url"
+                                class="flex-1"
+                            >
                                 <Button
                                     variant="outline"
                                     size="sm"
@@ -181,7 +186,9 @@ const monthNames = [
                             </Link>
                             <Link
                                 :href="
-                                    monthly({ year, month: current_month }).url
+                                    monthly({
+                                        query: { year, month: current_month },
+                                    }).url
                                 "
                                 class="flex-1"
                             >

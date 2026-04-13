@@ -22,8 +22,8 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Stringable;
 
-#[MaxSteps(10)]
-#[Temperature(1.0)]
+#[MaxSteps(8)]
+#[Temperature(0.7)]
 #[Timeout(120)]
 class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasProviderOptions, HasTools
 {
@@ -76,6 +76,7 @@ class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasProvid
         - Be concise but thorough. Use bullet points and tables when helpful.
         - If you don't have enough data, say so rather than guessing.
         - Never reveal sensitive information about other members unless the user is an admin.
+        - STRICT SCOPE: You must refuse to answer any questions or perform any tasks that are not related to family funds, contributions, expenses, or the tracking system. If asked something off-topic (like general knowledge), politely decline and remind the user of your specific purpose.
         - Be friendly and professional.
         INSTRUCTIONS;
     }
