@@ -22,7 +22,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
 import { useStream } from '@laravel/stream-vue';
-import { Bot, Menu, MessageSquarePlus, Send, User, X } from 'lucide-vue-next';
+import { Bot, Check, Menu, MessageSquarePlus, Send, User, X, XCircle } from 'lucide-vue-next';
 import { marked } from 'marked';
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 
@@ -177,6 +177,40 @@ const { isFetching, isStreaming, send, cancel, clearData } = createStream();
 // Computed streaming message for display
 const streamingContent = computed(() => parsedStreamContent.value || '');
 const isProcessing = computed(() => isFetching.value || isStreaming.value);
+
+// Detect if the last assistant message is asking for confirmation
+const pendingConfirmation = computed(() => {
+    if (isProcessing.value) return false;
+    if (chatMessages.value.length === 0) return false;
+
+    const lastMessage = chatMessages.value[chatMessages.value.length - 1];
+    if (lastMessage.role !== 'assistant') return false;
+
+    const content = lastMessage.content.toLowerCase();
+    return (
+        content.includes('please confirm') ||
+        content.includes('would you like me to go ahead') ||
+        content.includes('confirm to proceed') ||
+        content.includes('would you like to proceed')
+    );
+});
+
+// Send a confirmation or decline response
+function sendConfirmation(confirmed: boolean): void {
+    const message = confirmed
+        ? 'Yes, go ahead and confirm.'
+        : 'No, cancel this action.';
+
+    chatMessages.value.push({ role: 'user', content: message });
+    parsedStreamContent.value = '';
+
+    send({
+        message,
+        ...(currentConversationId.value
+            ? { conversation_id: currentConversationId.value }
+            : {}),
+    });
+}
 
 // Scroll to bottom when messages update
 function scrollToBottom(): void {
@@ -455,6 +489,34 @@ function confirmDelete(): void {
                                     class="prose prose-sm max-w-none dark:prose-invert prose-headings:my-2 prose-p:my-1 prose-pre:my-2 prose-ol:my-1 prose-ul:my-1 prose-li:my-0.5"
                                     v-html="renderMarkdown(msg.content)"
                                 />
+
+                                <!-- Confirmation action buttons -->
+                                <div
+                                    v-if="
+                                        pendingConfirmation &&
+                                        msg.role === 'assistant' &&
+                                        idx === chatMessages.length - 1
+                                    "
+                                    class="mt-3 flex gap-2"
+                                >
+                                    <Button
+                                        size="sm"
+                                        class="bg-teal-600 text-white hover:bg-teal-700"
+                                        @click="sendConfirmation(true)"
+                                    >
+                                        <Check class="mr-1 h-3.5 w-3.5" />
+                                        Confirm
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        class="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
+                                        @click="sendConfirmation(false)"
+                                    >
+                                        <XCircle class="mr-1 h-3.5 w-3.5" />
+                                        Decline
+                                    </Button>
+                                </div>
                             </div>
 
                             <div
