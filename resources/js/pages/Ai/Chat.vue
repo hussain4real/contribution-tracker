@@ -22,9 +22,20 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
 import { useStream } from '@laravel/stream-vue';
-import { Bot, Menu, MessageSquarePlus, Send, User, X } from 'lucide-vue-next';
+import {
+    Bot,
+    Check,
+    Menu,
+    MessageSquarePlus,
+    Mic,
+    MicOff,
+    Send,
+    User,
+    X,
+    XCircle,
+} from 'lucide-vue-next';
 import { marked } from 'marked';
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 
 // Configure marked for safe rendering
 marked.setOptions({
@@ -78,6 +89,7 @@ const showMobileSidebar = ref(false);
 const isMounted = ref(false);
 onMounted(() => {
     isMounted.value = true;
+    initSpeechRecognition();
 });
 
 // Parsed streaming text (extracted from SSE text_delta events)
@@ -177,6 +189,112 @@ const { isFetching, isStreaming, send, cancel, clearData } = createStream();
 // Computed streaming message for display
 const streamingContent = computed(() => parsedStreamContent.value || '');
 const isProcessing = computed(() => isFetching.value || isStreaming.value);
+
+// Detect if the last assistant message is asking for confirmation
+const pendingConfirmation = computed(() => {
+    if (isProcessing.value) return false;
+    if (chatMessages.value.length === 0) return false;
+
+    const lastMessage = chatMessages.value[chatMessages.value.length - 1];
+    if (lastMessage.role !== 'assistant') return false;
+
+    const content = lastMessage.content.toLowerCase();
+    return (
+        content.includes('please confirm') ||
+        content.includes('would you like me to go ahead') ||
+        content.includes('confirm to proceed') ||
+        content.includes('would you like to proceed')
+    );
+});
+
+// Voice input via Web Speech API
+const isListening = ref(false);
+const speechSupported = ref(false);
+let recognition: any = null;
+
+function initSpeechRecognition(): void {
+    if (typeof window === 'undefined') return;
+
+    const SpeechRecognition =
+        (window as any).SpeechRecognition ||
+        (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) return;
+
+    speechSupported.value = true;
+    recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    let finalTranscript = '';
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+        let interim = '';
+        finalTranscript = '';
+
+        for (let i = 0; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+                finalTranscript += transcript;
+            } else {
+                interim += transcript;
+            }
+        }
+
+        messageInput.value = finalTranscript || interim;
+    };
+
+    recognition.onend = () => {
+        isListening.value = false;
+        if (finalTranscript && messageInput.value.trim()) {
+            sendMessage();
+        }
+    };
+
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        isListening.value = false;
+        if (event.error !== 'no-speech' && event.error !== 'aborted') {
+            console.error('Speech recognition error:', event.error);
+        }
+    };
+}
+
+function toggleVoiceInput(): void {
+    if (!recognition) return;
+
+    if (isListening.value) {
+        recognition.stop();
+        isListening.value = false;
+    } else {
+        messageInput.value = '';
+        recognition.start();
+        isListening.value = true;
+    }
+}
+
+onUnmounted(() => {
+    if (recognition && isListening.value) {
+        recognition.stop();
+    }
+});
+
+// Send a confirmation or decline response
+function sendConfirmation(confirmed: boolean): void {
+    const message = confirmed
+        ? 'Yes, go ahead and confirm.'
+        : 'No, cancel this action.';
+
+    chatMessages.value.push({ role: 'user', content: message });
+    parsedStreamContent.value = '';
+
+    send({
+        message,
+        ...(currentConversationId.value
+            ? { conversation_id: currentConversationId.value }
+            : {}),
+    });
+}
 
 // Scroll to bottom when messages update
 function scrollToBottom(): void {
@@ -455,6 +573,34 @@ function confirmDelete(): void {
                                     class="prose prose-sm max-w-none dark:prose-invert prose-headings:my-2 prose-p:my-1 prose-pre:my-2 prose-ol:my-1 prose-ul:my-1 prose-li:my-0.5"
                                     v-html="renderMarkdown(msg.content)"
                                 />
+
+                                <!-- Confirmation action buttons -->
+                                <div
+                                    v-if="
+                                        pendingConfirmation &&
+                                        msg.role === 'assistant' &&
+                                        idx === chatMessages.length - 1
+                                    "
+                                    class="mt-3 flex gap-2"
+                                >
+                                    <Button
+                                        size="sm"
+                                        class="bg-teal-600 text-white hover:bg-teal-700"
+                                        @click="sendConfirmation(true)"
+                                    >
+                                        <Check class="mr-1 h-3.5 w-3.5" />
+                                        Confirm
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        class="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
+                                        @click="sendConfirmation(false)"
+                                    >
+                                        <XCircle class="mr-1 h-3.5 w-3.5" />
+                                        Decline
+                                    </Button>
+                                </div>
                             </div>
 
                             <div
@@ -499,11 +645,32 @@ function confirmDelete(): void {
                         <Input
                             v-model="messageInput"
                             type="text"
-                            placeholder="Ask about contributions, expenses, or reports..."
+                            :placeholder="
+                                isListening
+                                    ? 'Listening...'
+                                    : 'Ask about contributions, expenses, or reports...'
+                            "
                             class="flex-1"
+                            :class="{
+                                'border-red-400 ring-1 ring-red-400':
+                                    isListening,
+                            }"
                             :disabled="isProcessing"
                             @keydown="handleKeydown"
                         />
+                        <Button
+                            v-if="speechSupported"
+                            variant="outline"
+                            :disabled="isProcessing"
+                            :class="{
+                                'border-red-400 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-950 dark:text-red-400 dark:hover:bg-red-900':
+                                    isListening,
+                            }"
+                            @click="toggleVoiceInput"
+                        >
+                            <MicOff v-if="isListening" class="h-4 w-4" />
+                            <Mic v-else class="h-4 w-4" />
+                        </Button>
                         <Button
                             :disabled="!messageInput.trim() || isProcessing"
                             @click="sendMessage"

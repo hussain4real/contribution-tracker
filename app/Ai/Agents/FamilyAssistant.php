@@ -3,10 +3,15 @@
 namespace App\Ai\Agents;
 
 use App\Ai\Middleware\LogPrompts;
+use App\Ai\Tools\GenerateContributions;
 use App\Ai\Tools\GetContributionSummary;
 use App\Ai\Tools\GetExpenseSummary;
 use App\Ai\Tools\GetFundBalance;
 use App\Ai\Tools\GetMemberOverview;
+use App\Ai\Tools\RecordExpense;
+use App\Ai\Tools\RecordFundAdjustment;
+use App\Ai\Tools\RecordPayment;
+use App\Ai\Tools\SendInvitation;
 use App\Models\User;
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Attributes\Temperature;
@@ -22,8 +27,8 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Stringable;
 
-#[MaxSteps(8)]
-#[Temperature(0.7)]
+#[MaxSteps(10)]
+#[Temperature(1.0)]
 #[Timeout(120)]
 class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasProviderOptions, HasTools
 {
@@ -58,16 +63,27 @@ class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasProvid
         $currentDate = now()->format('F j, Y');
         $currentYear = now()->year;
         $currentMonth = now()->month;
+        $roleCapabilities = $this->getRoleCapabilities();
 
         return <<<INSTRUCTIONS
         You are a helpful AI assistant for the "{$familyName}" family contribution tracking group.
-        You are speaking with {$userName}.
+        You are speaking with {$userName} (role: {$this->user->role->value}).
         Today's date is {$currentDate}. The current year is {$currentYear} and the current month is {$currentMonth}.
 
         Your capabilities:
         1. **Chat Assistant**: Answer general questions about the family group, contributions, and how the system works.
         2. **Financial Analyzer**: Analyze contribution payments, expenses, and provide financial insights for the family.
         3. **Report Summarizer**: Summarize monthly and annual contribution reports, highlight trends, and identify issues.
+        4. **Agentic Actions**: Perform write operations on behalf of the user based on their role permissions.
+
+        {$userName}'s permissions based on their role:
+        {$roleCapabilities}
+
+        CRITICAL - Confirm-First Rule for Write Actions:
+        - When using any write tool (recording expenses, payments, fund adjustments, generating contributions, or sending invitations), you MUST call the tool first WITHOUT setting confirmed=true.
+        - Present the preview/summary to the user and ask for their explicit confirmation.
+        - Only after the user confirms (says yes, confirm, go ahead, etc.), call the tool again WITH confirmed=true to execute the action.
+        - NEVER set confirmed=true on the first call. Always preview first.
 
         Guidelines:
         - All monetary values are in {$currency} (Nigerian Naira).
@@ -76,6 +92,7 @@ class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasProvid
         - Be concise but thorough. Use bullet points and tables when helpful.
         - If you don't have enough data, say so rather than guessing.
         - Never reveal sensitive information about other members unless the user is an admin.
+        - If the user asks to perform an action they don't have permission for, explain what role is required.
         - STRICT SCOPE: You must refuse to answer any questions or perform any tasks that are not related to family funds, contributions, expenses, or the tracking system. If asked something off-topic (like general knowledge), politely decline and remind the user of your specific purpose.
         - Be friendly and professional.
         INSTRUCTIONS;
@@ -88,12 +105,54 @@ class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasProvid
      */
     public function tools(): iterable
     {
-        return [
+        $tools = [
             new GetContributionSummary($this->user),
             new GetExpenseSummary($this->user),
             new GetFundBalance($this->user),
             new GetMemberOverview($this->user),
         ];
+
+        if ($this->user->canRecordPayments()) {
+            $tools[] = new RecordExpense($this->user);
+            $tools[] = new RecordPayment($this->user);
+            $tools[] = new RecordFundAdjustment($this->user);
+        }
+
+        if ($this->user->isAdmin()) {
+            $tools[] = new GenerateContributions($this->user);
+            $tools[] = new SendInvitation($this->user);
+        }
+
+        return $tools;
+    }
+
+    /**
+     * Get the role-specific capabilities description for the instructions.
+     */
+    private function getRoleCapabilities(): string
+    {
+        $capabilities = ['- Can view contribution summaries, expense reports, fund balance, and member overviews'];
+
+        if ($this->user->canRecordPayments()) {
+            $capabilities[] = '- Can record expenses for the family';
+            $capabilities[] = '- Can record payments for family members';
+            $capabilities[] = '- Can record fund adjustments (donations, corrections, interest)';
+        }
+
+        if ($this->user->isAdmin()) {
+            $capabilities[] = '- Can generate monthly contribution records for all members';
+            $capabilities[] = '- Can send invitations to new family members';
+        }
+
+        if (! $this->user->canRecordPayments()) {
+            $capabilities[] = '- Cannot record expenses, payments, or fund adjustments (requires admin or financial secretary role)';
+        }
+
+        if (! $this->user->isAdmin()) {
+            $capabilities[] = '- Cannot generate contributions or send invitations (requires admin role)';
+        }
+
+        return implode("\n        ", $capabilities);
     }
 
     /**
