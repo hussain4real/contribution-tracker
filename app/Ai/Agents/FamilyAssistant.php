@@ -22,7 +22,7 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Stringable;
 
-#[MaxSteps(3)]
+#[MaxSteps(8)]
 #[Temperature(0.7)]
 #[Timeout(120)]
 class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasProviderOptions, HasTools
