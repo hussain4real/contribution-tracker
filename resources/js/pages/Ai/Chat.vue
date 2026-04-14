@@ -251,8 +251,11 @@ function initSpeechRecognition(): void {
         }
     };
 
-    recognition.onerror = () => {
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
         isListening.value = false;
+        if (event.error !== 'no-speech' && event.error !== 'aborted') {
+        console.error('Speech recognition error:', event.error);
+    }
     };
 }
 

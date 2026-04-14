@@ -4,7 +4,7 @@ import { AppPageProps } from '@/types/index';
 declare global {
     var SpeechRecognition: {
         prototype: SpeechRecognition;
-        new (): SpeechRecognition;
+        new(): SpeechRecognition;
     };
 
     interface SpeechRecognition extends EventTarget {
@@ -19,8 +19,18 @@ declare global {
         onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
     }
 
+    type SpeechRecognitionErrorCode =
+        | 'aborted'
+        | 'audio-capture'
+        | 'bad-grammar'
+        | 'language-not-supported'
+        | 'network'
+        | 'no-speech'
+        | 'not-allowed'
+        | 'service-not-allowed';
+
     interface SpeechRecognitionErrorEvent extends Event {
-        error: string;
+        error: SpeechRecognitionErrorCode;
         message: string;
     }
 
@@ -46,7 +56,7 @@ declare module 'vite/client' {
 /// <reference types="vite-plugin-pwa/client" />
 
 declare module '@inertiajs/core' {
-    interface PageProps extends InertiaPageProps, AppPageProps {}
+    interface PageProps extends InertiaPageProps, AppPageProps { }
 }
 
 declare module 'vue' {
