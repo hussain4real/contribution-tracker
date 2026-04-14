@@ -1,5 +1,45 @@
 import { AppPageProps } from '@/types/index';
 
+// Web Speech API types
+declare global {
+    var SpeechRecognition: {
+        prototype: SpeechRecognition;
+        new (): SpeechRecognition;
+    };
+
+    interface SpeechRecognition extends EventTarget {
+        continuous: boolean;
+        interimResults: boolean;
+        lang: string;
+        start(): void;
+        stop(): void;
+        abort(): void;
+        onresult: ((event: SpeechRecognitionEvent) => void) | null;
+        onend: (() => void) | null;
+        onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+    }
+
+    type SpeechRecognitionErrorCode =
+        | 'aborted'
+        | 'audio-capture'
+        | 'bad-grammar'
+        | 'language-not-supported'
+        | 'network'
+        | 'no-speech'
+        | 'not-allowed'
+        | 'service-not-allowed';
+
+    interface SpeechRecognitionErrorEvent extends Event {
+        error: SpeechRecognitionErrorCode;
+        message: string;
+    }
+
+    interface Window {
+        SpeechRecognition: typeof SpeechRecognition;
+        webkitSpeechRecognition: typeof SpeechRecognition;
+    }
+}
+
 // Extend ImportMeta interface for Vite...
 declare module 'vite/client' {
     interface ImportMetaEnv {

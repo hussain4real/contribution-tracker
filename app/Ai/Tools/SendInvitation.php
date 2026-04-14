@@ -98,7 +98,7 @@ class SendInvitation implements Tool
 
         $acceptUrl = route('invitations.accept', $invitation->token);
 
-        Mail::to($email)->send(new FamilyInvitationMail($invitation, $acceptUrl));
+        Mail::to($email)->queue(new FamilyInvitationMail($invitation, $acceptUrl));
 
         return json_encode([
             'status' => 'success',

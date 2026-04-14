@@ -210,14 +210,13 @@ const pendingConfirmation = computed(() => {
 // Voice input via Web Speech API
 const isListening = ref(false);
 const speechSupported = ref(false);
-let recognition: any = null;
+let recognition: SpeechRecognition | null = null;
 
 function initSpeechRecognition(): void {
     if (typeof window === 'undefined') return;
 
     const SpeechRecognition =
-        (window as any).SpeechRecognition ||
-        (window as any).webkitSpeechRecognition;
+        window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) return;
 
