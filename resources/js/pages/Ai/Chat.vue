@@ -251,7 +251,7 @@ function initSpeechRecognition(): void {
         }
     };
 
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+    recognition.onerror = () => {
         isListening.value = false;
     };
 }

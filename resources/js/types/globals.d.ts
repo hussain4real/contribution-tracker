@@ -2,7 +2,6 @@ import { AppPageProps } from '@/types/index';
 
 // Web Speech API types
 declare global {
-    // eslint-disable-next-line no-var
     var SpeechRecognition: {
         prototype: SpeechRecognition;
         new (): SpeechRecognition;
