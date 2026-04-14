@@ -50,10 +50,19 @@ class AiChatController extends Controller
             }
         }
 
+        $memberNames = $user->family_id
+            ? User::query()
+                ->where('family_id', $user->family_id)
+                ->whereNull('archived_at')
+                ->pluck('name')
+                ->toArray()
+            : [];
+
         return Inertia::render('Ai/Chat', [
             'conversations' => $conversations,
             'messages' => $messages,
             'activeConversationId' => $activeConversationId,
+            'memberNames' => $memberNames,
         ]);
     }
 

@@ -64,12 +64,14 @@ interface Props {
     conversations?: Conversation[];
     messages?: Message[];
     activeConversationId?: string | null;
+    memberNames?: string[];
 }
 
 const props = withDefaults(defineProps<Props>(), {
     conversations: () => [],
     messages: () => [],
     activeConversationId: null,
+    memberNames: () => [],
 });
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -207,6 +209,96 @@ const pendingConfirmation = computed(() => {
     );
 });
 
+// Phonetic correction for speech recognition
+function soundex(str: string): string {
+    const s = str.toUpperCase().replace(/[^A-Z]/g, '');
+    if (!s) return '';
+
+    const map: Record<string, string> = {
+        B: '1', F: '1', P: '1', V: '1',
+        C: '2', G: '2', J: '2', K: '2', Q: '2', S: '2', X: '2', Z: '2',
+        D: '3', T: '3',
+        L: '4',
+        M: '5', N: '5',
+        R: '6',
+    };
+
+    let code = s[0];
+    let prev = map[s[0]] || '0';
+
+    for (let i = 1; i < s.length && code.length < 4; i++) {
+        const c = map[s[i]] || '0';
+        if (c !== '0' && c !== prev) {
+            code += c;
+        }
+        prev = c;
+    }
+
+    return code.padEnd(4, '0');
+}
+
+function levenshtein(a: string, b: string): number {
+    const m = a.length;
+    const n = b.length;
+    const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0) as number[]);
+
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+    for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+            dp[i][j] = a[i - 1] === b[j - 1]
+                ? dp[i - 1][j - 1]
+                : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+        }
+    }
+
+    return dp[m][n];
+}
+
+function correctTranscript(text: string): string {
+    if (!props.memberNames.length) return text;
+
+    // Build lookup: split multi-word names into individual tokens and full names
+    const nameTokens = new Map<string, string>();
+    for (const fullName of props.memberNames) {
+        for (const part of fullName.split(/\s+/)) {
+            nameTokens.set(part.toLowerCase(), part);
+        }
+    }
+
+    return text.replace(/\b[A-Za-z]{3,}\b/g, (word) => {
+        const lower = word.toLowerCase();
+
+        // Skip if it's already an exact match (case-insensitive)
+        if (nameTokens.has(lower)) return nameTokens.get(lower)!;
+
+        const wordSoundex = soundex(word);
+        let bestMatch: string | null = null;
+        let bestDistance = Infinity;
+
+        for (const [tokenLower, original] of nameTokens) {
+            // Must share soundex code or be within 40% edit distance
+            const tokenSoundex = soundex(tokenLower);
+            const dist = levenshtein(lower, tokenLower);
+            const maxLen = Math.max(lower.length, tokenLower.length);
+            const threshold = Math.ceil(maxLen * 0.4);
+
+            if ((wordSoundex === tokenSoundex || dist <= threshold) && dist < bestDistance && dist > 0) {
+                bestDistance = dist;
+                bestMatch = original;
+            }
+        }
+
+        // Only correct if the edit distance is reasonable (not too far off)
+        if (bestMatch && bestDistance <= Math.ceil(Math.max(word.length, bestMatch.length) * 0.4)) {
+            return bestMatch;
+        }
+
+        return word;
+    });
+}
+
 // Voice input via Web Speech API
 const isListening = ref(false);
 const speechSupported = ref(false);
@@ -224,7 +316,7 @@ function initSpeechRecognition(): void {
     recognition = new SpeechRecognition();
     recognition.continuous = false;
     recognition.interimResults = true;
-    recognition.lang = 'en-US';
+    recognition.lang = 'en-NG'; // Set to Nigerian English for better local recognition
 
     let finalTranscript = '';
 
@@ -241,14 +333,11 @@ function initSpeechRecognition(): void {
             }
         }
 
-        messageInput.value = finalTranscript || interim;
+        messageInput.value = correctTranscript(finalTranscript || interim);
     };
 
     recognition.onend = () => {
         isListening.value = false;
-        if (finalTranscript && messageInput.value.trim()) {
-            sendMessage();
-        }
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
