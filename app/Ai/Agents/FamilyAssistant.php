@@ -28,7 +28,7 @@ use Laravel\Ai\Promptable;
 use Stringable;
 
 #[MaxSteps(10)]
-#[Temperature(0.7)]
+#[Temperature(1.0)]
 #[Timeout(120)]
 class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasProviderOptions, HasTools
 {
