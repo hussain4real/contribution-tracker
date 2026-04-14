@@ -5,7 +5,7 @@ declare global {
     // eslint-disable-next-line no-var
     var SpeechRecognition: {
         prototype: SpeechRecognition;
-        new(): SpeechRecognition;
+        new (): SpeechRecognition;
     };
 
     interface SpeechRecognition extends EventTarget {
@@ -47,7 +47,7 @@ declare module 'vite/client' {
 /// <reference types="vite-plugin-pwa/client" />
 
 declare module '@inertiajs/core' {
-    interface PageProps extends InertiaPageProps, AppPageProps { }
+    interface PageProps extends InertiaPageProps, AppPageProps {}
 }
 
 declare module 'vue' {
