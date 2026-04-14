@@ -5,14 +5,18 @@ namespace App\Http\Controllers;
 use App\Ai\Agents\FamilyAssistant;
 use App\Http\Requests\RenameAiConversationRequest;
 use App\Http\Requests\StreamAiChatRequest;
+use App\Http\Requests\TranscribeAudioRequest;
 use App\Models\User;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Responses\StreamableAgentResponse;
+use Laravel\Ai\Transcription;
 
 class AiChatController extends Controller
 {
@@ -58,12 +62,36 @@ class AiChatController extends Controller
                 ->toArray()
             : [];
 
+        $transcriptionAvailable = ! empty(config('ai.providers.openai.key'))
+            || ! empty(config('ai.providers.mistral.key'));
+
         return Inertia::render('Ai/Chat', [
             'conversations' => $conversations,
             'messages' => $messages,
             'activeConversationId' => $activeConversationId,
             'memberNames' => $memberNames,
+            'transcriptionAvailable' => $transcriptionAvailable,
         ]);
+    }
+
+    /**
+     * Transcribe uploaded audio to text using AI provider.
+     */
+    public function transcribe(TranscribeAudioRequest $request): JsonResponse
+    {
+        $file = $request->file('audio');
+
+        $providers = array_filter([
+            ! empty(config('ai.providers.openai.key')) ? Lab::OpenAI : null,
+            ! empty(config('ai.providers.mistral.key')) ? Lab::Mistral : null,
+        ]);
+
+        $response = Transcription::of($file)
+            ->language('en')
+            ->timeout(30)
+            ->generate($providers ?: null);
+
+        return response()->json(['text' => $response->text]);
     }
 
     /**

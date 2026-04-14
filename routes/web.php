@@ -80,6 +80,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware(EnsureFeaturesAreActive::using(AiAssistant::class))->group(function () {
         Route::get('ai', [AiChatController::class, 'index'])->name('ai.index');
         Route::post('ai/chat', [AiChatController::class, 'stream'])->name('ai.chat')->middleware('throttle:30,1');
+        Route::post('ai/transcribe', [AiChatController::class, 'transcribe'])->name('ai.transcribe')->middleware('throttle:20,1');
         Route::patch('ai/conversations/{conversation}', [AiChatController::class, 'rename'])->name('ai.conversations.rename');
         Route::delete('ai/conversations/{conversation}', [AiChatController::class, 'destroy'])->name('ai.conversations.destroy');
     });

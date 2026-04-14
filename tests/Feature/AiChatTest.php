@@ -4,8 +4,10 @@ use App\Ai\Agents\FamilyAssistant;
 use App\Features\AiAssistant;
 use App\Models\Family;
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Laravel\Ai\Transcription;
 
 beforeEach(function () {
     DB::table('features')->insert([
@@ -280,4 +282,44 @@ test('rename validates title is required', function () {
     $this->actingAs($user)
         ->patch(route('ai.conversations.rename', $conversationId), ['title' => ''])
         ->assertSessionHasErrors(['title']);
+});
+
+test('guests cannot post to the AI transcribe endpoint', function () {
+    $this->postJson(route('ai.transcribe'))
+        ->assertForbidden();
+});
+
+test('the transcribe endpoint validates an audio file is required', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->postJson(route('ai.transcribe'), [])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['audio']);
+});
+
+test('the transcribe endpoint rejects non-audio files', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->postJson(route('ai.transcribe'), [
+            'audio' => UploadedFile::fake()->create('document.pdf', 100, 'application/pdf'),
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['audio']);
+});
+
+test('the transcribe endpoint returns transcribed text', function () {
+    $user = User::factory()->create();
+
+    Transcription::fake(['Hello Suleiman, how are you?']);
+
+    $this->actingAs($user)
+        ->postJson(route('ai.transcribe'), [
+            'audio' => UploadedFile::fake()->create('recording.webm', 100, 'audio/webm'),
+        ])
+        ->assertSuccessful()
+        ->assertJson(['text' => 'Hello Suleiman, how are you?']);
+
+    Transcription::assertGenerated(fn () => true);
 });
