@@ -23,6 +23,8 @@ class LogPrompts
         return $next($prompt)->then(function (AgentResponse $response) use ($prompt) {
             Log::info('AI Agent responded', [
                 'agent' => $prompt->agent::class,
+                'provider' => $response->meta->provider ?? null,
+                'model' => $response->meta->model ?? null,
                 'response_length' => Str::length($response->text ?? ''),
                 'usage' => $response->usage ?? null,
             ]);

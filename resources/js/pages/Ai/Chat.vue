@@ -2,6 +2,7 @@
 import {
     index as aiIndex,
     stream as aiStream,
+    transcribe as aiTranscribe,
     destroy,
     rename,
 } from '@/actions/App/Http/Controllers/AiChatController';
@@ -25,6 +26,7 @@ import { useStream } from '@laravel/stream-vue';
 import {
     Bot,
     Check,
+    Loader2,
     Menu,
     MessageSquarePlus,
     Mic,
@@ -64,12 +66,16 @@ interface Props {
     conversations?: Conversation[];
     messages?: Message[];
     activeConversationId?: string | null;
+    memberNames?: string[];
+    transcriptionAvailable?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
     conversations: () => [],
     messages: () => [],
     activeConversationId: null,
+    memberNames: () => [],
+    transcriptionAvailable: false,
 });
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -207,14 +213,150 @@ const pendingConfirmation = computed(() => {
     );
 });
 
-// Voice input via Web Speech API
+// Phonetic correction for speech recognition
+function soundex(str: string): string {
+    const s = str.toUpperCase().replace(/[^A-Z]/g, '');
+    if (!s) return '';
+
+    const map: Record<string, string> = {
+        B: '1',
+        F: '1',
+        P: '1',
+        V: '1',
+        C: '2',
+        G: '2',
+        J: '2',
+        K: '2',
+        Q: '2',
+        S: '2',
+        X: '2',
+        Z: '2',
+        D: '3',
+        T: '3',
+        L: '4',
+        M: '5',
+        N: '5',
+        R: '6',
+    };
+
+    let code = s[0];
+    let prev = map[s[0]] || '0';
+
+    for (let i = 1; i < s.length && code.length < 4; i++) {
+        const c = map[s[i]] || '0';
+        if (c !== '0' && c !== prev) {
+            code += c;
+        }
+        prev = c;
+    }
+
+    return code.padEnd(4, '0');
+}
+
+function levenshtein(a: string, b: string): number {
+    const m = a.length;
+    const n = b.length;
+    const dp: number[][] = Array.from(
+        { length: m + 1 },
+        () => Array(n + 1).fill(0) as number[],
+    );
+
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+    for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+            dp[i][j] =
+                a[i - 1] === b[j - 1]
+                    ? dp[i - 1][j - 1]
+                    : 1 +
+                      Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+        }
+    }
+
+    return dp[m][n];
+}
+
+function correctTranscript(text: string): string {
+    if (!props.memberNames.length) return text;
+
+    // Build lookup: split multi-word names into individual tokens and full names
+    const nameTokens = new Map<string, string>();
+    for (const fullName of props.memberNames) {
+        for (const part of fullName.split(/\s+/)) {
+            nameTokens.set(part.toLowerCase(), part);
+        }
+    }
+
+    return text.replace(/\b[A-Za-z]{3,}\b/g, (word) => {
+        const lower = word.toLowerCase();
+
+        // Skip if it's already an exact match (case-insensitive)
+        if (nameTokens.has(lower)) return nameTokens.get(lower)!;
+
+        const wordSoundex = soundex(word);
+        let bestMatch: string | null = null;
+        let bestDistance = Infinity;
+
+        for (const [tokenLower, original] of nameTokens) {
+            // Must share soundex code or be within 40% edit distance
+            const tokenSoundex = soundex(tokenLower);
+            const dist = levenshtein(lower, tokenLower);
+            const maxLen = Math.max(lower.length, tokenLower.length);
+            const threshold = Math.ceil(maxLen * 0.4);
+
+            if (
+                (wordSoundex === tokenSoundex || dist <= threshold) &&
+                dist < bestDistance &&
+                dist > 0
+            ) {
+                bestDistance = dist;
+                bestMatch = original;
+            }
+        }
+
+        // Only correct if the edit distance is reasonable (not too far off)
+        if (
+            bestMatch &&
+            bestDistance <=
+                Math.ceil(Math.max(word.length, bestMatch.length) * 0.4)
+        ) {
+            return bestMatch;
+        }
+
+        return word;
+    });
+}
+
+// Voice input state
 const isListening = ref(false);
+const isTranscribing = ref(false);
 const speechSupported = ref(false);
+const recordingSeconds = ref(0);
+const MAX_RECORDING_SECONDS = 30;
 let recognition: SpeechRecognition | null = null;
+let mediaRecorder: MediaRecorder | null = null;
+let audioChunks: Blob[] = [];
+let recordingTimer: ReturnType<typeof setInterval> | null = null;
+
+// Use server-side transcription when available, fall back to Web Speech API
+const useServerTranscription = computed(
+    () =>
+        props.transcriptionAvailable &&
+        typeof navigator !== 'undefined' &&
+        !!navigator.mediaDevices,
+);
 
 function initSpeechRecognition(): void {
     if (typeof window === 'undefined') return;
 
+    // Server-side transcription uses MediaRecorder (available in all modern browsers)
+    if (useServerTranscription.value) {
+        speechSupported.value = true;
+        return;
+    }
+
+    // Fall back to Web Speech API
     const SpeechRecognition =
         window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -224,7 +366,7 @@ function initSpeechRecognition(): void {
     recognition = new SpeechRecognition();
     recognition.continuous = false;
     recognition.interimResults = true;
-    recognition.lang = 'en-US';
+    recognition.lang = 'en-NG'; // Set to Nigerian English for better local recognition
 
     let finalTranscript = '';
 
@@ -241,14 +383,11 @@ function initSpeechRecognition(): void {
             }
         }
 
-        messageInput.value = finalTranscript || interim;
+        messageInput.value = correctTranscript(finalTranscript || interim);
     };
 
     recognition.onend = () => {
         isListening.value = false;
-        if (finalTranscript && messageInput.value.trim()) {
-            sendMessage();
-        }
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
@@ -259,7 +398,135 @@ function initSpeechRecognition(): void {
     };
 }
 
+async function startMediaRecording(): Promise<void> {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+        });
+        audioChunks = [];
+
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+            ? 'audio/webm;codecs=opus'
+            : MediaRecorder.isTypeSupported('audio/webm')
+              ? 'audio/webm'
+              : '';
+
+        mediaRecorder = new MediaRecorder(
+            stream,
+            mimeType ? { mimeType } : undefined,
+        );
+
+        mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+                audioChunks.push(event.data);
+            }
+        };
+
+        mediaRecorder.onstop = async () => {
+            // Stop all tracks to release the microphone
+            stream.getTracks().forEach((track) => track.stop());
+            clearRecordingTimer();
+
+            if (audioChunks.length === 0) return;
+
+            // Use the actual mimeType from the recorder
+            const actualType = mediaRecorder?.mimeType || 'audio/webm';
+            const ext = actualType.includes('mp4')
+                ? 'mp4'
+                : actualType.includes('ogg')
+                  ? 'ogg'
+                  : 'webm';
+            const audioBlob = new Blob(audioChunks, { type: actualType });
+            audioChunks = [];
+            await sendAudioForTranscription(audioBlob, ext);
+        };
+
+        mediaRecorder.start();
+        isListening.value = true;
+        startRecordingTimer();
+    } catch {
+        isListening.value = false;
+    }
+}
+
+function startRecordingTimer(): void {
+    recordingSeconds.value = 0;
+    recordingTimer = setInterval(() => {
+        recordingSeconds.value++;
+        if (recordingSeconds.value >= MAX_RECORDING_SECONDS) {
+            stopMediaRecording();
+        }
+    }, 1000);
+}
+
+function clearRecordingTimer(): void {
+    if (recordingTimer) {
+        clearInterval(recordingTimer);
+        recordingTimer = null;
+    }
+    recordingSeconds.value = 0;
+}
+
+function stopMediaRecording(): void {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+    }
+    isListening.value = false;
+}
+
+async function sendAudioForTranscription(
+    audioBlob: Blob,
+    ext: string,
+): Promise<void> {
+    isTranscribing.value = true;
+
+    try {
+        const formData = new FormData();
+        formData.append('audio', audioBlob, `recording.${ext}`);
+
+        const response = await fetch(aiTranscribe().url, {
+            method: 'POST',
+            headers: {
+                'X-XSRF-TOKEN': decodeURIComponent(
+                    document.cookie
+                        .split('; ')
+                        .find((row) => row.startsWith('XSRF-TOKEN='))
+                        ?.split('=')
+                        .slice(1)
+                        .join('=') ?? '',
+                ),
+                Accept: 'application/json',
+            },
+            credentials: 'same-origin',
+            body: formData,
+        });
+
+        if (!response.ok) throw new Error('Transcription failed');
+
+        const data = (await response.json()) as { text: string };
+        if (data.text) {
+            messageInput.value = correctTranscript(data.text);
+        }
+    } catch {
+        // Silently fail — user can still type manually
+    } finally {
+        isTranscribing.value = false;
+    }
+}
+
 function toggleVoiceInput(): void {
+    if (isTranscribing.value) return;
+
+    if (useServerTranscription.value) {
+        if (isListening.value) {
+            stopMediaRecording();
+        } else {
+            messageInput.value = '';
+            startMediaRecording();
+        }
+        return;
+    }
+
     if (!recognition) return;
 
     if (isListening.value) {
@@ -276,6 +543,10 @@ onUnmounted(() => {
     if (recognition && isListening.value) {
         recognition.stop();
     }
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+    }
+    clearRecordingTimer();
 });
 
 // Send a confirmation or decline response
@@ -640,34 +911,55 @@ function confirmDelete(): void {
 
                 <!-- Input area -->
                 <div class="border-t border-gray-200 p-4 dark:border-gray-700">
+                    <!-- Recording timer -->
+                    <div
+                        v-if="isListening"
+                        class="mb-2 flex items-center justify-center gap-2 text-xs text-red-500 dark:text-red-400"
+                    >
+                        <span
+                            class="h-2 w-2 animate-pulse rounded-full bg-red-500"
+                        />
+                        Recording {{ recordingSeconds }}s /
+                        {{ MAX_RECORDING_SECONDS }}s — tap mic to stop
+                    </div>
                     <div class="flex gap-2">
                         <Input
                             v-model="messageInput"
                             type="text"
                             :placeholder="
-                                isListening
-                                    ? 'Listening...'
-                                    : 'Ask about contributions, expenses, or reports...'
+                                isTranscribing
+                                    ? 'Transcribing...'
+                                    : isListening
+                                      ? 'Listening...'
+                                      : 'Ask about contributions, expenses, or reports...'
                             "
                             class="flex-1"
                             :class="{
                                 'border-red-400 ring-1 ring-red-400':
                                     isListening,
+                                'border-amber-400 ring-1 ring-amber-400':
+                                    isTranscribing,
                             }"
-                            :disabled="isProcessing"
+                            :disabled="isProcessing || isTranscribing"
                             @keydown="handleKeydown"
                         />
                         <Button
                             v-if="speechSupported"
                             variant="outline"
-                            :disabled="isProcessing"
+                            :disabled="isProcessing || isTranscribing"
                             :class="{
                                 'border-red-400 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-950 dark:text-red-400 dark:hover:bg-red-900':
                                     isListening,
+                                'border-amber-400 bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-400':
+                                    isTranscribing,
                             }"
                             @click="toggleVoiceInput"
                         >
-                            <MicOff v-if="isListening" class="h-4 w-4" />
+                            <Loader2
+                                v-if="isTranscribing"
+                                class="h-4 w-4 animate-spin"
+                            />
+                            <MicOff v-else-if="isListening" class="h-4 w-4" />
                             <Mic v-else class="h-4 w-4" />
                         </Button>
                         <Button

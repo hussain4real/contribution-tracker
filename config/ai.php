@@ -16,7 +16,7 @@ return [
     'default' => 'openai',
     'default_for_images' => 'gemini',
     'default_for_audio' => 'openai',
-    'default_for_transcription' => 'openai',
+    'default_for_transcription' => env('AI_TRANSCRIPTION_PROVIDER', 'openai'),
     'default_for_embeddings' => 'openai',
     'default_for_reranking' => 'cohere',
 
@@ -125,6 +125,11 @@ return [
             'driver' => 'openai',
             'key' => env('OPENAI_API_KEY'),
             'url' => env('OPENAI_URL', 'https://api.openai.com/v1'),
+            'models' => [
+                'transcription' => [
+                    'default' => env('OPENAI_TRANSCRIPTION_MODEL', 'gpt-4o-mini-transcribe'),
+                ],
+            ],
         ],
 
         'openrouter' => [
