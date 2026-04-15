@@ -12,6 +12,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 use Laravel\Ai\Enums\Lab;
@@ -90,6 +91,15 @@ class AiChatController extends Controller
             ->language('en')
             ->timeout(30)
             ->generate($providers ?: null);
+
+        Log::info('AI Transcription completed', [
+            'provider' => $response->meta->provider ?? null,
+            'model' => $response->meta->model ?? null,
+            'file_size' => $file->getSize(),
+            'mime_type' => $file->getMimeType(),
+            'text_length' => mb_strlen($response->text),
+            'usage' => $response->usage ?? null,
+        ]);
 
         return response()->json(['text' => $response->text]);
     }
