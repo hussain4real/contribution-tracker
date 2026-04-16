@@ -93,13 +93,14 @@ export default defineConfig({
                     },
                     {
                         urlPattern: /\.(?:js|css)$/i,
-                        handler: 'StaleWhileRevalidate',
+                        handler: 'NetworkFirst',
                         options: {
                             cacheName: 'static-resources',
                             expiration: {
                                 maxEntries: 50,
                                 maxAgeSeconds: 60 * 60 * 24 * 7,
                             },
+                            networkTimeoutSeconds: 3,
                         },
                     },
                 ],
