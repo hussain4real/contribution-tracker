@@ -161,27 +161,27 @@ This project grew out of a real problem the researcher faces personally. The res
 
 These frustrations turn out to be remarkably common. In conversations with classmates, friends, and colleagues, the researcher found that nearly every Nigerian family with a contribution arrangement faces similar problems. Some families have given up on their funds entirely because the record-keeping became too unreliable and the arguments too frequent.
 
-As someone studying software engineering, the researcher saw an opportunity to build something that would actually solve this problem—not as a theoretical exercise but as a working tool that the researcher's own family could use. That personal stake matters. It means the requirements are grounded in lived experience rather than hypothetical user stories.
+As someone studying software engineering, the researcher looked at the mess and thought: I can fix this. Not as a thought experiment or a hypothetical proof-of-concept, but as an actual tool the family could start using. When your own relatives are the first users, you do not get to cut corners on requirements. Every feature maps to a real argument somebody had at a family meeting.
 
-Beyond the immediate practical motivation, the project offered an intellectually compelling challenge. Building a multi-tenant platform where dozens of independent families operate securely on shared infrastructure is a non-trivial architectural problem. Layering machine learning for payment prediction and LLM-based report generation on top of that pushes the project well beyond a standard database-backed web application into the territory of intelligent systems. The combination of SaaS architecture and applied AI in an informal finance context is what makes this project interesting as a 400-level capstone—it demands competence across backend engineering, frontend development, data modelling, security, and emerging AI capabilities.
+The technical challenge sealed the deal. Getting dozens of independent families to coexist securely on shared infrastructure—with proper data isolation, role enforcement, and auditable records—is a genuinely hard architectural problem. Stack machine learning on top for payment prediction, then add LLM-generated reports in plain language, and you have something that goes well past the typical CRUD web app. For a 400-level capstone, that felt right. It pulls together backend engineering, frontend development, data modelling, security design, and emerging AI capabilities all at once. The researcher wanted a project worth struggling with. This one qualifies.
 
 ### 1.7 Limitations of the Study
 
 Several constraints bound what this system can do in its current form:
 
-1. **Internet dependency.** Everything requires an active connection. In parts of Nigeria where internet access is unreliable, this is a genuine barrier. The system does not currently work offline or as a progressive web application.
+1. **Internet dependency.** No internet, no access. That is a real problem in parts of Nigeria where connectivity drops out regularly. Right now the system has no offline mode and does not work as a progressive web application—if the connection goes down, you wait.
 
-2. **Paystack-only payments.** Online payments go exclusively through Paystack, which is optimised for the Nigerian Naira ecosystem. Families in other countries or currencies would need a different gateway, and that is outside the current scope.
+2. **Paystack-only payments.** The only online payment channel is Paystack, which works best with Nigerian Naira. A family based in Ghana or Kenya, or one that deals in dollars, would need a different gateway entirely—and supporting that is not part of the current build.
 
-3. **Cold-start problem for ML predictions.** The predictive analytics module needs a meaningful volume of historical payment data to produce useful results. Newly registered families with only a few months of records will not get reliable predictions until enough data accumulates—a well-known limitation in prediction systems generally (Schein et al., 2002).
+3. **Cold-start problem for ML predictions.** Machine learning needs data to be useful, and a brand-new family with two months of payment records does not give the model much to work with. Predictions will be unreliable until enough history accumulates—a well-documented challenge in prediction systems of all kinds (Schein et al., 2002).
 
-4. **LLM cost and speed.** Generating narrative reports through external LLM APIs costs money per request and introduces latency. How much this costs in practice will affect which subscription tiers get access to the feature, and the quality of the output depends on whichever LLM provider the system is connected to (OpenAI, 2023).
+4. **LLM cost and speed.** Every time the system asks an LLM to write a report, that is an API call—and API calls cost money and take time. Whether that cost is pennies or dollars per report will determine which subscription tiers can offer the feature. The quality also varies depending on the provider (OpenAI, 2023).
 
-5. **English only.** The interface and all generated reports are in English. Nigeria is linguistically diverse, and some family members—particularly older ones—might prefer their native language. Multilingual support is a future consideration, not a current feature.
+5. **English only.** Everything—the interface, the buttons, the generated reports—is in English. In a country with over 500 living languages, that leaves out family members who would be more comfortable in Hausa, Yoruba, or Igbo. Adding other languages is a future goal, not a current capability.
 
-6. **Device requirements for WebAuthn.** Passkey-based authentication requires devices with biometric sensors or platform authenticators (fingerprint readers, face recognition, etc.). Members whose devices lack these capabilities fall back to TOTP-based two-factor authentication instead.
+6. **Device requirements for WebAuthn.** Not every phone or laptop has a fingerprint reader or face recognition. Passkey login only works on devices that do. For members with older hardware, the system falls back to TOTP codes from an authenticator app—functional, but not as seamless.
 
-7. **Untested at scale.** The multi-tenant design supports multiple families on one platform instance, but large-scale load testing with thousands of concurrent tenants has not been performed. Performance under heavy concurrent use remains to be evaluated.
+7. **Untested at scale.** The architecture is designed for multi-tenancy, but nobody has thrown thousands of families at it simultaneously to see what breaks. That kind of load testing is outside the scope of this project. Whether the system holds up under serious concurrent traffic is an open question.
 
 ### 1.8 Definition of Terms
 
@@ -189,20 +189,20 @@ Several constraints bound what this system can do in its current form:
 
 | Term | Definition | Reference |
 | --- | --- | --- |
-| **Multi-Tenancy** | A software architecture where one application instance serves multiple independent user groups (tenants) with logical or physical data isolation between them. | Bezemer & Zaidman (2010) |
-| **Role-Based Access Control (RBAC)** | An access control method where permissions are assigned to roles rather than individual users. Users inherit the permissions of whatever role they are assigned. | Sandhu et al. (1996) |
-| **Contribution** | A periodic (usually monthly) financial obligation assigned to each member of a family group, with the amount set by the member's category or tier. | — |
-| **Partial Payment** | A payment that covers only part of a member's outstanding contribution for a given period, leaving a remaining balance to be paid later. | — |
-| **Balance-First Allocation** | An algorithm that applies incoming payments to the member's oldest unpaid contribution first, then moves forward chronologically through remaining outstanding periods. | — |
-| **Predictive Analytics** | Using statistical methods and machine learning to analyse historical data and forecast future outcomes—in this case, whether a member is likely to default on their contribution. | Khandani et al. (2010) |
-| **Large Language Model (LLM)** | A deep learning model trained on large text datasets that can generate coherent natural language, answer questions, and transform data into readable text. Used here to produce narrative financial summaries. | Brown et al. (2020) |
-| **WebAuthn** | A W3C web standard for passwordless authentication using public-key cryptography. Users authenticate with biometric sensors, security keys, or device-level platform authenticators. | W3C (2021) |
-| **Two-Factor Authentication (2FA)** | A security approach requiring two separate forms of identification—typically a password plus a time-based one-time code from an authenticator app or device. | Ometov et al. (2018) |
-| **Software as a Service (SaaS)** | A model where software is hosted by a provider and accessed over the internet on a subscription basis, with no local installation required. | Chong et al. (2006) |
-| **Single Page Application (SPA)** | A web application that loads a single HTML page and updates content dynamically without full page reloads, creating a smoother user experience similar to a desktop application. | Mikowski & Powell (2013) |
-| **Inertia.js** | A library that connects server-side frameworks like Laravel directly to client-side frameworks like Vue.js, enabling server-driven single-page applications without a separate REST API layer. | Reinink (2024) |
-| **Application Programming Interface (API)** | A defined set of protocols and tools that allow different software systems to communicate. In this project, APIs connect the system to Paystack for payments and to LLM services for report generation. | Fielding (2000) |
-| **Payment Gateway** | A service that processes electronic payment transactions between buyers, sellers, and their banks. Paystack is the gateway used in this system. | Paystack (2024) |
+| **Multi-Tenancy** | One application instance serving many independent groups (tenants), where each tenant's data is kept separate through logical or physical isolation. Think of it as apartment units in a building—shared infrastructure, private spaces. | Bezemer & Zaidman (2010) |
+| **Role-Based Access Control (RBAC)** | Instead of giving permissions to individual people, you assign them to roles. A user gets whatever permissions their role carries. In this project: Administrator, Financial Secretary, or Member. | Sandhu et al. (1996) |
+| **Contribution** | The monthly amount each family member owes, determined by which category they fall into—employed, unemployed, or student. | — |
+| **Partial Payment** | When a member pays less than the full amount owed for a given month. The unpaid remainder carries forward as an outstanding balance. | — |
+| **Balance-First Allocation** | The rule the system follows when money comes in: apply it to the member's oldest outstanding month first, then work forward. No cherry-picking which month gets credited. | — |
+| **Predictive Analytics** | Running statistical models and machine learning on past payment data to guess what happens next—specifically, whether a given member is heading toward a missed payment. | Khandani et al. (2010) |
+| **Large Language Model (LLM)** | A neural network trained on massive amounts of text that can generate human-readable prose, answer questions, and turn raw data into narrative summaries. This project uses one to write financial reports in plain English. | Brown et al. (2020) |
+| **WebAuthn** | The W3C standard that lets people log in without passwords. Instead, the browser uses public-key cryptography tied to a fingerprint reader, face scanner, or hardware security key. | W3C (2021) |
+| **Two-Factor Authentication (2FA)** | Logging in with two separate proofs of identity. Usually that means a password plus a six-digit code from an authenticator app on your phone. | Ometov et al. (2018) |
+| **Software as a Service (SaaS)** | Software that lives on someone else's server and you access through a browser. No installation, no updates to manage locally—just a subscription and an internet connection. | Chong et al. (2006) |
+| **Single Page Application (SPA)** | A web app that loads once and then updates itself dynamically as you interact with it, rather than reloading a fresh page every time you click something. Feels more like a desktop app than a traditional website. | Mikowski & Powell (2013) |
+| **Inertia.js** | The glue between Laravel on the server and Vue.js in the browser. It lets you build an SPA that is actually driven by server-side routing—no separate REST API needed. | Reinink (2024) |
+| **Application Programming Interface (API)** | The agreed-upon way two pieces of software talk to each other. Here, APIs connect the system to Paystack for processing payments and to external LLM services for generating reports. | Fielding (2000) |
+| **Payment Gateway** | The middleman that handles electronic transactions between a buyer, a seller, and their respective banks. Paystack fills this role in the system. | Paystack (2024) |
 
 ### 1.9 Organization of the Report
 
@@ -214,9 +214,9 @@ This report is structured in five chapters.
 
 **Chapter Three** covers the system design and methodology—requirements specification, the development methodology (Agile), system architecture, database design, programming tools, module descriptions, and security measures. The methodology choices are theoretically grounded in the framework established in Chapter Two.
 
-**Chapter Four** documents the actual implementation. It covers how each module was coded and integrated, the testing strategy (unit tests, feature tests, browser tests using Pest PHP), and the results of testing with evidence of working functionality.
+**Chapter Four** is where the code meets reality. It walks through how each module was actually built and wired together, then documents the testing strategy—unit tests, feature tests, browser tests with Pest PHP—and shows the results. Screenshots, test outputs, the evidence that things work.
 
-**Chapter Five** wraps up with a summary of findings, an evaluation of how well the objectives were met, the contributions of the study, and recommendations for future development.
+**Chapter Five** steps back and asks: did it work? It summarises the findings, evaluates the system against the objectives from Chapter One, states what this project contributes to the field, and suggests where future developers could take it next.
 
 ---
 
