@@ -121,10 +121,10 @@ The application is developed using Laravel (PHP) for the backend, Vue.js with In
   - [1.9 Organization of the Report](chapter-1.md#19-organization-of-the-report)
 - [Chapter Two: Literature Review](chapter-2.md)
   - [2.1 Historical Perspectives of Family Fund Management Systems](chapter-2.md#21-historical-perspectives-of-family-fund-management-systems)
-  - 2.2 Theoretical Framework
-  - 2.3 Review of Related Work
-  - 2.4 Gaps in Existing Research
-  - 2.5 Summary of the Literature Review
+  - [2.2 Theoretical Framework](chapter-2.md#22-theoretical-framework)
+  - [2.3 Review of Related Work](chapter-2.md#23-review-of-related-work)
+  - [2.4 Gaps in Existing Research](chapter-2.md#24-gaps-in-existing-research)
+  - [2.5 Summary of the Literature Review](chapter-2.md#25-summary-of-the-literature-review)
 - Chapter Three: System Design and Methodology
   - 3.1 Review of the Proposed System
   - 3.2 System Requirements
@@ -153,9 +153,8 @@ The application is developed using Laravel (PHP) for the backend, Vue.js with In
 | Table No. | Title | Page |
 | --- | --- | --- |
 | 1.1 | Comparison of Existing Financial Management Platforms | — |
-| 1.2 | Summary of System Objectives | — |
-| 1.3 | Technical Stack Overview | — |
-| 1.4 | Definition of Key Terms | — |
+| 1.2 | Technical Stack Overview | — |
+| 1.3 | Definition of Key Terms | — |
 
 *\[To be updated as the document progresses.]*
 
