@@ -30,9 +30,10 @@ php artisan route:cache
 php artisan view:cache
 php artisan event:cache
 
-echo "Restarting queue workers and SSR..."
+echo "Restarting queue workers, SSR, and Nightwatch..."
 sudo supervisorctl restart queue-worker
 sudo supervisorctl restart ssr
+sudo supervisorctl restart nightwatch
 
 echo "Reloading PHP-FPM..."
 sudo systemctl reload php8.4-fpm
