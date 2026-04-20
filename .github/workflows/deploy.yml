@@ -86,7 +86,7 @@ jobs:
             php artisan event:cache
 
             # Restart queue workers, SSR server, and Nightwatch agent
-            sudo supervisorctl restart queue-worker
+            sudo supervisorctl restart queue-worker:*
             sudo supervisorctl restart ssr
             sudo supervisorctl restart nightwatch
 
