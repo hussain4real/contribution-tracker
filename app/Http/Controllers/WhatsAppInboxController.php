@@ -167,7 +167,7 @@ class WhatsAppInboxController extends Controller
 
         $message = (new WhatsAppMessageBuilder)->text($validated['body']);
 
-        $result = $this->whatsapp->send($this->normalisePhone($phone), $message);
+        $result = $this->whatsapp->send($this->whatsapp->normalisePhone($phone), $message);
 
         if (! $result['success']) {
             return back()->withErrors([
@@ -187,10 +187,5 @@ class WhatsAppInboxController extends Controller
         $user = Auth::user();
 
         abort_unless($user && $user->role->canViewAllMembers(), 403);
-    }
-
-    protected function normalisePhone(string $phone): string
-    {
-        return preg_replace('/\D+/', '', $phone) ?? '';
     }
 }

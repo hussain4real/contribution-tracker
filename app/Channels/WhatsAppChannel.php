@@ -59,17 +59,6 @@ class WhatsAppChannel
             return;
         }
 
-        $this->whatsapp->send($this->normalisePhone($to), $message);
-    }
-
-    /**
-     * Strip non-digit characters so Meta accepts the phone number.
-     *
-     * Meta expects an E.164 number without the leading "+" or any spaces,
-     * dashes, or parentheses (e.g. "2348012345678").
-     */
-    protected function normalisePhone(string $phone): string
-    {
-        return preg_replace('/\D+/', '', $phone) ?? '';
+        $this->whatsapp->send($this->whatsapp->normalisePhone($to), $message);
     }
 }

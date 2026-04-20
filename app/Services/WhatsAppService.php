@@ -76,6 +76,17 @@ class WhatsAppService
     }
 
     /**
+     * Strip non-digit characters so Meta accepts the phone number.
+     *
+     * Meta expects an E.164 number without the leading "+" or any spaces,
+     * dashes, or parentheses (e.g. "2348012345678").
+     */
+    public function normalisePhone(string $phone): string
+    {
+        return preg_replace('/\D+/', '', $phone) ?? '';
+    }
+
+    /**
      * POST a payload to the Graph API and normalise the response.
      *
      * @param  array<string, mixed>  $payload

@@ -53,7 +53,7 @@ class WhatsAppVerificationController extends Controller
             ->body([$code])
             ->button('url', '0', $code);
 
-        $result = $this->whatsapp->send($this->normalisePhone($phone), $message);
+        $result = $this->whatsapp->send($this->whatsapp->normalisePhone($phone), $message);
 
         if (! $result['success']) {
             return back()->withErrors([
@@ -107,10 +107,5 @@ class WhatsAppVerificationController extends Controller
     protected function cacheKey(int $userId): string
     {
         return "whatsapp_otp:{$userId}";
-    }
-
-    protected function normalisePhone(string $phone): string
-    {
-        return preg_replace('/\D+/', '', $phone) ?? '';
     }
 }
