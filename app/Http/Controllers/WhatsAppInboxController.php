@@ -44,29 +44,41 @@ class WhatsAppInboxController extends Controller
         /** @var User $user */
         $user = Auth::user();
 
-        $threads = WhatsAppMessage::query()
+        // Subquery to fetch the latest message body per phone number for the family.
+        $latestBodySub = WhatsAppMessage::query()
+            ->select('body')
+            ->whereColumn('from', 'wam.from')
+            ->where('family_id', $user->family_id)
+            ->orderByDesc('created_at')
+            ->limit(1);
+
+        $rows = WhatsAppMessage::query()
+            ->from('whatsapp_messages as wam')
             ->where('family_id', $user->family_id)
             ->selectRaw('"from" as phone, MAX(created_at) as last_at, COUNT(*) as message_count, MAX(user_id) as user_id')
+            ->selectSub($latestBodySub, 'last_body')
             ->groupBy('from')
             ->orderByDesc('last_at')
-            ->get()
-            ->map(function ($row): array {
-                $latest = WhatsAppMessage::query()
-                    ->where('from', $row->phone)
-                    ->latest('created_at')
-                    ->first();
+            ->get();
 
-                $member = $row->user_id ? User::query()->find($row->user_id) : null;
+        // Batch-load matched users to avoid N+1.
+        $userIds = $rows->pluck('user_id')->filter()->unique()->values();
+        $users = $userIds->isEmpty()
+            ? collect()
+            : User::query()->whereIn('id', $userIds)->get()->keyBy('id');
 
-                return [
-                    'phone' => $row->phone,
-                    'member_id' => $member?->id,
-                    'member_name' => $member?->name,
-                    'last_at' => $row->last_at,
-                    'last_body' => $latest?->body,
-                    'message_count' => (int) $row->message_count,
-                ];
-            });
+        $threads = $rows->map(function ($row) use ($users): array {
+            $member = $row->user_id ? $users->get($row->user_id) : null;
+
+            return [
+                'phone' => $row->phone,
+                'member_id' => $member?->id,
+                'member_name' => $member?->name,
+                'last_at' => $row->last_at,
+                'last_body' => $row->last_body,
+                'message_count' => (int) $row->message_count,
+            ];
+        });
 
         return Inertia::render('Inbox/Index', [
             'threads' => $threads,

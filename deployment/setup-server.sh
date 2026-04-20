@@ -83,8 +83,11 @@ echo "=== Step 8: Install PostgreSQL 16 ==="
 apt install -y postgresql postgresql-contrib
 systemctl enable postgresql
 
-# Create database and user
-sudo -u postgres psql -c "CREATE USER app_user WITH PASSWORD 'jBc1Tijza2a2d9jb4HYAi1K1J5vblCH';"
+# Create database and user.
+# Require DB_PASSWORD to be set in the environment so a real password is never
+# committed to source control.
+: "${DB_PASSWORD:?DB_PASSWORD environment variable must be set before running this script}"
+sudo -u postgres psql -c "CREATE USER app_user WITH PASSWORD '$DB_PASSWORD';"
 sudo -u postgres psql -c "CREATE DATABASE contribution_tracker OWNER app_user;"
 sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE contribution_tracker TO app_user;"
 
@@ -114,7 +117,7 @@ echo "============================================="
 echo "Server setup complete!"
 echo ""
 echo "NEXT STEPS (as deployer user):"
-echo "1. Change the PostgreSQL password in this script before running!"
+echo "1. Re-run this script with DB_PASSWORD exported to set the PostgreSQL password."
 echo "2. SSH as deployer: ssh deployer@<server-ip>"
 echo "3. Clone repo: cd /var/www && git clone git@github.com:hussain4real/contribution-tracker.git"
 echo "4. Copy Nginx config: sudo cp deployment/nginx/familyfunds.app.conf /etc/nginx/sites-available/"

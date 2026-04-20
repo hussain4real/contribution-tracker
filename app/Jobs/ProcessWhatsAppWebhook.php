@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\WhatsAppMessage;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -174,6 +175,8 @@ class ProcessWhatsAppWebhook implements ShouldQueue
      * Match an inbound phone number to a user via their verified WhatsApp phone.
      *
      * Compares using digit-only forms so that "+234..." and "234..." both match.
+     * Uses a database-level regex strip so we don't pull every verified user
+     * into memory.
      */
     protected function matchUser(string $from): ?User
     {
@@ -183,9 +186,27 @@ class ProcessWhatsAppWebhook implements ShouldQueue
             return null;
         }
 
-        return User::query()
+        $driver = DB::connection()->getDriverName();
+
+        $query = User::query()
             ->whereNotNull('whatsapp_verified_at')
-            ->whereNotNull('whatsapp_phone')
+            ->whereNotNull('whatsapp_phone');
+
+        if ($driver === 'pgsql') {
+            return $query
+                ->whereRaw("regexp_replace(whatsapp_phone, '\\D', '', 'g') = ?", [$normalised])
+                ->first();
+        }
+
+        if ($driver === 'mysql' || $driver === 'mariadb') {
+            return $query
+                ->whereRaw("REGEXP_REPLACE(whatsapp_phone, '[^0-9]', '') = ?", [$normalised])
+                ->first();
+        }
+
+        // Fallback (e.g. SQLite in tests) — no regex_replace; do digit-stripped
+        // PHP comparison but keep the result set bounded by the indexed columns.
+        return $query
             ->get()
             ->first(function (User $user) use ($normalised): bool {
                 $userDigits = preg_replace('/\D+/', '', (string) $user->whatsapp_phone) ?? '';
