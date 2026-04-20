@@ -1,11 +1,11 @@
 <script setup lang="ts">
+import { send as sendWhatsAppReminderAction } from '@/actions/App/Http/Controllers/ContributionWhatsAppReminderController';
 import {
     destroy,
     index,
     restore,
     show,
 } from '@/actions/App/Http/Controllers/MemberController';
-import { send as sendWhatsAppReminderAction } from '@/actions/App/Http/Controllers/ContributionWhatsAppReminderController';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';

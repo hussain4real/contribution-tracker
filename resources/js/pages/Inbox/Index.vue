@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { index, show } from '@/actions/App/Http/Controllers/WhatsAppInboxController';
-import { Button } from '@/components/ui/button';
 import {
-    Card,
-    CardContent,
-    CardHeader,
-    CardTitle,
-} from '@/components/ui/card';
+    index,
+    show,
+} from '@/actions/App/Http/Controllers/WhatsAppInboxController';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/vue3';
@@ -25,7 +23,7 @@ interface Props {
     threads?: Thread[];
 }
 
-const props = withDefaults(defineProps<Props>(), {
+const { threads } = withDefaults(defineProps<Props>(), {
     threads: () => [],
 });
 

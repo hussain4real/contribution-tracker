@@ -7,7 +7,6 @@ import { index as fundAdjustmentsIndex } from '@/actions/App/Http/Controllers/Fu
 import { index as invitationsIndex } from '@/actions/App/Http/Controllers/InvitationController';
 import { index as membersIndex } from '@/actions/App/Http/Controllers/MemberController';
 import { show as payContributions } from '@/actions/App/Http/Controllers/MemberPaymentController';
-import { index as whatsappInboxIndex } from '@/actions/App/Http/Controllers/WhatsAppInboxController';
 import {
     index as platformDashboard,
     families as platformFamilies,
@@ -17,6 +16,7 @@ import { index as platformFeatureFlags } from '@/actions/App/Http/Controllers/Pl
 import { index as platformPlans } from '@/actions/App/Http/Controllers/PlatformPlanController';
 import { index as reportsIndex } from '@/actions/App/Http/Controllers/ReportController';
 import { index as subscriptionIndex } from '@/actions/App/Http/Controllers/SubscriptionController';
+import { index as whatsappInboxIndex } from '@/actions/App/Http/Controllers/WhatsAppInboxController';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';

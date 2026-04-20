@@ -3,15 +3,10 @@ import {
     index as inboxIndex,
     reply,
 } from '@/actions/App/Http/Controllers/WhatsAppInboxController';
+import InputError from '@/components/InputError.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-    Card,
-    CardContent,
-    CardHeader,
-    CardTitle,
-} from '@/components/ui/card';
-import InputError from '@/components/InputError.vue';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Form, Head, Link } from '@inertiajs/vue3';
@@ -74,10 +69,7 @@ function formatTime(iso: string | null): string {
                     <h1 class="truncate text-lg font-semibold">
                         {{ member?.name ?? `+${phone}` }}
                     </h1>
-                    <p
-                        v-if="member"
-                        class="text-xs text-muted-foreground"
-                    >
+                    <p v-if="member" class="text-xs text-muted-foreground">
                         +{{ phone }}
                     </p>
                 </div>
@@ -115,7 +107,7 @@ function formatTime(iso: string | null): string {
                         >
                             <p
                                 v-if="message.body"
-                                class="whitespace-pre-wrap wrap-break-word"
+                                class="wrap-break-word whitespace-pre-wrap"
                             >
                                 {{ message.body }}
                             </p>
@@ -128,7 +120,9 @@ function formatTime(iso: string | null): string {
                             <div
                                 class="mt-1 flex items-center gap-2 text-[10px] opacity-70"
                             >
-                                <span>{{ formatTime(message.created_at) }}</span>
+                                <span>{{
+                                    formatTime(message.created_at)
+                                }}</span>
                                 <Badge
                                     v-if="message.status"
                                     variant="outline"
@@ -154,8 +148,8 @@ function formatTime(iso: string | null): string {
                         class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
                     >
                         WhatsApp only allows free-form replies within
-                        {{ replyWindowHours }} hours of the user's last
-                        inbound message. Send an approved template instead.
+                        {{ replyWindowHours }} hours of the user's last inbound
+                        message. Send an approved template instead.
                     </div>
 
                     <Form
@@ -172,7 +166,7 @@ function formatTime(iso: string | null): string {
                                 rows="3"
                                 required
                                 maxlength="4096"
-                                class="flex min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                class="flex min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                             />
                             <InputError :message="errors.body" />
                         </div>
