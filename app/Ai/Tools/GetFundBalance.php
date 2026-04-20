@@ -87,6 +87,7 @@ class GetFundBalance implements Tool
      */
     public function schema(JsonSchema $schema): array
     {
+        // just testing
         return [
             'include_breakdown' => $schema->boolean(),
         ];
