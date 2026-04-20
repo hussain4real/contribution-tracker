@@ -23,9 +23,7 @@ interface Props {
     threads?: Thread[];
 }
 
-const { threads } = withDefaults(defineProps<Props>(), {
-    threads: () => [],
-});
+const { threads = [] } = defineProps<Props>();
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
