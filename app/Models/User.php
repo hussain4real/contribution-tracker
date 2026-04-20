@@ -36,6 +36,8 @@ class User extends Authenticatable implements MustVerifyEmail
         'is_super_admin',
         'archived_at',
         'paystack_customer_code',
+        'whatsapp_phone',
+        'whatsapp_verified_at',
     ];
 
     /**
@@ -65,6 +67,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'category' => MemberCategory::class,
             'is_super_admin' => 'boolean',
             'archived_at' => 'datetime',
+            'whatsapp_verified_at' => 'datetime',
         ];
     }
 
@@ -246,5 +249,25 @@ class User extends Authenticatable implements MustVerifyEmail
     public function getMonthlyAmount(): ?int
     {
         return $this->familyCategory?->monthly_amount ?? $this->category?->monthlyAmount();
+    }
+
+    /**
+     * Check if the user has a verified WhatsApp number.
+     */
+    public function hasVerifiedWhatsApp(): bool
+    {
+        return $this->whatsapp_phone !== null && $this->whatsapp_verified_at !== null;
+    }
+
+    /**
+     * Route notifications for the WhatsApp channel.
+     *
+     * Returns the verified WhatsApp phone number, or null if the user
+     * has not verified their WhatsApp number. Returning null causes the
+     * channel to skip this notifiable silently.
+     */
+    public function routeNotificationForWhatsApp(): ?string
+    {
+        return $this->hasVerifiedWhatsApp() ? $this->whatsapp_phone : null;
     }
 }

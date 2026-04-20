@@ -5,6 +5,7 @@ import {
     restore,
     show,
 } from '@/actions/App/Http/Controllers/MemberController';
+import { send as sendWhatsAppReminderAction } from '@/actions/App/Http/Controllers/ContributionWhatsAppReminderController';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -16,6 +17,7 @@ import {
     CheckCircle2,
     ChevronRight,
     Clock,
+    MessageCircle,
     Pencil,
     Receipt,
     RotateCcw,
@@ -24,6 +26,7 @@ import {
     Wallet,
 } from 'lucide-vue-next';
 import { ref } from 'vue';
+import { toast } from 'vue-sonner';
 
 interface Payment {
     id: number;
@@ -68,6 +71,7 @@ interface Member {
     is_archived: boolean;
     archived_at: string | null;
     created_at: string | null;
+    whatsapp_verified: boolean;
 }
 
 interface Props {
@@ -76,9 +80,46 @@ interface Props {
     summary: Summary;
     canManageMembers: boolean;
     canViewContributions: boolean;
+    canSendWhatsAppReminder?: boolean;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+    canSendWhatsAppReminder: false,
+});
+
+const sendingReminderId = ref<number | null>(null);
+
+function sendWhatsAppReminder(contributionId: number) {
+    if (sendingReminderId.value !== null) {
+        return;
+    }
+
+    sendingReminderId.value = contributionId;
+
+    router.post(
+        sendWhatsAppReminderAction(contributionId).url,
+        {},
+        {
+            preserveScroll: true,
+            onSuccess: (page) => {
+                const flash = page.props.flash as
+                    | { success?: string; error?: string }
+                    | undefined;
+                if (flash?.success) {
+                    toast.success(flash.success);
+                } else if (flash?.error) {
+                    toast.error(flash.error);
+                }
+            },
+            onError: () => {
+                toast.error('Failed to send WhatsApp reminder.');
+            },
+            onFinish: () => {
+                sendingReminderId.value = null;
+            },
+        },
+    );
+}
 
 const expandedContribution = ref<number | null>(null);
 
@@ -517,6 +558,34 @@ function restoreMember() {
                                         >
                                             {{ contribution.status_label }}
                                         </Badge>
+                                        <button
+                                            v-if="
+                                                canSendWhatsAppReminder &&
+                                                member.whatsapp_verified &&
+                                                contribution.balance > 0
+                                            "
+                                            type="button"
+                                            :title="`Send WhatsApp reminder for ${contribution.period_label}`"
+                                            :disabled="
+                                                sendingReminderId ===
+                                                contribution.id
+                                            "
+                                            class="inline-flex h-8 w-8 items-center justify-center rounded-full text-emerald-600 transition hover:bg-emerald-50 disabled:opacity-50 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
+                                            @click.stop="
+                                                sendWhatsAppReminder(
+                                                    contribution.id,
+                                                )
+                                            "
+                                        >
+                                            <MessageCircle
+                                                class="h-4 w-4"
+                                                :class="{
+                                                    'animate-pulse':
+                                                        sendingReminderId ===
+                                                        contribution.id,
+                                                }"
+                                            />
+                                        </button>
                                         <ChevronRight
                                             class="h-4 w-4 text-neutral-400 transition-transform"
                                             :class="{

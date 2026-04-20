@@ -2,24 +2,29 @@
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
 import { edit } from '@/routes/profile';
 import { send } from '@/routes/verification';
-import { Form, Head, Link, usePage } from '@inertiajs/vue3';
+import * as whatsapp from '@/routes/whatsapp';
+import { Form, Head, Link, router, usePage } from '@inertiajs/vue3';
 
 import DeleteUser from '@/components/DeleteUser.vue';
 import HeadingSmall from '@/components/HeadingSmall.vue';
 import InputError from '@/components/InputError.vue';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
 import AppLayout from '@/layouts/AppLayout.vue';
 import SettingsLayout from '@/layouts/settings/Layout.vue';
 import { type BreadcrumbItem } from '@/types';
+import { CheckCircle2, MessageCircle } from 'lucide-vue-next';
+import { computed, ref } from 'vue';
 
 interface Props {
     mustVerifyEmail?: boolean;
     status?: string;
 }
 
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
     mustVerifyEmail: false,
 });
 
@@ -31,7 +36,16 @@ const breadcrumbItems: BreadcrumbItem[] = [
 ];
 
 const page = usePage();
-const user = page.props.auth.user;
+const user = computed(() => page.props.auth.user);
+
+const isVerified = computed(
+    () => !!user.value?.whatsapp_phone && !!user.value?.whatsapp_verified_at,
+);
+
+const codeSent = ref(false);
+const showCodeSent = computed(
+    () => codeSent.value || props.status === 'whatsapp-code-sent',
+);
 </script>
 
 <template>
@@ -122,6 +136,140 @@ const user = page.props.auth.user;
                         </Transition>
                     </div>
                 </Form>
+            </div>
+
+            <Separator class="my-8" />
+
+            <div class="flex flex-col space-y-6">
+                <HeadingSmall
+                    title="WhatsApp notifications"
+                    description="Verify your WhatsApp number to receive contribution reminders on WhatsApp."
+                />
+
+                <div
+                    v-if="isVerified"
+                    class="flex flex-col gap-4 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20"
+                >
+                    <div class="flex items-start gap-3">
+                        <CheckCircle2
+                            class="mt-0.5 h-5 w-5 text-green-600 dark:text-green-400"
+                        />
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2">
+                                <p class="font-medium">
+                                    {{ user.whatsapp_phone }}
+                                </p>
+                                <Badge variant="default" class="bg-green-600">
+                                    Verified
+                                </Badge>
+                            </div>
+                            <p class="mt-1 text-sm text-muted-foreground">
+                                You'll receive contribution reminders on this
+                                WhatsApp number.
+                            </p>
+                        </div>
+                    </div>
+
+                    <Form
+                        v-bind="whatsapp.destroy.form()"
+                        :options="{ preserveScroll: true }"
+                        v-slot="{ processing }"
+                    >
+                        <Button
+                            type="submit"
+                            variant="outline"
+                            size="sm"
+                            :disabled="processing"
+                        >
+                            Remove WhatsApp number
+                        </Button>
+                    </Form>
+                </div>
+
+                <template v-else>
+                    <Form
+                        v-bind="whatsapp.sendCode.form()"
+                        :options="{ preserveScroll: true }"
+                        v-slot="{ errors, processing }"
+                        @success="codeSent = true"
+                    >
+                        <div class="grid gap-2">
+                            <Label for="whatsapp_phone">WhatsApp number</Label>
+                            <Input
+                                id="whatsapp_phone"
+                                name="whatsapp_phone"
+                                type="tel"
+                                class="mt-1 block w-full"
+                                :default-value="user.whatsapp_phone ?? ''"
+                                placeholder="+2348012345678"
+                                autocomplete="tel"
+                            />
+                            <p class="text-xs text-muted-foreground">
+                                Enter your WhatsApp number with country code
+                                (e.g. +234 for Nigeria). Make sure this number
+                                is registered on WhatsApp.
+                            </p>
+                            <InputError
+                                class="mt-2"
+                                :message="errors.whatsapp_phone"
+                            />
+                        </div>
+
+                        <div class="mt-4">
+                            <Button type="submit" :disabled="processing">
+                                <MessageCircle class="h-4 w-4" />
+                                Send verification code
+                            </Button>
+                        </div>
+                    </Form>
+
+                    <div
+                        v-if="showCodeSent"
+                        class="rounded-lg border bg-muted/40 p-4"
+                    >
+                        <p class="mb-3 text-sm">
+                            We sent a 6-digit code to your WhatsApp. Enter it
+                            below to verify your number.
+                        </p>
+
+                        <Form
+                            v-bind="whatsapp.verify.form()"
+                            :options="{ preserveScroll: true }"
+                            reset-on-success
+                            v-slot="{ errors, processing }"
+                            @success="
+                                () => {
+                                    codeSent = false;
+                                    router.reload({ only: ['auth'] });
+                                }
+                            "
+                        >
+                            <div class="grid gap-2">
+                                <Label for="code">Verification code</Label>
+                                <Input
+                                    id="code"
+                                    name="code"
+                                    type="text"
+                                    inputmode="numeric"
+                                    autocomplete="one-time-code"
+                                    maxlength="6"
+                                    class="mt-1 block w-full"
+                                    placeholder="123456"
+                                />
+                                <InputError
+                                    class="mt-2"
+                                    :message="errors.code"
+                                />
+                            </div>
+
+                            <div class="mt-4">
+                                <Button type="submit" :disabled="processing">
+                                    Verify
+                                </Button>
+                            </div>
+                        </Form>
+                    </div>
+                </template>
             </div>
 
             <DeleteUser />

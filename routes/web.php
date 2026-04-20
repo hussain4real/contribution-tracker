@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\PasskeyLoginController;
 use App\Http\Controllers\Auth\PasskeyTwoFactorController;
 use App\Http\Controllers\ChangelogController;
 use App\Http\Controllers\ContributionController;
+use App\Http\Controllers\ContributionWhatsAppReminderController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\FamilySettingsController;
@@ -21,6 +22,8 @@ use App\Http\Controllers\PlatformFeatureFlagController;
 use App\Http\Controllers\PlatformPlanController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SubscriptionController;
+use App\Http\Controllers\WhatsAppInboxController;
+use App\Http\Controllers\WhatsAppWebhookController;
 use App\Http\Middleware\EnsurePlatformSuperAdmin;
 use Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests;
 use Illuminate\Support\Facades\Route;
@@ -46,6 +49,9 @@ Route::get('invitations/{token}/accept', [InvitationController::class, 'accept']
 // =========================================================================
 
 Route::post('webhooks/paystack', [PaystackWebhookController::class, 'handle'])->name('webhooks.paystack');
+
+Route::get('webhooks/whatsapp', [WhatsAppWebhookController::class, 'verify'])->name('webhooks.whatsapp.verify');
+Route::post('webhooks/whatsapp', [WhatsAppWebhookController::class, 'handle'])->name('webhooks.whatsapp');
 
 // =========================================================================
 // Passkey Authentication (Guest)
@@ -76,6 +82,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
     Route::post('notifications/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('notifications.mark-all-read');
 
+    // WhatsApp inbox (Admin / Financial Secretary only — gate enforced in controller)
+    Route::get('inbox/whatsapp', [WhatsAppInboxController::class, 'index'])->name('inbox.whatsapp.index');
+    Route::get('inbox/whatsapp/{phone}', [WhatsAppInboxController::class, 'show'])
+        ->where('phone', '[0-9]+')
+        ->name('inbox.whatsapp.show');
+    Route::post('inbox/whatsapp/{phone}/reply', [WhatsAppInboxController::class, 'reply'])
+        ->where('phone', '[0-9]+')
+        ->middleware('throttle:30,1')
+        ->name('inbox.whatsapp.reply');
+
     // AI Assistant (gated by Pennant feature flag)
     Route::middleware(EnsureFeaturesAreActive::using(AiAssistant::class))->group(function () {
         Route::get('ai', [AiChatController::class, 'index'])->name('ai.index');
@@ -97,6 +113,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('contributions/my', [ContributionController::class, 'my'])->name('contributions.my');
     Route::post('contributions/generate', [ContributionController::class, 'generate'])->name('contributions.generate');
     Route::get('contributions/{contribution}', [ContributionController::class, 'show'])->name('contributions.show');
+    Route::post('contributions/{contribution}/whatsapp-reminder', [ContributionWhatsAppReminderController::class, 'send'])
+        ->middleware('throttle:10,1')
+        ->name('contributions.whatsapp-reminder');
 
     // Payments
     Route::get('payments', [PaymentController::class, 'index'])->name('payments.index');

@@ -7,6 +7,7 @@ import { index as fundAdjustmentsIndex } from '@/actions/App/Http/Controllers/Fu
 import { index as invitationsIndex } from '@/actions/App/Http/Controllers/InvitationController';
 import { index as membersIndex } from '@/actions/App/Http/Controllers/MemberController';
 import { show as payContributions } from '@/actions/App/Http/Controllers/MemberPaymentController';
+import { index as whatsappInboxIndex } from '@/actions/App/Http/Controllers/WhatsAppInboxController';
 import {
     index as platformDashboard,
     families as platformFamilies,
@@ -41,6 +42,7 @@ import {
     Layers,
     LayoutGrid,
     Mail,
+    MessageCircle,
     MessageSquare,
     Receipt,
     Rocket,
@@ -114,6 +116,13 @@ const mainNavItems = computed<NavItem[]>(() => {
             href: reportsIndex(),
             icon: FileBarChart2,
             component: 'Reports/Index',
+        });
+
+        items.push({
+            title: 'WhatsApp Inbox',
+            href: whatsappInboxIndex(),
+            icon: MessageCircle,
+            component: 'Inbox/Index',
         });
     }
 

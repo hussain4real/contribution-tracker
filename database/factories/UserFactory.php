@@ -168,4 +168,41 @@ class UserFactory extends Factory
             'category' => null,
         ]);
     }
+
+    // =========================================================================
+    // WhatsApp States
+    // =========================================================================
+
+    /**
+     * Indicate that the user has a verified WhatsApp number.
+     */
+    public function withVerifiedWhatsApp(?string $phone = null): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'whatsapp_phone' => $phone ?? fake()->e164PhoneNumber(),
+            'whatsapp_verified_at' => now(),
+        ]);
+    }
+
+    /**
+     * Indicate that the user has a WhatsApp number but it is not verified.
+     */
+    public function withUnverifiedWhatsApp(?string $phone = null): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'whatsapp_phone' => $phone ?? fake()->e164PhoneNumber(),
+            'whatsapp_verified_at' => null,
+        ]);
+    }
+
+    /**
+     * Indicate that the user has no WhatsApp number on file.
+     */
+    public function withoutWhatsApp(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'whatsapp_phone' => null,
+            'whatsapp_verified_at' => null,
+        ]);
+    }
 }
