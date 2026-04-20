@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Settings;
 
 use App\Channels\WhatsAppMessage;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Settings\SendWhatsAppCodeRequest;
+use App\Http\Requests\Settings\VerifyWhatsAppCodeRequest;
 use App\Services\WhatsAppService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -34,13 +36,9 @@ class WhatsAppVerificationController extends Controller
     /**
      * Generate and send an OTP to the supplied WhatsApp number.
      */
-    public function sendCode(Request $request): RedirectResponse
+    public function sendCode(SendWhatsAppCodeRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'whatsapp_phone' => ['required', 'string', 'regex:/^\+[1-9]\d{6,14}$/'],
-        ], [
-            'whatsapp_phone.regex' => 'Enter a valid WhatsApp number in international format (e.g. +2348012345678).',
-        ]);
+        $validated = $request->validated();
 
         $phone = $validated['whatsapp_phone'];
         $code = (string) random_int(100000, 999999);
@@ -69,11 +67,9 @@ class WhatsAppVerificationController extends Controller
     /**
      * Verify the OTP and mark the phone as verified.
      */
-    public function verifyCode(Request $request): RedirectResponse
+    public function verifyCode(VerifyWhatsAppCodeRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'code' => ['required', 'string', 'digits:6'],
-        ]);
+        $validated = $request->validated();
 
         $cached = Cache::get($this->cacheKey($request->user()->id));
 

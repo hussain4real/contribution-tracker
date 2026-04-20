@@ -64,7 +64,11 @@ class WhatsAppWebhookController extends Controller
             $signatureHeader = '';
         }
 
-        if (! empty($appSecret) && ! $this->verifySignature($rawBody, $signatureHeader, (string) $appSecret)) {
+        if (empty($appSecret)) {
+            if (! app()->environment('local', 'testing')) {
+                Log::critical('WhatsApp app_secret is not configured — webhook signature verification is disabled in a non-local environment.');
+            }
+        } elseif (! $this->verifySignature($rawBody, $signatureHeader, (string) $appSecret)) {
             Log::warning('WhatsApp webhook: invalid signature');
 
             return response()->json(['message' => 'Invalid signature'], HttpResponse::HTTP_FORBIDDEN);

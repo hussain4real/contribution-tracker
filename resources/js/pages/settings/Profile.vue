@@ -2,7 +2,11 @@
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
 import { edit } from '@/routes/profile';
 import { send } from '@/routes/verification';
-import * as whatsapp from '@/routes/whatsapp';
+import {
+    destroy as destroyWhatsApp,
+    sendCode as sendWhatsAppCode,
+    verify as verifyWhatsApp,
+} from '@/routes/whatsapp';
 import { Form, Head, Link, router, usePage } from '@inertiajs/vue3';
 
 import DeleteUser from '@/components/DeleteUser.vue';
@@ -171,7 +175,7 @@ const showCodeSent = computed(
                     </div>
 
                     <Form
-                        v-bind="whatsapp.destroy.form()"
+                        v-bind="destroyWhatsApp.form()"
                         :options="{ preserveScroll: true }"
                         v-slot="{ processing }"
                     >
@@ -188,7 +192,7 @@ const showCodeSent = computed(
 
                 <template v-else>
                     <Form
-                        v-bind="whatsapp.sendCode.form()"
+                        v-bind="sendWhatsAppCode.form()"
                         :options="{ preserveScroll: true }"
                         v-slot="{ errors, processing }"
                         @success="codeSent = true"
@@ -233,7 +237,7 @@ const showCodeSent = computed(
                         </p>
 
                         <Form
-                            v-bind="whatsapp.verify.form()"
+                            v-bind="verifyWhatsApp.form()"
                             :options="{ preserveScroll: true }"
                             reset-on-success
                             v-slot="{ errors, processing }"

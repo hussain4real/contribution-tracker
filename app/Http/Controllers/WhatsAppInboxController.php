@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Channels\WhatsAppMessage as WhatsAppMessageBuilder;
+use App\Http\Requests\ReplyWhatsAppMessageRequest;
 use App\Models\User;
 use App\Models\WhatsAppMessage;
 use App\Services\WhatsAppService;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -143,13 +143,11 @@ class WhatsAppInboxController extends Controller
     /**
      * Send a free-form text reply to the supplied phone number.
      */
-    public function reply(Request $request, string $phone): RedirectResponse
+    public function reply(ReplyWhatsAppMessageRequest $request, string $phone): RedirectResponse
     {
         $this->authorizeInboxAccess();
 
-        $validated = $request->validate([
-            'body' => ['required', 'string', 'max:4096'],
-        ]);
+        $validated = $request->validated();
 
         /** @var User $user */
         $user = Auth::user();
