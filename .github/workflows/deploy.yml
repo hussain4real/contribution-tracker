@@ -42,6 +42,9 @@ jobs:
       - name: Generate Application Key
         run: php artisan key:generate
 
+      - name: Generate Wayfinder Routes
+        run: php artisan wayfinder:generate
+
       - name: Build Assets
         run: npm run build
 
@@ -70,6 +73,7 @@ jobs:
 
             # Install Node dependencies and build assets
             npm ci
+            php artisan wayfinder:generate
             npm run build
 
             # Run database migrations
