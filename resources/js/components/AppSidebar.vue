@@ -16,6 +16,7 @@ import { index as platformFeatureFlags } from '@/actions/App/Http/Controllers/Pl
 import { index as platformPlans } from '@/actions/App/Http/Controllers/PlatformPlanController';
 import { index as reportsIndex } from '@/actions/App/Http/Controllers/ReportController';
 import { index as subscriptionIndex } from '@/actions/App/Http/Controllers/SubscriptionController';
+import { index as whatsappInboxIndex } from '@/actions/App/Http/Controllers/WhatsAppInboxController';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
@@ -41,6 +42,7 @@ import {
     Layers,
     LayoutGrid,
     Mail,
+    MessageCircle,
     MessageSquare,
     Receipt,
     Rocket,
@@ -114,6 +116,13 @@ const mainNavItems = computed<NavItem[]>(() => {
             href: reportsIndex(),
             icon: FileBarChart2,
             component: 'Reports/Index',
+        });
+
+        items.push({
+            title: 'WhatsApp Inbox',
+            href: whatsappInboxIndex(),
+            icon: MessageCircle,
+            component: 'Inbox/Index',
         });
     }
 

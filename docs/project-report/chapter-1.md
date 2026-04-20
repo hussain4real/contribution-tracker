@@ -4,99 +4,117 @@
 
 ### 1.1 Background of the Study
 
-The collective management of financial resources within family units and small cooperative groups represents one of the oldest and most enduring forms of informal financial organisation across Sub-Saharan Africa (Aryeetey, 2008). In Nigeria, practices such as *ajo* (rotating savings), *esusu* (pooled savings with rotating disbursement), and *adashi* have historically enabled communities to mobilise funds for education, healthcare, enterprise development, and social obligations (Akanji, 2006; Iganiga & Asemota, 2008). These informal financial mechanisms have persisted not because of a lack of formal banking infrastructure, but because they are rooted in the social fabric of trust, kinship, and collective responsibility that characterises African communal life (Oloyede, 2008).
+Long before colonial banks opened their doors in West Africa, families and small groups were already pooling money together. Aryeetey (2008) documents these arrangements going back centuries across Sub-Saharan Africa. Nigeria alone has several culturally distinct versions. The Yoruba have *ajo*—everyone puts in a fixed amount on a regular schedule, and members take turns collecting the pot. Then there is *esusu*, also Yoruba, which works similarly but adds a designated treasurer to oversee how the money gets disbursed (Akanji, 2006). In the north, the Hausa equivalent goes by *adashi*: a fixed-cycle system where members pool what they have for collective or sequential payouts (Iganiga & Asemota, 2008). These are not purely financial mechanisms. They run on reciprocal obligation, on trust, on the kind of communal identity that holds extended families and neighbourhoods together (Oloyede, 2008).
 
-However, a distinct and increasingly prevalent variant of collective finance exists outside the well-documented rotating savings models: the **family contribution fund**, or family purse. Unlike *ajo* or *esusu*, where pooled funds rotate among members in a predetermined sequence, the family purse operates as a **non-rotating, centrally managed treasury** into which family members contribute fixed or tiered monthly amounts. These funds are retained collectively and disbursed as needed for shared family expenses—funerals, medical emergencies, celebrations, property maintenance, and educational support (Nnama-Okechukwu & Okoye, 2019). The management of such funds typically falls on a designated family member, often an elder or an elected financial secretary, who maintains records, collects payments, tracks expenses, and provides periodic financial summaries to the family.
+But there is another form of collective finance that gets far less scholarly attention—the **family contribution fund**, sometimes called the family purse. This arrangement works differently from *ajo* or *esusu*. The funds do not rotate. Instead, family members pay into a **non-rotating, centrally managed treasury** every month, and the money stays pooled until it is needed for shared expenses: funerals, hospital bills, school fees, family celebrations, or property upkeep (Oloyede, 2008; Apt, 2002). Typically, one person—an elder or someone elected as financial secretary—keeps the records, collects the money, tracks who has paid and who has not, and gives the family periodic updates.
 
-Despite the critical role these family funds play in household financial resilience, their management remains overwhelmingly manual and informal. Records are kept in physical notebooks, spreadsheet applications, or, increasingly, within messaging platform groups such as WhatsApp (Ogunleye & Adewale, 2021). This informality introduces several well-documented challenges: human errors in calculation, inconsistent record-keeping, lack of audit trails, disputes over outstanding balances, and an inability to produce structured financial reports (Adeyemo & Bamire, 2005). The situation is further compounded when family members reside in different geographical locations, as is common in Nigeria's pattern of urban-rural and diaspora migration (Osili, 2007).
+The trouble is that almost all of this management happens manually. The financial secretary writes contributions down in a notebook, tracks payments on a personal spreadsheet, or posts updates in a WhatsApp group (Aker & Mbiti, 2010). These methods work tolerably at small scale but create real problems as the group grows or persists over time: arithmetic mistakes creep in, records get lost, there is no audit trail, and disputes over balances become difficult to resolve because there is no single authoritative source of truth (Adeyemo & Bamire, 2005). Scatter the family across Lagos, Abuja, London, and Houston—which is perfectly normal given Nigeria's rural-urban and diaspora migration patterns (Osili, 2007)—and the whole thing becomes nearly impossible to manage.
 
-The rapid advancement of web technologies and cloud computing has enabled the development of Software as a Service (SaaS) platforms capable of addressing complex multi-user, multi-organisation challenges through **multi-tenant architectures** (Bezemer & Zaidman, 2010). Multi-tenancy allows a single software instance to serve multiple independent groups (tenants) while ensuring strict logical isolation of each tenant's data and operations—a property essential for the privacy and trust required in family financial management (Chong et al., 2006). This architectural pattern, combined with modern web frameworks such as Laravel (PHP) and reactive frontend technologies like Vue.js, makes it feasible to build sophisticated financial management platforms that are accessible, scalable, and secure (Otwell, 2024; You, 2024).
+Here is what makes the situation frustrating: Nigeria's fintech sector has grown enormously. There are apps for saving, apps for lending, apps for investing. But not one of them is built for this particular use case. None of them combine multi-group data isolation with tiered contribution structures, role-based governance, and intelligent reporting—which is exactly what family fund management demands. That gap is what this project exists to fill.
 
-Concurrently, the emergence of **artificial intelligence (AI)** in financial technology has opened new possibilities for enhancing the intelligence of financial management systems. **Predictive analytics**, powered by machine learning algorithms, can analyse historical payment patterns to forecast future member behaviour—identifying individuals likely to default on their contributions or those who consistently pay on time (Khandani et al., 2010; Lessmann et al., 2015). Such capabilities are invaluable for proactive fund management, enabling administrators to intervene before shortfalls occur. Furthermore, the advent of **Large Language Models (LLMs)** has made it possible to generate human-readable narrative summaries from structured financial data, transforming raw numbers and statistics into comprehensible reports that any family member can understand regardless of their financial literacy level (Brown et al., 2020; OpenAI, 2023).
+The good news is that the technology to solve this problem properly already exists—it just has not been pointed at this particular use case. **Multi-tenant architectures** let a single Software as a Service (SaaS) application serve dozens or hundreds of independent groups, each with its own walled-off data. That is precisely the trust boundary family funds need: my family's finances are invisible to yours, even though we are on the same platform (Bezemer & Zaidman, 2010; Chong et al., 2006). And building something like this no longer requires an enterprise budget. Laravel handles the backend; Vue.js handles the frontend. Both are mature, well-documented, and free (Otwell, 2024; You, 2024).
 
-It is against this backdrop—the persistence of informal family fund management, the limitations of manual approaches, and the transformative potential of modern web and AI technologies—that this project undertakes the design and implementation of an AI-enhanced multi-tenant family fund management system. The system aims to digitise and modernise the family purse by providing a secure, role-governed, and intelligent platform for contribution tracking, payment processing, expense management, predictive analytics, and narrative report generation.
+At the same time, **artificial intelligence** offers capabilities that go beyond what any manual bookkeeper could provide. Machine learning models trained on historical payment data can flag members who are likely to miss their next contribution, giving administrators a chance to follow up before a shortfall develops (Khandani et al., 2010; Lessmann et al., 2015). And **Large Language Models (LLMs)** can take the structured data from monthly financial records and turn it into plain-English summaries—reports that any family member can read and understand, regardless of whether they have any background in accounting or finance (Brown et al., 2020; OpenAI, 2023).
+
+So the pieces are all there: a widespread practice that families care about deeply, manual methods that keep failing them, and technology that could actually fix the problem if someone built the right thing. That is what this project does. FamilyFunds is a secure, role-governed, AI-enhanced platform for tracking contributions, processing payments, managing expenses, predicting payment behaviour, and generating financial reports that anyone can read.
 
 ### 1.2 Statement of the Problem
 
-The management of collective financial contributions within Nigerian families and extended family groups is plagued by a constellation of interrelated problems that undermine transparency, accountability, and the effective stewardship of shared funds.
+Managing collective financial contributions within Nigerian families is harder than it looks. It is not just bookkeeping. Governance, trust, who has access to what, the mismatch between how families actually work and the digital tools on offer—all of it feeds the problem. Consider the scale: the World Bank Global Findex Database reports that roughly 55% of Nigerian adults who save do so informally, outside the banking system entirely (Demirgüç-Kunt et al., 2022). EFInA (2023) puts a sharper number on it—over 36 million adults depend on informal financial groups for their savings and credit. And yet, no mainstream digital tool has been built specifically for family funds.
 
-**First**, the reliance on manual record-keeping methods—physical notebooks, personal spreadsheets, or ad hoc notes within messaging platforms—introduces a high risk of arithmetic errors, data loss, and inconsistent documentation (Adeyemo & Bamire, 2005). When a family's financial secretary records a member's partial payment in a notebook or a WhatsApp message, there is no systematic mechanism to track the remaining balance, link it to the correct contribution period, or ensure that the record is immutable and auditable. Over time, discrepancies accumulate, leading to disputes and erosion of trust among family members (Ogunleye & Adewale, 2021).
+The problems break down into six interrelated areas.
 
-**Second**, there is a fundamental lack of **structured role-based governance** in how these funds are managed. In most family groups, the distinction between who can record payments, who can authorise expenses, and who has view-only access to financial records is undefined or entirely absent. This ambiguity creates opportunities for mismanagement, whether intentional or inadvertent, and places a disproportionate burden of trust on a single individual without adequate checks and balances (Nnama-Okechukwu & Okoye, 2019).
+**Record-keeping fragility.** Most family funds run on notebooks, personal spreadsheets, or WhatsApp messages. These methods lack the immutability and computational capability that reliable financial administration requires (Adeyemo & Bamire, 2005). When someone makes a partial payment, there is no automatic way to track the remaining balance, link it to the right month, or ensure the record cannot be altered later. Discrepancies pile up quietly, and by the time they surface—usually at a family meeting—they have already damaged trust (Aryeetey, 2008).
 
-**Third**, the problem of **payment tracking complexity** is acute. Family members often have different contribution amounts based on their economic capacity—employed members may contribute more than students or unemployed members. Payments may be partial, arriving in instalments rather than as lump sums. When a member finally makes a payment after missing several months, the question of how to allocate that payment—to the oldest outstanding balance or to the current month—is a non-trivial administrative challenge that most manual systems handle inconsistently (Aryeetey, 2008).
+**Absence of role-based governance.** In most family groups, there are no formal rules about who can record payments, who can approve expenses, and who simply has read-only visibility into the accounts. Everyone either trusts the financial secretary completely or has no recourse if something goes wrong. This lack of structured access control creates opportunities for mismanagement—sometimes deliberate, sometimes just careless—and concentrates risk on a single person (Aryeetey, 2008; Bouman, 1995).
 
-**Fourth**, existing digital financial platforms in Nigeria are **not designed for family-level collective fund management**. Platforms such as PiggyVest and Cowrywise are oriented towards individual savings and investment goals (PiggyVest, 2024; Cowrywise, 2024). Cooperative management software such as CreditClan and Lendsqr targets formal lending cooperatives with regulatory compliance requirements that are irrelevant to informal family groups (CreditClan, 2024). There is no widely available platform that combines multi-tenant group isolation, tiered contribution management, role-based access control, and integrated payment processing specifically for the family fund use case.
+**Payment allocation complexity.** Family members rarely contribute identical amounts. An employed professional might pay ₦4,000 monthly while a student pays ₦1,000. Payments may arrive late, partially, or in lump sums covering several months at once. Deciding how to allocate an incoming payment—against the oldest unpaid balance or the current month—is a non-trivial problem that most manual systems handle inconsistently, if they handle it at all (Aryeetey, 2008).
 
-**Fifth**, the absence of **predictive and analytical capabilities** means that family administrators operate reactively rather than proactively. There is no mechanism to forecast which members are likely to default in the coming month, anticipate fund shortfalls before they materialise, or identify trends in payment behaviour over time. Without such intelligence, families are unable to plan effectively or intervene early to ensure financial obligations are met (Khandani et al., 2010).
+**No suitable digital platform exists.** PiggyVest and Cowrywise serve individual savers. CreditClan and Lendsqr target formal lending cooperatives with regulatory requirements that have nothing to do with an informal family group (PiggyVest, 2024; Cowrywise, 2024; CreditClan, 2024). Table 1.1 maps the gap concretely—none of these platforms offer multi-tenant group isolation, tiered contribution management, RBAC, or partial payment allocation together. The family fund use case falls through the cracks.
 
-**Finally**, the reporting challenge is significant. Even where digital spreadsheets are used, producing a comprehensible financial summary that non-financially literate family members can understand requires considerable effort and expertise. The potential of Large Language Models to translate structured financial data into natural-language narratives remains unexploited in this domain (Brown et al., 2020).
+**No predictive or analytical tools.** Family fund administrators only find out someone has not paid after the deadline has already passed. They cannot forecast defaults, spot patterns, or see a shortfall coming (Khandani et al., 2010). Without data to work with, proactive management is not just difficult—it is not possible.
 
-In summary, there exists a clear and unmet need for a purpose-built, intelligent, multi-tenant web application that addresses the specific challenges of family fund management—providing structured governance, automated tracking with intelligent payment allocation, integrated online payments, predictive analytics for payment behaviour, and AI-generated narrative financial reports.
+**Reporting that nobody can read.** Even the families that bother with spreadsheets struggle to turn them into summaries that every member actually understands. Large Language Models could convert structured financial data into plain-English narrative reports, but nobody has tried that in this domain (Brown et al., 2020).
 
-### 1.3 Aim and Objectives of the Study
+*Table 1.1: Comparison of Existing Financial Management Platforms in Nigeria*
+
+| Feature | PiggyVest | Cowrywise | CreditClan | Lendsqr | FamilyFunds (This Project) |
+| --- | --- | --- | --- | --- | --- |
+| Target Users | Individuals | Individuals | Formal cooperatives | Formal lenders | Family groups |
+| Multi-Tenant Group Isolation | No | No | No | No | Yes |
+| Tiered Contribution Management | No | No | No | No | Yes |
+| RBAC (Admin / Secretary / Member) | No | No | Limited | Limited | Yes |
+| Partial Payment Allocation | No | No | No | No | Yes |
+| Integrated Payment Gateway | Yes | Yes | Yes | Yes | Yes |
+| Predictive Analytics | No | No | No | Yes | Yes (Planned) |
+| LLM Narrative Reports | No | No | No | No | Yes (Planned) |
+| Family Fund Specific | No | No | No | No | Yes |
+
+Table 1.1 makes the gap visible. What is needed is a purpose-built, intelligent, multi-tenant web application that brings together structured governance, automated payment tracking with smart allocation, online payment support, predictive analytics, and AI-generated financial reports—all designed specifically for family fund management.
+
+### 1.3 Aim, Objectives, and Research Questions of the Study
 
 #### Aim
 
-The aim of this project is to design and implement an AI-enhanced multi-tenant web-based application for family fund management that provides automated contribution tracking, intelligent payment allocation, predictive analytics for member payment behaviour, and Large Language Model-powered narrative financial reporting.
+This project aims to design and implement FamilyFunds—an AI-enhanced multi-tenant web application for family fund management. The system will provide automated contribution tracking, intelligent payment allocation, machine learning-based prediction of member payment behaviour, and LLM-powered narrative financial reporting.
 
 #### Objectives
 
-The specific objectives of this study are to:
+The specific objectives are to:
 
-1. **Design** a multi-tenant software architecture that ensures logical data isolation between family groups and implements a role-based access control model with Administrator, Financial Secretary, and Member permission tiers.
+1. **Review** existing digital platforms for informal group and cooperative financial management, assess their limitations in addressing family-level contribution fund requirements, and establish functional design criteria for the proposed system.
 
-2. **Develop** a contribution tracking module with support for tiered contribution amounts, partial payment recording, an oldest-balance-first automatic allocation algorithm, and overdue detection with automated reminder notifications.
+2. **Design** a multi-tenant web application architecture incorporating logical tenant data isolation, a three-tier role-based access control model, and modules for contribution tracking, payment processing, predictive analytics, and intelligent narrative reporting.
 
-3. **Integrate** online payment processing through the Paystack payment gateway alongside expense recording and fund balance management modules to provide a comprehensive financial operations suite.
+3. **Develop** the designed system using Laravel, Vue.js, and Inertia.js, integrating the Paystack payment gateway, a machine learning-based payment behaviour prediction engine, an LLM-powered report generation module, and a WebAuthn/TOTP security framework.
 
-4. **Implement** a predictive analytics engine using machine learning techniques to analyse historical payment data and forecast individual member payment behaviour, including the likelihood of default and on-time payment.
+4. **Test** the system rigorously—unit tests for individual components, feature tests for end-to-end workflows, and browser tests for real user interactions—covering functional correctness, tenant data isolation, payment allocation accuracy, and security.
 
-5. **Deploy** an intelligent reporting module that leverages Large Language Model technology to generate human-readable narrative summaries of monthly and annual financial reports, complemented by WebAuthn passkey authentication and two-factor authentication for system security.
+5. **Evaluate** whether the finished system actually meets the requirements identified in Objective 1, paying particular attention to how well the predictive analytics perform and whether the LLM-generated reports are coherent and useful.
 
-*Table 1.2: Summary of System Objectives*
+#### Research Questions
 
-| No. | Objective | Action Verb | Key Deliverable |
-| --- | --- | --- | --- |
-| 1 | Multi-tenant architecture and RBAC | Design | Isolated tenant environments with three-tier role model |
-| 2 | Contribution tracking and payment allocation | Develop | Balance-first allocation algorithm with overdue detection |
-| 3 | Payment processing and expense management | Integrate | Paystack gateway, expense and fund balance modules |
-| 4 | Predictive analytics for payment behaviour | Implement | ML-based default likelihood and trend forecasting |
-| 5 | Intelligent reporting and security | Deploy | LLM narrative reports, WebAuthn, and 2FA |
+Five questions drive the investigation. Each one connects back to at least one of the objectives listed above.
+
+1. What architectural decisions does a multi-tenant system need to get right in order to guarantee data isolation and enforce role-based access control across independent family groups sharing the same platform?
+
+2. Does an automated oldest-balance-first allocation algorithm actually improve contribution tracking accuracy compared to how families do it manually?
+
+3. When trained on historical payment records from a family contribution fund, how accurately can machine learning models predict which members are likely to default?
+
+4. Can LLM technology generate financial reports that make sense to family members who have never studied accounting or finance?
+
+5. For a multi-tenant family fund management system handling real money and personal data, which security mechanisms provide the most effective protection?
 
 ### 1.4 Scope of the Study
 
-This section defines the boundaries of the system in terms of functionality, technology, and exclusions.
+What follows draws the boundaries of the system—what it does, what it runs on, and what it deliberately leaves out.
 
 #### Functional Scope
 
-The system encompasses the following functional areas:
+Every family group gets its own isolated tenant on the platform. Members, contribution schedules, categories, financial records—all of it lives within the family's boundary, invisible to every other family on the system. An administrator can configure the basics: family name, currency, the day contributions are due, bank account details. No family sees another family's data. That isolation is not optional; it is enforced at the application level.
 
-- **Multi-Tenant Family Management:** Creation and management of family groups, each operating as an isolated tenant with its own members, contribution schedules, categories, and financial records. Family administrators can configure group settings including family name, currency, contribution due day, and bank account details.
+Within each family, three roles govern who can do what. Administrators handle the big-picture work—managing members, adjusting settings, configuring contribution categories. Financial Secretaries deal with the operational side: recording payments, logging expenses, pulling reports. Members get read-only access to their own contribution history, plus the ability to pay online. The system enforces these boundaries. A member cannot record a payment for someone else. A Financial Secretary cannot change the family's settings.
 
-- **Role-Based Access Control (RBAC):** A three-tier permission model comprising Administrator, Financial Secretary, and Member roles. Administrators possess full management capabilities including member management, family settings, and category configuration. Financial Secretaries can record payments, manage expenses, and generate reports. Members have access to their personal contribution history and online payment functionality.
+Contributions are generated automatically each month for every paying member, based on their assigned category. An employed member might owe ₦4,000, an unemployed one ₦2,000, a student ₦1,000. When payments come in—and they often arrive partial, late, or lumped together covering several months—the system applies them oldest-balance-first. The allocation is deterministic. No human judgment calls, no ambiguity about which month got credited.
 
-- **Contribution Tracking:** Monthly contribution generation for all paying members based on their assigned category (e.g., Employed, Unemployed, Student) with corresponding tiered amounts. The system supports partial payment recording and implements an automatic oldest-balance-first allocation algorithm that distributes incoming payments across outstanding contributions chronologically.
+Payments flow through two channels. Authorised roles can record them manually for members who pay cash or transfer outside the platform. Members can also pay directly through Paystack. Both channels feed the same allocation engine, so records stay consistent regardless of how the money actually arrives.
 
-- **Payment Processing:** Dual payment channels—manual recording by authorised roles and online payment via the Paystack payment gateway for member self-service. Both channels integrate with the contribution allocation engine to maintain consistent records.
+Expenses get recorded with descriptions and dates. The system also handles fund adjustments—non-contribution inflows like donations or interest—and computes the overall fund balance: total payments minus total expenses, adjusted for any non-contribution money that came in.
 
-- **Expense and Fund Balance Management:** Recording of family expenses with descriptions and timestamps, fund balance adjustments for non-contribution inflows, and a computed fund balance derived from total payments, adjustments, and expenses.
+On the reporting side, the system produces monthly and annual financial summaries covering collection rates, category breakdowns, and individual member statuses. Both tabular data and summary statistics.
 
-- **Reporting:** Monthly and annual financial reports with aggregate statistics, collection rates, category-wise breakdowns, and individual member contribution status. Reports include both tabular data and summary metrics.
+Two modules are planned but depend on what proves feasible during development. The first is a **predictive analytics** component—machine learning that would analyse historical payment data to flag likely defaults and surface payment trends. The second is **intelligent reporting**—LLM-generated narrative summaries written in plain language for family members who are not comfortable reading spreadsheets or charts. Both are architectural targets. Whether they ship in full depends on data availability and API integration timelines.
 
-- **Predictive Analytics (Planned):** Machine learning-based prediction of member payment behaviour, including default likelihood scoring and payment trend analysis. This module will consume historical contribution and payment data to train classification models.
+Security covers several layers: email-and-password login with email verification, TOTP-based two-factor authentication for an extra layer, and WebAuthn passkey support for passwordless or biometric-assisted login. A super-administrator role at the platform level provides system-wide oversight across all family tenants.
 
-- **Intelligent Reporting (Planned):** Integration with a Large Language Model API to generate natural-language narrative summaries of financial reports, enabling comprehensible reporting for non-financially literate family members.
+New members join through email invitations with tokenised acceptance links. Existing families can onboard someone and pre-assign their role before that person even creates an account.
 
-- **Authentication and Security:** Email/password authentication with email verification, two-factor authentication (TOTP-based), WebAuthn passkey registration and authentication for passwordless login and biometric-assisted two-factor verification, and platform-level super-administrator access for system-wide management.
-
-- **Invitation and Onboarding:** Email-based family invitation system with tokenised acceptance flow, supporting the onboarding of new members into existing family groups with pre-assigned roles.
-
-- **Subscription and Plan Management:** A platform subscription model with tiered plans (Free, Starter, Pro, Enterprise) that govern member limits and feature access, processed through the Paystack payment gateway.
+The platform itself runs on tiered subscription plans—Free, Starter, Pro, Enterprise—that control how many members a family can have and which features they can access. Billing goes through Paystack.
 
 #### Technical Scope
 
-*Table 1.3: Technical Stack Overview*
+*Table 1.2: Technical Stack Overview*
 
 | Layer | Technology | Version |
 | --- | --- | --- |
@@ -106,98 +124,99 @@ The system encompasses the following functional areas:
 | Database | PostgreSQL | Latest stable |
 | CSS Framework | Tailwind CSS | v4 |
 | Payment Gateway | Paystack API | Current |
-| Authentication | Laravel Fortify, WebAuthn | v1 / Custom |
+| Authentication | Laravel Fortify | v1 |
+| WebAuthn | Custom (web-auth/cose-lib, @simplewebauthn/browser) | v4.5 / v13.3 |
 | Build Tool | Vite | v8 |
 | Type System | TypeScript | v5 |
 | Route Generation | Laravel Wayfinder | v0 |
 | Code Quality | Laravel Pint, ESLint, Prettier | Latest |
 | Testing | Pest PHP | v4 |
-| ML/Predictive Analytics | To be determined (Python/scikit-learn or in-app) | — |
-| LLM Integration | To be determined (OpenAI API or equivalent) | — |
+| ML/Predictive Analytics | Laravel AI SDK (preferred for native integration); Python/scikit-learn (candidate for granular model control) | v0.5 (selection pending feasibility assessment) |
+| LLM Integration | Laravel AI SDK with OpenAI GPT-4 or Anthropic Claude providers | v0.5 (selection pending API evaluation) |
 
 #### Exclusions
 
-The following are explicitly outside the scope of this study:
+The following fall outside this project's scope:
 
-- Native mobile applications (iOS, Android); the system is a responsive web application accessible on mobile browsers.
-- Cryptocurrency or blockchain-based payment mechanisms.
-- Formal cooperative society regulatory compliance (CAMA registration, CBN cooperative guidelines).
-- Tax computation, invoicing, or full-scale accounting functionality.
-- Multi-language or localisation support beyond English.
-- Integration with banking APIs beyond Paystack (e.g., direct bank transfer APIs, USSD payment channels).
+- Native mobile apps for iOS or Android. The system is a responsive web application that works in mobile browsers.
+- Cryptocurrency or blockchain-based payments.
+- Regulatory compliance for formal cooperative societies (CAMA registration, CBN guidelines).
+- Tax computation, invoicing, or full accounting functionality.
+- Multilingual support. The interface and reports are English-only.
+- Banking API integrations beyond Paystack (no direct bank transfers, no USSD).
 
 ### 1.5 Significance of the Study
 
-This study holds significance across multiple dimensions encompassing practical utility, academic contribution, industry relevance, and research advancement.
+Start with what matters most: families. Millions of Nigerian families run contribution funds, and the way most of them manage the money—notebooks, personal spreadsheets, WhatsApp messages—is fragile. This project replaces that fragility with an automated, auditable system where roles are clearly defined and technically enforced. Administrators run the group. Financial Secretaries handle payments and expenses. Members check their own records and pay online. That structure alone goes a long way toward addressing the disputes and mistrust that scholars like Aryeetey (2008) and Oloyede (2008) have identified as existential threats to informal family financial arrangements. And because the platform is multi-tenant by design, it is not limited to one family. A workplace savings club, a church group, a community development association—any of them could adopt it with minimal modification.
 
-**Significance to Families and Cooperative Groups.** At its most fundamental level, this project addresses a tangible, everyday problem faced by millions of Nigerian families. By providing a dedicated platform for managing family contributions, the system replaces error-prone manual methods with automated, auditable, and transparent financial tracking. The role-based access control ensures that responsibilities are clearly delineated—administrators manage family settings and membership, financial secretaries record payments and expenses, and members view their personal contribution history and make online payments. This structured governance reduces disputes, enhances accountability, and strengthens the trust that is essential for the continued functioning of family financial cooperation (Nnama-Okechukwu & Okoye, 2019). While the system is designed for the family fund use case, its multi-tenant architecture makes it readily extensible to other informal cooperative groups such as workplace savings clubs, religious organisation funds, and community development associations.
+Academically, this project walks into relatively thin territory. The credit scoring literature has spent two decades refining models for banks and formal lenders (Lessmann et al., 2015). Applying machine learning to predict payment behaviour in a family contribution context—where the consequences of default are social embarrassment and strained relationships rather than credit bureau flags—is something nobody has published on. The same is true for using LLMs to generate financial reports outside corporate and regulatory settings; it contributes to a small but growing body of work on natural language generation for everyday financial communication (Brown et al., 2020). For future software engineering students, the project also doubles as a concrete, replicable case study in multi-tenant SaaS architecture.
 
-**Academic and Research Contribution.** From an academic perspective, this project contributes to the body of knowledge on the application of artificial intelligence to informal financial management—an area that has received limited scholarly attention despite the economic significance of informal finance in developing economies (Aryeetey, 2008). The integration of predictive analytics to forecast payment behaviour within a non-commercial, family-oriented context represents a novel application of machine learning that differs substantively from traditional credit scoring models which operate on formal lending data (Lessmann et al., 2015). Similarly, the use of Large Language Models for generating narrative financial reports in a low-stakes, non-regulatory context provides an empirical case study for the application of natural language generation in financial communication (Brown et al., 2020). The project also serves as a practical demonstration of multi-tenant SaaS architecture principles as taught in software engineering curricula, providing a replicable reference implementation for future students and researchers.
+From an industry standpoint, the implementation showcases a production-grade multi-tenant pattern on Laravel: application-level isolation through middleware, policy-based authorisation, and explicit query scoping—no global scopes, no magic. Layering Paystack integration, WebAuthn passwordless login, and TOTP-based two-factor authentication within the same application reflects current best practice in Nigerian and African fintech development (Paystack, 2024). Anyone building a similar platform in the Laravel and Vue.js ecosystem can treat this as a reference architecture.
 
-**Industry and Technological Relevance.** The multi-tenant architecture implemented in this project—employing application-level tenant isolation through middleware-enforced family context binding, policy-based authorisation, and query-scoped data access—demonstrates a production-grade approach to building SaaS platforms on the Laravel framework. The integration of the Paystack payment gateway, WebAuthn passwordless authentication, and two-factor authentication reflects current industry best practices in fintech application development within the Nigerian and broader African technology ecosystem (Paystack, 2024). The project thus serves as a reference architecture for developers building similar multi-tenant financial applications in the Laravel and Vue.js ecosystem.
-
-**Social Impact.** By lowering the barrier to effective fund management, the system has the potential to strengthen the financial resilience of families, particularly those with members spread across different geographical locations. The automated reminder system, predictive default detection, and transparent reporting collectively address the social friction points that cause many informal family funds to collapse, thereby preserving a vital mechanism of mutual financial support.
+The social impact argument is simple. Families whose members are scattered across different cities or countries—and that describes a huge share of Nigerian families, given migration patterns—stand to benefit the most. Automated reminders, early-warning signals from predictive models, and transparent reporting target exactly the friction points that cause informal family funds to fall apart. These funds matter. For many families, they are the first safety net available. Sometimes the only one.
 
 ### 1.6 Motivation for the Study
 
-The motivation for this project is rooted in a personal and lived experience. The researcher belongs to a Nigerian family that practises monthly financial contributions into a shared family purse. As with many such families, the management of this fund has historically relied on manual methods—handwritten records, informal WhatsApp group announcements, and verbal confirmations of payments. Over time, this approach has led to recurring challenges: disputes over who has paid and who has not, confusion about partial payments and outstanding balances, difficulty producing clear financial summaries for family meetings, and the absence of any mechanism to hold the fund manager accountable.
+This project grew out of a real problem the researcher faces personally. The researcher's family in Nigeria runs a monthly contribution fund—a family purse—in which members pay different amounts depending on their employment status. For years, this fund has been managed manually: handwritten records, announcements in a messaging group, and verbal confirmations at family meetings. The results have been predictable. Disagreements about who has paid and who has not. Confusion over partial payments. Difficulty producing any kind of clear financial summary when the family meets. No way to hold the person managing the money properly accountable.
 
-These challenges are not unique to the researcher's family. Conversations with peers, classmates, and community members have revealed that similar frustrations are widespread across Nigerian families and extended family networks that operate collective contribution funds. The problem is both common and consequential—when trust erodes due to poor record-keeping, families may abandon their contribution arrangements entirely, losing a valuable mechanism of collective financial support.
+These frustrations turn out to be remarkably common. In conversations with classmates, friends, and colleagues, the researcher found that nearly every Nigerian family with a contribution arrangement faces similar problems. Some families have given up on their funds entirely because the record-keeping became too unreliable and the arguments too frequent.
 
-The researcher's background in software engineering presented an opportunity to address this problem through technology. Rather than proposing a purely theoretical project, the decision was made to design and build a functional system that solves a real problem the researcher and their family actively face. This personal stake ensures that the project is grounded in genuine user needs and informed by first-hand understanding of the domain.
+As someone studying software engineering, the researcher looked at the mess and thought: I can fix this. Not as a thought experiment or a hypothetical proof-of-concept, but as an actual tool the family could start using. When your own relatives are the first users, you do not get to cut corners on requirements. Every feature maps to a real argument somebody had at a family meeting.
 
-Furthermore, the project presented an opportunity to explore the intersection of two rapidly advancing fields: **multi-tenant SaaS architecture** and **artificial intelligence in financial technology**. The integration of predictive analytics and Large Language Model-based report generation into a family fund management context represents an intellectually stimulating challenge that extends the project beyond a standard CRUD application into the domain of intelligent systems. The prospect of building a system that not only tracks contributions but also anticipates payment behaviour and communicates financial insights in natural language served as a strong intellectual motivation.
-
-Finally, the multi-tenant architecture requirement—ensuring that multiple independent families can operate securely on a single platform—aligned well with the software engineering principles of scalability, data isolation, and security that the researcher sought to demonstrate as part of a 400-level capstone project.
+The technical challenge sealed the deal. Getting dozens of independent families to coexist securely on shared infrastructure—with proper data isolation, role enforcement, and auditable records—is a genuinely hard architectural problem. Stack machine learning on top for payment prediction, then add LLM-generated reports in plain language, and you have something that goes well past the typical CRUD web app. For a 400-level capstone, that felt right. It pulls together backend engineering, frontend development, data modelling, security design, and emerging AI capabilities all at once. The researcher wanted a project worth struggling with. This one qualifies.
 
 ### 1.7 Limitations of the Study
 
-While the system is designed to be comprehensive and functional, several constraints bound its current implementation and deployment:
+Several constraints bound what this system can do in its current form:
 
-1. **Internet Connectivity Dependency.** The system is a web-based application requiring active internet connectivity for all operations. In regions of Nigeria with limited or unreliable internet infrastructure, this dependency may hinder consistent access. The system does not currently support offline-first or progressive web application capabilities for disconnected usage scenarios.
+1. **Internet dependency.** No internet, no access. That is a real problem in parts of Nigeria where connectivity drops out regularly. Right now the system has no offline mode and does not work as a progressive web application—if the connection goes down, you wait.
 
-2. **Payment Gateway Geographic Limitation.** The Paystack payment gateway, which serves as the sole online payment processor, primarily supports Nigerian Naira (NGN) transactions and is optimised for the Nigerian financial ecosystem. Families operating in other currencies or countries without Paystack coverage would need an alternative payment integration, which is not within the current scope.
+2. **Paystack-only payments.** The only online payment channel is Paystack, which works best with Nigerian Naira. A family based in Ghana or Kenya, or one that deals in dollars, would need a different gateway entirely—and supporting that is not part of the current build.
 
-3. **Machine Learning Model Data Requirements.** The predictive analytics module's accuracy is contingent upon a sufficient volume of historical payment data. For newly onboarded families with limited transaction history, the predictive models will have reduced reliability until adequate data has been accumulated. The cold-start problem is a recognised limitation in recommendation and prediction systems (Schein et al., 2002).
+3. **Cold-start problem for ML predictions.** Machine learning needs data to be useful, and a brand-new family with two months of payment records does not give the model much to work with. Predictions will be unreliable until enough history accumulates—a well-documented challenge in prediction systems of all kinds (Schein et al., 2002).
 
-4. **LLM API Costs and Latency.** The intelligent reporting feature relies on external Large Language Model API services, which introduce both financial costs (per-token or per-request pricing) and potential latency in report generation. The operational cost of this feature may influence its availability across different subscription tiers, and the quality of generated narratives is dependent on the capabilities of the underlying LLM provider (OpenAI, 2023).
+4. **LLM cost and speed.** Every time the system asks an LLM to write a report, that is an API call—and API calls cost money and take time. Whether that cost is pennies or dollars per report will determine which subscription tiers can offer the feature. The quality also varies depending on the provider (OpenAI, 2023).
 
-5. **Single-Language Interface.** The application interface and all generated reports are in English. While English is Nigeria's official language and lingua franca, some family members, particularly elderly participants, may be more comfortable with indigenous languages. Multilingual support is not addressed in this project.
+5. **English only.** Everything—the interface, the buttons, the generated reports—is in English. In a country with over 500 living languages, that leaves out family members who would be more comfortable in Hausa, Yoruba, or Igbo. Adding other languages is a future goal, not a current capability.
 
-6. **Security Assumptions.** The WebAuthn passkey implementation requires devices with biometric sensors or platform authenticators (e.g., fingerprint readers, facial recognition). Users whose devices lack such hardware must rely on the fallback TOTP-based two-factor authentication, which provides a different security posture.
+6. **Device requirements for WebAuthn.** Not every phone or laptop has a fingerprint reader or face recognition. Passkey login only works on devices that do. For members with older hardware, the system falls back to TOTP codes from an authenticator app—functional, but not as seamless.
 
-7. **Scalability Boundaries.** While the multi-tenant architecture supports multiple families on a single platform instance, the system has not been subjected to large-scale load testing with thousands of concurrent tenants. Performance under high concurrency remains an area for future evaluation.
+7. **Untested at scale.** The architecture is designed for multi-tenancy, but nobody has thrown thousands of families at it simultaneously to see what breaks. That kind of load testing is outside the scope of this project. Whether the system holds up under serious concurrent traffic is an open question.
 
 ### 1.8 Definition of Terms
 
-*Table 1.5: Definition of Key Terms*
+*Table 1.3: Definition of Key Terms*
 
 | Term | Definition | Reference |
 | --- | --- | --- |
-| **Multi-Tenancy** | A software architecture in which a single instance of an application serves multiple independent user groups (tenants), with each tenant's data logically or physically isolated from others. | Bezemer & Zaidman (2010) |
-| **Role-Based Access Control (RBAC)** | A method of regulating access to system resources based on the roles assigned to individual users within an organisation. Users inherit permissions associated with their assigned role rather than being granted permissions individually. | Sandhu et al. (1996) |
-| **Contribution** | In the context of this system, a periodic (typically monthly) financial obligation assigned to a member of a family group, the amount of which is determined by the member's assigned category or tier. | — |
-| **Partial Payment** | A payment that satisfies only a portion of a member's outstanding contribution for a given period, resulting in a remaining balance that must be fulfilled through subsequent payments. | — |
-| **Balance-First Allocation** | An automatic payment distribution algorithm that applies incoming funds to the member's oldest outstanding contribution balance before allocating to more recent periods, ensuring chronological debt resolution. | — |
-| **Predictive Analytics** | The use of statistical techniques and machine learning algorithms to analyse historical data and make predictions about future outcomes, such as the likelihood of a member defaulting on a contribution payment. | Khandani et al. (2010) |
-| **Large Language Model (LLM)** | A deep learning model trained on vast corpora of text data, capable of generating coherent natural-language text, answering questions, and performing text transformation tasks. In this project, LLMs are used to generate narrative summaries of financial reports. | Brown et al. (2020) |
-| **WebAuthn** | A web standard published by the World Wide Web Consortium (W3C) that enables passwordless authentication using public-key cryptography. It allows users to authenticate using biometric sensors, security keys, or platform authenticators built into their devices. | W3C (2021) |
-| **Two-Factor Authentication (2FA)** | A security mechanism that requires users to provide two distinct forms of identification before accessing a system—typically something they know (a password) and something they have (a time-based one-time password or authentication device). | Ometov et al. (2018) |
-| **Software as a Service (SaaS)** | A software distribution model in which applications are hosted by a service provider and made available to customers over the internet, typically on a subscription basis, eliminating the need for local installation and maintenance. | Chong et al. (2006) |
-| **Single Page Application (SPA)** | A web application architecture in which the browser loads a single HTML page and dynamically updates content in response to user interactions without requiring full page reloads, providing a fluid, desktop-like user experience. | Mikowski & Powell (2013) |
-| **Inertia.js** | A library that enables the creation of server-driven single-page applications by connecting server-side frameworks (such as Laravel) directly to client-side frameworks (such as Vue.js) without requiring a separate API layer. | Reinink (2024) |
-| **Application Programming Interface (API)** | A set of defined protocols, routines, and tools that enable different software systems to communicate and exchange data with one another. In this project, APIs are used for payment gateway integration and LLM service communication. | Fielding (2000) |
-| **Payment Gateway** | A technology service that authorises and processes electronic payment transactions between a buyer, a seller, and their respective financial institutions. Paystack is the payment gateway integrated in this system. | Paystack (2024) |
+| **Multi-Tenancy** | One application instance serving many independent groups (tenants), where each tenant's data is kept separate through logical or physical isolation. Think of it as apartment units in a building—shared infrastructure, private spaces. | Bezemer & Zaidman (2010) |
+| **Role-Based Access Control (RBAC)** | Instead of giving permissions to individual people, you assign them to roles. A user gets whatever permissions their role carries. In this project: Administrator, Financial Secretary, or Member. | Sandhu et al. (1996) |
+| **Contribution** | The monthly amount each family member owes, determined by which category they fall into—employed, unemployed, or student. | — |
+| **Partial Payment** | When a member pays less than the full amount owed for a given month. The unpaid remainder carries forward as an outstanding balance. | — |
+| **Balance-First Allocation** | The rule the system follows when money comes in: apply it to the member's oldest outstanding month first, then work forward. No cherry-picking which month gets credited. | — |
+| **Predictive Analytics** | Running statistical models and machine learning on past payment data to guess what happens next—specifically, whether a given member is heading toward a missed payment. | Khandani et al. (2010) |
+| **Large Language Model (LLM)** | A neural network trained on massive amounts of text that can generate human-readable prose, answer questions, and turn raw data into narrative summaries. This project uses one to write financial reports in plain English. | Brown et al. (2020) |
+| **WebAuthn** | The W3C standard that lets people log in without passwords. Instead, the browser uses public-key cryptography tied to a fingerprint reader, face scanner, or hardware security key. | W3C (2021) |
+| **Two-Factor Authentication (2FA)** | Logging in with two separate proofs of identity. Usually that means a password plus a six-digit code from an authenticator app on your phone. | Ometov et al. (2018) |
+| **Software as a Service (SaaS)** | Software that lives on someone else's server and you access through a browser. No installation, no updates to manage locally—just a subscription and an internet connection. | Chong et al. (2006) |
+| **Single Page Application (SPA)** | A web app that loads once and then updates itself dynamically as you interact with it, rather than reloading a fresh page every time you click something. Feels more like a desktop app than a traditional website. | Mikowski & Powell (2013) |
+| **Inertia.js** | The glue between Laravel on the server and Vue.js in the browser. It lets you build an SPA that is actually driven by server-side routing—no separate REST API needed. | Reinink (2024) |
+| **Application Programming Interface (API)** | The agreed-upon way two pieces of software talk to each other. Here, APIs connect the system to Paystack for processing payments and to external LLM services for generating reports. | Fielding (2000) |
+| **Payment Gateway** | The middleman that handles electronic transactions between a buyer, a seller, and their respective banks. Paystack fills this role in the system. | Paystack (2024) |
 
 ### 1.9 Organization of the Report
 
-This project report is organised into three chapters, each addressing a distinct phase of the research and development process.
+This report is structured in five chapters.
 
-**Chapter One: Introduction.** This chapter provides the background and context for the study, articulates the problem statement, defines the aim and objectives, delineates the scope and significance of the project, presents the researcher's motivation, identifies limitations, and defines key terms used throughout the report.
+**Chapter One** sets out the background, problem statement, objectives, research questions, scope, significance, motivation, limitations, and key definitions—establishing what the project is about and why it matters.
 
-**Chapter Two: Literature Review.** This chapter examines the historical perspectives of family fund management and informal financial systems, establishes the theoretical framework underpinning the system design, reviews related work from at least fifty scholarly sources, identifies gaps in existing research, and summarises how this project addresses those gaps.
+**Chapter Two** reviews the literature across several thematic areas: informal finance, multi-tenant architecture, RBAC, payment systems, machine learning for default prediction, LLM-based reporting, web authentication, and SPA frameworks. It draws on at least fifty scholarly sources, identifies the gaps in existing research, and establishes how this project addresses them.
 
-**Chapter Three: System Design and Methodology.** This chapter presents the proposed system design, specifies functional and non-functional requirements, describes the software development methodology adopted, details the system architecture and database design, documents the programming languages and tools used, explains the key software modules and components, and outlines the security measures implemented in the system.
+**Chapter Three** covers the system design and methodology—requirements specification, the development methodology (Agile), system architecture, database design, programming tools, module descriptions, and security measures. The methodology choices are theoretically grounded in the framework established in Chapter Two.
+
+**Chapter Four** is where the code meets reality. It walks through how each module was actually built and wired together, then documents the testing strategy—unit tests, feature tests, browser tests with Pest PHP—and shows the results. Screenshots, test outputs, the evidence that things work.
+
+**Chapter Five** steps back and asks: did it work? It summarises the findings, evaluates the system against the objectives from Chapter One, states what this project contributes to the field, and suggests where future developers could take it next.
 
 ---
 

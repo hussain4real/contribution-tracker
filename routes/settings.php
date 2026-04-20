@@ -4,6 +4,7 @@ use App\Http\Controllers\Settings\PasskeyController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\TwoFactorAuthenticationController;
+use App\Http\Controllers\Settings\WhatsAppVerificationController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -13,6 +14,15 @@ Route::middleware('auth')->group(function () {
     Route::get('settings/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('settings/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('settings/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    Route::post('settings/whatsapp/send-code', [WhatsAppVerificationController::class, 'sendCode'])
+        ->middleware('throttle:3,5')
+        ->name('whatsapp.send-code');
+    Route::post('settings/whatsapp/verify', [WhatsAppVerificationController::class, 'verifyCode'])
+        ->middleware('throttle:6,5')
+        ->name('whatsapp.verify');
+    Route::delete('settings/whatsapp', [WhatsAppVerificationController::class, 'destroy'])
+        ->name('whatsapp.destroy');
 
     Route::get('settings/password', [PasswordController::class, 'edit'])->name('user-password.edit');
 

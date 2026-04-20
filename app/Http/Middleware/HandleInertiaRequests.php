@@ -49,6 +49,8 @@ class HandleInertiaRequests extends Middleware
                     'category_label' => $user->category?->label(),
                     'family_id' => $user->family_id,
                     'is_super_admin' => $user->is_super_admin,
+                    'whatsapp_phone' => $user->whatsapp_phone,
+                    'whatsapp_verified_at' => $user->whatsapp_verified_at,
                 ] : null,
                 'can' => $user ? [
                     'manage_members' => $user->role->canManageMembers(),
