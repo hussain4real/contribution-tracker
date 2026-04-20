@@ -31,7 +31,7 @@ php artisan view:cache
 php artisan event:cache
 
 echo "Restarting queue workers, SSR, and Nightwatch..."
-sudo supervisorctl restart queue-worker
+sudo supervisorctl restart queue-worker:*
 sudo supervisorctl restart ssr
 sudo supervisorctl restart nightwatch
 
