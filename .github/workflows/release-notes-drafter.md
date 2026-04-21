@@ -84,13 +84,6 @@ If you cannot identify any user-facing changes to summarize, call `noop` instead
 
 ---
 
-<details>
-<summary>PRs Included</summary>
-
-<List of PR numbers and titles for reference>
-
-</details>
-
 ### ⚠️ Review Checklist
 - [ ] Version number is correct
 - [ ] All changes are accurately described
@@ -115,6 +108,7 @@ If you cannot identify any user-facing changes to summarize, call `noop` instead
 - Suggest version bump based on semver: patch for fixes, minor for features, major for breaking changes.
 - Attribute work to the humans who did it, not bots.
 - Skip merge commits and routine maintenance in the notes.
+- **Do not reference PR numbers, issue numbers, or commit SHAs** anywhere in the release notes — they are written for end-users, not developers.
 - Apply the label `release-draft` to the created issue.
 
 ## Safe Outputs

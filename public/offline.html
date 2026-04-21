@@ -187,10 +187,18 @@
         var statusText = document.getElementById('status-text');
         var countdownSeconds = 10;
         var countdownTimer = null;
+        var retryCount = 0;
+        var maxRetries = 5;
 
         function retry() {
             retryBtn.disabled = true;
             retryBtn.textContent = 'Checking…';
+
+            // If the user manually retries after we stopped auto-retrying,
+            // reset the counter so they get a fresh batch of auto-retries.
+            if (retryCount >= maxRetries) {
+                retryCount = 0;
+            }
 
             fetch(window.location.href, { cache: 'no-store' })
                 .then(function (r) {
@@ -206,6 +214,15 @@
         }
 
         function retryFailed() {
+            retryCount++;
+
+            if (retryCount >= maxRetries) {
+                retryBtn.disabled = false;
+                retryBtn.textContent = 'Try Again';
+                statusText.textContent = 'Still no connection — tap to retry';
+                return;
+            }
+
             countdownSeconds = 10;
             retryBtn.disabled = true;
             updateCountdown();
