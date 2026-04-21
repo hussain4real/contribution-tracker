@@ -2,7 +2,7 @@
 description: Reviews pull requests for Laravel best practices, security issues, N+1 queries, and missing tests.
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, ready_for_review, reopened]
 permissions:
   contents: read
   issues: read

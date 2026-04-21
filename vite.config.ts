@@ -103,6 +103,32 @@ export default defineConfig({
                             networkTimeoutSeconds: 3,
                         },
                     },
+                    {
+                        urlPattern: ({ request, url }) => {
+                            if (url.pathname.startsWith('/platform')) {
+                                return false;
+                            }
+                            if (url.origin !== self.location.origin) {
+                                return false;
+                            }
+                            return (
+                                request.mode === 'navigate' ||
+                                request.headers.get('X-Inertia') === 'true'
+                            );
+                        },
+                        handler: 'NetworkFirst',
+                        options: {
+                            cacheName: 'inertia-pages',
+                            expiration: {
+                                maxEntries: 50,
+                                maxAgeSeconds: 60 * 60 * 24 * 7,
+                            },
+                            networkTimeoutSeconds: 3,
+                            cacheableResponse: {
+                                statuses: [200],
+                            },
+                        },
+                    },
                 ],
             },
         }),
