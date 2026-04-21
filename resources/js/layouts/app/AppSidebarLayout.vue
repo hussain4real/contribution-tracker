@@ -4,6 +4,7 @@ import AppContent from '@/components/AppContent.vue';
 import AppShell from '@/components/AppShell.vue';
 import AppSidebar from '@/components/AppSidebar.vue';
 import AppSidebarHeader from '@/components/AppSidebarHeader.vue';
+import NetworkStatusBanner from '@/components/NetworkStatusBanner.vue';
 import PwaInstallPrompt from '@/components/PwaInstallPrompt.vue';
 import SwUpdateToast from '@/components/SwUpdateToast.vue';
 import { Button } from '@/components/ui/button';
@@ -73,6 +74,7 @@ function dismissWhatsAppPrompt(): void {
     <AppShell variant="sidebar">
         <AppSidebar />
         <AppContent variant="sidebar" class="overflow-x-hidden">
+            <NetworkStatusBanner />
             <!-- Impersonation Banner -->
             <div
                 v-if="isImpersonating"
