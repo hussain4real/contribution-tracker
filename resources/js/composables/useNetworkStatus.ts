@@ -1,9 +1,11 @@
 import { router } from '@inertiajs/vue3';
-import { onMounted, onUnmounted, ref } from 'vue';
+import { ref } from 'vue';
 
 const CACHE_NAME = 'inertia-pages';
 
-const isOnline = ref(true);
+const isOnline = ref(
+    typeof navigator !== 'undefined' ? navigator.onLine : true,
+);
 const cachedAt = ref<Date | null>(null);
 const justReconnected = ref(false);
 
@@ -46,33 +48,24 @@ async function lookupCacheDate(): Promise<void> {
     }
 }
 
-export function useNetworkStatus() {
-    let removeRouteListener: (() => void) | undefined;
+// Initialize listeners once at the module level so the singleton state stays
+// in sync regardless of how many components consume the composable.
+if (typeof window !== 'undefined') {
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
 
-    onMounted(() => {
-        isOnline.value = navigator.onLine;
-
-        window.addEventListener('online', updateOnlineStatus);
-        window.addEventListener('offline', updateOnlineStatus);
-
-        removeRouteListener = router.on('navigate', () => {
-            if (!isOnline.value) {
-                lookupCacheDate();
-            }
-        });
-
+    router.on('navigate', () => {
         if (!isOnline.value) {
             lookupCacheDate();
         }
     });
 
-    onUnmounted(() => {
-        window.removeEventListener('online', updateOnlineStatus);
-        window.removeEventListener('offline', updateOnlineStatus);
-        removeRouteListener?.();
-        clearTimeout(reconnectedTimer);
-    });
+    if (!isOnline.value) {
+        lookupCacheDate();
+    }
+}
 
+export function useNetworkStatus() {
     return {
         isOnline,
         cachedAt,

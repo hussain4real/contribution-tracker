@@ -1,14 +1,28 @@
 <script setup lang="ts">
 import { useNetworkStatus } from '@/composables/useNetworkStatus';
 import { Wifi, WifiOff } from 'lucide-vue-next';
-import { computed } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 
 const { isOnline, cachedAt, justReconnected } = useNetworkStatus();
+
+// Reactive "now" so the relative timestamp updates as time passes.
+const now = ref(Date.now());
+let ticker: ReturnType<typeof setInterval> | undefined;
+
+onMounted(() => {
+    ticker = setInterval(() => {
+        now.value = Date.now();
+    }, 30_000);
+});
+
+onUnmounted(() => {
+    clearInterval(ticker);
+});
 
 const timeAgo = computed(() => {
     if (!cachedAt.value) return null;
 
-    const seconds = Math.floor((Date.now() - cachedAt.value.getTime()) / 1000);
+    const seconds = Math.floor((now.value - cachedAt.value.getTime()) / 1000);
 
     if (seconds < 60) return 'just now';
     if (seconds < 3600) {

@@ -104,27 +104,18 @@ export default defineConfig({
                         },
                     },
                     {
-                        urlPattern: ({ request, url }) =>
-                            request.mode === 'navigate' &&
-                            !url.pathname.startsWith('/platform'),
-                        handler: 'NetworkFirst',
-                        options: {
-                            cacheName: 'inertia-pages',
-                            expiration: {
-                                maxEntries: 50,
-                                maxAgeSeconds: 60 * 60 * 24 * 7,
-                            },
-                            networkTimeoutSeconds: 3,
-                            cacheableResponse: {
-                                statuses: [200],
-                            },
+                        urlPattern: ({ request, url }) => {
+                            if (url.pathname.startsWith('/platform')) {
+                                return false;
+                            }
+                            if (url.origin !== self.location.origin) {
+                                return false;
+                            }
+                            return (
+                                request.mode === 'navigate' ||
+                                request.headers.get('X-Inertia') === 'true'
+                            );
                         },
-                    },
-                    {
-                        urlPattern: ({ request, url }) =>
-                            request.headers.get('X-Inertia') === 'true' &&
-                            url.origin === self.location.origin &&
-                            !url.pathname.startsWith('/platform'),
                         handler: 'NetworkFirst',
                         options: {
                             cacheName: 'inertia-pages',
