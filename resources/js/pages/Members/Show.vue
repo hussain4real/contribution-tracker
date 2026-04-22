@@ -239,10 +239,6 @@ function canSendWhatsApp(contribution: Contribution): boolean {
     );
 }
 
-function canSendAnyReminder(contribution: Contribution): boolean {
-    return canSendEmail(contribution) || canSendWhatsApp(contribution);
-}
-
 function hasSingleEmailReminder(contribution: Contribution): boolean {
     return canSendEmail(contribution) && !canSendWhatsApp(contribution);
 }
