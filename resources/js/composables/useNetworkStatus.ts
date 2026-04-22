@@ -1,11 +1,17 @@
 import { router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
-const CACHE_NAME = 'inertia-pages';
+const CACHE_NAME = 'inertia-pages-v2';
 
-const isOnline = ref(
-    typeof navigator !== 'undefined' ? navigator.onLine : true,
-);
+function getInitialOnlineStatus(): boolean {
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+        return true;
+    }
+
+    return navigator.onLine !== false;
+}
+
+const isOnline = ref(getInitialOnlineStatus());
 const cachedAt = ref<Date | null>(null);
 const justReconnected = ref(false);
 
@@ -18,7 +24,7 @@ const RECONNECT_THRESHOLD_MS = 2000;
 
 function updateOnlineStatus(): void {
     const wasOffline = !isOnline.value;
-    isOnline.value = navigator.onLine;
+    isOnline.value = navigator.onLine !== false;
 
     if (isOnline.value) {
         cachedAt.value = null;
@@ -71,7 +77,7 @@ if (typeof window !== 'undefined') {
         }
     });
 
-    if (!isOnline.value) {
+    if (!getInitialOnlineStatus()) {
         lookupCacheDate();
     }
 }

@@ -6,16 +6,19 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 const { isOnline, cachedAt, justReconnected } = useNetworkStatus();
 
 // Reactive "now" so the relative timestamp updates as time passes.
+const hasMounted = ref(false);
 const now = ref(Date.now());
 let ticker: ReturnType<typeof setInterval> | undefined;
 
 onMounted(() => {
+    hasMounted.value = true;
     ticker = setInterval(() => {
         now.value = Date.now();
     }, 30_000);
 });
 
 onUnmounted(() => {
+    hasMounted.value = false;
     clearInterval(ticker);
 });
 
@@ -38,7 +41,9 @@ const timeAgo = computed(() => {
     return `${days} day${days !== 1 ? 's' : ''} ago`;
 });
 
-const visible = computed(() => !isOnline.value || justReconnected.value);
+const visible = computed(
+    () => hasMounted.value && (!isOnline.value || justReconnected.value),
+);
 </script>
 
 <template>
