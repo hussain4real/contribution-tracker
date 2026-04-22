@@ -57,7 +57,7 @@ const emit = defineEmits<{
                         <Button
                             variant="ghost"
                             size="sm"
-                            class="h-6 w-6 shrink-0 p-0 opacity-100 sm:opacity-0 group-hover:opacity-100"
+                            class="h-6 w-6 shrink-0 p-0 opacity-100 group-hover:opacity-100 sm:opacity-0"
                             @click.stop
                         >
                             <EllipsisVertical class="h-3 w-3" />
