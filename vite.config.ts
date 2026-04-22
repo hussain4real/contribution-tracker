@@ -6,6 +6,8 @@ import laravel from 'laravel-vite-plugin';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+const INERTIA_PAGES_CACHE = 'inertia-pages-v2';
+
 export default defineConfig({
     plugins: [
         laravel({
@@ -111,14 +113,28 @@ export default defineConfig({
                             if (url.origin !== self.location.origin) {
                                 return false;
                             }
+
+                            const isPartialInertiaRequest =
+                                request.headers.has(
+                                    'X-Inertia-Partial-Component',
+                                ) ||
+                                request.headers.has('X-Inertia-Partial-Data') ||
+                                request.headers.has(
+                                    'X-Inertia-Partial-Except',
+                                );
+
                             return (
                                 request.mode === 'navigate' ||
-                                request.headers.get('X-Inertia') === 'true'
+                                (request.headers.get('X-Inertia') === 'true' &&
+                                    !isPartialInertiaRequest)
                             );
                         },
                         handler: 'NetworkFirst',
                         options: {
-                            cacheName: 'inertia-pages',
+                            // Cache only full-page Inertia responses. Partial
+                            // reloads can omit props and would otherwise poison
+                            // the offline cache for that URL.
+                            cacheName: INERTIA_PAGES_CACHE,
                             expiration: {
                                 maxEntries: 50,
                                 maxAgeSeconds: 60 * 60 * 24 * 7,
