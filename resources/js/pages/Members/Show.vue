@@ -9,6 +9,13 @@ import {
 } from '@/actions/App/Http/Controllers/MemberController';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
@@ -16,6 +23,7 @@ import {
     AlertCircle,
     Archive,
     CheckCircle2,
+    ChevronDown,
     ChevronRight,
     Clock,
     Mail,
@@ -23,6 +31,7 @@ import {
     Pencil,
     Receipt,
     RotateCcw,
+    Send,
     TrendingUp,
     User,
     Wallet,
@@ -211,6 +220,33 @@ function getProgressPercentage(contribution: Contribution): number {
     return Math.min(
         100,
         (contribution.total_paid / contribution.expected_amount) * 100,
+    );
+}
+
+function canSendEmail(contribution: Contribution): boolean {
+    return (
+        props.canSendEmailReminder &&
+        Boolean(props.member.email) &&
+        contribution.balance > 0
+    );
+}
+
+function canSendWhatsApp(contribution: Contribution): boolean {
+    return (
+        props.canSendWhatsAppReminder &&
+        props.member.whatsapp_verified &&
+        contribution.balance > 0
+    );
+}
+
+function canSendAnyReminder(contribution: Contribution): boolean {
+    return canSendEmail(contribution) || canSendWhatsApp(contribution);
+}
+
+function isSendingReminder(contributionId: number): boolean {
+    return (
+        sendingEmailReminderId.value === contributionId ||
+        sendingWhatsAppReminderId.value === contributionId
     );
 }
 
@@ -589,62 +625,99 @@ function restoreMember() {
                                         >
                                             {{ contribution.status_label }}
                                         </Badge>
-                                        <button
+                                        <DropdownMenu
                                             v-if="
-                                                canSendEmailReminder &&
-                                                member.email &&
-                                                contribution.balance > 0
-                                            "
-                                            type="button"
-                                            :title="`Send email reminder for ${contribution.period_label}`"
-                                            :disabled="
-                                                sendingEmailReminderId ===
-                                                contribution.id
-                                            "
-                                            class="inline-flex h-8 w-8 items-center justify-center rounded-full text-blue-600 transition hover:bg-blue-50 disabled:opacity-50 dark:text-blue-400 dark:hover:bg-blue-900/30"
-                                            @click.stop="
-                                                sendEmailReminder(
-                                                    contribution.id,
-                                                )
+                                                canSendAnyReminder(contribution)
                                             "
                                         >
-                                            <Mail
-                                                class="h-4 w-4"
-                                                :class="{
-                                                    'animate-pulse':
-                                                        sendingEmailReminderId ===
-                                                        contribution.id,
-                                                }"
-                                            />
-                                        </button>
-                                        <button
-                                            v-if="
-                                                canSendWhatsAppReminder &&
-                                                member.whatsapp_verified &&
-                                                contribution.balance > 0
-                                            "
-                                            type="button"
-                                            :title="`Send WhatsApp reminder for ${contribution.period_label}`"
-                                            :disabled="
-                                                sendingWhatsAppReminderId ===
-                                                contribution.id
-                                            "
-                                            class="inline-flex h-8 w-8 items-center justify-center rounded-full text-emerald-600 transition hover:bg-emerald-50 disabled:opacity-50 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
-                                            @click.stop="
-                                                sendWhatsAppReminder(
-                                                    contribution.id,
-                                                )
-                                            "
-                                        >
-                                            <MessageCircle
-                                                class="h-4 w-4"
-                                                :class="{
-                                                    'animate-pulse':
-                                                        sendingWhatsAppReminderId ===
-                                                        contribution.id,
-                                                }"
-                                            />
-                                        </button>
+                                            <DropdownMenuTrigger as-child>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    class="h-8 gap-1 px-2 text-xs"
+                                                    :disabled="
+                                                        isSendingReminder(
+                                                            contribution.id,
+                                                        )
+                                                    "
+                                                    @click.stop
+                                                >
+                                                    <Send
+                                                        class="h-3.5 w-3.5"
+                                                        :class="{
+                                                            'animate-pulse':
+                                                                isSendingReminder(
+                                                                    contribution.id,
+                                                                ),
+                                                        }"
+                                                    />
+                                                    <span
+                                                        class="hidden sm:inline"
+                                                        >Remind</span
+                                                    >
+                                                    <ChevronDown
+                                                        class="h-3 w-3 opacity-60"
+                                                    />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent
+                                                align="end"
+                                                class="w-48"
+                                            >
+                                                <DropdownMenuItem
+                                                    v-if="
+                                                        canSendEmail(
+                                                            contribution,
+                                                        )
+                                                    "
+                                                    :disabled="
+                                                        sendingEmailReminderId !==
+                                                        null
+                                                    "
+                                                    @click.stop="
+                                                        sendEmailReminder(
+                                                            contribution.id,
+                                                        )
+                                                    "
+                                                >
+                                                    <Mail
+                                                        class="mr-2 h-4 w-4"
+                                                    />
+                                                    Send email reminder
+                                                </DropdownMenuItem>
+                                                <DropdownMenuSeparator
+                                                    v-if="
+                                                        canSendEmail(
+                                                            contribution,
+                                                        ) &&
+                                                        canSendWhatsApp(
+                                                            contribution,
+                                                        )
+                                                    "
+                                                />
+                                                <DropdownMenuItem
+                                                    v-if="
+                                                        canSendWhatsApp(
+                                                            contribution,
+                                                        )
+                                                    "
+                                                    :disabled="
+                                                        sendingWhatsAppReminderId !==
+                                                        null
+                                                    "
+                                                    @click.stop="
+                                                        sendWhatsAppReminder(
+                                                            contribution.id,
+                                                        )
+                                                    "
+                                                >
+                                                    <MessageCircle
+                                                        class="mr-2 h-4 w-4"
+                                                    />
+                                                    Send WhatsApp reminder
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
                                         <ChevronRight
                                             class="h-4 w-4 text-neutral-400 transition-transform"
                                             :class="{
