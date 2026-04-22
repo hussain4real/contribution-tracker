@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\PasskeyLoginController;
 use App\Http\Controllers\Auth\PasskeyTwoFactorController;
 use App\Http\Controllers\ChangelogController;
 use App\Http\Controllers\ContributionController;
+use App\Http\Controllers\ContributionEmailReminderController;
 use App\Http\Controllers\ContributionWhatsAppReminderController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExpenseController;
@@ -113,6 +114,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('contributions/my', [ContributionController::class, 'my'])->name('contributions.my');
     Route::post('contributions/generate', [ContributionController::class, 'generate'])->name('contributions.generate');
     Route::get('contributions/{contribution}', [ContributionController::class, 'show'])->name('contributions.show');
+    Route::post('contributions/{contribution}/email-reminder', [ContributionEmailReminderController::class, 'send'])
+        ->middleware('throttle:10,1')
+        ->name('contributions.email-reminder');
     Route::post('contributions/{contribution}/whatsapp-reminder', [ContributionWhatsAppReminderController::class, 'send'])
         ->middleware('throttle:10,1')
         ->name('contributions.whatsapp-reminder');

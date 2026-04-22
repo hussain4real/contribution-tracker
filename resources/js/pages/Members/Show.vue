@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { send as sendEmailReminderAction } from '@/actions/App/Http/Controllers/ContributionEmailReminderController';
 import { send as sendWhatsAppReminderAction } from '@/actions/App/Http/Controllers/ContributionWhatsAppReminderController';
 import {
     destroy,
@@ -17,6 +18,7 @@ import {
     CheckCircle2,
     ChevronRight,
     Clock,
+    Mail,
     MessageCircle,
     Pencil,
     Receipt,
@@ -80,42 +82,71 @@ interface Props {
     summary: Summary;
     canManageMembers: boolean;
     canViewContributions: boolean;
+    canSendEmailReminder?: boolean;
     canSendWhatsAppReminder?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
+    canSendEmailReminder: false,
     canSendWhatsAppReminder: false,
 });
 
-const sendingReminderId = ref<number | null>(null);
+const sendingEmailReminderId = ref<number | null>(null);
+const sendingWhatsAppReminderId = ref<number | null>(null);
 
-function sendWhatsAppReminder(contributionId: number) {
-    if (sendingReminderId.value !== null) {
+function handleReminderResponse(page: {
+    props: { flash?: { success?: string; error?: string } };
+}) {
+    const flash = page.props.flash;
+
+    if (flash?.success) {
+        toast.success(flash.success);
+    } else if (flash?.error) {
+        toast.error(flash.error);
+    }
+}
+
+function sendEmailReminder(contributionId: number) {
+    if (sendingEmailReminderId.value !== null) {
         return;
     }
 
-    sendingReminderId.value = contributionId;
+    sendingEmailReminderId.value = contributionId;
+
+    router.post(
+        sendEmailReminderAction(contributionId).url,
+        {},
+        {
+            preserveScroll: true,
+            onSuccess: handleReminderResponse,
+            onError: () => {
+                toast.error('Failed to send email reminder.');
+            },
+            onFinish: () => {
+                sendingEmailReminderId.value = null;
+            },
+        },
+    );
+}
+
+function sendWhatsAppReminder(contributionId: number) {
+    if (sendingWhatsAppReminderId.value !== null) {
+        return;
+    }
+
+    sendingWhatsAppReminderId.value = contributionId;
 
     router.post(
         sendWhatsAppReminderAction(contributionId).url,
         {},
         {
             preserveScroll: true,
-            onSuccess: (page) => {
-                const flash = page.props.flash as
-                    | { success?: string; error?: string }
-                    | undefined;
-                if (flash?.success) {
-                    toast.success(flash.success);
-                } else if (flash?.error) {
-                    toast.error(flash.error);
-                }
-            },
+            onSuccess: handleReminderResponse,
             onError: () => {
                 toast.error('Failed to send WhatsApp reminder.');
             },
             onFinish: () => {
-                sendingReminderId.value = null;
+                sendingWhatsAppReminderId.value = null;
             },
         },
     );
@@ -560,6 +591,34 @@ function restoreMember() {
                                         </Badge>
                                         <button
                                             v-if="
+                                                canSendEmailReminder &&
+                                                member.email &&
+                                                contribution.balance > 0
+                                            "
+                                            type="button"
+                                            :title="`Send email reminder for ${contribution.period_label}`"
+                                            :disabled="
+                                                sendingEmailReminderId ===
+                                                contribution.id
+                                            "
+                                            class="inline-flex h-8 w-8 items-center justify-center rounded-full text-blue-600 transition hover:bg-blue-50 disabled:opacity-50 dark:text-blue-400 dark:hover:bg-blue-900/30"
+                                            @click.stop="
+                                                sendEmailReminder(
+                                                    contribution.id,
+                                                )
+                                            "
+                                        >
+                                            <Mail
+                                                class="h-4 w-4"
+                                                :class="{
+                                                    'animate-pulse':
+                                                        sendingEmailReminderId ===
+                                                        contribution.id,
+                                                }"
+                                            />
+                                        </button>
+                                        <button
+                                            v-if="
                                                 canSendWhatsAppReminder &&
                                                 member.whatsapp_verified &&
                                                 contribution.balance > 0
@@ -567,7 +626,7 @@ function restoreMember() {
                                             type="button"
                                             :title="`Send WhatsApp reminder for ${contribution.period_label}`"
                                             :disabled="
-                                                sendingReminderId ===
+                                                sendingWhatsAppReminderId ===
                                                 contribution.id
                                             "
                                             class="inline-flex h-8 w-8 items-center justify-center rounded-full text-emerald-600 transition hover:bg-emerald-50 disabled:opacity-50 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
@@ -581,7 +640,7 @@ function restoreMember() {
                                                 class="h-4 w-4"
                                                 :class="{
                                                     'animate-pulse':
-                                                        sendingReminderId ===
+                                                        sendingWhatsAppReminderId ===
                                                         contribution.id,
                                                 }"
                                             />

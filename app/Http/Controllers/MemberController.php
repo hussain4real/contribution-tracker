@@ -190,6 +190,7 @@ class MemberController extends Controller
             ],
             'canManageMembers' => Auth::user()?->canManageMembers() ?? false,
             'canViewContributions' => $canViewContributions,
+            'canSendEmailReminder' => Auth::user()?->canRecordPayments() ?? false,
             'canSendWhatsAppReminder' => Auth::user()?->canRecordPayments() ?? false,
         ]);
     }
