@@ -56,10 +56,39 @@ interface Conversation {
 }
 
 interface Message {
-    id: string;
+    id?: string;
     role: string;
     content: string;
-    created_at: string;
+    created_at?: string;
+    tool_calls?: ToolCallMessageData[];
+    tool_results?: ToolResultMessageData[];
+    reasoning_summary?: string;
+}
+
+interface ToolCallMessageData {
+    id: string;
+    name: string;
+    arguments: Record<string, unknown>;
+    result_id?: string | null;
+    reasoning_summary?: Array<{ text?: string } | string> | null;
+}
+
+interface ToolResultMessageData {
+    id: string;
+    name: string;
+    arguments: Record<string, unknown>;
+    result: unknown;
+    result_id?: string | null;
+}
+
+interface AgentActivity {
+    id: string;
+    name: string;
+    label: string;
+    status: 'running' | 'completed';
+    arguments: Record<string, unknown>;
+    result?: unknown;
+    reasoningSummary?: string | null;
 }
 
 interface Props {
@@ -84,9 +113,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 // Chat state
 const messageInput = ref('');
-const chatMessages = ref<{ role: string; content: string }[]>([
-    ...props.messages,
-]);
+const chatMessages = ref<Message[]>([...props.messages]);
 const currentConversationId = ref<string | null>(props.activeConversationId);
 const messagesContainer = ref<HTMLElement | null>(null);
 const showMobileSidebar = ref(false);
@@ -100,6 +127,215 @@ onMounted(() => {
 
 // Parsed streaming text (extracted from SSE text_delta events)
 const parsedStreamContent = ref('');
+const streamedToolCalls = ref<ToolCallMessageData[]>([]);
+const streamedToolResults = ref<ToolResultMessageData[]>([]);
+const streamedReasoningSummary = ref('');
+
+function prettifyToolName(name: string): string {
+    const baseName = name.split('\\').pop() ?? name;
+
+    return baseName
+        .replace(/[_-]+/g, ' ')
+        .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+        .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function normalizeToolArguments(value: unknown): Record<string, unknown> {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+        return value as Record<string, unknown>;
+    }
+
+    return {};
+}
+
+function formatReasoningSummary(summary: unknown): string {
+    if (!summary) {
+        return '';
+    }
+
+    if (typeof summary === 'string') {
+        return summary;
+    }
+
+    if (!Array.isArray(summary)) {
+        return '';
+    }
+
+    return summary
+        .map((item) => {
+            if (typeof item === 'string') {
+                return item;
+            }
+
+            if (item && typeof item === 'object' && 'text' in item) {
+                return String((item as { text?: unknown }).text ?? '');
+            }
+
+            return '';
+        })
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+}
+
+function formatArgumentValue(value: unknown): string {
+    if (typeof value === 'string') {
+        return value.length > 36 ? `${value.slice(0, 33)}...` : value;
+    }
+
+    if (typeof value === 'number' || typeof value === 'boolean') {
+        return String(value);
+    }
+
+    if (Array.isArray(value)) {
+        return value.length === 0
+            ? '[]'
+            : `${value.length} item${value.length === 1 ? '' : 's'}`;
+    }
+
+    if (value && typeof value === 'object') {
+        return 'Object';
+    }
+
+    return '—';
+}
+
+function summarizeToolArguments(
+    argumentsValue: Record<string, unknown>,
+): Array<{ key: string; value: string }> {
+    return Object.entries(argumentsValue)
+        .filter(
+            ([, value]) =>
+                value !== null && value !== undefined && value !== '',
+        )
+        .slice(0, 3)
+        .map(([key, value]) => ({
+            key: key.replace(/_/g, ' '),
+            value: formatArgumentValue(value),
+        }));
+}
+
+function summarizeToolResult(result: unknown): string | null {
+    let normalized = result;
+
+    if (typeof normalized === 'string') {
+        const stringResult = normalized;
+
+        try {
+            normalized = JSON.parse(stringResult) as unknown;
+        } catch {
+            return stringResult.length > 96
+                ? `${stringResult.slice(0, 93)}...`
+                : stringResult;
+        }
+    }
+
+    if (
+        !normalized ||
+        typeof normalized !== 'object' ||
+        Array.isArray(normalized)
+    ) {
+        return null;
+    }
+
+    const data = normalized as Record<string, unknown>;
+
+    if (typeof data.error === 'string' && data.error !== '') {
+        return data.error;
+    }
+
+    if (typeof data.message === 'string' && data.message !== '') {
+        return data.message;
+    }
+
+    if (typeof data.summary === 'string' && data.summary !== '') {
+        return data.summary;
+    }
+
+    if (typeof data.period === 'string' && data.period !== '') {
+        return `Retrieved data for ${data.period}.`;
+    }
+
+    const fieldCount = Object.keys(data).length;
+
+    return fieldCount > 0
+        ? `Returned ${fieldCount} field${fieldCount === 1 ? '' : 's'}.`
+        : null;
+}
+
+function normalizeActivityCollection<T>(items: unknown): T[] {
+    if (Array.isArray(items)) {
+        return items as T[];
+    }
+
+    if (items && typeof items === 'object') {
+        return Object.values(items as Record<string, T>);
+    }
+
+    return [];
+}
+
+function buildAgentActivities(
+    toolCalls: unknown = [],
+    toolResults: unknown = [],
+): AgentActivity[] {
+    const normalizedToolCalls =
+        normalizeActivityCollection<ToolCallMessageData>(toolCalls);
+    const normalizedToolResults =
+        normalizeActivityCollection<ToolResultMessageData>(toolResults);
+
+    const resultsById = new Map(
+        normalizedToolResults.map((toolResult) => [toolResult.id, toolResult]),
+    );
+
+    return normalizedToolCalls.map((toolCall) => {
+        const matchingResult = resultsById.get(toolCall.id);
+
+        return {
+            id: toolCall.id,
+            name: toolCall.name,
+            label: prettifyToolName(toolCall.name),
+            status: matchingResult ? 'completed' : 'running',
+            arguments: normalizeToolArguments(toolCall.arguments),
+            result: matchingResult?.result,
+            reasoningSummary: formatReasoningSummary(
+                toolCall.reasoning_summary,
+            ),
+        };
+    });
+}
+
+function getMessageActivities(message: Message): AgentActivity[] {
+    return buildAgentActivities(
+        message.tool_calls ?? [],
+        message.tool_results ?? [],
+    );
+}
+
+function getMessageReasoningSummary(message: Message): string {
+    if (message.reasoning_summary?.trim()) {
+        return message.reasoning_summary.trim();
+    }
+
+    return normalizeActivityCollection<ToolCallMessageData>(message.tool_calls)
+        .map((toolCall) => formatReasoningSummary(toolCall.reasoning_summary))
+        .filter((summary) => summary !== '')
+        .join(' ')
+        .trim();
+}
+
+function hasMessageActivity(message: Message): boolean {
+    return (
+        getMessageActivities(message).length > 0 ||
+        getMessageReasoningSummary(message) !== ''
+    );
+}
+
+function resetStreamActivity(): void {
+    streamedToolCalls.value = [];
+    streamedToolResults.value = [];
+    streamedReasoningSummary.value = '';
+}
 
 /**
  * Parse raw SSE chunk and extract text deltas from AI SDK stream events.
@@ -107,17 +343,91 @@ const parsedStreamContent = ref('');
  */
 function parseSSEChunk(rawChunk: string): void {
     const lines = rawChunk.split('\n');
+
     for (const line of lines) {
         const trimmed = line.trim();
-        if (!trimmed.startsWith('data:')) continue;
+
+        if (!trimmed.startsWith('data:')) {
+            continue;
+        }
 
         const payload = trimmed.slice(5).trim();
-        if (payload === '[DONE]') continue;
+
+        if (payload === '[DONE]') {
+            continue;
+        }
 
         try {
             const event = JSON.parse(payload);
-            if (event.type === 'text_delta' && event.delta) {
+
+            if (
+                (event.type === 'text_delta' || event.type === 'text-delta') &&
+                event.delta
+            ) {
                 parsedStreamContent.value += event.delta;
+
+                continue;
+            }
+
+            if (
+                (event.type === 'reasoning_delta' ||
+                    event.type === 'reasoning-delta') &&
+                event.delta
+            ) {
+                streamedReasoningSummary.value += event.delta;
+
+                continue;
+            }
+
+            if (
+                event.type === 'tool-input-available' &&
+                event.toolCallId &&
+                event.toolName
+            ) {
+                const toolCall: ToolCallMessageData = {
+                    id: String(event.toolCallId),
+                    name: String(event.toolName),
+                    arguments: normalizeToolArguments(event.input),
+                };
+
+                const existingIndex = streamedToolCalls.value.findIndex(
+                    (existingToolCall) => existingToolCall.id === toolCall.id,
+                );
+
+                if (existingIndex === -1) {
+                    streamedToolCalls.value.push(toolCall);
+                } else {
+                    streamedToolCalls.value[existingIndex] = {
+                        ...streamedToolCalls.value[existingIndex],
+                        ...toolCall,
+                    };
+                }
+
+                continue;
+            }
+
+            if (event.type === 'tool-output-available' && event.toolCallId) {
+                const toolCallId = String(event.toolCallId);
+                const existingToolCall = streamedToolCalls.value.find(
+                    (toolCall) => toolCall.id === toolCallId,
+                );
+                const toolResult: ToolResultMessageData = {
+                    id: toolCallId,
+                    name: existingToolCall?.name ?? 'Tool',
+                    arguments: existingToolCall?.arguments ?? {},
+                    result: event.output,
+                };
+
+                const existingIndex = streamedToolResults.value.findIndex(
+                    (existingToolResult) =>
+                        existingToolResult.id === toolCallId,
+                );
+
+                if (existingIndex === -1) {
+                    streamedToolResults.value.push(toolResult);
+                } else {
+                    streamedToolResults.value[existingIndex] = toolResult;
+                }
             }
         } catch {
             // skip non-JSON lines
@@ -149,22 +459,43 @@ function createStream() {
             parseSSEChunk(chunk);
         },
         onFinish: () => {
-            if (parsedStreamContent.value) {
+            if (
+                parsedStreamContent.value ||
+                streamedToolCalls.value.length > 0 ||
+                streamedReasoningSummary.value.trim() !== ''
+            ) {
                 chatMessages.value.push({
+                    id: crypto.randomUUID(),
                     role: 'assistant',
                     content: parsedStreamContent.value,
+                    tool_calls: [...streamedToolCalls.value],
+                    tool_results: [...streamedToolResults.value],
+                    reasoning_summary:
+                        streamedReasoningSummary.value.trim() || undefined,
+                    created_at: new Date().toISOString(),
                 });
                 parsedStreamContent.value = '';
             }
+
+            resetStreamActivity();
             clearData();
 
-            // Reload conversations and pick up the new conversation ID
-            router.reload({
-                only: ['conversations', 'activeConversationId'],
+            // Reload conversations, active ID, and messages so the freshly
+            // persisted assistant message (with tool activity) replaces the
+            // in-memory placeholder pushed above.
+            const reloadOptions: Parameters<typeof router.reload>[0] = {
+                only: ['conversations', 'activeConversationId', 'messages'],
                 onSuccess: (page) => {
-                    const updatedConversations = (
-                        page.props as Record<string, unknown>
-                    ).conversations as Conversation[] | undefined;
+                    const props = page.props as Record<string, unknown>;
+                    const updatedConversations = props.conversations as
+                        | Conversation[]
+                        | undefined;
+                    const updatedMessages = props.messages as
+                        | Message[]
+                        | undefined;
+
+                    let resolvedConversationId =
+                        currentConversationId.value ?? null;
 
                     if (updatedConversations?.length) {
                         const currentExists =
@@ -177,6 +508,7 @@ function createStream() {
                             // Current ID is stale or null — set to the most recent conversation
                             currentConversationId.value =
                                 updatedConversations[0].id;
+                            resolvedConversationId = updatedConversations[0].id;
                             window.history.replaceState(
                                 {},
                                 '',
@@ -184,8 +516,33 @@ function createStream() {
                             );
                         }
                     }
+
+                    if (updatedMessages && updatedMessages.length > 0) {
+                        chatMessages.value = [...updatedMessages];
+                        return;
+                    }
+
+                    // Brand-new conversation: the first reload didn't have
+                    // ?conversation= in the URL, so messages came back empty.
+                    // Fetch them now that we know the ID.
+                    if (resolvedConversationId) {
+                        router.reload({
+                            only: ['messages'],
+                            data: { conversation: resolvedConversationId },
+                            onSuccess: (innerPage) => {
+                                const refreshed = (
+                                    innerPage.props as Record<string, unknown>
+                                ).messages as Message[] | undefined;
+                                if (refreshed && refreshed.length > 0) {
+                                    chatMessages.value = [...refreshed];
+                                }
+                            },
+                        });
+                    }
                 },
-            });
+            };
+
+            router.reload(reloadOptions);
         },
     });
 }
@@ -195,6 +552,14 @@ const { isFetching, isStreaming, send, cancel, clearData } = createStream();
 // Computed streaming message for display
 const streamingContent = computed(() => parsedStreamContent.value || '');
 const isProcessing = computed(() => isFetching.value || isStreaming.value);
+const streamingAgentActivities = computed(() =>
+    buildAgentActivities(streamedToolCalls.value, streamedToolResults.value),
+);
+const hasStreamingActivity = computed(
+    () =>
+        streamingAgentActivities.value.length > 0 ||
+        streamedReasoningSummary.value.trim() !== '',
+);
 
 // Detect if the last assistant message is asking for confirmation
 const pendingConfirmation = computed(() => {
@@ -205,12 +570,27 @@ const pendingConfirmation = computed(() => {
     if (lastMessage.role !== 'assistant') return false;
 
     const content = lastMessage.content.toLowerCase();
-    return (
-        content.includes('please confirm') ||
-        content.includes('would you like me to go ahead') ||
-        content.includes('confirm to proceed') ||
-        content.includes('would you like to proceed')
-    );
+    const patterns = [
+        'please confirm',
+        'would you like me to go ahead',
+        'would you like me to proceed',
+        'confirm to proceed',
+        'would you like to proceed',
+        'should i proceed',
+        'shall i proceed',
+        'do you want me to proceed',
+        'do you want me to go ahead',
+        'let me know if i should proceed',
+        'let me know if you would like me to',
+        'let me know if you want me to',
+        'shall i go ahead',
+        'should i go ahead',
+        'i have prepared',
+        'ready to record',
+        'ready to save',
+    ];
+
+    return patterns.some((phrase) => content.includes(phrase));
 });
 
 // Phonetic correction for speech recognition
@@ -557,6 +937,7 @@ function sendConfirmation(confirmed: boolean): void {
 
     chatMessages.value.push({ role: 'user', content: message });
     parsedStreamContent.value = '';
+    resetStreamActivity();
 
     send({
         message,
@@ -580,6 +961,14 @@ watch([chatMessages, parsedStreamContent], () => scrollToBottom(), {
     deep: true,
 });
 
+watch(
+    [streamedToolCalls, streamedToolResults, streamedReasoningSummary],
+    () => scrollToBottom(),
+    {
+        deep: true,
+    },
+);
+
 // Send message
 function sendMessage(): void {
     const message = messageInput.value.trim();
@@ -588,6 +977,7 @@ function sendMessage(): void {
     chatMessages.value.push({ role: 'user', content: message });
     messageInput.value = '';
     parsedStreamContent.value = '';
+    resetStreamActivity();
 
     send({
         message,
@@ -609,6 +999,7 @@ function handleKeydown(event: KeyboardEvent): void {
 function startNewConversation(): void {
     currentConversationId.value = null;
     chatMessages.value = [];
+    resetStreamActivity();
     clearData();
     cancel();
     router.visit(aiIndex().url);
@@ -839,10 +1230,143 @@ function confirmDelete(): void {
                                     {{ msg.content }}
                                 </div>
                                 <div
-                                    v-else
+                                    v-else-if="msg.content"
                                     class="prose prose-sm max-w-none dark:prose-invert prose-headings:my-2 prose-p:my-1 prose-pre:my-2 prose-ol:my-1 prose-ul:my-1 prose-li:my-0.5"
                                     v-html="renderMarkdown(msg.content)"
                                 />
+
+                                <details
+                                    v-if="
+                                        msg.role === 'assistant' &&
+                                        hasMessageActivity(msg)
+                                    "
+                                    class="mt-3 rounded-md border border-gray-200/80 bg-white/70 p-3 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-300"
+                                >
+                                    <summary
+                                        class="cursor-pointer font-medium marker:text-gray-400 dark:marker:text-gray-500"
+                                    >
+                                        Agent activity
+                                        <span
+                                            v-if="
+                                                getMessageActivities(msg)
+                                                    .length > 0
+                                            "
+                                            class="ml-1 text-gray-500 dark:text-gray-400"
+                                        >
+                                            ·
+                                            {{
+                                                getMessageActivities(msg).length
+                                            }}
+                                            step{{
+                                                getMessageActivities(msg)
+                                                    .length === 1
+                                                    ? ''
+                                                    : 's'
+                                            }}
+                                        </span>
+                                    </summary>
+
+                                    <div class="mt-3 space-y-3">
+                                        <p
+                                            v-if="
+                                                getMessageReasoningSummary(msg)
+                                            "
+                                            class="rounded-md bg-gray-100 px-3 py-2 leading-relaxed text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+                                        >
+                                            {{
+                                                getMessageReasoningSummary(msg)
+                                            }}
+                                        </p>
+
+                                        <div
+                                            v-for="activity in getMessageActivities(
+                                                msg,
+                                            )"
+                                            :key="activity.id"
+                                            class="rounded-md border border-gray-200/70 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/80"
+                                        >
+                                            <div
+                                                class="flex items-start justify-between gap-3"
+                                            >
+                                                <div class="min-w-0">
+                                                    <p
+                                                        class="font-medium text-gray-800 dark:text-gray-100"
+                                                    >
+                                                        {{ activity.label }}
+                                                    </p>
+
+                                                    <div
+                                                        v-if="
+                                                            summarizeToolArguments(
+                                                                activity.arguments,
+                                                            ).length
+                                                        "
+                                                        class="mt-2 flex flex-wrap gap-1.5"
+                                                    >
+                                                        <span
+                                                            v-for="argument in summarizeToolArguments(
+                                                                activity.arguments,
+                                                            )"
+                                                            :key="`${activity.id}-${argument.key}`"
+                                                            class="rounded-full bg-white px-2 py-1 text-[11px] text-gray-600 dark:bg-gray-900 dark:text-gray-300"
+                                                        >
+                                                            <span
+                                                                class="font-medium"
+                                                                >{{
+                                                                    argument.key
+                                                                }}:</span
+                                                            >
+                                                            {{ argument.value }}
+                                                        </span>
+                                                    </div>
+
+                                                    <p
+                                                        v-if="
+                                                            activity.reasoningSummary
+                                                        "
+                                                        class="mt-2 leading-relaxed text-gray-500 dark:text-gray-400"
+                                                    >
+                                                        {{
+                                                            activity.reasoningSummary
+                                                        }}
+                                                    </p>
+
+                                                    <p
+                                                        v-if="
+                                                            summarizeToolResult(
+                                                                activity.result,
+                                                            )
+                                                        "
+                                                        class="mt-2 leading-relaxed text-gray-500 dark:text-gray-400"
+                                                    >
+                                                        {{
+                                                            summarizeToolResult(
+                                                                activity.result,
+                                                            )
+                                                        }}
+                                                    </p>
+                                                </div>
+
+                                                <span
+                                                    class="shrink-0 rounded-full px-2 py-1 text-[11px] font-medium"
+                                                    :class="
+                                                        activity.status ===
+                                                        'completed'
+                                                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                                                            : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                                                    "
+                                                >
+                                                    {{
+                                                        activity.status ===
+                                                        'completed'
+                                                            ? 'Done'
+                                                            : 'Running'
+                                                    }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </details>
 
                                 <!-- Confirmation action buttons -->
                                 <div
@@ -904,6 +1428,131 @@ function confirmDelete(): void {
                                     <Skeleton class="h-4 w-36" />
                                     <Skeleton class="h-4 w-24" />
                                 </div>
+
+                                <details
+                                    v-if="hasStreamingActivity"
+                                    open
+                                    class="mt-3 rounded-md border border-gray-200/80 bg-white/70 p-3 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-300"
+                                >
+                                    <summary
+                                        class="cursor-pointer font-medium marker:text-gray-400 dark:marker:text-gray-500"
+                                    >
+                                        Agent activity
+                                        <span
+                                            v-if="
+                                                streamingAgentActivities.length >
+                                                0
+                                            "
+                                            class="ml-1 text-gray-500 dark:text-gray-400"
+                                        >
+                                            ·
+                                            {{
+                                                streamingAgentActivities.length
+                                            }}
+                                            step{{
+                                                streamingAgentActivities.length ===
+                                                1
+                                                    ? ''
+                                                    : 's'
+                                            }}
+                                        </span>
+                                    </summary>
+
+                                    <div class="mt-3 space-y-3">
+                                        <p
+                                            v-if="streamedReasoningSummary"
+                                            class="rounded-md bg-gray-100 px-3 py-2 leading-relaxed text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+                                        >
+                                            {{ streamedReasoningSummary }}
+                                        </p>
+
+                                        <div
+                                            v-for="activity in streamingAgentActivities"
+                                            :key="activity.id"
+                                            class="rounded-md border border-gray-200/70 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/80"
+                                        >
+                                            <div
+                                                class="flex items-start justify-between gap-3"
+                                            >
+                                                <div class="min-w-0">
+                                                    <p
+                                                        class="font-medium text-gray-800 dark:text-gray-100"
+                                                    >
+                                                        {{ activity.label }}
+                                                    </p>
+
+                                                    <div
+                                                        v-if="
+                                                            summarizeToolArguments(
+                                                                activity.arguments,
+                                                            ).length
+                                                        "
+                                                        class="mt-2 flex flex-wrap gap-1.5"
+                                                    >
+                                                        <span
+                                                            v-for="argument in summarizeToolArguments(
+                                                                activity.arguments,
+                                                            )"
+                                                            :key="`${activity.id}-${argument.key}`"
+                                                            class="rounded-full bg-white px-2 py-1 text-[11px] text-gray-600 dark:bg-gray-900 dark:text-gray-300"
+                                                        >
+                                                            <span
+                                                                class="font-medium"
+                                                                >{{
+                                                                    argument.key
+                                                                }}:</span
+                                                            >
+                                                            {{ argument.value }}
+                                                        </span>
+                                                    </div>
+
+                                                    <p
+                                                        v-if="
+                                                            activity.reasoningSummary
+                                                        "
+                                                        class="mt-2 leading-relaxed text-gray-500 dark:text-gray-400"
+                                                    >
+                                                        {{
+                                                            activity.reasoningSummary
+                                                        }}
+                                                    </p>
+
+                                                    <p
+                                                        v-if="
+                                                            summarizeToolResult(
+                                                                activity.result,
+                                                            )
+                                                        "
+                                                        class="mt-2 leading-relaxed text-gray-500 dark:text-gray-400"
+                                                    >
+                                                        {{
+                                                            summarizeToolResult(
+                                                                activity.result,
+                                                            )
+                                                        }}
+                                                    </p>
+                                                </div>
+
+                                                <span
+                                                    class="shrink-0 rounded-full px-2 py-1 text-[11px] font-medium"
+                                                    :class="
+                                                        activity.status ===
+                                                        'completed'
+                                                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                                                            : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                                                    "
+                                                >
+                                                    {{
+                                                        activity.status ===
+                                                        'completed'
+                                                            ? 'Done'
+                                                            : 'Running'
+                                                    }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </details>
                             </div>
                         </div>
                     </div>

@@ -22,6 +22,22 @@ use Laravel\Ai\Transcription;
 class AiChatController extends Controller
 {
     /**
+     * Normalize stored JSON activity payloads to indexed arrays.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function normalizeActivityPayload(?string $payload): array
+    {
+        $decoded = json_decode($payload ?? '[]', true);
+
+        if (! is_array($decoded)) {
+            return [];
+        }
+
+        return array_values($decoded);
+    }
+
+    /**
      * Display the AI chat page with conversation history.
      */
     public function index(Request $request): Response
@@ -48,7 +64,15 @@ class AiChatController extends Controller
                 $messages = DB::table('agent_conversation_messages')
                     ->where('conversation_id', $activeConversationId)
                     ->orderBy('created_at')
-                    ->get(['id', 'role', 'content', 'created_at'])
+                    ->get(['id', 'role', 'content', 'created_at', 'tool_calls', 'tool_results'])
+                    ->map(fn (object $message) => [
+                        'id' => $message->id,
+                        'role' => $message->role,
+                        'content' => $message->content,
+                        'created_at' => $message->created_at,
+                        'tool_calls' => $this->normalizeActivityPayload($message->tool_calls),
+                        'tool_results' => $this->normalizeActivityPayload($message->tool_results),
+                    ])
                     ->toArray();
             } else {
                 $activeConversationId = null;
