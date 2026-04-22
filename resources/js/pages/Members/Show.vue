@@ -243,6 +243,18 @@ function canSendAnyReminder(contribution: Contribution): boolean {
     return canSendEmail(contribution) || canSendWhatsApp(contribution);
 }
 
+function hasSingleEmailReminder(contribution: Contribution): boolean {
+    return canSendEmail(contribution) && !canSendWhatsApp(contribution);
+}
+
+function hasSingleWhatsAppReminder(contribution: Contribution): boolean {
+    return !canSendEmail(contribution) && canSendWhatsApp(contribution);
+}
+
+function hasMultipleReminderChannels(contribution: Contribution): boolean {
+    return canSendEmail(contribution) && canSendWhatsApp(contribution);
+}
+
 function isSendingReminder(contributionId: number): boolean {
     return (
         sendingEmailReminderId.value === contributionId ||
@@ -625,9 +637,75 @@ function restoreMember() {
                                         >
                                             {{ contribution.status_label }}
                                         </Badge>
-                                        <DropdownMenu
+                                        <Button
                                             v-if="
-                                                canSendAnyReminder(contribution)
+                                                hasSingleEmailReminder(
+                                                    contribution,
+                                                )
+                                            "
+                                            variant="outline"
+                                            size="sm"
+                                            class="h-8 gap-1 px-2 text-xs text-blue-600 hover:bg-blue-50 hover:text-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/30 dark:hover:text-blue-300"
+                                            :disabled="
+                                                sendingEmailReminderId ===
+                                                contribution.id
+                                            "
+                                            :title="`Send email reminder for ${contribution.period_label}`"
+                                            @click.stop="
+                                                sendEmailReminder(
+                                                    contribution.id,
+                                                )
+                                            "
+                                        >
+                                            <Mail
+                                                class="h-3.5 w-3.5"
+                                                :class="{
+                                                    'animate-pulse':
+                                                        sendingEmailReminderId ===
+                                                        contribution.id,
+                                                }"
+                                            />
+                                            <span class="hidden sm:inline"
+                                                >Email</span
+                                            >
+                                        </Button>
+                                        <Button
+                                            v-else-if="
+                                                hasSingleWhatsAppReminder(
+                                                    contribution,
+                                                )
+                                            "
+                                            variant="outline"
+                                            size="sm"
+                                            class="h-8 gap-1 px-2 text-xs text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-300"
+                                            :disabled="
+                                                sendingWhatsAppReminderId ===
+                                                contribution.id
+                                            "
+                                            :title="`Send WhatsApp reminder for ${contribution.period_label}`"
+                                            @click.stop="
+                                                sendWhatsAppReminder(
+                                                    contribution.id,
+                                                )
+                                            "
+                                        >
+                                            <MessageCircle
+                                                class="h-3.5 w-3.5"
+                                                :class="{
+                                                    'animate-pulse':
+                                                        sendingWhatsAppReminderId ===
+                                                        contribution.id,
+                                                }"
+                                            />
+                                            <span class="hidden sm:inline"
+                                                >WhatsApp</span
+                                            >
+                                        </Button>
+                                        <DropdownMenu
+                                            v-else-if="
+                                                hasMultipleReminderChannels(
+                                                    contribution,
+                                                )
                                             "
                                         >
                                             <DropdownMenuTrigger as-child>
@@ -653,7 +731,7 @@ function restoreMember() {
                                                     />
                                                     <span
                                                         class="hidden sm:inline"
-                                                        >Remind</span
+                                                        >Remind via</span
                                                     >
                                                     <ChevronDown
                                                         class="h-3 w-3 opacity-60"
