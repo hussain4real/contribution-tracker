@@ -267,6 +267,62 @@ test('the AI chat index loads messages for an active conversation', function () 
         );
 });
 
+test('the AI chat index includes stored tool activity for assistant messages', function () {
+    $user = User::factory()->create();
+    $conversationId = (string) Str::uuid();
+
+    DB::table('agent_conversations')->insert([
+        'id' => $conversationId,
+        'user_id' => $user->id,
+        'title' => 'Tool Activity Chat',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => (string) Str::uuid(),
+        'conversation_id' => $conversationId,
+        'user_id' => $user->id,
+        'agent' => 'App\\Ai\\Agents\\FamilyAssistant',
+        'role' => 'assistant',
+        'content' => 'I checked the contribution summary for you.',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            [
+                'id' => 'tool-call-1',
+                'name' => 'GetContributionSummary',
+                'arguments' => ['year' => 2026],
+                'result_id' => null,
+                'reasoning_summary' => [],
+            ],
+        ], JSON_THROW_ON_ERROR),
+        'tool_results' => json_encode([
+            '2' => [
+                'id' => 'tool-call-1',
+                'name' => 'GetContributionSummary',
+                'arguments' => ['year' => 2026],
+                'result' => ['period' => 'Year 2026'],
+                'result_id' => null,
+            ],
+        ], JSON_THROW_ON_ERROR),
+        'usage' => '{}',
+        'meta' => '{}',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('ai.index', ['conversation' => $conversationId]))
+        ->assertSuccessful()
+        ->assertInertia(fn ($page) => $page
+            ->component('Ai/Chat')
+            ->where('activeConversationId', $conversationId)
+            ->where('messages.0.tool_calls.0.name', 'GetContributionSummary')
+            ->where('messages.0.tool_results.0.id', 'tool-call-1')
+            ->where('messages.0.tool_results.0.result.period', 'Year 2026')
+        );
+});
+
 test('rename validates title is required', function () {
     $user = User::factory()->create();
     $conversationId = (string) Str::uuid();
