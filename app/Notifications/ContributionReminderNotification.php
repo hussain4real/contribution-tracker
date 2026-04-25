@@ -9,7 +9,14 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Queue\Attributes\MaxExceptions;
+use Illuminate\Queue\Attributes\Timeout;
+use Illuminate\Queue\Attributes\Tries;
+use Illuminate\Queue\Middleware\RateLimited;
 
+#[Tries(5)]
+#[Timeout(60)]
+#[MaxExceptions(3)]
 class ContributionReminderNotification extends Notification implements ShouldQueue
 {
     use Queueable;
@@ -59,6 +66,30 @@ class ContributionReminderNotification extends Notification implements ShouldQue
     public function via(object $notifiable): array
     {
         return $this->channels ?? ['mail', 'database', WhatsAppChannel::class];
+    }
+
+    /**
+     * Get the middleware the queued notification job should pass through.
+     *
+     * @return array<int, object>
+     */
+    public function middleware(object $notifiable, string $channel): array
+    {
+        if ($channel !== WhatsAppChannel::class) {
+            return [];
+        }
+
+        return [(new RateLimited('whatsapp-notifications'))->releaseAfter(60)];
+    }
+
+    /**
+     * Calculate the number of seconds to wait before retrying the notification.
+     *
+     * @return list<int>
+     */
+    public function backoff(): array
+    {
+        return [1, 5, 10];
     }
 
     /**

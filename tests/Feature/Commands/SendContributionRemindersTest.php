@@ -13,7 +13,7 @@ describe('Send Contribution Reminders Command', function () {
 
         $family = Family::factory()->create();
         $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
-        Contribution::factory()->forUser($member)->currentMonth()->create();
+        $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
 
         $this->artisan('contributions:remind', ['--day' => 25])
             ->assertSuccessful();
@@ -21,6 +21,8 @@ describe('Send Contribution Reminders Command', function () {
         Notification::assertSentTo($member, ContributionReminderNotification::class, function ($notification) {
             return $notification->type === 'reminder';
         });
+
+        expect($contribution->fresh()->reminder_sent_at)->not->toBeNull();
     });
 
     it('sends follow_up notifications when day is 28', function () {
@@ -28,7 +30,7 @@ describe('Send Contribution Reminders Command', function () {
 
         $family = Family::factory()->create();
         $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
-        Contribution::factory()->forUser($member)->currentMonth()->create();
+        $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
 
         $this->artisan('contributions:remind', ['--day' => 28])
             ->assertSuccessful();
@@ -36,6 +38,45 @@ describe('Send Contribution Reminders Command', function () {
         Notification::assertSentTo($member, ContributionReminderNotification::class, function ($notification) {
             return $notification->type === 'follow_up';
         });
+
+        expect($contribution->fresh()->follow_up_sent_at)->not->toBeNull();
+    });
+
+    it('does not send duplicate reminders when rerun', function () {
+        Notification::fake();
+
+        $family = Family::factory()->create();
+        $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
+
+        $this->artisan('contributions:remind', ['--day' => 25])
+            ->assertSuccessful();
+
+        $this->artisan('contributions:remind', ['--day' => 25])
+            ->expectsOutput('Sent 0 reminder notifications.')
+            ->assertSuccessful();
+
+        Notification::assertSentToTimes($member, ContributionReminderNotification::class, 1);
+        expect($contribution->fresh()->reminder_sent_at)->not->toBeNull();
+    });
+
+    it('tracks follow-up reminders independently from early reminders', function () {
+        Notification::fake();
+
+        $family = Family::factory()->create();
+        $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($member)->currentMonth()->create([
+            'reminder_sent_at' => now(),
+        ]);
+
+        $this->artisan('contributions:remind', ['--day' => 28])
+            ->assertSuccessful();
+
+        Notification::assertSentTo($member, ContributionReminderNotification::class, function ($notification) {
+            return $notification->type === 'follow_up';
+        });
+
+        expect($contribution->fresh()->follow_up_sent_at)->not->toBeNull();
     });
 
     it('skips members who have fully paid', function () {

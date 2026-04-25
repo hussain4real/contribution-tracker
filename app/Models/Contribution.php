@@ -31,6 +31,8 @@ class Contribution extends Model
         'month',
         'expected_amount',
         'due_date',
+        'reminder_sent_at',
+        'follow_up_sent_at',
     ];
 
     /**
@@ -45,6 +47,8 @@ class Contribution extends Model
             'month' => 'integer',
             'expected_amount' => 'integer',
             'due_date' => 'date',
+            'reminder_sent_at' => 'datetime',
+            'follow_up_sent_at' => 'datetime',
         ];
     }
 
