@@ -8,6 +8,7 @@ use App\Models\Payment;
 use App\Models\User;
 use App\Notifications\ContributionReminderNotification;
 use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Queue\Middleware\RateLimited;
 
 describe('ContributionReminderNotification', function () {
     it('sends via mail, database, and whatsapp channels', function () {
@@ -18,6 +19,18 @@ describe('ContributionReminderNotification', function () {
         $notification = new ContributionReminderNotification($contribution, 'reminder');
 
         expect($notification->via($user))->toBe(['mail', 'database', WhatsAppChannel::class]);
+    });
+
+    it('rate limits whatsapp delivery and retries with backoff', function () {
+        $family = Family::factory()->create();
+        $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($user)->currentMonth()->create();
+
+        $notification = new ContributionReminderNotification($contribution, 'reminder');
+
+        expect($notification->middleware($user, 'mail'))->toBe([])
+            ->and($notification->middleware($user, WhatsAppChannel::class)[0])->toBeInstanceOf(RateLimited::class)
+            ->and($notification->backoff())->toBe([1, 5, 10]);
     });
 
     it('builds correct mail content for reminder type', function () {

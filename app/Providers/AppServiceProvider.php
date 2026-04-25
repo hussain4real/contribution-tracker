@@ -3,9 +3,11 @@
 namespace App\Providers;
 
 use App\Models\User;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\LazyLoadingViolationException;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Inertia\ExceptionResponse;
 use Inertia\Inertia;
@@ -18,6 +20,11 @@ class AppServiceProvider extends ServiceProvider
         // Gate for generating reports
         Gate::define('generate-reports', function (User $user) {
             return $user->role->canGenerateReports();
+        });
+
+        RateLimiter::for('whatsapp-notifications', function (object $job): Limit {
+            return Limit::perMinute(max(1, (int) config('services.whatsapp.rate_limit_per_minute', 60)))
+                ->by('whatsapp-notifications');
         });
 
         Inertia::handleExceptionsUsing(function (ExceptionResponse $response) {
