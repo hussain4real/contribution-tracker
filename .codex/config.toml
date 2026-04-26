@@ -1,3 +1,4 @@
+sandbox_mode = "workspace-write"
 [mcp_servers.laravel-boost]
 command = "php"
 args = ["artisan", "boost:mcp"]
@@ -9,3 +10,6 @@ approval_mode = "approve"
 [mcp_servers.nightwatch]
 command = "npx"
 args = ["-y", "mcp-remote", "https://nightwatch.laravel.com/mcp"]
+
+[sandbox_workspace_write]
+network_access = true
