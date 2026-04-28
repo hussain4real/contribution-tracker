@@ -1,0 +1,60 @@
+%%{init: { "theme": "base", "themeVariables": { "fontSize": "16pt" }, "flowchart": { "nodeSpacing": 55, "rankSpacing": 55 } }}%%
+
+flowchart TB
+    classDef terminator fill:#1f3b64,stroke:#1f3b64,color:#ffffff,stroke-width:1.2px;
+    classDef process fill:#ffffff,stroke:#355e9a,color:#17335c,stroke-width:1.2px;
+    classDef decision fill:#fff7e8,stroke:#a66a00,color:#6b4200,stroke-width:1.2px;
+    classDef error fill:#fef2f2,stroke:#b91c1c,color:#7f1d1d,stroke-width:1.2px;
+
+    A([Start]) --> B{"Payment source?"}
+
+    subgraph ROW1[" "]
+        direction LR
+        C["Manual: Admin / Secretary<br/>records payment"]
+        D["Online: Member selects<br/>unpaid contributions"]
+        E["Process Paystack checkout<br/>and callback / webhook"]
+        H{"Valid status<br/>and amount?"}
+        X["Mark failed / review later"]
+        T([End: payment not allocated])
+    end
+
+    subgraph ROW2[" "]
+        direction LR
+        J["Send payment to<br/>allocation service"]
+        K["Load incomplete contributions<br/>oldest month first"]
+        L{"Outstanding balance<br/>exists?"}
+    end
+
+    subgraph LOOP["Allocation Loop"]
+        direction LR
+        M["Apply payment to<br/>oldest balance"]
+        N{"Amount still<br/>remaining?"}
+        O["Move to next unpaid<br/>or future month"]
+        Q["Create current month<br/>contribution if needed"]
+        P["Persist payment<br/>records"]
+        R["Refresh reports, dashboard,<br/>and member status"]
+        U["Send email / WhatsApp notification<br/>(when required)"]
+        S([End: allocation complete])
+    end
+
+    B -->|Manual| C
+    B -->|Online| D
+    D --> E --> H
+    H -->|No| X --> T
+    H -->|Yes| J
+    C --> J
+    J --> K --> L
+
+    L -->|Yes| M
+    M --> N
+    N -->|Yes| O --> M
+    N -->|No| P
+    L -->|No| Q --> P
+    P --> R --> U --> S
+
+    class A,S,T terminator;
+    class C,D,E,J,K,M,O,P,Q,R,U process;
+    class B,H,L,N decision;
+    class X error;
+    style ROW1 fill:transparent,stroke:transparent
+    style ROW2 fill:transparent,stroke:transparent

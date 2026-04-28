@@ -1,0 +1,80 @@
+%%{init: { "theme": "base", "themeVariables": { "fontSize": "16pt" }, "flowchart": { "nodeSpacing": 75, "rankSpacing": 70 } }}%%
+
+flowchart TB
+    classDef actor fill:#f8fafc,stroke:#1f3b64,color:#1f3b64,stroke-width:1px;
+    classDef usecase fill:#ffffff,stroke:#355e9a,color:#17335c,stroke-width:1.2px,rx:28,ry:28;
+    classDef boundary fill:#f8fbff,stroke:#1f3b64,color:#16263f,stroke-width:1.4px;
+    classDef external fill:#fff7e8,stroke:#a66a00,color:#6b4200,stroke-width:1.2px;
+    classDef planned fill:#fdf2f8,stroke:#be185d,color:#831843,stroke-dasharray: 5 5;
+
+    subgraph ACTORS["Primary Actors"]
+        direction LR
+        PSA["Platform Super Admin"]
+        FA["Family Admin"]
+        FS["Financial Secretary"]
+        MB["Member"]
+    end
+
+    subgraph SYSTEM["FamilyFunds Platform"]
+        direction TB
+        subgraph ROW1[" "]
+            direction LR
+            UC1["Manage Family & Members"]
+            UC2["Manage Billing"]
+            UC3["Track Contributions & Payments"]
+            UC4["Record Expenses / Adjustments"]
+            UC5["View Reports"]
+        end
+        subgraph ROW2[" "]
+            direction LR
+            UC6["Send Email / WhatsApp Notifications"]
+            UC7["Pay Contributions Online"]
+            UC8["View My Contribution Status"]
+            UC9["Use AI Assistant"]
+            UC10["Generate Predictive Insights"]
+        end
+    end
+
+    subgraph EXTERNAL["External Actors"]
+        direction LR
+        PAY["Paystack"]
+        AIEXT["AI Provider"]
+    end
+
+    PSA --> UC1
+    PSA --> UC2
+
+    FA --> UC1
+    FA --> UC3
+    FA --> UC4
+    FA --> UC5
+    FA --> UC6
+    FA --> UC9
+    FA -.advanced.-> UC10
+
+    FS --> UC3
+    FS --> UC4
+    FS --> UC5
+    FS --> UC6
+    FS --> UC9
+    FS -.advanced.-> UC10
+
+    MB --> UC7
+    MB --> UC8
+    MB --> UC9
+
+    PAY --> UC2
+    PAY --> UC7
+    AIEXT --> UC9
+    AIEXT -.planned support.-> UC10
+
+    UC7 -."<<include>>".-> UC3
+    UC9 -."<<include>>".-> UC5
+
+    class PSA,FA,FS,MB actor;
+    class UC1,UC2,UC3,UC4,UC5,UC6,UC7,UC8,UC9 usecase;
+    class SYSTEM,ACTORS,EXTERNAL boundary;
+    class PAY,AIEXT external;
+    class UC10 planned;
+    style ROW1 fill:transparent,stroke:transparent
+    style ROW2 fill:transparent,stroke:transparent

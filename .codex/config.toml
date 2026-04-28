@@ -1,15 +1,14 @@
 sandbox_mode = "workspace-write"
+[mcp_servers.laravel-boost.tools.search-docs]
+approval_mode = "approve"
+[sandbox_workspace_write]
+network_access = true
+
 [mcp_servers.laravel-boost]
 command = "php"
 args = ["artisan", "boost:mcp"]
 cwd = "/Users/amisha/www/contribution-tracker"
 
-[mcp_servers.laravel-boost.tools.search-docs]
-approval_mode = "approve"
-
 [mcp_servers.nightwatch]
 command = "npx"
 args = ["-y", "mcp-remote", "https://nightwatch.laravel.com/mcp"]
-
-[sandbox_workspace_write]
-network_access = true

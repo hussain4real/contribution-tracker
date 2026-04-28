@@ -11,7 +11,7 @@
     "require": {
         "php": "^8.2",
         "inertiajs/inertia-laravel": "^3.0.0",
-        "laravel/ai": "^0.5.1",
+        "laravel/ai": "^0.6.4",
         "laravel/fortify": "^1.30",
         "laravel/framework": "^13.0",
         "laravel/nightwatch": "^1.24",

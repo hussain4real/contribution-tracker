@@ -4,9 +4,10 @@
         "gemini",
         "codex"
     ],
+    "cloud": false,
     "guidelines": true,
     "mcp": true,
-    "nightwatch_mcp": true,
+    "nightwatch": true,
     "packages": [
         "barryvdh/laravel-debugbar"
     ],
