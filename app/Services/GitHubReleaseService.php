@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Throwable;
 
 class GitHubReleaseService
 {
@@ -32,15 +33,21 @@ class GitHubReleaseService
             $request = Http::withHeaders([
                 'Accept' => 'application/vnd.github+json',
                 'X-GitHub-Api-Version' => '2022-11-28',
-            ])->timeout(10);
+            ])
+                ->connectTimeout(2)
+                ->timeout(5);
 
             if ($token) {
                 $request = $request->withToken($token);
             }
 
-            $response = $request->get("https://api.github.com/repos/{$owner}/{$repo}/releases", [
-                'per_page' => $max,
-            ]);
+            try {
+                $response = $request->get("https://api.github.com/repos/{$owner}/{$repo}/releases", [
+                    'per_page' => $max,
+                ]);
+            } catch (Throwable) {
+                return [];
+            }
 
             if ($response->failed()) {
                 return [];

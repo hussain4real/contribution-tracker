@@ -126,9 +126,17 @@ class HandleInertiaRequests extends Middleware
     {
         $publicKey = config('webpush.vapid.public_key');
 
+        if (blank($publicKey)) {
+            return [
+                'enabled' => false,
+                'publicKey' => null,
+                'subscribed' => false,
+            ];
+        }
+
         return [
-            'enabled' => filled($publicKey),
-            'publicKey' => filled($publicKey) ? $publicKey : null,
+            'enabled' => true,
+            'publicKey' => $publicKey,
             'subscribed' => $user->pushSubscriptions()->exists(),
         ];
     }

@@ -6,6 +6,9 @@ use Illuminate\Support\Facades\Http;
 
 beforeEach(function () {
     $this->user = User::factory()->member()->employed()->create();
+    config()->set('services.github.releases.owner', 'test-owner');
+    config()->set('services.github.releases.repo', 'test-repo');
+    config()->set('services.github.releases.token', null);
     Cache::forget('github_releases');
 });
 
