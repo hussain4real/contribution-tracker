@@ -125,15 +125,19 @@ The application is developed using Laravel (PHP) for the backend, Vue.js with In
   - [2.3 Review of Related Work](chapter-2.md#23-review-of-related-work)
   - [2.4 Gaps in Existing Research](chapter-2.md#24-gaps-in-existing-research)
   - [2.5 Summary of the Literature Review](chapter-2.md#25-summary-of-the-literature-review)
-- Chapter Three: System Design and Methodology
-  - 3.1 Review of the Proposed System
-  - 3.2 System Requirements
-  - 3.3 Software Development Methodology
-  - 3.4 System Architecture
-  - 3.5 Programming Languages and Tools Used
-  - 3.6 Database Design
-  - 3.7 Software Modules and Components
-  - 3.8 System Security
+- [Chapter Three: Methodology](chapter-3.md)
+  - [3.1 Introduction](chapter-3.md#31-introduction)
+  - [3.2 System Overview](chapter-3.md#32-system-overview)
+  - [3.3 Research/Development Approach](chapter-3.md#33-researchdevelopment-approach)
+  - [3.4 System Requirements](chapter-3.md#34-system-requirements)
+  - [3.5 System Architecture](chapter-3.md#35-system-architecture)
+  - [3.6 System Design](chapter-3.md#36-system-design)
+  - [3.7 Modeling Tools](chapter-3.md#37-modeling-tools)
+  - [3.8 Implementation Details](chapter-3.md#38-implementation-details)
+  - [3.9 System Testing and Validation](chapter-3.md#39-system-testing-and-validation)
+  - [3.10 Deployment Strategy](chapter-3.md#310-deployment-strategy)
+  - [3.11 Evaluation Metrics](chapter-3.md#311-evaluation-metrics)
+  - [3.12 Summary](chapter-3.md#312-summary)
 - Chapter Four: System Implementation and Testing
   - 4.1 Implementation of the System Design
   - 4.2 Module Integration and Coding
@@ -155,6 +159,13 @@ The application is developed using Laravel (PHP) for the backend, Vue.js with In
 | 1.1 | Comparison of Existing Financial Management Platforms | — |
 | 1.2 | Technical Stack Overview | — |
 | 1.3 | Definition of Key Terms | — |
+| 3.1 | Summary of Proposed System Features | — |
+| 3.2 | Functional Requirements | — |
+| 3.3 | Non-Functional Requirements | — |
+| 3.4 | Major Database Entities | — |
+| 3.5 | Implementation Technologies | — |
+| 3.6 | Testing and Validation Plan | — |
+| 3.7 | Evaluation Metrics | — |
 
 *\[To be updated as the document progresses.]*
 
@@ -166,10 +177,8 @@ The application is developed using Laravel (PHP) for the backend, Vue.js with In
 | --- | --- | --- |
 | 3.1 | System Architecture Diagram | — |
 | 3.2 | Entity-Relationship Diagram (ERD) | — |
-| 3.3 | Use Case Diagram | — |
-| 3.4 | Multi-Tenant Data Isolation Model | — |
-| 3.5 | Payment Allocation Flowchart | — |
-| 3.6 | Predictive Analytics Pipeline | — |
+| 3.3 | Payment Allocation Flowchart | — |
+| 3.4 | Use Case Diagram | — |
 
 *\[To be updated as the document progresses.]*
 

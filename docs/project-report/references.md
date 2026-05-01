@@ -50,6 +50,8 @@ CreditClan. (2024). *CreditClan — Lending infrastructure for Africa.* https://
 
 Dale, R. (2020). Natural language generation: The commercial state of the art in 2020. *Natural Language Engineering, 26*(4), 481–487. https://doi.org/10.1017/S1351324920000340
 
+de Wynter, A., Wang, X., Sokolov, A., Gu, Q., & Chen, S.-Q. (2023). An evaluation on large language model outputs: Discourse and memorization. *Natural Language Processing Journal, 4*, 100024. https://doi.org/10.1016/j.nlp.2023.100024
+
 Demirgüç-Kunt, A., Klapper, L., Singer, D., & Ansar, S. (2022). *The Global Findex Database 2021: Financial inclusion, digital payments, and resilience in the age of COVID-19.* World Bank. https://doi.org/10.1596/978-1-4648-1897-4
 
 Devlin, J., Chang, M.-W., Lee, K., & Toutanova, K. (2019). BERT: Pre-training of deep bidirectional transformers for language understanding. In *Proceedings of the 2019 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies* (pp. 4171–4186). ACL.
@@ -76,17 +78,29 @@ Hastie, T., Tibshirani, R., & Friedman, J. (2009). *The Elements of Statistical 
 
 Hu, V. C., Ferraiolo, D., Kuhn, R., Schnitzer, A., Sandlin, K., Miller, R., & Scarfone, K. (2014). *Guide to Attribute Based Access Control (ABAC) Definition and Considerations.* NIST Special Publication 800-162.
 
+Hussin Adam Khatir, A. A., & Bee, M. (2022). Machine learning models and data-balancing techniques for credit scoring: What is the best combination? *Risks, 10*(9), 169. https://doi.org/10.3390/risks10090169
+
 Iganiga, B. O., & Asemota, A. (2008). The Nigerian unorganised rural financial institutions and operations: A framework for improved rural credit schemes in a fragile environment. *Journal of Social Sciences, 17*(1), 63–71.
 
 Jack, W., & Suri, T. (2014). Risk sharing and transactions costs: Evidence from Kenya's mobile money revolution. *American Economic Review, 104*(1), 183–223. https://doi.org/10.1257/aer.104.1.183
 
+Jia, R., Yang, Y., Grundy, J., Keung, J., & Hao, L. (2021). A systematic review of scheduling approaches on multi-tenancy cloud platforms. *Information and Software Technology, 132*, 106478. https://doi.org/10.1016/j.infsof.2020.106478
+
+Kang, H., & Liu, X.-Y. (2023). *Deficiency of large language models in finance: An empirical examination of hallucination* (arXiv:2311.15548). arXiv. https://arxiv.org/abs/2311.15548
+
 Khandani, A. E., Kim, A. J., & Lo, A. W. (2010). Consumer credit-risk models via machine-learning algorithms. *Journal of Banking & Finance, 34*(11), 2767–2787. https://doi.org/10.1016/j.jbankfin.2010.06.001
+
+Karhapää, P., Behutiye, W., Rodríguez, P., Oivo, M., Costal, D., Franch, X., Aaramaa, S., Choraś, M., Partanen, J., & Abherve, A. (2021). Strategies to manage quality requirements in agile software development: A multiple case study. *Empirical Software Engineering, 26*, Article 28. https://doi.org/10.1007/s10664-020-09903-x
 
 Krasner, G. E., & Pope, S. T. (1988). A description of the model-view-controller user interface paradigm in the Smalltalk-80 system. *Journal of Object-Oriented Programming, 1*(3), 26–49.
 
 Lessmann, S., Baesens, B., Seow, H. V., & Thomas, L. C. (2015). Benchmarking state-of-the-art classification algorithms for credit scoring: An update of research. *European Journal of Operational Research, 247*(1), 124–136. https://doi.org/10.1016/j.ejor.2015.05.030
 
+Li, W., Zhou, Y., Luo, S., & Dong, Y. (2022). Design factors to improve the consistency and sustainable user experience of responsive interface design. *Sustainability, 14*(15), 9131. https://doi.org/10.3390/su14159131
+
 Lyastani, S. G., Schilling, M., Neuber, M., Backes, M., & Bugiel, S. (2020). Is FIDO2 the kingslayer of user authentication? A comparative usability study of FIDO2 passwordless authentication. In *Proceedings of the 2020 IEEE Symposium on Security and Privacy* (pp. 268–285). IEEE.
+
+Masood, Z., Hoda, R., & Blincoe, K. (2020). How agile teams make self-assignment work: A grounded theory study. *Empirical Software Engineering, 25*, 4962–5005. https://doi.org/10.1007/s10664-020-09876-x
 
 Mikowski, M. S., & Powell, J. C. (2013). *Single page web applications: JavaScript end-to-end.* Manning Publications.
 
@@ -110,11 +124,15 @@ Reinink, J. (2024). *Inertia.js — The modern monolith.* https://inertiajs.com
 
 Reiter, E., & Dale, R. (2000). *Building Natural Language Generation Systems.* Cambridge University Press.
 
+Robisco, A. A., & Carbó Martínez, J. M. (2022). Measuring the model risk-adjusted performance of machine learning algorithms in credit default prediction. *Financial Innovation, 8*, Article 70. https://doi.org/10.1186/s40854-022-00366-1
+
 Sandhu, R. S., Coyne, E. J., Feinstein, H. L., & Youman, C. E. (1996). Role-based access control models. *IEEE Computer, 29*(2), 38–47. https://doi.org/10.1109/2.485845
 
 Schein, A. I., Popescul, A., Ungar, L. H., & Pennock, D. M. (2002). Methods and metrics for cold-start recommendations. In *Proceedings of the 25th Annual International ACM SIGIR Conference on Research and Development in Information Retrieval* (pp. 253–260). ACM.
 
 Schwaber, K., & Sutherland, J. (2020). *The Scrum Guide: The Definitive Guide to Scrum: The Rules of the Game.* https://scrumguides.org
+
+Sharma, A., & Kaur, P. (2021). TOSDS: Tenant-centric object-based software defined storage for multitenant SaaS applications. *Arabian Journal for Science and Engineering, 46*(9), 9221–9235. https://doi.org/10.1007/s13369-021-05743-z
 
 Sommerville, I. (2016). *Software Engineering* (10th ed.). Pearson.
 
