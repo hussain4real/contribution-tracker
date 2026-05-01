@@ -82,6 +82,8 @@ jobs:
 
             # Install Node dependencies and build assets
             npm ci
+            php artisan optimize:clear
+            rm -rf resources/js/actions resources/js/routes resources/js/wayfinder
             php artisan wayfinder:generate
             npm run build
 
