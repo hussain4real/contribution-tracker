@@ -17,11 +17,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { useWebPush } from '@/composables/useWebPush';
 import AppLayout from '@/layouts/AppLayout.vue';
 import SettingsLayout from '@/layouts/settings/Layout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { CheckCircle2, MessageCircle } from 'lucide-vue-next';
-import { computed, ref } from 'vue';
+import {
+    BellRing,
+    CheckCircle2,
+    MessageCircle,
+    XCircle,
+} from 'lucide-vue-next';
+import { computed, onMounted, ref } from 'vue';
 
 interface Props {
     mustVerifyEmail?: boolean;
@@ -50,6 +56,24 @@ const codeSent = ref(false);
 const showCodeSent = computed(
     () => codeSent.value || props.status === 'whatsapp-code-sent',
 );
+
+const {
+    isSupported: webPushSupported,
+    subscribed: webPushSubscribed,
+    processing: webPushProcessing,
+    ready: webPushReady,
+    error: webPushError,
+    denied: webPushDenied,
+    init: initWebPush,
+    subscribe: subscribeWebPush,
+    unsubscribe: unsubscribeWebPush,
+} = useWebPush();
+
+const webPushEnabled = computed(() => !!page.props.webPush?.enabled);
+
+onMounted(() => {
+    void initWebPush();
+});
 </script>
 
 <template>
@@ -274,6 +298,115 @@ const showCodeSent = computed(
                         </Form>
                     </div>
                 </template>
+            </div>
+
+            <Separator class="my-8" />
+
+            <div class="flex flex-col space-y-6">
+                <HeadingSmall
+                    title="Browser notifications"
+                    description="Receive app notifications from this browser."
+                />
+
+                <div
+                    v-if="webPushSubscribed"
+                    class="flex flex-col gap-4 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20"
+                >
+                    <div class="flex items-start gap-3">
+                        <CheckCircle2
+                            class="mt-0.5 h-5 w-5 text-green-600 dark:text-green-400"
+                        />
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2">
+                                <p class="font-medium">Notifications enabled</p>
+                                <Badge variant="default" class="bg-green-600">
+                                    Active
+                                </Badge>
+                            </div>
+                            <p class="mt-1 text-sm text-muted-foreground">
+                                This browser will receive contribution reminders
+                                and app updates.
+                            </p>
+                        </div>
+                    </div>
+
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        :disabled="webPushProcessing"
+                        @click="unsubscribeWebPush"
+                    >
+                        Disable browser notifications
+                    </Button>
+                </div>
+
+                <div
+                    v-else
+                    class="flex flex-col gap-4 rounded-lg border bg-muted/40 p-4"
+                >
+                    <div class="flex items-start gap-3">
+                        <BellRing
+                            class="mt-0.5 h-5 w-5 text-primary"
+                            aria-hidden="true"
+                        />
+                        <div class="flex-1">
+                            <p class="font-medium">
+                                Browser notifications are off
+                            </p>
+                            <p class="mt-1 text-sm text-muted-foreground">
+                                Turn them on for this browser to receive app
+                                alerts even when FamilyFunds is not open.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div
+                        v-if="
+                            webPushReady &&
+                            (!webPushEnabled || !webPushSupported)
+                        "
+                        class="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100"
+                    >
+                        <XCircle class="mt-0.5 h-4 w-4 shrink-0" />
+                        <span>
+                            Browser notifications are not available in this
+                            browser or environment.
+                        </span>
+                    </div>
+
+                    <div
+                        v-else-if="webPushDenied"
+                        class="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100"
+                    >
+                        <XCircle class="mt-0.5 h-4 w-4 shrink-0" />
+                        <span>
+                            Notifications are blocked in this browser's site
+                            settings.
+                        </span>
+                    </div>
+
+                    <p v-if="webPushError" class="text-sm text-destructive">
+                        {{ webPushError }}
+                    </p>
+
+                    <div>
+                        <Button
+                            type="button"
+                            :disabled="
+                                webPushProcessing ||
+                                !webPushReady ||
+                                !webPushEnabled ||
+                                !webPushSupported ||
+                                webPushDenied
+                            "
+                            @click="subscribeWebPush"
+                        >
+                            <BellRing class="h-4 w-4" />
+                            Enable browser notifications
+                        </Button>
+                    </div>
+                </div>
             </div>
 
             <DeleteUser />

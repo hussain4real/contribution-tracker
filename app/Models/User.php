@@ -13,12 +13,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Cache;
 use Laravel\Fortify\TwoFactorAuthenticatable;
+use NotificationChannels\WebPush\HasPushSubscriptions;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, TwoFactorAuthenticatable;
+    use HasFactory, HasPushSubscriptions, Notifiable, TwoFactorAuthenticatable;
 
     /**
      * The attributes that are mass assignable.
@@ -38,6 +40,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'paystack_customer_code',
         'whatsapp_phone',
         'whatsapp_verified_at',
+        'last_seen_changelog_release_id',
     ];
 
     /**
@@ -68,6 +71,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'is_super_admin' => 'boolean',
             'archived_at' => 'datetime',
             'whatsapp_verified_at' => 'datetime',
+            'last_seen_changelog_release_id' => 'integer',
         ];
     }
 
@@ -121,6 +125,25 @@ class User extends Authenticatable implements MustVerifyEmail
     public function passkeys(): HasMany
     {
         return $this->hasMany(Passkey::class);
+    }
+
+    public function hasWebPushSubscription(): bool
+    {
+        return Cache::remember(
+            $this->webPushSubscriptionCacheKey(),
+            now()->addMinutes(5),
+            fn (): bool => $this->pushSubscriptions()->exists(),
+        );
+    }
+
+    public function forgetWebPushSubscriptionCache(): void
+    {
+        Cache::forget($this->webPushSubscriptionCacheKey());
+    }
+
+    private function webPushSubscriptionCacheKey(): string
+    {
+        return "users.{$this->id}.web_push_subscribed";
     }
 
     // =========================================================================

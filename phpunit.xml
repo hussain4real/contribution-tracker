@@ -28,6 +28,12 @@
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
+        <env name="GITHUB_RELEASES_OWNER" value=""/>
+        <env name="GITHUB_RELEASES_REPO" value=""/>
+        <env name="GITHUB_RELEASES_TOKEN" value=""/>
+        <env name="VAPID_PUBLIC_KEY" value=""/>
+        <env name="VAPID_PRIVATE_KEY" value=""/>
+        <env name="VAPID_SUBJECT" value=""/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>

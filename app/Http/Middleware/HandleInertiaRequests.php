@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Features\AiAssistant;
 use App\Models\User;
+use App\Services\GitHubReleaseService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -78,6 +79,8 @@ class HandleInertiaRequests extends Middleware
             'featureFlags' => $user ? [
                 'ai_assistant' => fn () => Feature::for($user)->active(AiAssistant::class),
             ] : null,
+            'changelogUpdate' => $user ? fn () => app(GitHubReleaseService::class)->updateDataFor($user) : null,
+            'webPush' => $user ? fn () => $this->webPushData($user) : null,
             'notifications' => $user ? [
                 'unread_count' => fn () => $user->unreadNotifications()->count(),
                 'recent' => fn () => $user->unreadNotifications()->latest()->limit(10)->get()->map(fn ($n) => [
@@ -111,6 +114,30 @@ class HandleInertiaRequests extends Middleware
             'max_members' => $plan && ! $plan->hasUnlimitedMembers() ? $plan->max_members : null,
             'can_add_members' => ! $plan || $plan->hasUnlimitedMembers() || $memberCount < $plan->max_members,
             'features' => $plan?->features ?? [],
+        ];
+    }
+
+    /**
+     * Get safe web push data for the authenticated user's browser.
+     *
+     * @return array{enabled: bool, publicKey: string|null, subscribed: bool}
+     */
+    private function webPushData(User $user): array
+    {
+        $publicKey = config('webpush.vapid.public_key');
+
+        if (blank($publicKey)) {
+            return [
+                'enabled' => false,
+                'publicKey' => null,
+                'subscribed' => false,
+            ];
+        }
+
+        return [
+            'enabled' => true,
+            'publicKey' => $publicKey,
+            'subscribed' => $user->hasWebPushSubscription(),
         ];
     }
 }

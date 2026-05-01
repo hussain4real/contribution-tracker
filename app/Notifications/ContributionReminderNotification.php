@@ -13,6 +13,8 @@ use Illuminate\Queue\Attributes\MaxExceptions;
 use Illuminate\Queue\Attributes\Timeout;
 use Illuminate\Queue\Attributes\Tries;
 use Illuminate\Queue\Middleware\RateLimited;
+use NotificationChannels\WebPush\WebPushChannel;
+use NotificationChannels\WebPush\WebPushMessage;
 
 #[Tries(5)]
 #[Timeout(60)]
@@ -51,7 +53,11 @@ class ContributionReminderNotification extends Notification implements ShouldQue
     public function onlyChannels(array $channels): self
     {
         $this->channels = array_map(
-            fn (string $channel): string => $channel === 'whatsapp' ? WhatsAppChannel::class : $channel,
+            fn (string $channel): string => match ($channel) {
+                'whatsapp' => WhatsAppChannel::class,
+                'webpush', 'web_push' => WebPushChannel::class,
+                default => $channel,
+            },
             $channels,
         );
 
@@ -61,11 +67,13 @@ class ContributionReminderNotification extends Notification implements ShouldQue
     /**
      * Get the notification's delivery channels.
      *
+     * Web push is intentionally part of the default app-notification channels.
+     *
      * @return array<int, string>
      */
     public function via(object $notifiable): array
     {
-        return $this->channels ?? ['mail', 'database', WhatsAppChannel::class];
+        return $this->channels ?? ['mail', 'database', WhatsAppChannel::class, WebPushChannel::class];
     }
 
     /**
@@ -147,5 +155,29 @@ class ContributionReminderNotification extends Notification implements ShouldQue
                 $this->contribution->family->name,
                 $this->contribution->formattedBalance(),
             ]);
+    }
+
+    /**
+     * Get the web push representation of the notification.
+     */
+    public function toWebPush(object $notifiable, Notification $notification): WebPushMessage
+    {
+        $isFollowUp = $this->type === 'follow_up';
+        $title = $isFollowUp ? 'Contribution due today' : 'Contribution due soon';
+        $body = "Your {$this->contribution->period_label} contribution for {$this->contribution->family->name} has {$this->contribution->formattedBalance()} remaining.";
+
+        return (new WebPushMessage)
+            ->title($title)
+            ->body($body)
+            ->icon('/pwa-192x192.png')
+            ->badge('/pwa-192x192.png')
+            ->tag("contribution-{$this->contribution->id}-{$this->type}")
+            ->data([
+                'notification_id' => $notification->id,
+                'contribution_id' => $this->contribution->id,
+                'url' => route('contributions.show', $this->contribution),
+                'type' => $this->type,
+            ])
+            ->options(['TTL' => 60 * 60 * 24]);
     }
 }

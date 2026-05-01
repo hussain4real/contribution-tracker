@@ -5,8 +5,10 @@ use App\Http\Controllers\AiChatController;
 use App\Http\Controllers\Auth\PasskeyLoginController;
 use App\Http\Controllers\Auth\PasskeyTwoFactorController;
 use App\Http\Controllers\ChangelogController;
+use App\Http\Controllers\ChangelogSeenController;
 use App\Http\Controllers\ContributionController;
 use App\Http\Controllers\ContributionEmailReminderController;
+use App\Http\Controllers\ContributionWebPushReminderController;
 use App\Http\Controllers\ContributionWhatsAppReminderController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExpenseController;
@@ -104,6 +106,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Changelog
     Route::get('changelog', ChangelogController::class)->name('changelog');
+    Route::post('changelog/seen', ChangelogSeenController::class)->name('changelog.seen');
 
     // Members (Admin only for management, all can view list)
     Route::resource('members', MemberController::class)->middleware('subscription');
@@ -120,6 +123,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('contributions/{contribution}/whatsapp-reminder', [ContributionWhatsAppReminderController::class, 'send'])
         ->middleware('throttle:10,1')
         ->name('contributions.whatsapp-reminder');
+    Route::post('contributions/{contribution}/web-push-reminder', [ContributionWebPushReminderController::class, 'send'])
+        ->middleware('throttle:10,1')
+        ->name('contributions.web-push-reminder');
 
     // Payments
     Route::get('payments', [PaymentController::class, 'index'])->name('payments.index');

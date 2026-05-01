@@ -6,11 +6,33 @@ use Illuminate\Support\Facades\Http;
 
 beforeEach(function () {
     $this->user = User::factory()->member()->employed()->create();
+    config()->set('services.github.releases.owner', 'test-owner');
+    config()->set('services.github.releases.repo', 'test-repo');
+    config()->set('services.github.releases.token', null);
     Cache::forget('github_releases');
 });
 
+function githubRelease(array $overrides = []): array
+{
+    return array_merge([
+        'id' => 1,
+        'name' => 'v1.0.0',
+        'tag_name' => 'v1.0.0',
+        'body' => '## What\'s Changed\n- Initial release',
+        'html_url' => 'https://github.com/test/repo/releases/tag/v1.0.0',
+        'published_at' => '2026-03-01T00:00:00Z',
+        'created_at' => '2026-03-01T00:00:00Z',
+        'prerelease' => false,
+    ], $overrides);
+}
+
 it('requires authentication to access the changelog', function () {
     $this->get('/changelog')
+        ->assertRedirect();
+});
+
+it('requires authentication to mark changelog updates as seen', function () {
+    $this->post(route('changelog.seen'))
         ->assertRedirect();
 });
 
@@ -30,16 +52,7 @@ it('displays the changelog page for authenticated users', function () {
 
 it('fetches and displays github releases', function () {
     $fakeReleases = [
-        [
-            'id' => 1,
-            'name' => 'v1.0.0',
-            'tag_name' => 'v1.0.0',
-            'body' => '## What\'s Changed\n- Initial release',
-            'html_url' => 'https://github.com/test/repo/releases/tag/v1.0.0',
-            'published_at' => '2026-03-01T00:00:00Z',
-            'created_at' => '2026-03-01T00:00:00Z',
-            'prerelease' => false,
-        ],
+        githubRelease(),
     ];
 
     Http::fake([
@@ -57,6 +70,70 @@ it('fetches and displays github releases', function () {
         );
 });
 
+it('strips unsafe html and links from github release markdown', function () {
+    Http::fake([
+        'api.github.com/*' => Http::response([
+            githubRelease([
+                'body' => '# Update <script>alert("xss")</script>'."\n".'[unsafe](javascript:alert(1))',
+            ]),
+        ], 200),
+    ]);
+
+    $response = $this->actingAs($this->user)
+        ->get('/changelog')
+        ->assertSuccessful();
+
+    $body = $response->inertiaProps('releases.0.body');
+
+    expect($body)
+        ->not->toContain('<script')
+        ->not->toContain('javascript:');
+});
+
+it('shares latest changelog update data with authenticated pages', function () {
+    Http::fake([
+        'api.github.com/*' => Http::response([githubRelease()], 200),
+    ]);
+
+    $this->actingAs($this->user)
+        ->get('/changelog')
+        ->assertSuccessful()
+        ->assertInertia(fn ($page) => $page
+            ->where('changelogUpdate.latest.id', 1)
+            ->where('changelogUpdate.latest.name', 'v1.0.0')
+            ->where('changelogUpdate.latest.tag_name', 'v1.0.0')
+            ->where('changelogUpdate.unseen', true)
+        );
+});
+
+it('marks the latest changelog release as seen for the current user', function () {
+    Http::fake([
+        'api.github.com/*' => Http::response([githubRelease()], 200),
+    ]);
+
+    $this->actingAs($this->user)
+        ->post(route('changelog.seen'))
+        ->assertRedirect();
+
+    expect($this->user->fresh()->last_seen_changelog_release_id)->toBe(1);
+});
+
+it('does not mark latest changelog update as unseen after it has been seen', function () {
+    $this->user->update(['last_seen_changelog_release_id' => 1]);
+
+    Http::fake([
+        'api.github.com/*' => Http::response([githubRelease()], 200),
+    ]);
+
+    $this->actingAs($this->user)
+        ->get('/changelog')
+        ->assertSuccessful()
+        ->assertInertia(fn ($page) => $page
+            ->where('changelogUpdate.latest.id', 1)
+            ->where('changelogUpdate.unseen', false)
+        );
+});
+
 it('handles github api failure gracefully', function () {
     Http::fake([
         'api.github.com/*' => Http::response([], 500),
@@ -68,22 +145,15 @@ it('handles github api failure gracefully', function () {
         ->assertInertia(fn ($page) => $page
             ->component('Changelog/Index')
             ->has('releases', 0)
+            ->where('changelogUpdate.latest', null)
+            ->where('changelogUpdate.unseen', false)
         );
 });
 
 it('caches github releases with stale-while-revalidate', function () {
     Http::fake([
         'api.github.com/*' => Http::response([
-            [
-                'id' => 1,
-                'name' => 'v1.0.0',
-                'tag_name' => 'v1.0.0',
-                'body' => 'Test',
-                'html_url' => 'https://github.com/test/repo/releases/tag/v1.0.0',
-                'published_at' => '2026-03-01T00:00:00Z',
-                'created_at' => '2026-03-01T00:00:00Z',
-                'prerelease' => false,
-            ],
+            githubRelease(['body' => 'Test']),
         ], 200),
     ]);
 

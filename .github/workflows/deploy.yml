@@ -71,6 +71,15 @@ jobs:
             # Install PHP dependencies
             composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
 
+            # Generate VAPID keys once for web push notifications
+            if ! grep -Eq '^VAPID_PUBLIC_KEY=.+$' .env || ! grep -Eq '^VAPID_PRIVATE_KEY=.+$' .env; then
+              echo "Generating VAPID keys..."
+              php artisan config:clear
+              php artisan webpush:vapid --force --no-interaction
+            else
+              echo "VAPID keys already configured; skipping generation."
+            fi
+
             # Install Node dependencies and build assets
             npm ci
             php artisan wayfinder:generate

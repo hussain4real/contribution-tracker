@@ -9,16 +9,44 @@ use App\Models\User;
 use App\Notifications\ContributionReminderNotification;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Queue\Middleware\RateLimited;
+use NotificationChannels\WebPush\WebPushChannel;
+use NotificationChannels\WebPush\WebPushMessage;
 
 describe('ContributionReminderNotification', function () {
-    it('sends via mail, database, and whatsapp channels', function () {
+    it('sends via mail, database, whatsapp, and web push channels', function () {
         $family = Family::factory()->create();
         $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
         $contribution = Contribution::factory()->forUser($user)->currentMonth()->create();
 
         $notification = new ContributionReminderNotification($contribution, 'reminder');
 
-        expect($notification->via($user))->toBe(['mail', 'database', WhatsAppChannel::class]);
+        expect($notification->via($user))->toBe(['mail', 'database', WhatsAppChannel::class, WebPushChannel::class]);
+    });
+
+    it('respects channel restrictions when web push is not requested', function (string $channel, string $expected) {
+        $family = Family::factory()->create();
+        $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($user)->currentMonth()->create();
+
+        $notification = (new ContributionReminderNotification($contribution, 'reminder'))
+            ->onlyChannels([$channel]);
+
+        expect($notification->via($user))->toBe([$expected]);
+    })->with([
+        'mail' => ['mail', 'mail'],
+        'database' => ['database', 'database'],
+        'whatsapp' => ['whatsapp', WhatsAppChannel::class],
+    ]);
+
+    it('allows restricting delivery to web push only', function () {
+        $family = Family::factory()->create();
+        $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($user)->currentMonth()->create();
+
+        $notification = (new ContributionReminderNotification($contribution, 'reminder'))
+            ->onlyChannels(['webpush']);
+
+        expect($notification->via($user))->toBe([WebPushChannel::class]);
     });
 
     it('rate limits whatsapp delivery and retries with backoff', function () {
@@ -145,5 +173,42 @@ describe('ContributionReminderNotification', function () {
         $params = $message->toPayload('2348012345678')['template']['components'][0]['parameters'];
 
         expect($params[1]['text'])->toBe('follow-up');
+    });
+
+    it('builds a web push message for reminder type', function () {
+        $family = Family::factory()->create(['name' => 'Smith Family']);
+        $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($user)->currentMonth()->create([
+            'expected_amount' => 5000,
+        ]);
+
+        $notification = new ContributionReminderNotification($contribution, 'reminder');
+        $message = $notification->toWebPush($user, $notification);
+        $payload = $message->toArray();
+
+        expect($message)->toBeInstanceOf(WebPushMessage::class)
+            ->and($payload['title'])->toBe('Contribution due soon')
+            ->and($payload['body'])->toContain($contribution->period_label)
+            ->and($payload['body'])->toContain('Smith Family')
+            ->and($payload['icon'])->toBe('/pwa-192x192.png')
+            ->and($payload['badge'])->toBe('/pwa-192x192.png')
+            ->and($payload['tag'])->toBe("contribution-{$contribution->id}-reminder")
+            ->and($payload['data']['contribution_id'])->toBe($contribution->id)
+            ->and($payload['data']['url'])->toBe(route('contributions.show', $contribution))
+            ->and($payload['data']['type'])->toBe('reminder')
+            ->and($message->getOptions())->toBe(['TTL' => 60 * 60 * 24]);
+    });
+
+    it('builds a web push message for follow_up type', function () {
+        $family = Family::factory()->create();
+        $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($user)->currentMonth()->create();
+
+        $notification = new ContributionReminderNotification($contribution, 'follow_up');
+        $payload = $notification->toWebPush($user, $notification)->toArray();
+
+        expect($payload['title'])->toBe('Contribution due today')
+            ->and($payload['tag'])->toBe("contribution-{$contribution->id}-follow_up")
+            ->and($payload['data']['type'])->toBe('follow_up');
     });
 });

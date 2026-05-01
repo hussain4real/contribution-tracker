@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+  <defs>
+    <style>
+      .bg { fill: #ffffff; }
+      .box { fill: #f8fafc; stroke: #1e293b; stroke-width: 3; rx: 14; }
+      .main { fill: #e0f2fe; stroke: #075985; stroke-width: 4; rx: 16; }
+      .ai { fill: #fef3c7; stroke: #92400e; stroke-width: 3; rx: 14; }
+      .pay { fill: #dcfce7; stroke: #166534; stroke-width: 3; rx: 14; }
+      .title { font: 700 34px Arial, sans-serif; fill: #0f172a; }
+      .label { font: 700 25px Arial, sans-serif; fill: #0f172a; }
+      .small { font: 400 19px Arial, sans-serif; fill: #334155; }
+      .rel { stroke: #475569; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="11" refY="6" orient="auto">
+      <path d="M2,2 L11,6 L2,10 Z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1600" height="1000"/>
+  <text x="800" y="58" text-anchor="middle" class="title">FamilyFunds Entity-Relationship Diagram</text>
+
+  <rect x="660" y="105" width="280" height="120" class="main"/>
+  <text x="800" y="150" text-anchor="middle" class="label">families</text>
+  <text x="800" y="182" text-anchor="middle" class="small">Tenant boundary</text>
+
+  <rect x="120" y="300" width="260" height="115" class="box"/>
+  <text x="250" y="342" text-anchor="middle" class="label">users</text>
+  <text x="250" y="374" text-anchor="middle" class="small">Roles and membership</text>
+
+  <rect x="470" y="300" width="300" height="115" class="box"/>
+  <text x="620" y="342" text-anchor="middle" class="label">family_categories</text>
+  <text x="620" y="374" text-anchor="middle" class="small">Contribution tiers</text>
+
+  <rect x="850" y="300" width="270" height="115" class="box"/>
+  <text x="985" y="342" text-anchor="middle" class="label">contributions</text>
+  <text x="985" y="374" text-anchor="middle" class="small">Monthly obligations</text>
+
+  <rect x="1210" y="300" width="260" height="115" class="box"/>
+  <text x="1340" y="342" text-anchor="middle" class="label">payments</text>
+  <text x="1340" y="374" text-anchor="middle" class="small">Allocated receipts</text>
+
+  <rect x="120" y="540" width="260" height="115" class="box"/>
+  <text x="250" y="582" text-anchor="middle" class="label">expenses</text>
+  <text x="250" y="614" text-anchor="middle" class="small">Outgoing funds</text>
+
+  <rect x="470" y="540" width="300" height="115" class="box"/>
+  <text x="620" y="582" text-anchor="middle" class="label">fund_adjustments</text>
+  <text x="620" y="614" text-anchor="middle" class="small">Donations/corrections</text>
+
+  <rect x="850" y="540" width="270" height="115" class="box"/>
+  <text x="985" y="582" text-anchor="middle" class="label">family_invitations</text>
+  <text x="985" y="614" text-anchor="middle" class="small">Signed invitation links</text>
+
+  <rect x="1210" y="540" width="260" height="115" class="pay"/>
+  <text x="1340" y="582" text-anchor="middle" class="label">paystack_transactions</text>
+  <text x="1340" y="614" text-anchor="middle" class="small">Gateway records</text>
+
+  <rect x="120" y="775" width="260" height="115" class="box"/>
+  <text x="250" y="817" text-anchor="middle" class="label">passkeys</text>
+  <text x="250" y="849" text-anchor="middle" class="small">WebAuthn credentials</text>
+
+  <rect x="470" y="775" width="300" height="115" class="pay"/>
+  <text x="620" y="817" text-anchor="middle" class="label">platform_plans</text>
+  <text x="620" y="849" text-anchor="middle" class="small">Subscription limits</text>
+
+  <rect x="850" y="775" width="270" height="115" class="ai"/>
+  <text x="985" y="817" text-anchor="middle" class="label">agent_conversations</text>
+  <text x="985" y="849" text-anchor="middle" class="small">AI chat sessions</text>
+
+  <rect x="1210" y="775" width="260" height="115" class="ai"/>
+  <text x="1340" y="817" text-anchor="middle" class="label">agent_messages</text>
+  <text x="1340" y="849" text-anchor="middle" class="small">Prompts, tools, results</text>
+
+  <path class="rel" d="M710 225 C585 255 365 265 250 300"/>
+  <path class="rel" d="M760 225 C705 255 655 265 620 300"/>
+  <path class="rel" d="M840 225 C900 255 960 265 985 300"/>
+  <path class="rel" d="M1120 358 C1160 358 1190 358 1210 358"/>
+  <path class="rel" d="M725 225 C575 340 380 445 250 540"/>
+  <path class="rel" d="M785 225 C710 360 660 460 620 540"/>
+  <path class="rel" d="M845 225 C920 360 970 460 985 540"/>
+  <path class="rel" d="M895 225 C1085 345 1260 455 1340 540"/>
+  <path class="rel" d="M250 415 C250 520 250 675 250 775"/>
+  <path class="rel" d="M710 225 C690 420 650 620 620 775"/>
+  <path class="rel" d="M250 415 C520 555 790 650 985 775"/>
+  <path class="rel" d="M1120 833 C1150 833 1185 833 1210 833"/>
+</svg>

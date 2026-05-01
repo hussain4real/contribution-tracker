@@ -1,0 +1,78 @@
+%%{init: { "theme": "base", "themeVariables": { "fontSize": "16pt" }, "flowchart": { "nodeSpacing": 90, "rankSpacing": 110 } }}%%
+
+flowchart LR
+    classDef actor fill:#f8fafc,stroke:#1f3b64,color:#1f3b64,stroke-width:1px;
+    classDef layer fill:#ffffff,stroke:#1f3b64,color:#16263f,stroke-width:1.4px;
+    classDef external fill:#fff7e8,stroke:#a66a00,color:#6b4200,stroke-width:1.2px;
+    classDef planned fill:#fdf2f8,stroke:#be185d,color:#831843,stroke-dasharray: 5 5;
+    classDef note fill:#f8fafc,stroke:#64748b,color:#334155,stroke-dasharray: 5 5;
+
+    subgraph ACTORS["Actors / Access"]
+        direction TB
+        PSA["Platform Super Admin"]
+        FA["Family Admin"]
+        FS["Financial Secretary"]
+        MB["Member"]
+    end
+
+    subgraph PRESENTATION["Presentation Layer"]
+        direction LR
+        SPA["Vue 3 SPA<br/>Inertia.js Interface"]
+        AUTH["Fortify Auth<br/>Email Verification<br/>Passkeys / 2FA"]
+    end
+
+    subgraph APPLICATION["Laravel Application Layer"]
+        direction LR
+        CTRL["Controllers + Routes"]
+        GOV["Governance + Security<br/>RBAC · Tenant Context · Subscription Gates"]
+        CORE["Business Modules<br/>Contributions · Payments · Expenses · Reports"]
+        AI["AI Assistant<br/>Laravel AI Agent + Tools"]
+    end
+
+    NOTE["Multi-tenant isolation<br/>Each request is bound to one family context;<br/>family financial data stays logically separated<br/>on shared infrastructure"]
+    PRED["Predictive Analytics<br/>(planned / advanced module)"]
+    DB["Data Layer<br/><br/>MySQL Relational Database<br/>Families · Users · Contributions · Payments<br/>Expenses · Transactions · Notifications"]
+
+    subgraph EXTERNAL["External Services"]
+        direction TB
+        PAY["Paystack<br/>Contribution Payments<br/>Subscription Billing"]
+        MSG["Email / WhatsApp<br/>Reminders + Notifications"]
+        LLM["AI Providers<br/>Ollama / OpenAI / Others"]
+    end
+
+    PSA --> SPA
+    FA --> SPA
+    FS --> SPA
+    MB --> SPA
+
+    SPA --> AUTH --> CTRL
+    CTRL --> GOV
+    CTRL --> CORE
+    CTRL --> AI
+
+    AUTH ~~~ NOTE
+    NOTE ~~~ GOV
+    NOTE ~~~ PRED
+
+    GOV --> DB
+    CORE --> DB
+    AI --> DB
+
+    GOV --> PAY
+    CORE --> PAY
+    CORE --> MSG
+    AI --> LLM
+
+    PAY -.-> CTRL
+    MSG -.-> CTRL
+
+    PRED -.-> DB
+    PRED -.-> CORE
+
+    NOTE -.-> GOV
+
+    class PSA,FA,FS,MB actor;
+    class SPA,AUTH,CTRL,GOV,CORE,AI,DB layer;
+    class PAY,MSG,LLM external;
+    class PRED planned;
+    class NOTE note;
