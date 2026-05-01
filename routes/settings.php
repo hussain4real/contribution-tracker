@@ -4,7 +4,9 @@ use App\Http\Controllers\Settings\PasskeyController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\TwoFactorAuthenticationController;
+use App\Http\Controllers\Settings\WebPushSubscriptionController;
 use App\Http\Controllers\Settings\WhatsAppVerificationController;
+use Illuminate\Auth\Middleware\Authenticate;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -23,6 +25,13 @@ Route::middleware('auth')->group(function () {
         ->name('whatsapp.verify');
     Route::delete('settings/whatsapp', [WhatsAppVerificationController::class, 'destroy'])
         ->name('whatsapp.destroy');
+
+    Route::post('settings/web-push/subscription', [WebPushSubscriptionController::class, 'store'])
+        ->middleware([Authenticate::class, 'throttle:6,1'])
+        ->name('web-push.subscription.store');
+    Route::delete('settings/web-push/subscription', [WebPushSubscriptionController::class, 'destroy'])
+        ->middleware(Authenticate::class)
+        ->name('web-push.subscription.destroy');
 
     Route::get('settings/password', [PasswordController::class, 'edit'])->name('user-password.edit');
 

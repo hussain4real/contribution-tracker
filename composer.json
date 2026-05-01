@@ -11,6 +11,7 @@
     "require": {
         "php": "^8.2",
         "inertiajs/inertia-laravel": "^3.0.0",
+        "laravel-notification-channels/webpush": "^10.5",
         "laravel/ai": "^0.6.4",
         "laravel/fortify": "^1.30",
         "laravel/framework": "^13.0",

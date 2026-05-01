@@ -7,6 +7,7 @@ import AppSidebarHeader from '@/components/AppSidebarHeader.vue';
 import NetworkStatusBanner from '@/components/NetworkStatusBanner.vue';
 import PwaInstallPrompt from '@/components/PwaInstallPrompt.vue';
 import SwUpdateToast from '@/components/SwUpdateToast.vue';
+import WebPushEnablePrompt from '@/components/WebPushEnablePrompt.vue';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
 import { usePwaCacheWarmer } from '@/composables/usePwaCacheWarmer';
@@ -128,6 +129,8 @@ function dismissWhatsAppPrompt(): void {
                     </Button>
                 </div>
             </div>
+
+            <WebPushEnablePrompt />
 
             <AppSidebarHeader :breadcrumbs="breadcrumbs" />
             <slot />

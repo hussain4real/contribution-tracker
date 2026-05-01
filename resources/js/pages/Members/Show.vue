@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { send as sendEmailReminderAction } from '@/actions/App/Http/Controllers/ContributionEmailReminderController';
+import { send as sendWebPushReminderAction } from '@/actions/App/Http/Controllers/ContributionWebPushReminderController';
 import { send as sendWhatsAppReminderAction } from '@/actions/App/Http/Controllers/ContributionWhatsAppReminderController';
 import {
     destroy,
@@ -22,6 +23,7 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import {
     AlertCircle,
     Archive,
+    BellRing,
     CheckCircle2,
     ChevronDown,
     ChevronRight,
@@ -83,6 +85,7 @@ interface Member {
     archived_at: string | null;
     created_at: string | null;
     whatsapp_verified: boolean;
+    web_push_subscribed: boolean;
 }
 
 interface Props {
@@ -93,15 +96,18 @@ interface Props {
     canViewContributions: boolean;
     canSendEmailReminder?: boolean;
     canSendWhatsAppReminder?: boolean;
+    canSendWebPushReminder?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
     canSendEmailReminder: false,
     canSendWhatsAppReminder: false,
+    canSendWebPushReminder: false,
 });
 
 const sendingEmailReminderId = ref<number | null>(null);
 const sendingWhatsAppReminderId = ref<number | null>(null);
+const sendingWebPushReminderId = ref<number | null>(null);
 
 function handleReminderResponse(page: {
     props: { flash?: { success?: string; error?: string } };
@@ -156,6 +162,29 @@ function sendWhatsAppReminder(contributionId: number) {
             },
             onFinish: () => {
                 sendingWhatsAppReminderId.value = null;
+            },
+        },
+    );
+}
+
+function sendWebPushReminder(contributionId: number) {
+    if (sendingWebPushReminderId.value !== null) {
+        return;
+    }
+
+    sendingWebPushReminderId.value = contributionId;
+
+    router.post(
+        sendWebPushReminderAction(contributionId).url,
+        {},
+        {
+            preserveScroll: true,
+            onSuccess: handleReminderResponse,
+            onError: () => {
+                toast.error('Failed to send browser reminder.');
+            },
+            onFinish: () => {
+                sendingWebPushReminderId.value = null;
             },
         },
     );
@@ -239,22 +268,35 @@ function canSendWhatsApp(contribution: Contribution): boolean {
     );
 }
 
-function hasSingleEmailReminder(contribution: Contribution): boolean {
-    return canSendEmail(contribution) && !canSendWhatsApp(contribution);
+function canSendWebPush(contribution: Contribution): boolean {
+    return (
+        props.canSendWebPushReminder &&
+        props.member.web_push_subscribed &&
+        contribution.balance > 0
+    );
 }
 
-function hasSingleWhatsAppReminder(contribution: Contribution): boolean {
-    return !canSendEmail(contribution) && canSendWhatsApp(contribution);
+function reminderChannelCount(contribution: Contribution): number {
+    return [
+        canSendEmail(contribution),
+        canSendWhatsApp(contribution),
+        canSendWebPush(contribution),
+    ].filter(Boolean).length;
+}
+
+function hasSingleReminderChannel(contribution: Contribution): boolean {
+    return reminderChannelCount(contribution) === 1;
 }
 
 function hasMultipleReminderChannels(contribution: Contribution): boolean {
-    return canSendEmail(contribution) && canSendWhatsApp(contribution);
+    return reminderChannelCount(contribution) > 1;
 }
 
 function isSendingReminder(contributionId: number): boolean {
     return (
         sendingEmailReminderId.value === contributionId ||
-        sendingWhatsAppReminderId.value === contributionId
+        sendingWhatsAppReminderId.value === contributionId ||
+        sendingWebPushReminderId.value === contributionId
     );
 }
 
@@ -635,9 +677,9 @@ function restoreMember() {
                                         </Badge>
                                         <Button
                                             v-if="
-                                                hasSingleEmailReminder(
+                                                hasSingleReminderChannel(
                                                     contribution,
-                                                )
+                                                ) && canSendEmail(contribution)
                                             "
                                             variant="outline"
                                             size="sm"
@@ -667,9 +709,10 @@ function restoreMember() {
                                         </Button>
                                         <Button
                                             v-else-if="
-                                                hasSingleWhatsAppReminder(
+                                                hasSingleReminderChannel(
                                                     contribution,
-                                                )
+                                                ) &&
+                                                canSendWhatsApp(contribution)
                                             "
                                             variant="outline"
                                             size="sm"
@@ -695,6 +738,39 @@ function restoreMember() {
                                             />
                                             <span class="hidden sm:inline"
                                                 >WhatsApp</span
+                                            >
+                                        </Button>
+                                        <Button
+                                            v-else-if="
+                                                hasSingleReminderChannel(
+                                                    contribution,
+                                                ) &&
+                                                canSendWebPush(contribution)
+                                            "
+                                            variant="outline"
+                                            size="sm"
+                                            class="h-8 gap-1 px-2 text-xs text-violet-600 hover:bg-violet-50 hover:text-violet-700 dark:text-violet-400 dark:hover:bg-violet-900/30 dark:hover:text-violet-300"
+                                            :disabled="
+                                                sendingWebPushReminderId ===
+                                                contribution.id
+                                            "
+                                            :title="`Send browser reminder for ${contribution.period_label}`"
+                                            @click.stop="
+                                                sendWebPushReminder(
+                                                    contribution.id,
+                                                )
+                                            "
+                                        >
+                                            <BellRing
+                                                class="h-3.5 w-3.5"
+                                                :class="{
+                                                    'animate-pulse':
+                                                        sendingWebPushReminderId ===
+                                                        contribution.id,
+                                                }"
+                                            />
+                                            <span class="hidden sm:inline"
+                                                >Browser</span
                                             >
                                         </Button>
                                         <DropdownMenu
@@ -764,9 +840,12 @@ function restoreMember() {
                                                         canSendEmail(
                                                             contribution,
                                                         ) &&
-                                                        canSendWhatsApp(
+                                                        (canSendWhatsApp(
                                                             contribution,
-                                                        )
+                                                        ) ||
+                                                            canSendWebPush(
+                                                                contribution,
+                                                            ))
                                                     "
                                                 />
                                                 <DropdownMenuItem
@@ -789,6 +868,40 @@ function restoreMember() {
                                                         class="mr-2 h-4 w-4"
                                                     />
                                                     Send WhatsApp reminder
+                                                </DropdownMenuItem>
+                                                <DropdownMenuSeparator
+                                                    v-if="
+                                                        canSendWebPush(
+                                                            contribution,
+                                                        ) &&
+                                                        (canSendEmail(
+                                                            contribution,
+                                                        ) ||
+                                                            canSendWhatsApp(
+                                                                contribution,
+                                                            ))
+                                                    "
+                                                />
+                                                <DropdownMenuItem
+                                                    v-if="
+                                                        canSendWebPush(
+                                                            contribution,
+                                                        )
+                                                    "
+                                                    :disabled="
+                                                        sendingWebPushReminderId !==
+                                                        null
+                                                    "
+                                                    @click.stop="
+                                                        sendWebPushReminder(
+                                                            contribution.id,
+                                                        )
+                                                    "
+                                                >
+                                                    <BellRing
+                                                        class="mr-2 h-4 w-4"
+                                                    />
+                                                    Send browser reminder
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>

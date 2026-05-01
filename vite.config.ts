@@ -65,6 +65,7 @@ export default defineConfig({
                 ],
             },
             workbox: {
+                importScripts: ['/web-push-sw.js'],
                 navigateFallback: '/offline.html',
                 navigateFallbackDenylist: [/^\/build\//, /^\/api\//],
                 runtimeCaching: [

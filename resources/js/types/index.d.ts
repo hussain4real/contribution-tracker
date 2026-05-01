@@ -70,6 +70,12 @@ export interface Subscription {
     features: string[];
 }
 
+export interface WebPush {
+    enabled: boolean;
+    publicKey: string | null;
+    subscribed: boolean;
+}
+
 export type AppPageProps<
     T extends Record<string, unknown> = Record<string, unknown>,
 > = T & {
@@ -82,6 +88,7 @@ export type AppPageProps<
     flash?: Flash;
     featureFlags?: FeatureFlags | null;
     subscription?: Subscription | null;
+    webPush?: WebPush | null;
 };
 
 export interface User {

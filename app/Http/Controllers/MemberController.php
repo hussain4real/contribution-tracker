@@ -180,6 +180,7 @@ class MemberController extends Controller
                 'archived_at' => $member->archived_at?->toDateString(),
                 'created_at' => $member->created_at?->toDateString(),
                 'whatsapp_verified' => $member->whatsapp_verified_at !== null,
+                'web_push_subscribed' => $member->pushSubscriptions()->exists(),
             ],
             'contributions' => $contributions,
             'summary' => [
@@ -192,6 +193,7 @@ class MemberController extends Controller
             'canViewContributions' => $canViewContributions,
             'canSendEmailReminder' => Auth::user()?->canRecordPayments() ?? false,
             'canSendWhatsAppReminder' => Auth::user()?->canRecordPayments() ?? false,
+            'canSendWebPushReminder' => Auth::user()?->canRecordPayments() ?? false,
         ]);
     }
 
