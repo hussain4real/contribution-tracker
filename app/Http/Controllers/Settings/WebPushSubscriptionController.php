@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\DestroyWebPushSubscriptionRequest;
 use App\Http\Requests\StoreWebPushSubscriptionRequest;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 
 class WebPushSubscriptionController extends Controller
 {
@@ -20,16 +20,17 @@ class WebPushSubscriptionController extends Controller
             $validated['contentEncoding'] ?? null,
         );
 
+        $request->user()->forgetWebPushSubscriptionCache();
+
         return back()->with('success', 'Browser notifications enabled.');
     }
 
-    public function destroy(Request $request): RedirectResponse
+    public function destroy(DestroyWebPushSubscriptionRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'endpoint' => ['required', 'string', 'url', 'max:500'],
-        ]);
+        $validated = $request->validated();
 
         $request->user()->deletePushSubscription($validated['endpoint']);
+        $request->user()->forgetWebPushSubscriptionCache();
 
         return back()->with('success', 'Browser notifications disabled.');
     }

@@ -62,7 +62,10 @@ class GitHubReleaseService
                     'id' => $release['id'],
                     'name' => $release['name'] ?? $release['tag_name'],
                     'tag_name' => $release['tag_name'],
-                    'body' => $includeBody ? Str::markdown($release['body'] ?? '') : '',
+                    'body' => $includeBody ? Str::markdown($release['body'] ?? '', [
+                        'html_input' => 'strip',
+                        'allow_unsafe_links' => false,
+                    ]) : '',
                     'html_url' => $release['html_url'],
                     'published_at' => $release['published_at'],
                     'prerelease' => $release['prerelease'] ?? false,

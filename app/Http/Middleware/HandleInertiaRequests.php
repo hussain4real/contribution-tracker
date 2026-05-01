@@ -137,7 +137,7 @@ class HandleInertiaRequests extends Middleware
         return [
             'enabled' => true,
             'publicKey' => $publicKey,
-            'subscribed' => $user->pushSubscriptions()->exists(),
+            'subscribed' => $user->hasWebPushSubscription(),
         ];
     }
 }

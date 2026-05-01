@@ -67,6 +67,8 @@ class ContributionReminderNotification extends Notification implements ShouldQue
     /**
      * Get the notification's delivery channels.
      *
+     * Web push is intentionally part of the default app-notification channels.
+     *
      * @return array<int, string>
      */
     public function via(object $notifiable): array

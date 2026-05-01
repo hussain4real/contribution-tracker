@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
 
 function webPushPayload(array $overrides = []): array
@@ -111,6 +112,16 @@ describe('web push subscriptions', function () {
 
         $response->assertSessionHasErrors(['endpoint', 'keys.auth']);
     });
+
+    it('rejects invalid unsubscribe payloads', function () {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->delete(route('web-push.subscription.destroy'), [
+            'endpoint' => 'not-a-url',
+        ]);
+
+        $response->assertSessionHasErrors(['endpoint']);
+    });
 });
 
 describe('web push shared props', function () {
@@ -158,5 +169,33 @@ describe('web push shared props', function () {
                 ->where('webPush.publicKey', null)
                 ->missing('webPush.privateKey')
             );
+    });
+
+    it('does not query subscriptions when web push is disabled', function () {
+        config()->set('webpush.vapid.public_key', null);
+
+        $user = User::factory()->create();
+        $user->updatePushSubscription(
+            'https://updates.push.services.mozilla.com/wpush/v2/test-endpoint',
+            'test-public-key',
+            'test-auth-token',
+            'aes128gcm',
+        );
+
+        DB::enableQueryLog();
+
+        $response = $this->actingAs($user)->get(route('profile.edit'));
+
+        $queries = collect(DB::getQueryLog())->pluck('query');
+
+        DB::disableQueryLog();
+
+        $response->assertSuccessful()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('webPush.enabled', false)
+                ->where('webPush.subscribed', false)
+            );
+
+        expect($queries->filter(fn (string $query): bool => str_contains($query, 'push_subscriptions')))->toBeEmpty();
     });
 });

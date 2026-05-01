@@ -12,7 +12,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->unsignedBigInteger('last_seen_changelog_release_id')->nullable()->after('paystack_customer_code');
+            $table->unsignedBigInteger('last_seen_changelog_release_id')
+                ->nullable()
+                ->comment('GitHub release ID from the external GitHub Releases API; intentionally no local foreign key.')
+                ->after('paystack_customer_code');
         });
     }
 

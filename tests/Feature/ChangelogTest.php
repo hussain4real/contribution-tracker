@@ -70,6 +70,26 @@ it('fetches and displays github releases', function () {
         );
 });
 
+it('strips unsafe html and links from github release markdown', function () {
+    Http::fake([
+        'api.github.com/*' => Http::response([
+            githubRelease([
+                'body' => '# Update <script>alert("xss")</script>'."\n".'[unsafe](javascript:alert(1))',
+            ]),
+        ], 200),
+    ]);
+
+    $response = $this->actingAs($this->user)
+        ->get('/changelog')
+        ->assertSuccessful();
+
+    $body = $response->inertiaProps('releases.0.body');
+
+    expect($body)
+        ->not->toContain('<script')
+        ->not->toContain('javascript:');
+});
+
 it('shares latest changelog update data with authenticated pages', function () {
     Http::fake([
         'api.github.com/*' => Http::response([githubRelease()], 200),
