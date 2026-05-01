@@ -10,8 +10,16 @@ const PROMPT_INTERVAL_MS = 60 * 60 * 1000;
 const STORAGE_PREFIX = 'web_push_prompt';
 
 const page = usePage();
-const { isSupported, subscribed, processing, ready, denied, init, subscribe } =
-    useWebPush();
+const {
+    isSupported,
+    subscribed,
+    processing,
+    ready,
+    error: webPushError,
+    denied,
+    init,
+    subscribe,
+} = useWebPush();
 
 const promptVisible = ref(false);
 let promptTimer: ReturnType<typeof setTimeout> | undefined;
@@ -150,7 +158,10 @@ onUnmounted(() => clearPromptTimer());
                 aria-hidden="true"
             />
             <span class="truncate text-violet-950 dark:text-violet-100">
-                Enable browser notifications for contribution reminders.
+                {{
+                    webPushError ??
+                    'Enable browser notifications for contribution reminders.'
+                }}
             </span>
         </div>
 

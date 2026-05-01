@@ -22,6 +22,10 @@ const ready = ref(false);
 const error = ref<string | null>(null);
 let initialized = false;
 
+const PUSH_SERVICE_WORKER_URL = '/web-push-sw.js';
+const PUSH_SERVICE_WORKER_SCOPE = '/web-push/';
+const SERVICE_WORKER_ACTIVATION_TIMEOUT_MS = 8000;
+
 function base64ToUint8Array(base64String: string): Uint8Array {
     const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
     const base64 = (base64String + padding)
@@ -60,10 +64,107 @@ function subscriptionPayload(
     };
 }
 
-async function currentSubscription(): Promise<PushSubscription | null> {
-    const registration = await navigator.serviceWorker.ready;
+function serviceWorkerErrorMessage(exception: unknown): string {
+    if (exception instanceof DOMException) {
+        if (exception.name === 'NotAllowedError') {
+            return 'Browser notification permission was not granted.';
+        }
 
-    return registration.pushManager.getSubscription();
+        if (exception.name === 'InvalidCharacterError') {
+            return 'The browser notification key is invalid. Regenerate the VAPID keys and reload the page.';
+        }
+    }
+
+    return 'We could not prepare browser notifications. Reload the page and try again.';
+}
+
+async function waitForActivation(
+    registration: ServiceWorkerRegistration,
+): Promise<ServiceWorkerRegistration> {
+    if (registration.active) {
+        return registration;
+    }
+
+    const worker = registration.installing ?? registration.waiting;
+
+    if (!worker) {
+        return registration;
+    }
+
+    await new Promise<void>((resolve, reject) => {
+        const timeout = window.setTimeout(() => {
+            worker.removeEventListener('statechange', handleStateChange);
+            reject(new Error('Timed out waiting for the service worker.'));
+        }, SERVICE_WORKER_ACTIVATION_TIMEOUT_MS);
+
+        function handleStateChange(): void {
+            if (worker.state === 'activated') {
+                window.clearTimeout(timeout);
+                worker.removeEventListener('statechange', handleStateChange);
+                resolve();
+            }
+        }
+
+        worker.addEventListener('statechange', handleStateChange);
+        handleStateChange();
+    });
+
+    return registration;
+}
+
+async function registrationWithSubscription(): Promise<{
+    registration: ServiceWorkerRegistration;
+    subscription: PushSubscription;
+} | null> {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+
+    for (const registration of registrations) {
+        const subscription = await registration.pushManager
+            .getSubscription()
+            .catch(() => null);
+
+        if (subscription) {
+            return { registration, subscription };
+        }
+    }
+
+    return null;
+}
+
+async function webPushRegistration(): Promise<ServiceWorkerRegistration> {
+    const existingSubscription = await registrationWithSubscription();
+
+    if (existingSubscription) {
+        return existingSubscription.registration;
+    }
+
+    const existingRegistration = await navigator.serviceWorker.getRegistration(
+        PUSH_SERVICE_WORKER_SCOPE,
+    );
+
+    if (existingRegistration) {
+        return waitForActivation(existingRegistration);
+    }
+
+    return waitForActivation(
+        await navigator.serviceWorker.register(PUSH_SERVICE_WORKER_URL, {
+            scope: PUSH_SERVICE_WORKER_SCOPE,
+        }),
+    );
+}
+
+async function currentSubscription(): Promise<PushSubscription | null> {
+    const existingSubscription = await registrationWithSubscription();
+
+    if (existingSubscription) {
+        return existingSubscription.subscription;
+    }
+
+    const registration = await navigator.serviceWorker.getRegistration(
+        PUSH_SERVICE_WORKER_SCOPE,
+    );
+
+    return registration?.pushManager.getSubscription() ?? null;
 }
 
 async function init(): Promise<void> {
@@ -86,7 +187,11 @@ async function init(): Promise<void> {
     subscribed.value = !!page.props.webPush?.subscribed;
 
     if (permission.value === 'granted') {
-        subscribed.value = (await currentSubscription()) !== null;
+        try {
+            subscribed.value = (await currentSubscription()) !== null;
+        } catch {
+            subscribed.value = false;
+        }
     }
 
     ready.value = true;
@@ -112,8 +217,11 @@ async function subscribe(): Promise<void> {
             return;
         }
 
-        const registration = await navigator.serviceWorker.ready;
+        const existingSubscription = await registrationWithSubscription();
+        const registration =
+            existingSubscription?.registration ?? (await webPushRegistration());
         const subscription =
+            existingSubscription?.subscription ??
             (await registration.pushManager.getSubscription()) ??
             (await registration.pushManager.subscribe({
                 userVisibleOnly: true,
@@ -135,6 +243,8 @@ async function subscribe(): Promise<void> {
                 onFinish: () => resolve(),
             });
         });
+    } catch (exception) {
+        error.value = serviceWorkerErrorMessage(exception);
     } finally {
         processing.value = false;
     }
