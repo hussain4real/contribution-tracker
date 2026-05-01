@@ -4,6 +4,7 @@ import AppContent from '@/components/AppContent.vue';
 import AppShell from '@/components/AppShell.vue';
 import AppSidebar from '@/components/AppSidebar.vue';
 import AppSidebarHeader from '@/components/AppSidebarHeader.vue';
+import ChangelogUpdatePrompt from '@/components/ChangelogUpdatePrompt.vue';
 import NetworkStatusBanner from '@/components/NetworkStatusBanner.vue';
 import PwaInstallPrompt from '@/components/PwaInstallPrompt.vue';
 import SwUpdateToast from '@/components/SwUpdateToast.vue';
@@ -130,6 +131,7 @@ function dismissWhatsAppPrompt(): void {
                 </div>
             </div>
 
+            <ChangelogUpdatePrompt />
             <WebPushEnablePrompt />
 
             <AppSidebarHeader :breadcrumbs="breadcrumbs" />

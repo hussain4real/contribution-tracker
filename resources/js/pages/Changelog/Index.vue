@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
+import { seen as markChangelogSeen } from '@/routes/changelog';
 import { type BreadcrumbItem } from '@/types';
-import { Head } from '@inertiajs/vue3';
+import { Head, router, usePage } from '@inertiajs/vue3';
 import { ChevronDown, ExternalLink, Rocket } from 'lucide-vue-next';
-import { reactive } from 'vue';
+import { onMounted, reactive } from 'vue';
 
 interface Release {
     id: number;
@@ -18,6 +19,8 @@ interface Release {
 const props = withDefaults(defineProps<{ releases?: Release[] }>(), {
     releases: () => [],
 });
+
+const page = usePage();
 
 const expanded: Record<number, boolean> = reactive(
     Object.fromEntries(props.releases.map((r, i) => [r.id, i === 0])),
@@ -66,6 +69,19 @@ function timeAgo(dateString: string): string {
     const years = Math.floor(diffDays / 365);
     return `${years} ${years === 1 ? 'year' : 'years'} ago`;
 }
+
+onMounted(() => {
+    if (page.props.changelogUpdate?.unseen) {
+        router.post(
+            markChangelogSeen().url,
+            {},
+            {
+                preserveScroll: true,
+                only: ['changelogUpdate'],
+            },
+        );
+    }
+});
 </script>
 
 <template>

@@ -39,6 +39,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'paystack_customer_code',
         'whatsapp_phone',
         'whatsapp_verified_at',
+        'last_seen_changelog_release_id',
     ];
 
     /**
@@ -69,6 +70,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'is_super_admin' => 'boolean',
             'archived_at' => 'datetime',
             'whatsapp_verified_at' => 'datetime',
+            'last_seen_changelog_release_id' => 'integer',
         ];
     }
 

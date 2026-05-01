@@ -5,6 +5,7 @@ use App\Http\Controllers\AiChatController;
 use App\Http\Controllers\Auth\PasskeyLoginController;
 use App\Http\Controllers\Auth\PasskeyTwoFactorController;
 use App\Http\Controllers\ChangelogController;
+use App\Http\Controllers\ChangelogSeenController;
 use App\Http\Controllers\ContributionController;
 use App\Http\Controllers\ContributionEmailReminderController;
 use App\Http\Controllers\ContributionWebPushReminderController;
@@ -105,6 +106,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Changelog
     Route::get('changelog', ChangelogController::class)->name('changelog');
+    Route::post('changelog/seen', ChangelogSeenController::class)->name('changelog.seen');
 
     // Members (Admin only for management, all can view list)
     Route::resource('members', MemberController::class)->middleware('subscription');

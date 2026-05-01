@@ -76,6 +76,21 @@ export interface WebPush {
     subscribed: boolean;
 }
 
+export interface ChangelogRelease {
+    id: number;
+    name: string;
+    tag_name: string;
+    body: string;
+    html_url: string;
+    published_at: string;
+    prerelease: boolean;
+}
+
+export interface ChangelogUpdate {
+    latest: ChangelogRelease | null;
+    unseen: boolean;
+}
+
 export type AppPageProps<
     T extends Record<string, unknown> = Record<string, unknown>,
 > = T & {
@@ -89,6 +104,7 @@ export type AppPageProps<
     featureFlags?: FeatureFlags | null;
     subscription?: Subscription | null;
     webPush?: WebPush | null;
+    changelogUpdate?: ChangelogUpdate | null;
 };
 
 export interface User {

@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Features\AiAssistant;
 use App\Models\User;
+use App\Services\GitHubReleaseService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -78,6 +79,7 @@ class HandleInertiaRequests extends Middleware
             'featureFlags' => $user ? [
                 'ai_assistant' => fn () => Feature::for($user)->active(AiAssistant::class),
             ] : null,
+            'changelogUpdate' => $user ? fn () => app(GitHubReleaseService::class)->updateDataFor($user) : null,
             'webPush' => $user ? fn () => $this->webPushData($user) : null,
             'notifications' => $user ? [
                 'unread_count' => fn () => $user->unreadNotifications()->count(),
