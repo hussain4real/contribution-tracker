@@ -12,7 +12,7 @@ use App\Models\User;
 use App\Notifications\ContributionReminderNotification;
 use Illuminate\Support\Facades\Notification;
 use Laravel\Mcp\Server\Testing\TestResponse;
-use Laravel\Sanctum\Sanctum;
+use Laravel\Passport\Passport;
 
 function familyFundInitializePayload(): array
 {
@@ -45,29 +45,39 @@ beforeEach(function () {
     $this->admin = User::factory()->admin()->create(['family_id' => $this->family->id]);
 });
 
-it('requires sanctum authentication for the web mcp route', function () {
-    $this->postJson('/mcp/family-fund', familyFundInitializePayload(), [
+it('advertises oauth metadata for mcp clients', function () {
+    $this->getJson('/.well-known/oauth-protected-resource/mcp/family-fund')
+        ->assertSuccessful()
+        ->assertJsonPath('resource', url('/mcp/family-fund'))
+        ->assertJsonPath('authorization_servers.0', url('/'))
+        ->assertJsonPath('scopes_supported.0', 'mcp:use');
+
+    $this->getJson('/.well-known/oauth-authorization-server/mcp/family-fund')
+        ->assertSuccessful()
+        ->assertJsonPath('authorization_endpoint', route('passport.authorizations.authorize'))
+        ->assertJsonPath('token_endpoint', route('passport.token'))
+        ->assertJsonPath('registration_endpoint', url('/oauth/register'))
+        ->assertJsonPath('scopes_supported.0', 'mcp:use');
+});
+
+it('requires oauth authentication for the web mcp route', function () {
+    $response = $this->postJson('/mcp/family-fund', familyFundInitializePayload(), [
         'Accept' => 'application/json, text/event-stream',
-    ])
+    ]);
+
+    $response
         ->assertUnauthorized()
-        ->assertHeader('WWW-Authenticate', 'Bearer realm="mcp", error="invalid_token"')
-        ->assertHeader('Content-Type', 'application/json');
-});
-
-it('accepts sanctum bearer tokens for the web mcp route', function () {
-    $token = $this->admin->createToken('mcp-inspector')->plainTextToken;
-
-    $this->withToken($token)
-        ->postJson('/mcp/family-fund', familyFundInitializePayload(), [
-            'Accept' => 'application/json, text/event-stream',
-        ])
-        ->assertSuccessful()
         ->assertHeader('Content-Type', 'application/json')
-        ->assertJsonPath('result.serverInfo.name', 'Family Fund Server');
+        ->assertDontSee('<!DOCTYPE html');
+
+    expect($response->headers->get('WWW-Authenticate'))
+        ->toContain('Bearer realm="mcp"')
+        ->toContain('resource_metadata=')
+        ->toContain('/.well-known/oauth-protected-resource/mcp/family-fund');
 });
 
-it('accepts sanctum authenticated requests for the web mcp route', function () {
-    Sanctum::actingAs($this->admin);
+it('accepts passport authenticated requests for the web mcp route', function () {
+    Passport::actingAs($this->admin, ['mcp:use']);
 
     $this->postJson('/mcp/family-fund', familyFundInitializePayload(), [
         'Accept' => 'application/json, text/event-stream',
@@ -75,6 +85,25 @@ it('accepts sanctum authenticated requests for the web mcp route', function () {
         ->assertSuccessful()
         ->assertHeader('Content-Type', 'application/json')
         ->assertJsonPath('result.serverInfo.name', 'Family Fund Server');
+});
+
+it('forbids unverified users from the web mcp route and mcp tools', function () {
+    $unverifiedAdmin = User::factory()
+        ->admin()
+        ->unverified()
+        ->create(['family_id' => $this->family->id]);
+
+    Passport::actingAs($unverifiedAdmin, ['mcp:use']);
+
+    $this->postJson('/mcp/family-fund', familyFundInitializePayload(), [
+        'Accept' => 'application/json, text/event-stream',
+    ])
+        ->assertForbidden()
+        ->assertJsonPath('message', 'Your email address is not verified.');
+
+    FamilyFundServer::actingAs($unverifiedAdmin)
+        ->tool(OpenFamilyFundReview::class)
+        ->assertHasErrors(['Your email address is not verified.']);
 });
 
 it('opens the review app with ui metadata', function () {

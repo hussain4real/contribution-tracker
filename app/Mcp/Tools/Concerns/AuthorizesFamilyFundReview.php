@@ -16,6 +16,10 @@ trait AuthorizesFamilyFundReview
             return Response::error('Authentication is required.');
         }
 
+        if (! $user->hasVerifiedEmail()) {
+            return Response::error('Your email address is not verified.');
+        }
+
         if (! $user->canRecordPayments()) {
             return Response::error('Permission denied. Admin or Financial Secretary access is required.');
         }

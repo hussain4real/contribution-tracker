@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Inertia\ExceptionResponse;
 use Inertia\Inertia;
+use Laravel\Passport\Passport;
 use Laravel\Pennant\Middleware\EnsureFeaturesAreActive;
 
 class AppServiceProvider extends ServiceProvider
@@ -27,8 +28,12 @@ class AppServiceProvider extends ServiceProvider
                 ->by('whatsapp-notifications');
         });
 
+        Passport::authorizationView(function (array $parameters) {
+            return view('mcp.authorize', $parameters);
+        });
+
         Inertia::handleExceptionsUsing(function (ExceptionResponse $response) {
-            if ($response->request->is('mcp/*')) {
+            if ($response->request->is('mcp/*', '.well-known/oauth-*', 'oauth/*')) {
                 return null;
             }
 
