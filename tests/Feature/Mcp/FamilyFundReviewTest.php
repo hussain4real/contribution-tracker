@@ -88,7 +88,8 @@ it('opens the review app with ui metadata', function () {
 
     expect($tool->name())->toBe('open-family-fund-review')
         ->and($metadata['resourceUri'] ?? null)->toBe((new FamilyFundReviewApp)->uri())
-        ->and($metadata['visibility'] ?? [])->toContain('model', 'app');
+        ->and($metadata['visibility'] ?? [])->toContain('model', 'app')
+        ->and($tool->toArray()['_meta']['openai/outputTemplate'] ?? null)->toBe((new FamilyFundReviewApp)->uri());
 });
 
 it('returns the app resource html', function () {
