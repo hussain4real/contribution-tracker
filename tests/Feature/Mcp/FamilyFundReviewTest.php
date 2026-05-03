@@ -10,9 +10,13 @@ use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
 use App\Notifications\ContributionReminderNotification;
+use Illuminate\Http\Request as HttpRequest;
 use Illuminate\Support\Facades\Notification;
 use Laravel\Mcp\Server\Testing\TestResponse;
+use Laravel\Passport\Client;
 use Laravel\Passport\Passport;
+use Laravel\Passport\Scope;
+use League\OAuth2\Server\ResourceServer;
 
 function familyFundInitializePayload(): array
 {
@@ -40,7 +44,38 @@ function familyFundMcpJson(TestResponse $response): array
     return json_decode($method->invoke($response)[0] ?? '{}', true, flags: JSON_THROW_ON_ERROR);
 }
 
+function familyFundConfigurePassportKeys(): void
+{
+    static $keys;
+
+    if ($keys === null) {
+        $privateKey = '';
+        $resource = openssl_pkey_new([
+            'private_key_bits' => 2048,
+            'private_key_type' => OPENSSL_KEYTYPE_RSA,
+        ]);
+
+        openssl_pkey_export($resource, $privateKey);
+
+        $details = openssl_pkey_get_details($resource);
+
+        $keys = [
+            'private' => $privateKey,
+            'public' => $details['key'],
+        ];
+    }
+
+    config([
+        'passport.private_key' => $keys['private'],
+        'passport.public_key' => $keys['public'],
+    ]);
+
+    app()->forgetInstance(ResourceServer::class);
+}
+
 beforeEach(function () {
+    familyFundConfigurePassportKeys();
+
     $this->family = Family::factory()->create();
     $this->admin = User::factory()->admin()->create(['family_id' => $this->family->id]);
 });
@@ -126,6 +161,29 @@ it('returns the app resource html', function () {
         ->resource(FamilyFundReviewApp::class)
         ->assertOk()
         ->assertSee(['Family Fund Review', 'family-fund-review']);
+});
+
+it('preserves oauth state in the authorization form', function () {
+    $this->withoutVite();
+
+    $client = new Client([
+        'name' => 'MCP Client',
+    ]);
+    $client->id = 'client-id';
+
+    $html = (string) $this->view('mcp.authorize', [
+        'client' => $client,
+        'user' => $this->admin,
+        'scopes' => [new Scope('mcp:use', 'Use available MCP functionality.')],
+        'request' => HttpRequest::create('/oauth/authorize', 'GET', [
+            'state' => 'client-state-token',
+        ]),
+        'authToken' => 'auth-token',
+    ]);
+
+    expect($html)
+        ->toContain('name="state" value="client-state-token"')
+        ->and(substr_count($html, 'name="state" value="client-state-token"'))->toBe(2);
 });
 
 it('returns contribution review data for the authenticated family only', function () {
