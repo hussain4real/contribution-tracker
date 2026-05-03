@@ -11,7 +11,7 @@ const INERTIA_PAGES_CACHE = 'inertia-pages-v2';
 export default defineConfig({
     plugins: [
         laravel({
-            input: ['resources/js/app.ts'],
+            input: ['resources/js/app.ts', 'resources/css/app.css'],
             refresh: true,
         }),
         inertia({
