@@ -17,6 +17,7 @@
         "laravel/framework": "^13.0",
         "laravel/nightwatch": "^1.24",
         "laravel/pennant": "^1.23",
+        "laravel/sanctum": "^4.3",
         "laravel/tinker": "^3.0",
         "laravel/wayfinder": "^0.1.9",
         "resend/resend-php": "^1.1",
