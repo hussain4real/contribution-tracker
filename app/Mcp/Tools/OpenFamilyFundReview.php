@@ -17,6 +17,17 @@ class OpenFamilyFundReview extends Tool
 {
     use AuthorizesFamilyFundReview;
 
+    /**
+     * @return array<string, mixed>
+     */
+    public function toArray(): array
+    {
+        $tool = parent::toArray();
+        $tool['_meta']['openai/outputTemplate'] = (new FamilyFundReviewApp)->uri();
+
+        return $tool;
+    }
+
     public function handle(Request $request): Response
     {
         $user = $this->authorizedUser($request);
