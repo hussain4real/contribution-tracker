@@ -10,9 +10,13 @@ use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
 use App\Notifications\ContributionReminderNotification;
+use Illuminate\Http\Request as HttpRequest;
 use Illuminate\Support\Facades\Notification;
 use Laravel\Mcp\Server\Testing\TestResponse;
-use Laravel\Sanctum\Sanctum;
+use Laravel\Passport\Client;
+use Laravel\Passport\Passport;
+use Laravel\Passport\Scope;
+use League\OAuth2\Server\ResourceServer;
 
 function familyFundInitializePayload(): array
 {
@@ -40,34 +44,75 @@ function familyFundMcpJson(TestResponse $response): array
     return json_decode($method->invoke($response)[0] ?? '{}', true, flags: JSON_THROW_ON_ERROR);
 }
 
+function familyFundConfigurePassportKeys(): void
+{
+    static $keys;
+
+    if ($keys === null) {
+        $privateKey = '';
+        $resource = openssl_pkey_new([
+            'private_key_bits' => 2048,
+            'private_key_type' => OPENSSL_KEYTYPE_RSA,
+        ]);
+
+        openssl_pkey_export($resource, $privateKey);
+
+        $details = openssl_pkey_get_details($resource);
+
+        $keys = [
+            'private' => $privateKey,
+            'public' => $details['key'],
+        ];
+    }
+
+    config([
+        'passport.private_key' => $keys['private'],
+        'passport.public_key' => $keys['public'],
+    ]);
+
+    app()->forgetInstance(ResourceServer::class);
+}
+
 beforeEach(function () {
+    familyFundConfigurePassportKeys();
+
     $this->family = Family::factory()->create();
     $this->admin = User::factory()->admin()->create(['family_id' => $this->family->id]);
 });
 
-it('requires sanctum authentication for the web mcp route', function () {
-    $this->postJson('/mcp/family-fund', familyFundInitializePayload(), [
+it('advertises oauth metadata for mcp clients', function () {
+    $this->getJson('/.well-known/oauth-protected-resource/mcp/family-fund')
+        ->assertSuccessful()
+        ->assertJsonPath('resource', url('/mcp/family-fund'))
+        ->assertJsonPath('authorization_servers.0', url('/'))
+        ->assertJsonPath('scopes_supported.0', 'mcp:use');
+
+    $this->getJson('/.well-known/oauth-authorization-server/mcp/family-fund')
+        ->assertSuccessful()
+        ->assertJsonPath('authorization_endpoint', route('passport.authorizations.authorize'))
+        ->assertJsonPath('token_endpoint', route('passport.token'))
+        ->assertJsonPath('registration_endpoint', url('/oauth/register'))
+        ->assertJsonPath('scopes_supported.0', 'mcp:use');
+});
+
+it('requires oauth authentication for the web mcp route', function () {
+    $response = $this->postJson('/mcp/family-fund', familyFundInitializePayload(), [
         'Accept' => 'application/json, text/event-stream',
-    ])
+    ]);
+
+    $response
         ->assertUnauthorized()
-        ->assertHeader('WWW-Authenticate', 'Bearer realm="mcp", error="invalid_token"')
-        ->assertHeader('Content-Type', 'application/json');
-});
-
-it('accepts sanctum bearer tokens for the web mcp route', function () {
-    $token = $this->admin->createToken('mcp-inspector')->plainTextToken;
-
-    $this->withToken($token)
-        ->postJson('/mcp/family-fund', familyFundInitializePayload(), [
-            'Accept' => 'application/json, text/event-stream',
-        ])
-        ->assertSuccessful()
         ->assertHeader('Content-Type', 'application/json')
-        ->assertJsonPath('result.serverInfo.name', 'Family Fund Server');
+        ->assertDontSee('<!DOCTYPE html');
+
+    expect($response->headers->get('WWW-Authenticate'))
+        ->toContain('Bearer realm="mcp"')
+        ->toContain('resource_metadata=')
+        ->toContain('/.well-known/oauth-protected-resource/mcp/family-fund');
 });
 
-it('accepts sanctum authenticated requests for the web mcp route', function () {
-    Sanctum::actingAs($this->admin);
+it('accepts passport authenticated requests for the web mcp route', function () {
+    Passport::actingAs($this->admin, ['mcp:use']);
 
     $this->postJson('/mcp/family-fund', familyFundInitializePayload(), [
         'Accept' => 'application/json, text/event-stream',
@@ -75,6 +120,25 @@ it('accepts sanctum authenticated requests for the web mcp route', function () {
         ->assertSuccessful()
         ->assertHeader('Content-Type', 'application/json')
         ->assertJsonPath('result.serverInfo.name', 'Family Fund Server');
+});
+
+it('forbids unverified users from the web mcp route and mcp tools', function () {
+    $unverifiedAdmin = User::factory()
+        ->admin()
+        ->unverified()
+        ->create(['family_id' => $this->family->id]);
+
+    Passport::actingAs($unverifiedAdmin, ['mcp:use']);
+
+    $this->postJson('/mcp/family-fund', familyFundInitializePayload(), [
+        'Accept' => 'application/json, text/event-stream',
+    ])
+        ->assertForbidden()
+        ->assertJsonPath('message', 'Your email address is not verified.');
+
+    FamilyFundServer::actingAs($unverifiedAdmin)
+        ->tool(OpenFamilyFundReview::class)
+        ->assertHasErrors(['Your email address is not verified.']);
 });
 
 it('opens the review app with ui metadata', function () {
@@ -97,6 +161,29 @@ it('returns the app resource html', function () {
         ->resource(FamilyFundReviewApp::class)
         ->assertOk()
         ->assertSee(['Family Fund Review', 'family-fund-review']);
+});
+
+it('preserves oauth state in the authorization form', function () {
+    $this->withoutVite();
+
+    $client = new Client([
+        'name' => 'MCP Client',
+    ]);
+    $client->id = 'client-id';
+
+    $html = (string) $this->view('mcp.authorize', [
+        'client' => $client,
+        'user' => $this->admin,
+        'scopes' => [new Scope('mcp:use', 'Use available MCP functionality.')],
+        'request' => HttpRequest::create('/oauth/authorize', 'GET', [
+            'state' => 'client-state-token',
+        ]),
+        'authToken' => 'auth-token',
+    ]);
+
+    expect($html)
+        ->toContain('name="state" value="client-state-token"')
+        ->and(substr_count($html, 'name="state" value="client-state-token"'))->toBe(2);
 });
 
 it('returns contribution review data for the authenticated family only', function () {
