@@ -6,6 +6,7 @@ use App\Enums\MemberCategory;
 use App\Enums\PaymentStatus;
 use App\Models\Contribution;
 use App\Models\User;
+use App\Services\FamilyContributionReviewService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -13,6 +14,10 @@ use Inertia\Response;
 
 class ReportController extends Controller
 {
+    public function __construct(
+        private readonly FamilyContributionReviewService $reviewService,
+    ) {}
+
     /**
      * Display the report dashboard.
      */
@@ -70,76 +75,14 @@ class ReportController extends Controller
                 ];
             });
 
-        // Calculate summary statistics
-        $allContributions = Contribution::query()
-            ->where('family_id', $familyId)
-            ->where('year', $year)
-            ->where('month', $month)
-            ->with(['payments', 'user'])
-            ->get();
-
-        $totalExpected = $allContributions->sum('expected_amount');
-        $totalCollected = $allContributions->sum(fn ($c) => $c->payments->sum('amount'));
-        $totalOutstanding = $totalExpected - $totalCollected;
-        $collectionRate = $totalExpected > 0 ? round(($totalCollected / $totalExpected) * 100, 1) : 0;
-
-        // Count members by status
-        $statusCounts = [
-            PaymentStatus::Paid->value => 0,
-            PaymentStatus::Partial->value => 0,
-            PaymentStatus::Unpaid->value => 0,
-            PaymentStatus::Overdue->value => 0,
-        ];
-
-        foreach ($allContributions as $contribution) {
-            $status = $contribution->status->value;
-            if (isset($statusCounts[$status])) {
-                $statusCounts[$status]++;
-            }
-        }
-
-        // Count members without contributions as unpaid
-        $membersWithContributions = $allContributions->pluck('user_id')->toArray();
-        $membersWithoutContributions = User::query()
-            ->where('family_id', $familyId)
-            ->whereNull('archived_at')
-            ->whereNotNull('category')
-            ->whereNotIn('id', $membersWithContributions)
-            ->count();
-        $statusCounts[PaymentStatus::Unpaid->value] += $membersWithoutContributions;
-
-        // Breakdown by category
-        $byCategory = [];
-        foreach (MemberCategory::cases() as $category) {
-            $categoryContributions = $allContributions->filter(function ($c) use ($category) {
-                return $c->user && $c->user->category === $category;
-            });
-
-            $categoryExpected = $categoryContributions->sum('expected_amount');
-            $categoryCollected = $categoryContributions->sum(fn ($c) => $c->payments->sum('amount'));
-
-            $byCategory[$category->value] = [
-                'label' => $category->label(),
-                'expected' => $categoryExpected,
-                'collected' => $categoryCollected,
-                'outstanding' => $categoryExpected - $categoryCollected,
-                'count' => $categoryContributions->count(),
-            ];
-        }
+        $review = $this->reviewService->monthly($currentUser, $year, $month);
 
         return Inertia::render('Reports/Monthly', [
             'year' => $year,
             'month' => $month,
             'month_name' => $monthDate->format('F'),
-            'summary' => [
-                'total_expected' => $totalExpected,
-                'total_collected' => $totalCollected,
-                'total_outstanding' => $totalOutstanding,
-                'collection_rate' => $collectionRate,
-                'member_count' => $allContributions->count() + $membersWithoutContributions,
-                'status_counts' => $statusCounts,
-            ],
-            'by_category' => $byCategory,
+            'summary' => $review['summary'],
+            'by_category' => $review['by_category'],
             'members' => $members,
         ]);
     }

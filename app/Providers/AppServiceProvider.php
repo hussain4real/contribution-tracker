@@ -28,6 +28,10 @@ class AppServiceProvider extends ServiceProvider
         });
 
         Inertia::handleExceptionsUsing(function (ExceptionResponse $response) {
+            if ($response->request->is('mcp/*')) {
+                return null;
+            }
+
             if (in_array($response->statusCode(), [403, 404, 500, 503])) {
                 return $response->render('ErrorPage', [
                     'status' => $response->statusCode(),
