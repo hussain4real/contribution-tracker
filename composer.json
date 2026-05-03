@@ -15,6 +15,7 @@
         "laravel/ai": "^0.6.4",
         "laravel/fortify": "^1.30",
         "laravel/framework": "^13.0",
+        "laravel/mcp": "^0.7.0",
         "laravel/nightwatch": "^1.24",
         "laravel/pennant": "^1.23",
         "laravel/sanctum": "^4.3",
