@@ -60,6 +60,33 @@ describe('Mobile app shell', function () {
             ->assertNoJavaScriptErrors();
     });
 
+    it('renders the dedicated notifications page on mobile', function () {
+        $this->admin->notifications()->create([
+            'id' => (string) Str::uuid(),
+            'type' => 'App\\Notifications\\ContributionReminderNotification',
+            'data' => [
+                'contribution_id' => 1,
+                'family_name' => 'Test Family',
+                'period_label' => 'May 2026',
+                'amount_owed' => 4000,
+                'due_date' => '2026-05-25',
+                'type' => 'follow_up',
+            ],
+        ]);
+
+        $page = visit('/login')->on()->iPhone15Pro();
+
+        $page->fill('email', 'admin@test.com')
+            ->fill('password', 'password')
+            ->click('Log in')
+            ->navigate('/notifications')
+            ->assertSee('Notification Center')
+            ->assertSee('Timeline')
+            ->assertSee('May 2026')
+            ->assertSee('Due today')
+            ->assertNoJavaScriptErrors();
+    });
+
     it('keeps role-aware desktop navigation available', function () {
         $page = visit('/login');
 
