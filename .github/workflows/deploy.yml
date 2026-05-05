@@ -63,10 +63,22 @@ jobs:
           username: deployer
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            set -euo pipefail
+
             cd /var/www/contribution-tracker
 
             # Pull latest changes
-            git pull origin main
+            git config --global --add safe.directory /var/www/contribution-tracker
+
+            if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+              echo "Production checkout has local tracked changes. Refusing to deploy over them."
+              git status --short
+              exit 1
+            fi
+
+            git fetch origin main
+            git merge --ff-only origin/main
+            echo "Deploying $(git rev-parse --short HEAD)"
 
             # Install PHP dependencies
             composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
@@ -95,6 +107,21 @@ jobs:
             php artisan route:cache
             php artisan view:cache
             php artisan event:cache
+
+            # Update Nginx cache headers for PWA service workers and manifest
+            NGINX_SITE_CONFIG=""
+
+            if [ -f /etc/nginx/sites-available/familyfunds.app.conf ]; then
+              NGINX_SITE_CONFIG="/etc/nginx/sites-available/familyfunds.app.conf"
+            elif [ -f /etc/nginx/sites-available/familyfunds.app ]; then
+              NGINX_SITE_CONFIG="/etc/nginx/sites-available/familyfunds.app"
+            fi
+
+            if [ -n "$NGINX_SITE_CONFIG" ]; then
+              sudo cp deployment/nginx/familyfunds.app.conf "$NGINX_SITE_CONFIG"
+              sudo nginx -t
+              sudo systemctl reload nginx
+            fi
 
             # Restart queue workers, SSR server, and Nightwatch agent
             sudo supervisorctl restart queue-worker:*
