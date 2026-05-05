@@ -18,6 +18,11 @@ const { isInstallable, isInstalled, dismissed, init, install, dismiss } =
 
 const open = ref(false);
 const installing = ref(false);
+const isIos = computed(() => {
+    if (typeof window === 'undefined') return false;
+
+    return /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+});
 
 onMounted(() => {
     init();
@@ -119,6 +124,13 @@ function handleDismiss(): void {
                     <p class="text-sm text-muted-foreground">
                         Full-screen experience without browser bars
                     </p>
+                </div>
+                <div
+                    v-if="isIos"
+                    class="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-100"
+                >
+                    On iPhone, open Safari's share menu and choose Add to Home
+                    Screen.
                 </div>
             </div>
 

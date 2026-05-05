@@ -96,7 +96,53 @@ function deleteExpense(id: number): void {
                     </p>
                 </div>
 
-                <div v-else class="overflow-x-auto">
+                <div
+                    v-if="expenses?.data?.length"
+                    class="divide-y divide-neutral-100 md:hidden dark:divide-neutral-800"
+                >
+                    <div
+                        v-for="expense in expenses.data"
+                        :key="expense.id"
+                        class="p-4"
+                    >
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <p
+                                    class="font-medium text-neutral-900 dark:text-neutral-100"
+                                >
+                                    {{ expense.description }}
+                                </p>
+                                <p class="mt-1 text-xs text-muted-foreground">
+                                    {{ formatDate(expense.spent_at) }}
+                                    <template v-if="expense.recorded_by">
+                                        &middot; {{ expense.recorded_by }}
+                                    </template>
+                                </p>
+                            </div>
+                            <p
+                                class="shrink-0 font-semibold text-red-600 dark:text-red-400"
+                            >
+                                -{{ formatCurrency(expense.amount) }}
+                            </p>
+                        </div>
+                        <div v-if="can_create" class="mt-3 flex justify-end">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                @click="deleteExpense(expense.id)"
+                                class="text-red-500 hover:text-red-700"
+                            >
+                                <Trash2 class="mr-2 h-4 w-4" />
+                                Delete
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+
+                <div
+                    v-if="expenses?.data?.length"
+                    class="hidden overflow-x-auto md:block"
+                >
                     <table class="w-full text-left text-sm">
                         <thead>
                             <tr

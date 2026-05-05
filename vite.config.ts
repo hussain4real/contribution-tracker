@@ -11,7 +11,7 @@ const INERTIA_PAGES_CACHE = 'inertia-pages-v2';
 export default defineConfig({
     plugins: [
         laravel({
-            input: ['resources/js/app.ts'],
+            input: ['resources/js/app.ts', 'resources/css/app.css'],
             refresh: true,
         }),
         inertia({
@@ -35,11 +35,17 @@ export default defineConfig({
                 enabled: !!process.env.VITE_PWA_DEV,
                 type: 'module',
             },
-            includeAssets: ['favicon.ico', 'favicon.svg', 'apple-touch-icon.png', 'offline.html'],
+            includeAssets: [
+                'favicon.ico',
+                'favicon.svg',
+                'apple-touch-icon.png',
+                'offline.html',
+            ],
             manifest: {
                 name: 'FamilyFunds',
                 short_name: 'FamilyFunds',
-                description: 'Track family contributions with ease. Manage monthly contributions, record payments, and monitor your family fund.',
+                description:
+                    'Track family contributions with ease. Manage monthly contributions, record payments, and monitor your family fund.',
                 theme_color: '#ffffff',
                 background_color: '#ffffff',
                 display: 'standalone',
@@ -61,6 +67,44 @@ export default defineConfig({
                         sizes: '512x512',
                         type: 'image/png',
                         purpose: 'maskable',
+                    },
+                ],
+                shortcuts: [
+                    {
+                        name: 'Dashboard',
+                        short_name: 'Dashboard',
+                        url: '/dashboard',
+                        icons: [
+                            {
+                                src: '/pwa-192x192.png',
+                                sizes: '192x192',
+                                type: 'image/png',
+                            },
+                        ],
+                    },
+                    {
+                        name: 'My Contributions',
+                        short_name: 'Contributions',
+                        url: '/contributions/my',
+                        icons: [
+                            {
+                                src: '/pwa-192x192.png',
+                                sizes: '192x192',
+                                type: 'image/png',
+                            },
+                        ],
+                    },
+                    {
+                        name: 'Notifications',
+                        short_name: 'Alerts',
+                        url: '/notifications',
+                        icons: [
+                            {
+                                src: '/pwa-192x192.png',
+                                sizes: '192x192',
+                                type: 'image/png',
+                            },
+                        ],
                     },
                 ],
             },
@@ -120,9 +164,7 @@ export default defineConfig({
                                     'X-Inertia-Partial-Component',
                                 ) ||
                                 request.headers.has('X-Inertia-Partial-Data') ||
-                                request.headers.has(
-                                    'X-Inertia-Partial-Except',
-                                );
+                                request.headers.has('X-Inertia-Partial-Except');
 
                             return (
                                 request.mode === 'navigate' ||

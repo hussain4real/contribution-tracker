@@ -1,16 +1,22 @@
 <script setup lang="ts">
 import { stopImpersonating } from '@/actions/App/Http/Controllers/PlatformAdminController';
 import AppContent from '@/components/AppContent.vue';
+import AppMobileHeader from '@/components/AppMobileHeader.vue';
+import AppMobileNav from '@/components/AppMobileNav.vue';
+import AppNavigationProgress from '@/components/AppNavigationProgress.vue';
 import AppShell from '@/components/AppShell.vue';
 import AppSidebar from '@/components/AppSidebar.vue';
 import AppSidebarHeader from '@/components/AppSidebarHeader.vue';
 import ChangelogUpdatePrompt from '@/components/ChangelogUpdatePrompt.vue';
+import FloatingAiAssistant from '@/components/FloatingAiAssistant.vue';
 import NetworkStatusBanner from '@/components/NetworkStatusBanner.vue';
+import PullToRefreshIndicator from '@/components/PullToRefreshIndicator.vue';
 import PwaInstallPrompt from '@/components/PwaInstallPrompt.vue';
 import SwUpdateToast from '@/components/SwUpdateToast.vue';
 import WebPushEnablePrompt from '@/components/WebPushEnablePrompt.vue';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
+import { usePullToRefresh } from '@/composables/usePullToRefresh';
 import { usePwaCacheWarmer } from '@/composables/usePwaCacheWarmer';
 import { edit as editProfile } from '@/routes/profile';
 import type { BreadcrumbItemType } from '@/types';
@@ -19,6 +25,12 @@ import { MessageCircle, X } from 'lucide-vue-next';
 import { computed, onMounted, ref } from 'vue';
 
 usePwaCacheWarmer();
+
+const {
+    pullDistance,
+    isPulling: isPullingToRefresh,
+    isRefreshing: isRefreshingPage,
+} = usePullToRefresh();
 
 interface Props {
     breadcrumbs?: BreadcrumbItemType[];
@@ -77,9 +89,19 @@ function dismissWhatsAppPrompt(): void {
 
 <template>
     <AppShell variant="sidebar">
+        <AppNavigationProgress />
+        <PullToRefreshIndicator
+            :distance="pullDistance"
+            :pulling="isPullingToRefresh"
+            :refreshing="isRefreshingPage"
+        />
         <AppSidebar />
-        <AppContent variant="sidebar" class="overflow-x-hidden">
+        <AppContent
+            variant="sidebar"
+            class="min-h-dvh overflow-x-hidden pb-[calc(4.75rem+env(safe-area-inset-bottom))] md:pb-0"
+        >
             <NetworkStatusBanner />
+            <AppMobileHeader :breadcrumbs="breadcrumbs" />
             <!-- Impersonation Banner -->
             <div
                 v-if="isImpersonating"
@@ -134,9 +156,13 @@ function dismissWhatsAppPrompt(): void {
             <ChangelogUpdatePrompt />
             <WebPushEnablePrompt />
 
-            <AppSidebarHeader :breadcrumbs="breadcrumbs" />
+            <div class="hidden md:block">
+                <AppSidebarHeader :breadcrumbs="breadcrumbs" />
+            </div>
             <slot />
         </AppContent>
+        <AppMobileNav />
+        <FloatingAiAssistant />
         <Toaster />
         <PwaInstallPrompt />
         <SwUpdateToast />

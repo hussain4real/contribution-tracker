@@ -6,7 +6,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { urlIsActive } from '@/lib/utils';
+import { navItemIsActive } from '@/lib/appNavigation';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
 
@@ -25,16 +25,32 @@ const page = usePage();
             <SidebarMenuItem v-for="item in items" :key="item.title">
                 <SidebarMenuButton
                     as-child
-                    :is-active="urlIsActive(item.href, page.url)"
+                    :is-active="navItemIsActive(item, page.url, page.component)"
                     :tooltip="item.title"
                 >
                     <Link
                         :href="item.href"
                         prefetch
-                        :component="item.component"
+                        :cache-for="['30s', '2m']"
+                        view-transition
                     >
                         <component :is="item.icon" />
                         <span>{{ item.title }}</span>
+                        <span
+                            v-if="
+                                item.badge === 'notifications' &&
+                                (page.props.notifications?.unread_count ?? 0) >
+                                    0
+                            "
+                            class="ml-auto flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] leading-5 font-bold text-white"
+                        >
+                            {{
+                                (page.props.notifications?.unread_count ?? 0) >
+                                99
+                                    ? '99+'
+                                    : page.props.notifications?.unread_count
+                            }}
+                        </span>
                     </Link>
                 </SidebarMenuButton>
             </SidebarMenuItem>

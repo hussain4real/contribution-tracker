@@ -1,0 +1,316 @@
+import { index as aiIndex } from '@/actions/App/Http/Controllers/AiChatController';
+import { my as myContributions } from '@/actions/App/Http/Controllers/ContributionController';
+import { index as expensesIndex } from '@/actions/App/Http/Controllers/ExpenseController';
+import { edit as familySettings } from '@/actions/App/Http/Controllers/FamilySettingsController';
+import { index as fundAdjustmentsIndex } from '@/actions/App/Http/Controllers/FundAdjustmentController';
+import { index as invitationsIndex } from '@/actions/App/Http/Controllers/InvitationController';
+import { index as membersIndex } from '@/actions/App/Http/Controllers/MemberController';
+import { show as payContributions } from '@/actions/App/Http/Controllers/MemberPaymentController';
+import { index as notificationsIndex } from '@/actions/App/Http/Controllers/NotificationController';
+import { index as paymentsIndex } from '@/actions/App/Http/Controllers/PaymentController';
+import {
+    index as platformDashboard,
+    families as platformFamilies,
+    users as platformUsers,
+} from '@/actions/App/Http/Controllers/PlatformAdminController';
+import { index as platformFeatureFlags } from '@/actions/App/Http/Controllers/PlatformFeatureFlagController';
+import { index as platformPlans } from '@/actions/App/Http/Controllers/PlatformPlanController';
+import { index as reportsIndex } from '@/actions/App/Http/Controllers/ReportController';
+import { index as subscriptionIndex } from '@/actions/App/Http/Controllers/SubscriptionController';
+import { index as whatsappInboxIndex } from '@/actions/App/Http/Controllers/WhatsAppInboxController';
+import { urlIsActive } from '@/lib/utils';
+import { dashboard } from '@/routes';
+import { edit as editProfile } from '@/routes/profile';
+import type { NavItem } from '@/types';
+import { usePage } from '@inertiajs/vue3';
+import {
+    Bell,
+    Building2,
+    CreditCard,
+    FileBarChart2,
+    FileText,
+    Globe,
+    Landmark,
+    Layers,
+    LayoutGrid,
+    Mail,
+    MessageCircle,
+    MessageSquare,
+    Receipt,
+    Rocket,
+    Settings,
+    Shield,
+    Sparkles,
+    ToggleLeft,
+    User,
+    Users,
+    UsersRound,
+    Wallet,
+} from 'lucide-vue-next';
+import { computed } from 'vue';
+
+type NavigationGroup = {
+    label?: string;
+    items: NavItem[];
+};
+
+export function navItemIsActive(
+    item: NavItem,
+    currentUrl: string,
+    currentComponent: string,
+): boolean {
+    if (urlIsActive(item.href, currentUrl, item.exact ?? false)) {
+        return true;
+    }
+
+    if (!item.component) {
+        return false;
+    }
+
+    return (
+        currentComponent === item.component ||
+        currentComponent.startsWith(`${item.component}/`)
+    );
+}
+
+export function useAppNavigation() {
+    const page = usePage();
+
+    const paymentItem = computed<NavItem>(() => {
+        if (page.props.auth?.can?.record_payments) {
+            return {
+                title: 'Payments',
+                href: paymentsIndex(),
+                icon: CreditCard,
+                component: 'Payments/Index',
+                section: 'main',
+            };
+        }
+
+        return {
+            title: 'Pay',
+            href: payContributions(),
+            icon: CreditCard,
+            component: 'Pay/Index',
+            section: 'main',
+        };
+    });
+
+    const primaryItems = computed<NavItem[]>(() => {
+        const items: NavItem[] = [
+            {
+                title: 'Dashboard',
+                href: dashboard(),
+                icon: LayoutGrid,
+                component: 'Dashboard/Index',
+                section: 'main',
+            },
+            {
+                title: 'Members',
+                href: membersIndex(),
+                icon: Users,
+                component: 'Members/Index',
+                section: 'main',
+            },
+            {
+                title: 'My Contributions',
+                href: myContributions(),
+                icon: Wallet,
+                component: 'Contributions/My',
+                section: 'main',
+            },
+            paymentItem.value,
+            {
+                title: 'Notifications',
+                href: notificationsIndex(),
+                icon: Bell,
+                component: 'Notifications/Index',
+                badge: 'notifications',
+                section: 'main',
+            },
+            {
+                title: 'Expenses',
+                href: expensesIndex(),
+                icon: Receipt,
+                component: 'Expenses/Index',
+                section: 'main',
+            },
+            {
+                title: 'Fund Adjustments',
+                href: fundAdjustmentsIndex(),
+                icon: Landmark,
+                component: 'FundAdjustments/Index',
+                section: 'main',
+            },
+        ];
+
+        if (page.props.featureFlags?.ai_assistant) {
+            items.push({
+                title: 'AI Assistant',
+                href: aiIndex(),
+                icon: MessageSquare,
+                component: 'Ai/Chat',
+                section: 'main',
+            });
+        }
+
+        if (page.props.auth?.can?.generate_reports) {
+            items.push(
+                {
+                    title: 'Reports',
+                    href: reportsIndex(),
+                    icon: FileBarChart2,
+                    component: 'Reports/Index',
+                    section: 'main',
+                },
+                {
+                    title: 'WhatsApp Inbox',
+                    href: whatsappInboxIndex(),
+                    icon: MessageCircle,
+                    component: 'Inbox/Index',
+                    section: 'main',
+                },
+            );
+        }
+
+        items.push({
+            title: "What's New",
+            href: '/changelog',
+            icon: Rocket,
+            component: 'Changelog/Index',
+            section: 'main',
+        });
+
+        return items;
+    });
+
+    const adminItems = computed<NavItem[]>(() => {
+        if (page.props.auth?.user?.role !== 'admin') {
+            return [];
+        }
+
+        return [
+            {
+                title: 'Family Settings',
+                href: familySettings(),
+                icon: Settings,
+                component: 'Family/Settings',
+                section: 'Family Admin',
+            },
+            {
+                title: 'Invitations',
+                href: invitationsIndex(),
+                icon: Mail,
+                component: 'Family/Invitations',
+                section: 'Family Admin',
+            },
+            {
+                title: 'Subscription',
+                href: subscriptionIndex(),
+                icon: Sparkles,
+                component: 'Subscription/Index',
+                section: 'Family Admin',
+            },
+        ];
+    });
+
+    const platformItems = computed<NavItem[]>(() => {
+        if (!page.props.auth?.user?.is_super_admin) {
+            return [];
+        }
+
+        return [
+            {
+                title: 'Platform Admin',
+                href: platformDashboard(),
+                icon: Globe,
+                component: 'Platform/Dashboard',
+                exact: true,
+                section: 'Super Admin',
+            },
+            {
+                title: 'All Families',
+                href: platformFamilies(),
+                icon: Building2,
+                component: 'Platform/Families',
+                section: 'Super Admin',
+            },
+            {
+                title: 'All Users',
+                href: platformUsers(),
+                icon: UsersRound,
+                component: 'Platform/Users',
+                section: 'Super Admin',
+            },
+            {
+                title: 'Plans',
+                href: platformPlans(),
+                icon: Layers,
+                component: 'Platform/Plans',
+                section: 'Super Admin',
+            },
+            {
+                title: 'Feature Flags',
+                href: platformFeatureFlags(),
+                icon: ToggleLeft,
+                component: 'Platform/FeatureFlags',
+                section: 'Super Admin',
+            },
+        ];
+    });
+
+    const footerItems: NavItem[] = [
+        {
+            title: 'Privacy Policy',
+            href: '/privacy',
+            icon: Shield,
+        },
+        {
+            title: 'Terms of Service',
+            href: '/terms',
+            icon: FileText,
+        },
+    ];
+
+    const mobileTabs = computed<NavItem[]>(() => [
+        primaryItems.value[0],
+        primaryItems.value[1],
+        primaryItems.value[2],
+        paymentItem.value,
+    ]);
+
+    const moreGroups = computed<NavigationGroup[]>(() => [
+        {
+            items: [
+                primaryItems.value.find(
+                    (item) => item.title === 'Notifications',
+                ),
+                ...primaryItems.value.slice(5),
+                {
+                    title: 'Profile',
+                    href: editProfile(),
+                    icon: User,
+                    component: 'settings/Profile',
+                    section: 'Account',
+                },
+            ].filter(Boolean) as NavItem[],
+        },
+        {
+            label: 'Family Admin',
+            items: adminItems.value,
+        },
+        {
+            label: 'Super Admin',
+            items: platformItems.value,
+        },
+    ]);
+
+    return {
+        primaryItems,
+        adminItems,
+        platformItems,
+        footerItems,
+        mobileTabs,
+        moreGroups,
+    };
+}

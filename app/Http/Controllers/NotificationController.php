@@ -15,13 +15,28 @@ class NotificationController extends Controller
      */
     public function index(Request $request): Response
     {
-        $notifications = $request->user()
+        $filters = $this->filters($request);
+
+        $notificationFeed = $request->user()
             ->notifications()
             ->latest()
-            ->paginate(20);
+            ->when($filters['status'] === 'unread', fn ($query) => $query->whereNull('read_at'))
+            ->when($filters['status'] === 'read', fn ($query) => $query->whereNotNull('read_at'))
+            ->when($filters['type'] !== 'all', fn ($query) => $query->where('data->type', $filters['type']))
+            ->paginate(12)
+            ->withQueryString()
+            ->through(fn (DatabaseNotification $notification): array => [
+                'id' => $notification->id,
+                'type' => $notification->type,
+                'data' => $notification->data,
+                'read_at' => $notification->read_at?->toIso8601String(),
+                'created_at' => $notification->created_at?->toIso8601String(),
+            ]);
 
         return Inertia::render('Notifications/Index', [
-            'notifications' => $notifications,
+            'notificationFeed' => $notificationFeed,
+            'notificationSummary' => $this->summary($request),
+            'notificationFilters' => $filters,
         ]);
     }
 
@@ -45,5 +60,36 @@ class NotificationController extends Controller
         $request->user()->unreadNotifications()->update(['read_at' => now()]);
 
         return back();
+    }
+
+    /**
+     * @return array{status: string, type: string}
+     */
+    private function filters(Request $request): array
+    {
+        $status = $request->string('status')->toString();
+        $type = $request->string('type')->toString();
+
+        return [
+            'status' => in_array($status, ['unread', 'read'], true) ? $status : 'all',
+            'type' => in_array($type, ['reminder', 'follow_up'], true) ? $type : 'all',
+        ];
+    }
+
+    /**
+     * @return array{total: int, unread: int, read: int, reminders: int, follow_ups: int}
+     */
+    private function summary(Request $request): array
+    {
+        $total = $request->user()->notifications()->count();
+        $unread = $request->user()->unreadNotifications()->count();
+
+        return [
+            'total' => $total,
+            'unread' => $unread,
+            'read' => $total - $unread,
+            'reminders' => $request->user()->notifications()->where('data->type', 'reminder')->count(),
+            'follow_ups' => $request->user()->notifications()->where('data->type', 'follow_up')->count(),
+        ];
     }
 }
