@@ -31,10 +31,27 @@ const page = usePage();
                     <Link
                         :href="item.href"
                         prefetch
+                        :cache-for="['30s', '2m']"
+                        view-transition
                         :component="item.component"
                     >
                         <component :is="item.icon" />
                         <span>{{ item.title }}</span>
+                        <span
+                            v-if="
+                                item.badge === 'notifications' &&
+                                (page.props.notifications?.unread_count ?? 0) >
+                                    0
+                            "
+                            class="ml-auto flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] leading-5 font-bold text-white"
+                        >
+                            {{
+                                (page.props.notifications?.unread_count ?? 0) >
+                                99
+                                    ? '99+'
+                                    : page.props.notifications?.unread_count
+                            }}
+                        </span>
                     </Link>
                 </SidebarMenuButton>
             </SidebarMenuItem>

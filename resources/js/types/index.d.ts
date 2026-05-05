@@ -23,6 +23,8 @@ export interface NavItem {
     icon?: LucideIcon;
     isActive?: boolean;
     component?: string;
+    badge?: 'notifications';
+    section?: string;
 }
 
 export interface Family {
