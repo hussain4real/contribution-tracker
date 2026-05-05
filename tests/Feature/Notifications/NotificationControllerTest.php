@@ -4,6 +4,7 @@ use App\Models\Family;
 use App\Models\User;
 use App\Notifications\ContributionReminderNotification;
 use Illuminate\Notifications\DatabaseNotification;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -103,6 +104,104 @@ describe('NotificationController', function () {
                 ->where('notificationFeed.data.0.data.type', 'follow_up')
                 ->where('notificationFilters.status', 'unread')
                 ->where('notificationFilters.type', 'follow_up')
+            );
+    });
+
+    it('filters notification types when notification data is stored as text', function () {
+        $family = Family::factory()->create();
+        $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+
+        DB::table('notifications')->insert([
+            [
+                'id' => Str::uuid()->toString(),
+                'type' => ContributionReminderNotification::class,
+                'notifiable_type' => User::class,
+                'notifiable_id' => $user->id,
+                'data' => json_encode([
+                    'period_label' => 'May 2026',
+                    'amount_owed' => 5000,
+                    'type' => 'reminder',
+                ]),
+                'read_at' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'id' => Str::uuid()->toString(),
+                'type' => ContributionReminderNotification::class,
+                'notifiable_type' => User::class,
+                'notifiable_id' => $user->id,
+                'data' => json_encode([
+                    'period_label' => 'April 2026',
+                    'amount_owed' => 5000,
+                    'type' => 'follow_up',
+                ]),
+                'read_at' => null,
+                'created_at' => now()->subMinute(),
+                'updated_at' => now()->subMinute(),
+            ],
+        ]);
+
+        $response = $this->actingAs($user)->get(route('notifications.index', [
+            'type' => 'follow_up',
+        ]));
+
+        $response->assertSuccessful()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Notifications/Index')
+                ->has('notificationFeed.data', 1)
+                ->where('notificationFeed.data.0.data.type', 'follow_up')
+                ->where('notificationSummary.reminders', 1)
+                ->where('notificationSummary.follow_ups', 1)
+            );
+    });
+
+    it('paginates type filtered notifications', function () {
+        $family = Family::factory()->create();
+        $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+
+        $notifications = collect(range(1, 13))->map(fn (int $month): array => [
+            'id' => Str::uuid()->toString(),
+            'type' => ContributionReminderNotification::class,
+            'notifiable_type' => User::class,
+            'notifiable_id' => $user->id,
+            'data' => json_encode([
+                'period_label' => "Month {$month}",
+                'amount_owed' => 5000,
+                'type' => 'follow_up',
+            ]),
+            'read_at' => null,
+            'created_at' => now()->subMinutes($month),
+            'updated_at' => now()->subMinutes($month),
+        ])->push([
+            'id' => Str::uuid()->toString(),
+            'type' => ContributionReminderNotification::class,
+            'notifiable_type' => User::class,
+            'notifiable_id' => $user->id,
+            'data' => json_encode([
+                'period_label' => 'Reminder only',
+                'amount_owed' => 5000,
+                'type' => 'reminder',
+            ]),
+            'read_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ])->all();
+
+        DB::table('notifications')->insert($notifications);
+
+        $response = $this->actingAs($user)->get(route('notifications.index', [
+            'type' => 'follow_up',
+        ]));
+
+        $response->assertSuccessful()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Notifications/Index')
+                ->has('notificationFeed.data', 12)
+                ->where('notificationFeed.total', 13)
+                ->where('notificationFeed.current_page', 1)
+                ->where('notificationSummary.reminders', 1)
+                ->where('notificationSummary.follow_ups', 13)
             );
     });
 

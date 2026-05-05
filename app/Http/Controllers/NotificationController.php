@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
@@ -20,9 +22,9 @@ class NotificationController extends Controller
         $notificationFeed = $request->user()
             ->notifications()
             ->latest()
-            ->when($filters['status'] === 'unread', fn ($query) => $query->whereNull('read_at'))
-            ->when($filters['status'] === 'read', fn ($query) => $query->whereNotNull('read_at'))
-            ->when($filters['type'] !== 'all', fn ($query) => $query->where('data->type', $filters['type']))
+            ->when($filters['status'] === 'unread', fn (Builder $query) => $query->whereNull('read_at'))
+            ->when($filters['status'] === 'read', fn (Builder $query) => $query->whereNotNull('read_at'))
+            ->when($filters['type'] !== 'all', fn (Builder $query) => $this->whereNotificationDataType($query, $filters['type']))
             ->paginate(12)
             ->withQueryString()
             ->through(fn (DatabaseNotification $notification): array => [
@@ -88,8 +90,23 @@ class NotificationController extends Controller
             'total' => $total,
             'unread' => $unread,
             'read' => $total - $unread,
-            'reminders' => $request->user()->notifications()->where('data->type', 'reminder')->count(),
-            'follow_ups' => $request->user()->notifications()->where('data->type', 'follow_up')->count(),
+            'reminders' => $this->whereNotificationDataType($request->user()->notifications(), 'reminder')->count(),
+            'follow_ups' => $this->whereNotificationDataType($request->user()->notifications(), 'follow_up')->count(),
         ];
+    }
+
+    private function whereNotificationDataType(Builder|MorphMany $query, string $type): Builder|MorphMany
+    {
+        $connection = $query instanceof MorphMany
+            ? $query->getRelated()->getConnection()
+            : $query->getModel()->getConnection();
+        $column = $connection->getQueryGrammar()->wrap('data');
+
+        return match ($connection->getDriverName()) {
+            'pgsql' => $query->whereRaw("({$column})::jsonb ->> 'type' = ?", [$type]),
+            'sqlite' => $query->whereRaw("json_extract({$column}, '$.type') = ?", [$type]),
+            'sqlsrv' => $query->whereRaw("json_value({$column}, '$.type') = ?", [$type]),
+            default => $query->whereRaw("json_unquote(json_extract({$column}, '$.type')) = ?", [$type]),
+        };
     }
 }
