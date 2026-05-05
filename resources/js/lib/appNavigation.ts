@@ -59,7 +59,7 @@ export function navItemIsActive(
     currentUrl: string,
     currentComponent: string,
 ): boolean {
-    if (urlIsActive(item.href, currentUrl)) {
+    if (urlIsActive(item.href, currentUrl, item.exact ?? false)) {
         return true;
     }
 
@@ -67,11 +67,9 @@ export function navItemIsActive(
         return false;
     }
 
-    const section = item.component.split('/')[0];
-
     return (
         currentComponent === item.component ||
-        currentComponent.startsWith(`${section}/`)
+        currentComponent.startsWith(`${item.component}/`)
     );
 }
 
@@ -227,6 +225,7 @@ export function useAppNavigation() {
                 href: platformDashboard(),
                 icon: Globe,
                 component: 'Platform/Dashboard',
+                exact: true,
                 section: 'Super Admin',
             },
             {

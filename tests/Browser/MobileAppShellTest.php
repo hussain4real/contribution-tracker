@@ -167,4 +167,45 @@ describe('Mobile app shell', function () {
             ->assertSee('Family Settings')
             ->assertNoJavaScriptErrors();
     });
+
+    it('only marks the matching sibling navigation item active', function () {
+        $superAdmin = User::factory()
+            ->withoutTwoFactor()
+            ->admin()
+            ->superAdmin()
+            ->create([
+                'email' => 'super@test.com',
+                'password' => bcrypt('password'),
+            ]);
+
+        Feature::for($superAdmin)->activate(AiAssistant::class);
+        Feature::flushCache();
+
+        $page = visit('/login');
+
+        $page->fill('email', 'super@test.com')
+            ->fill('password', 'password')
+            ->click('Log in')
+            ->navigate('/family/invitations')
+            ->assertScript(<<<'JS'
+                () => {
+                    const familySettings = document.querySelector('a[href$="/family/settings"]');
+                    const invitations = document.querySelector('a[href$="/family/invitations"]');
+
+                    return familySettings?.dataset.active !== 'true'
+                        && invitations?.dataset.active === 'true';
+                }
+            JS)
+            ->navigate('/platform/users')
+            ->assertScript(<<<'JS'
+                () => {
+                    const platformDashboard = document.querySelector('a[href$="/platform"]');
+                    const platformUsers = document.querySelector('a[href$="/platform/users"]');
+
+                    return platformDashboard?.dataset.active !== 'true'
+                        && platformUsers?.dataset.active === 'true';
+                }
+            JS)
+            ->assertNoJavaScriptErrors();
+    });
 });
