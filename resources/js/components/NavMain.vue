@@ -33,7 +33,6 @@ const page = usePage();
                         prefetch
                         :cache-for="['30s', '2m']"
                         view-transition
-                        :component="item.component"
                     >
                         <component :is="item.icon" />
                         <span>{{ item.title }}</span>

@@ -8,6 +8,7 @@ import AppShell from '@/components/AppShell.vue';
 import AppSidebar from '@/components/AppSidebar.vue';
 import AppSidebarHeader from '@/components/AppSidebarHeader.vue';
 import ChangelogUpdatePrompt from '@/components/ChangelogUpdatePrompt.vue';
+import FloatingAiAssistant from '@/components/FloatingAiAssistant.vue';
 import NetworkStatusBanner from '@/components/NetworkStatusBanner.vue';
 import PullToRefreshIndicator from '@/components/PullToRefreshIndicator.vue';
 import PwaInstallPrompt from '@/components/PwaInstallPrompt.vue';
@@ -161,6 +162,7 @@ function dismissWhatsAppPrompt(): void {
             <slot />
         </AppContent>
         <AppMobileNav />
+        <FloatingAiAssistant />
         <Toaster />
         <PwaInstallPrompt />
         <SwUpdateToast />

@@ -52,21 +52,20 @@ const moreIsActive = computed(() =>
                 v-for="item in mobileTabs"
                 :key="item.title"
                 :href="item.href"
-                :component="item.component"
                 prefetch
                 :cache-for="['30s', '2m']"
                 view-transition
-                class="app-tap relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[11px] font-medium text-muted-foreground"
+                class="app-tap relative mx-0.5 flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[11px] font-medium text-muted-foreground"
                 :class="
                     isActive(item)
-                        ? 'bg-primary/10 text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] dark:bg-primary/20'
+                        ? 'bg-neutral-950 text-white shadow-sm dark:bg-neutral-50 dark:text-neutral-950'
                         : 'hover:bg-accent/70'
                 "
                 :aria-current="isActive(item) ? 'page' : undefined"
             >
                 <span
                     v-if="isActive(item)"
-                    class="absolute top-1 h-1 w-6 rounded-full bg-primary"
+                    class="absolute top-1 h-1 w-7 rounded-full bg-red-500 dark:bg-red-500"
                 />
                 <component
                     :is="item.icon"
@@ -87,17 +86,17 @@ const moreIsActive = computed(() =>
             <Sheet v-model:open="moreOpen">
                 <SheetTrigger as-child>
                     <button
-                        class="app-tap relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[11px] font-medium text-muted-foreground"
+                        class="app-tap relative mx-0.5 flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[11px] font-medium text-muted-foreground"
                         :class="
                             moreIsActive
-                                ? 'bg-primary/10 text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] dark:bg-primary/20'
+                                ? 'bg-neutral-950 text-white shadow-sm dark:bg-neutral-50 dark:text-neutral-950'
                                 : 'hover:bg-accent/70'
                         "
                         :aria-current="moreIsActive ? 'page' : undefined"
                     >
                         <span
                             v-if="moreIsActive"
-                            class="absolute top-1 h-1 w-6 rounded-full bg-primary"
+                            class="absolute top-1 h-1 w-7 rounded-full bg-red-500 dark:bg-red-500"
                         />
                         <Menu
                             class="mt-1 size-5"
@@ -140,13 +139,12 @@ const moreIsActive = computed(() =>
                                     v-for="item in group.items"
                                     :key="`${group.label ?? 'main'}-${item.title}`"
                                     :href="item.href"
-                                    :component="item.component"
                                     prefetch
                                     view-transition
                                     class="app-tap flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium"
                                     :class="
                                         isActive(item)
-                                            ? 'bg-accent text-accent-foreground'
+                                            ? 'bg-neutral-950 text-white dark:bg-neutral-50 dark:text-neutral-950'
                                             : 'text-foreground hover:bg-accent/70'
                                     "
                                     @click="moreOpen = false"

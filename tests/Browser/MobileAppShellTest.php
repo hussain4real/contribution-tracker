@@ -1,7 +1,9 @@
 <?php
 
+use App\Features\AiAssistant;
 use App\Models\User;
 use Illuminate\Support\Str;
+use Laravel\Pennant\Feature;
 
 describe('Mobile app shell', function () {
     beforeEach(function () {
@@ -9,6 +11,9 @@ describe('Mobile app shell', function () {
             'email' => 'admin@test.com',
             'password' => bcrypt('password'),
         ]);
+
+        Feature::for($this->admin)->activate(AiAssistant::class);
+        Feature::flushCache();
     });
 
     it('shows role-aware mobile tabs and the more sheet', function () {
@@ -32,6 +37,68 @@ describe('Mobile app shell', function () {
             ->assertSee('Notifications')
             ->assertSee('Family Admin')
             ->assertSee('Family Settings')
+            ->assertNoJavaScriptErrors();
+    });
+
+    it('shows a draggable floating AI assistant entry point', function () {
+        $page = visit('/login')->on()->iPhone15Pro();
+
+        $page->fill('email', 'admin@test.com')
+            ->fill('password', 'password')
+            ->click('Log in')
+            ->assertAttribute(
+                'button[aria-label="Open AI assistant"]',
+                'type',
+                'button',
+            )
+            ->assertScript(<<<'JS'
+                async () => {
+                    const button = document.querySelector('button[aria-label="Open AI assistant"]');
+
+                    if (!button) {
+                        return false;
+                    }
+
+                    const before = button.getBoundingClientRect();
+                    const startX = before.left + 30;
+                    const startY = before.top + 30;
+                    const endX = Math.max(40, startX - 80);
+                    const endY = Math.max(40, startY - 70);
+
+                    button.dispatchEvent(new PointerEvent('pointerdown', {
+                        pointerId: 7,
+                        clientX: startX,
+                        clientY: startY,
+                        button: 0,
+                        bubbles: true,
+                    }));
+
+                    button.dispatchEvent(new PointerEvent('pointermove', {
+                        pointerId: 7,
+                        clientX: endX,
+                        clientY: endY,
+                        button: 0,
+                        bubbles: true,
+                    }));
+
+                    button.dispatchEvent(new PointerEvent('pointerup', {
+                        pointerId: 7,
+                        clientX: endX,
+                        clientY: endY,
+                        button: 0,
+                        bubbles: true,
+                    }));
+
+                    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+                    const after = button.getBoundingClientRect();
+                    const stored = localStorage.getItem('familyfunds_floating_ai_position');
+
+                    return stored !== null && Math.abs(after.left - before.left) > 20;
+                }
+            JS)
+            ->click('button[aria-label="Open AI assistant"]')
+            ->assertPathIs('/ai')
             ->assertNoJavaScriptErrors();
     });
 
