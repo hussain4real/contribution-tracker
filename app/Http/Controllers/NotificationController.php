@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
-use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -19,19 +19,25 @@ class NotificationController extends Controller
     {
         $filters = $this->filters($request);
 
-        $notifications = $request->user()
+        $notificationFeed = $request->user()
             ->notifications()
             ->latest()
-            ->get();
-
-        $filteredNotifications = $notifications
-            ->filter(fn (DatabaseNotification $notification): bool => $this->matchesStatusFilter($notification, $filters['status']))
-            ->filter(fn (DatabaseNotification $notification): bool => $this->matchesTypeFilter($notification, $filters['type']))
-            ->values();
+            ->when($filters['status'] === 'unread', fn (Builder $query) => $query->whereNull('read_at'))
+            ->when($filters['status'] === 'read', fn (Builder $query) => $query->whereNotNull('read_at'))
+            ->when($filters['type'] !== 'all', fn (Builder $query) => $this->whereNotificationDataType($query, $filters['type']))
+            ->paginate(12)
+            ->withQueryString()
+            ->through(fn (DatabaseNotification $notification): array => [
+                'id' => $notification->id,
+                'type' => $notification->type,
+                'data' => $notification->data,
+                'read_at' => $notification->read_at?->toIso8601String(),
+                'created_at' => $notification->created_at?->toIso8601String(),
+            ]);
 
         return Inertia::render('Notifications/Index', [
-            'notificationFeed' => $this->paginateNotifications($request, $filteredNotifications),
-            'notificationSummary' => $this->summary($notifications),
+            'notificationFeed' => $notificationFeed,
+            'notificationSummary' => $this->summary($request),
             'notificationFilters' => $filters,
         ]);
     }
@@ -73,70 +79,34 @@ class NotificationController extends Controller
     }
 
     /**
-     * @param  Collection<int, DatabaseNotification>  $notifications
      * @return array{total: int, unread: int, read: int, reminders: int, follow_ups: int}
      */
-    private function summary(Collection $notifications): array
+    private function summary(Request $request): array
     {
-        $total = $notifications->count();
-        $unread = $notifications->whereNull('read_at')->count();
+        $total = $request->user()->notifications()->count();
+        $unread = $request->user()->unreadNotifications()->count();
 
         return [
             'total' => $total,
             'unread' => $unread,
             'read' => $total - $unread,
-            'reminders' => $notifications->filter(fn (DatabaseNotification $notification): bool => $this->notificationDataType($notification) === 'reminder')->count(),
-            'follow_ups' => $notifications->filter(fn (DatabaseNotification $notification): bool => $this->notificationDataType($notification) === 'follow_up')->count(),
+            'reminders' => $this->whereNotificationDataType($request->user()->notifications(), 'reminder')->count(),
+            'follow_ups' => $this->whereNotificationDataType($request->user()->notifications(), 'follow_up')->count(),
         ];
     }
 
-    private function matchesStatusFilter(DatabaseNotification $notification, string $status): bool
+    private function whereNotificationDataType(Builder|MorphMany $query, string $type): Builder|MorphMany
     {
-        return match ($status) {
-            'unread' => $notification->read_at === null,
-            'read' => $notification->read_at !== null,
-            default => true,
+        $connection = $query instanceof MorphMany
+            ? $query->getRelated()->getConnection()
+            : $query->getModel()->getConnection();
+        $column = $connection->getQueryGrammar()->wrap('data');
+
+        return match ($connection->getDriverName()) {
+            'pgsql' => $query->whereRaw("({$column})::jsonb ->> 'type' = ?", [$type]),
+            'sqlite' => $query->whereRaw("json_extract({$column}, '$.type') = ?", [$type]),
+            'sqlsrv' => $query->whereRaw("json_value({$column}, '$.type') = ?", [$type]),
+            default => $query->whereRaw("json_unquote(json_extract({$column}, '$.type')) = ?", [$type]),
         };
-    }
-
-    private function matchesTypeFilter(DatabaseNotification $notification, string $type): bool
-    {
-        return $type === 'all' || $this->notificationDataType($notification) === $type;
-    }
-
-    private function notificationDataType(DatabaseNotification $notification): ?string
-    {
-        $data = $notification->data;
-
-        return is_array($data) ? ($data['type'] ?? null) : null;
-    }
-
-    /**
-     * @param  Collection<int, DatabaseNotification>  $notifications
-     */
-    private function paginateNotifications(Request $request, Collection $notifications): LengthAwarePaginator
-    {
-        $perPage = 12;
-        $page = max(1, $request->integer('page', 1));
-
-        return new LengthAwarePaginator(
-            $notifications
-                ->forPage($page, $perPage)
-                ->values()
-                ->map(fn (DatabaseNotification $notification): array => [
-                    'id' => $notification->id,
-                    'type' => $notification->type,
-                    'data' => $notification->data,
-                    'read_at' => $notification->read_at?->toIso8601String(),
-                    'created_at' => $notification->created_at?->toIso8601String(),
-                ]),
-            $notifications->count(),
-            $perPage,
-            $page,
-            [
-                'path' => $request->url(),
-                'query' => $request->query(),
-            ],
-        );
     }
 }

@@ -156,6 +156,55 @@ describe('NotificationController', function () {
             );
     });
 
+    it('paginates type filtered notifications', function () {
+        $family = Family::factory()->create();
+        $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+
+        $notifications = collect(range(1, 13))->map(fn (int $month): array => [
+            'id' => Str::uuid()->toString(),
+            'type' => ContributionReminderNotification::class,
+            'notifiable_type' => User::class,
+            'notifiable_id' => $user->id,
+            'data' => json_encode([
+                'period_label' => "Month {$month}",
+                'amount_owed' => 5000,
+                'type' => 'follow_up',
+            ]),
+            'read_at' => null,
+            'created_at' => now()->subMinutes($month),
+            'updated_at' => now()->subMinutes($month),
+        ])->push([
+            'id' => Str::uuid()->toString(),
+            'type' => ContributionReminderNotification::class,
+            'notifiable_type' => User::class,
+            'notifiable_id' => $user->id,
+            'data' => json_encode([
+                'period_label' => 'Reminder only',
+                'amount_owed' => 5000,
+                'type' => 'reminder',
+            ]),
+            'read_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ])->all();
+
+        DB::table('notifications')->insert($notifications);
+
+        $response = $this->actingAs($user)->get(route('notifications.index', [
+            'type' => 'follow_up',
+        ]));
+
+        $response->assertSuccessful()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Notifications/Index')
+                ->has('notificationFeed.data', 12)
+                ->where('notificationFeed.total', 13)
+                ->where('notificationFeed.current_page', 1)
+                ->where('notificationSummary.reminders', 1)
+                ->where('notificationSummary.follow_ups', 13)
+            );
+    });
+
     it('marks a notification as read', function () {
         $family = Family::factory()->create();
         $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
