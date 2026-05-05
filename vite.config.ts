@@ -6,7 +6,8 @@ import laravel from 'laravel-vite-plugin';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
-const INERTIA_PAGES_CACHE = 'inertia-pages-v2';
+const CACHE_VERSION = 'v3';
+const INERTIA_PAGES_CACHE = `inertia-pages-${CACHE_VERSION}`;
 
 export default defineConfig({
     plugins: [
@@ -30,7 +31,7 @@ export default defineConfig({
             },
         }),
         VitePWA({
-            registerType: 'prompt',
+            registerType: 'autoUpdate',
             devOptions: {
                 enabled: !!process.env.VITE_PWA_DEV,
                 type: 'module',
@@ -109,6 +110,9 @@ export default defineConfig({
                 ],
             },
             workbox: {
+                cleanupOutdatedCaches: true,
+                skipWaiting: true,
+                clientsClaim: true,
                 importScripts: ['/web-push-sw.js'],
                 navigateFallback: '/offline.html',
                 navigateFallbackDenylist: [/^\/build\//, /^\/api\//],
@@ -117,7 +121,7 @@ export default defineConfig({
                         urlPattern: /^https:\/\/fonts\.bunny\.net\/.*/i,
                         handler: 'CacheFirst',
                         options: {
-                            cacheName: 'bunny-fonts-cache',
+                            cacheName: `bunny-fonts-cache-${CACHE_VERSION}`,
                             expiration: {
                                 maxEntries: 10,
                                 maxAgeSeconds: 60 * 60 * 24 * 365,
@@ -131,7 +135,7 @@ export default defineConfig({
                         urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/i,
                         handler: 'CacheFirst',
                         options: {
-                            cacheName: 'images-cache',
+                            cacheName: `images-cache-${CACHE_VERSION}`,
                             expiration: {
                                 maxEntries: 50,
                                 maxAgeSeconds: 60 * 60 * 24 * 30,
@@ -142,7 +146,7 @@ export default defineConfig({
                         urlPattern: /\.(?:js|css)$/i,
                         handler: 'NetworkFirst',
                         options: {
-                            cacheName: 'static-resources',
+                            cacheName: `static-resources-${CACHE_VERSION}`,
                             expiration: {
                                 maxEntries: 50,
                                 maxAgeSeconds: 60 * 60 * 24 * 7,

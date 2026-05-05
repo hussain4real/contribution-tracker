@@ -1,6 +1,6 @@
 import { onMounted } from 'vue';
 
-const CACHE_NAME = 'inertia-pages-v2';
+const CACHE_NAME = 'inertia-pages-v3';
 const SESSION_FLAG = 'pwa-cache-warmed';
 
 /**
