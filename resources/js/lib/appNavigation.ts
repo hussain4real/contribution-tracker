@@ -18,6 +18,7 @@ import { index as platformPlans } from '@/actions/App/Http/Controllers/PlatformP
 import { index as reportsIndex } from '@/actions/App/Http/Controllers/ReportController';
 import { index as subscriptionIndex } from '@/actions/App/Http/Controllers/SubscriptionController';
 import { index as whatsappInboxIndex } from '@/actions/App/Http/Controllers/WhatsAppInboxController';
+import { urlIsActive } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import { edit as editProfile } from '@/routes/profile';
 import type { NavItem } from '@/types';
@@ -52,6 +53,27 @@ type NavigationGroup = {
     label?: string;
     items: NavItem[];
 };
+
+export function navItemIsActive(
+    item: NavItem,
+    currentUrl: string,
+    currentComponent: string,
+): boolean {
+    if (urlIsActive(item.href, currentUrl)) {
+        return true;
+    }
+
+    if (!item.component) {
+        return false;
+    }
+
+    const section = item.component.split('/')[0];
+
+    return (
+        currentComponent === item.component ||
+        currentComponent.startsWith(`${section}/`)
+    );
+}
 
 export function useAppNavigation() {
     const page = usePage();

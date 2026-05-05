@@ -22,6 +22,12 @@ describe('Mobile app shell', function () {
             ->assertSee('My Contributions')
             ->assertSee('Payments')
             ->assertSee('More')
+            ->click('Payments')
+            ->assertAttribute(
+                'nav[aria-label="Mobile navigation"] a[href$="/payments"]',
+                'aria-current',
+                'page',
+            )
             ->click('More')
             ->assertSee('Notifications')
             ->assertSee('Family Admin')

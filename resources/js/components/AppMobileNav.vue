@@ -7,8 +7,7 @@ import {
     SheetTitle,
     SheetTrigger,
 } from '@/components/ui/sheet';
-import { useAppNavigation } from '@/lib/appNavigation';
-import { urlIsActive } from '@/lib/utils';
+import { navItemIsActive, useAppNavigation } from '@/lib/appNavigation';
 import type { NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
 import { Menu } from 'lucide-vue-next';
@@ -21,7 +20,7 @@ const moreOpen = ref(false);
 const unreadCount = computed(() => page.props.notifications?.unread_count ?? 0);
 
 function isActive(item: NavItem): boolean {
-    return urlIsActive(item.href, page.url);
+    return navItemIsActive(item, page.url, page.component);
 }
 
 function badgeCount(item: NavItem): number {
@@ -36,6 +35,10 @@ const hasMoreBadge = computed(() =>
     moreGroups.value.some((group) =>
         group.items.some((item) => badgeCount(item) > 0),
     ),
+);
+
+const moreIsActive = computed(() =>
+    moreGroups.value.some((group) => group.items.some(isActive)),
 );
 </script>
 
@@ -53,10 +56,23 @@ const hasMoreBadge = computed(() =>
                 prefetch
                 :cache-for="['30s', '2m']"
                 view-transition
-                class="app-tap relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 text-[11px] font-medium text-muted-foreground"
-                :class="{ 'text-foreground': isActive(item) }"
+                class="app-tap relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[11px] font-medium text-muted-foreground"
+                :class="
+                    isActive(item)
+                        ? 'bg-primary/10 text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] dark:bg-primary/20'
+                        : 'hover:bg-accent/70'
+                "
+                :aria-current="isActive(item) ? 'page' : undefined"
             >
-                <component :is="item.icon" class="size-5" />
+                <span
+                    v-if="isActive(item)"
+                    class="absolute top-1 h-1 w-6 rounded-full bg-primary"
+                />
+                <component
+                    :is="item.icon"
+                    class="mt-1 size-5"
+                    :class="{ 'stroke-[2.75]': isActive(item) }"
+                />
                 <span class="w-full truncate text-center">{{
                     item.title
                 }}</span>
@@ -71,14 +87,22 @@ const hasMoreBadge = computed(() =>
             <Sheet v-model:open="moreOpen">
                 <SheetTrigger as-child>
                     <button
-                        class="app-tap relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 text-[11px] font-medium text-muted-foreground"
-                        :class="{
-                            'text-foreground': moreGroups.some((group) =>
-                                group.items.some(isActive),
-                            ),
-                        }"
+                        class="app-tap relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[11px] font-medium text-muted-foreground"
+                        :class="
+                            moreIsActive
+                                ? 'bg-primary/10 text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] dark:bg-primary/20'
+                                : 'hover:bg-accent/70'
+                        "
+                        :aria-current="moreIsActive ? 'page' : undefined"
                     >
-                        <Menu class="size-5" />
+                        <span
+                            v-if="moreIsActive"
+                            class="absolute top-1 h-1 w-6 rounded-full bg-primary"
+                        />
+                        <Menu
+                            class="mt-1 size-5"
+                            :class="{ 'stroke-[2.75]': moreIsActive }"
+                        />
                         <span class="w-full truncate text-center">More</span>
                         <span
                             v-if="hasMoreBadge"

@@ -6,7 +6,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { urlIsActive } from '@/lib/utils';
+import { navItemIsActive } from '@/lib/appNavigation';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
 
@@ -25,7 +25,7 @@ const page = usePage();
             <SidebarMenuItem v-for="item in items" :key="item.title">
                 <SidebarMenuButton
                     as-child
-                    :is-active="urlIsActive(item.href, page.url)"
+                    :is-active="navItemIsActive(item, page.url, page.component)"
                     :tooltip="item.title"
                 >
                     <Link
