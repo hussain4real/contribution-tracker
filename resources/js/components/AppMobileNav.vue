@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UserInfo from '@/components/UserInfo.vue';
 import {
     Sheet,
     SheetContent,
@@ -8,15 +9,17 @@ import {
     SheetTrigger,
 } from '@/components/ui/sheet';
 import { navItemIsActive, useAppNavigation } from '@/lib/appNavigation';
+import { logout } from '@/routes';
 import type { NavItem } from '@/types';
-import { Link, usePage } from '@inertiajs/vue3';
-import { Menu } from 'lucide-vue-next';
+import { Link, router, usePage } from '@inertiajs/vue3';
+import { LogOut, Menu, Settings } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 const page = usePage();
-const { mobileTabs, moreGroups } = useAppNavigation();
+const { mobileTabs, moreGroups, footerItems } = useAppNavigation();
 const moreOpen = ref(false);
 
+const user = computed(() => page.props.auth?.user);
 const unreadCount = computed(() => page.props.notifications?.unread_count ?? 0);
 
 function isActive(item: NavItem): boolean {
@@ -40,6 +43,33 @@ const hasMoreBadge = computed(() =>
 const moreIsActive = computed(() =>
     moreGroups.value.some((group) => group.items.some(isActive)),
 );
+
+const settingsItem = computed(
+    () =>
+        moreGroups.value
+            .flatMap((group) => group.items)
+            .find((item) => item.component === 'settings/Profile') ?? null,
+);
+
+const visibleMoreGroups = computed(() =>
+    moreGroups.value
+        .map((group) => ({
+            ...group,
+            items: group.items.filter(
+                (item) => item.component !== 'settings/Profile',
+            ),
+        }))
+        .filter((group) => group.items.length > 0),
+);
+
+function closeMoreSheet(): void {
+    moreOpen.value = false;
+}
+
+function handleLogout(): void {
+    closeMoreSheet();
+    router.flushAll();
+}
 </script>
 
 <template>
@@ -122,9 +152,53 @@ const moreIsActive = computed(() =>
 
                     <div class="space-y-4">
                         <section
-                            v-for="group in moreGroups.filter(
-                                (group) => group.items.length > 0,
-                            )"
+                            v-if="user"
+                            class="rounded-xl border bg-muted/35 p-3"
+                            aria-label="Account"
+                        >
+                            <div class="mb-3">
+                                <UserInfo :user="user" :show-email="true" />
+                            </div>
+
+                            <div class="grid gap-1">
+                                <Link
+                                    v-if="settingsItem"
+                                    :href="settingsItem.href"
+                                    prefetch
+                                    view-transition
+                                    class="app-tap flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium"
+                                    :class="
+                                        isActive(settingsItem)
+                                            ? 'bg-neutral-950 text-white dark:bg-neutral-50 dark:text-neutral-950'
+                                            : 'text-foreground hover:bg-accent/70'
+                                    "
+                                    @click="closeMoreSheet"
+                                >
+                                    <Settings
+                                        class="size-5 text-muted-foreground"
+                                    />
+                                    <span class="min-w-0 flex-1 truncate">
+                                        Settings
+                                    </span>
+                                </Link>
+
+                                <Link
+                                    :href="logout()"
+                                    as="button"
+                                    class="app-tap flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm font-medium text-destructive hover:bg-destructive/10"
+                                    data-test="mobile-logout-button"
+                                    @click="handleLogout"
+                                >
+                                    <LogOut class="size-5" />
+                                    <span class="min-w-0 flex-1 truncate">
+                                        Log out
+                                    </span>
+                                </Link>
+                            </div>
+                        </section>
+
+                        <section
+                            v-for="group in visibleMoreGroups"
                             :key="group.label ?? 'main'"
                             class="space-y-2"
                         >
@@ -166,6 +240,34 @@ const moreIsActive = computed(() =>
                                                 ? '99+'
                                                 : badgeCount(item)
                                         }}
+                                    </span>
+                                </Link>
+                            </div>
+                        </section>
+
+                        <section class="space-y-2">
+                            <p
+                                class="px-1 text-xs font-medium text-muted-foreground"
+                            >
+                                Legal
+                            </p>
+                            <div class="grid gap-1">
+                                <Link
+                                    v-for="item in footerItems"
+                                    :key="`legal-${item.title}`"
+                                    :href="item.href"
+                                    prefetch
+                                    view-transition
+                                    class="app-tap flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-foreground hover:bg-accent/70"
+                                    @click="closeMoreSheet"
+                                >
+                                    <component
+                                        v-if="item.icon"
+                                        :is="item.icon"
+                                        class="size-5 text-muted-foreground"
+                                    />
+                                    <span class="min-w-0 flex-1 truncate">
+                                        {{ item.title }}
                                     </span>
                                 </Link>
                             </div>

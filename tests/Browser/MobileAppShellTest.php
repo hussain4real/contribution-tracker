@@ -8,6 +8,7 @@ use Laravel\Pennant\Feature;
 describe('Mobile app shell', function () {
     beforeEach(function () {
         $this->admin = User::factory()->withoutTwoFactor()->admin()->create([
+            'name' => 'Admin User',
             'email' => 'admin@test.com',
             'password' => bcrypt('password'),
         ]);
@@ -34,9 +35,16 @@ describe('Mobile app shell', function () {
                 'page',
             )
             ->click('More')
+            ->assertSee('Admin User')
+            ->assertSee('admin@test.com')
+            ->assertSee('Settings')
+            ->assertSee('Log out')
             ->assertSee('Notifications')
             ->assertSee('Family Admin')
             ->assertSee('Family Settings')
+            ->assertSee('Legal')
+            ->assertSee('Privacy Policy')
+            ->assertSee('Terms of Service')
             ->assertNoJavaScriptErrors();
     });
 
