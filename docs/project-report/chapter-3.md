@@ -8,11 +8,11 @@ This chapter is about turning a real-world headache into something a developer c
 
 The chapter blends several activities that normally get treated as separate disciplines—system design, iterative development, database modelling, process modelling, interface design, security planning, evaluation. They are stitched together here because the project itself does not really separate them in practice. A decision about how to store contributions affects how reports look. A decision about which roles exist affects which screens a member ever sees. Because money and family trust are involved, the design pays special attention to four things in particular: keeping one family's data invisible to another, enforcing role boundaries through code rather than through good behaviour, getting payment allocation right every single time, and producing reports that an aunt with no accounting background can still read.
 
-What follows below covers the system overview, the development approach, the requirements (functional and non-functional), the architecture, the data and process and interface designs, the modelling tools, the implementation technologies, the testing plan, the deployment strategy, the evaluation metrics, and a short summary at the end.
+What follows below is organised in line with the MIVA project guide: research design, research philosophy, system analysis, system design, algorithm and model description, sampling considerations, data collection methods, tools and technologies, implementation environment, evaluation metrics, and a short chapter summary.
 
-### 3.2 System Overview
+### 3.2 Research Design
 
-FamilyFunds is a web-based platform for managing family contribution funds. The immediate goal is straightforward: replace scattered notebooks, spreadsheets, and chat screenshots with one controlled record. In the manual setup, the financial secretary tends to know the story behind every payment, but the rest of the family only sees fragments—a WhatsApp message here, a bank alert there, a half-remembered conversation at the last meeting. The system tries to take the burden off memory and put it onto the database, where everyone with the right permission can see the same authoritative version of events.
+The research design is an applied system-development design. In other words, the project is not trying to measure an existing social behaviour with a questionnaire alone; it is trying to design and build a working software artefact that responds to a real management problem. FamilyFunds is the artefact. It is a web-based platform for managing family contribution funds. The immediate goal is straightforward: replace scattered notebooks, spreadsheets, and chat screenshots with one controlled record. In the manual setup, the financial secretary tends to know the story behind every payment, but the rest of the family only sees fragments—a WhatsApp message here, a bank alert there, a half-remembered conversation at the last meeting. The system tries to take the burden off memory and put it onto the database, where everyone with the right permission can see the same authoritative version of events.
 
 The whole platform is built around the idea of multi-tenancy. Each family gets its own workspace, and the records inside that workspace are walled off from every other family on the system. Inside the workspace, things are organised by who has the authority to do what. The Family Administrator runs the show—settings, members, contribution categories, invitations, subscriptions. The Financial Secretary handles the money side day to day: payment entries, expenses, adjustments, reminders, reports. Members mostly check their own balance, pay online when their family allows it, and receive notifications.
 
@@ -39,9 +39,9 @@ The major features of FamilyFunds are summarised in Table 3.1.
 | Security | Verification, password hashing, two-factor authentication, passkeys, signed invitations, and tenant scoping protect accounts and records. |
 | Subscription management | Families can use platform plans with defined member limits and feature access. |
 
-### 3.3 Research/Development Approach
+### 3.3 Research Paradigm / Philosophy
 
-The development approach for this project is Agile and iterative. Agile fits when requirements are likely to evolve through feedback rather than arrive complete on day one, and when functional decisions and quality decisions need to keep influencing each other throughout development (Masood et al., 2020; Karhapää et al., 2021). FamilyFunds is exactly that kind of project. The requirements are not extracted from a specification document—they come from how families actually behave. People pay late. People pay in halves. Categories vary. Some older members refuse online payment and insist on cash. Through it all, the family still expects records that everyone can trust.
+The research philosophy is pragmatic and design-oriented. The project treats knowledge as something that can be tested through a useful artefact: if the proposed system can model family roles, protect tenant data, allocate payments correctly, and produce understandable reports, then the design has answered the practical problem that motivated the study. Within that philosophy, the development approach is Agile and iterative. Agile fits when requirements are likely to evolve through feedback rather than arrive complete on day one, and when functional decisions and quality decisions need to keep influencing each other throughout development (Masood et al., 2020; Karhapää et al., 2021). FamilyFunds is exactly that kind of project. The requirements are not extracted from a specification document—they come from how families actually behave. People pay late. People pay in halves. Categories vary. Some older members refuse online payment and insist on cash. Through it all, the family still expects records that everyone can trust.
 
 Waterfall was considered and rejected. Waterfall assumes the requirements are known and locked before implementation starts, and that simply does not match the messy reality of family-fund administration. Take something that sounds simple, like a contribution category. It is not just a value in a database—it cascades into monthly generation, into the member dashboard, into payment balances, into reports. The same is true for reminders, invitations, subscriptions, and AI-assisted summaries. Each of those features only reveals its full shape when you start building and testing it. An iterative approach makes that kind of progressive discovery the normal mode of work rather than a problem.
 
@@ -49,9 +49,9 @@ In practice, the work moved through five overlapping phases rather than five nea
 
 This approach also fits naturally with the Model-View-Controller pattern from Chapter Two. Backend models hold the data, controllers handle the business rules and request flow, and the Vue/Inertia interface puts it all in front of users. Because those three responsibilities stay separated, one part can be revised without rewriting the rest of the application—which matters when you are iterating.
 
-### 3.4 System Requirements
+### 3.4 System Analysis
 
-System requirements state what FamilyFunds must do and the qualities it must maintain while doing it. For this project, the requirements are not treated as a generic checklist. They are derived from the specific problems of family-fund administration: unclear records, weak role separation, inconsistent payment handling, limited reporting, and the need to keep each family's data separate.
+System analysis states what FamilyFunds must do and the qualities it must maintain while doing it. For this project, the requirements are not treated as a generic checklist. They are derived from the specific problems of family-fund administration: unclear records, weak role separation, inconsistent payment handling, limited reporting, and the need to keep each family's data separate.
 
 #### 3.4.1 Functional Requirements
 
@@ -108,7 +108,7 @@ Non-functional requirements describe the qualities that must be present while th
 | Maintainability | Test coverage | Critical behaviours such as tenant isolation, payment allocation, and role permissions should be covered by automated tests. |
 | Scalability | Multi-family support | The architecture should support many independent families on shared infrastructure through logical data isolation. |
 
-### 3.5 System Architecture
+### 3.5 System Design (DFD, UML, ER Diagrams)
 
 FamilyFunds runs as a web-based client-server application. The backend is Laravel, the frontend is Vue.js, Inertia.js bridges the two, PostgreSQL holds the data, and a few external services (Paystack, AI providers, email, WhatsApp) handle things outside the application's own walls. Architecturally, it is a modular monolith rather than a set of microservices—and that is a deliberate choice. The project is broad enough that contributions, payments, reports, subscriptions, and AI features need to live in clearly separated parts of the codebase, but it is not so big that splitting it across several deployable services would do anything except create new problems. A modular monolith also has the practical advantage of being demonstrable as one running system, which matters for a final-year project.
 
@@ -120,11 +120,11 @@ Figure 3.1 shows the proposed high-level architecture.
 
 The architecture uses shared-schema multi-tenancy. In practical terms, different families share one application instance and one PostgreSQL database, but tenant-specific records carry a `family_id` where appropriate. Middleware, policies, and query scoping enforce the rule that a user can only work inside the family to which the user belongs. Recent work on multi-tenant cloud and SaaS systems continues to identify isolation, resource sharing, and tenant-specific quality requirements as central architectural concerns (Jia et al., 2021; Sharma & Kaur, 2021). This design gives FamilyFunds the cost and maintenance advantages of SaaS while still respecting the trust boundary between families.
 
-### 3.6 System Design
+### 3.6 Algorithm / Model Description
 
-System design explains how the proposed system is organised internally. In this project, the design is discussed under three practical concerns: how the data is stored, how the main processes work, and how users interact with the system.
+This section describes the main system models behind FamilyFunds: the data model, the payment-allocation model, and the interface model. The diagrams are included to make the design readable, but the explanation here also states the logic behind them.
 
-#### 3.6.1 Data Design
+#### 3.6.1 Data Model Description
 
 The database design starts from the family tenant. The `families` table represents each independent family group on the platform, and most financial records are linked either directly or indirectly to that family. This is the foundation for tenant isolation. If a contribution, payment, expense, invitation, or adjustment belongs to a family, reports can be generated without mixing one family's financial history with another's.
 
@@ -181,15 +181,19 @@ erDiagram
 
 The main database principle is traceability. A contribution belongs to a family and a member. A payment belongs to a contribution. An expense or adjustment belongs to a family and records who entered it. This makes it possible to reconstruct a member's balance later, not just display a current total. It also supports accountability because important records can be tied back to the authorised user who created them.
 
-#### 3.6.2 Process Design
+#### 3.6.2 Payment Allocation Algorithm
 
 Several important processes run inside the system: contribution generation, payment allocation, online payment handling, invitation acceptance, reminder delivery, report generation, and AI-assisted querying. Among these, payment allocation gets the most attention here—because that is the moment a real amount of money turns into a record against one or more contribution months, and getting it wrong is exactly the kind of mistake that destroys family trust.
 
 The allocation algorithm follows an oldest-balance-first rule, conceptually similar to a First-In, First-Out queue. The earliest unpaid contribution gets settled before any newer one. This is as much a fairness decision as a technical one. Imagine a member who owes January, February, and March. A payment that arrives in March should not vanish into March's balance while January remains mysteriously unresolved. FamilyFunds applies the rule the same way every time, so members and officers do not end up arguing about which month a payment was "really" for.
 
-The payment allocation process is shown in Figure 3.3.
+The payment allocation process is shown in Figure 3.3. It is divided into three panels in the report so the steps remain readable on the page.
 
-![Figure 3.3: Payment Allocation Flowchart](diagrams/slide-07-payment-allocation-flowchart-full-trimmed.png)
+![Figure 3.3a: Payment Allocation Flowchart, Part 1](diagrams/panels/slide-07-payment-allocation-flowchart-panel-1.png)
+
+![Figure 3.3b: Payment Allocation Flowchart, Part 2](diagrams/panels/slide-07-payment-allocation-flowchart-panel-2.png)
+
+![Figure 3.3c: Payment Allocation Flowchart, Part 3](diagrams/panels/slide-07-payment-allocation-flowchart-panel-3.png)
 
 The algorithm can be expressed as follows:
 
@@ -221,7 +225,7 @@ Other important processes are summarised below:
 - **Report flow:** Contribution, payment, expense, and adjustment records are aggregated into monthly or annual summaries.
 - **AI assistant flow:** The user asks a question, the assistant checks role and family context, calls only permitted tools, and returns an answer grounded in available family data.
 
-#### 3.6.3 Interface Design
+#### 3.6.3 Interface Model Description
 
 The interface is designed as a responsive single-page web application. The expected users are not all the same. Some may be comfortable managing settings and reports, while others may only want to confirm a balance on a phone. Recent responsive interface research emphasises consistency across screen sizes because users move between phones, tablets, and computers when accessing the same system (Li et al., 2022). For this reason, the interface hides database complexity and presents financial information through dashboards, lists, forms, status badges, and plain-language summaries.
 
@@ -241,9 +245,13 @@ The major screens include:
 
 The interface is also designed around role relevance. A Member should not be surrounded by administrative controls. A Financial Secretary needs quick access to payments, expenses, reports, and reminders. A Family Administrator needs member management, categories, subscription settings, and overall visibility. This role-sensitive interface is both a usability decision and a security decision, because users see the functions that match their responsibility.
 
-### 3.7 Modeling Tools
+### 3.7 Population & Sampling
 
-Diagrams matter in this project because the system has more moving parts than a description alone can carry. There are several user roles, several financial flows, several external services, and a database with more than a dozen related entities. A picture of the actors and their actions explains what the system is supposed to do faster than a paragraph can. A picture of the layers shows how the application is put together. A picture of the payment-allocation steps makes the algorithm easier to follow than its pseudocode. So the design relies on a small set of standard modelling artefacts, each chosen for what it explains best.
+This project is primarily a software-development project, not a survey-based study. For that reason, it does not use a statistical population, probability sampling frame, or sample-size calculation. The relevant population for design purposes is the set of people who normally participate in family contribution funds: family administrators, financial secretaries, ordinary members, and the platform administrator who manages the application itself.
+
+The validation scenarios are therefore selected purposively rather than randomly. They represent the user roles and financial events most likely to expose design weaknesses: creating a family, inviting members, generating monthly contributions, recording partial payments, paying online, sending reminders, viewing reports, and preventing one family from seeing another family's records. This is appropriate because the aim is to test whether the artefact behaves correctly under realistic use cases, not to generalise survey responses to a wider population.
+
+The same user-role logic is reflected in the modelling artefacts. Diagrams matter in this project because the system has more moving parts than a description alone can carry. There are several user roles, several financial flows, several external services, and a database with more than a dozen related entities. A picture of the actors and their actions explains what the system is supposed to do faster than a paragraph can. A picture of the layers shows how the application is put together. A picture of the payment-allocation steps makes the algorithm easier to follow than its pseudocode.
 
 A **Use Case Diagram** identifies the actors and what each one is allowed to do. The **System Architecture Diagram** shows how the layers fit together and how the application connects to the database and to outside services. An **Entity-Relationship Diagram** captures the major database tables and how they relate. An **Activity/Flowchart Diagram** walks through the payment-allocation steps. A **class-style description** explains how the major domain objects—Family, User, Contribution, Payment, Expense, FundAdjustment, PlatformPlan, Passkey—relate to each other in the code. And a **sequence-style description** lays out the order of interactions in critical processes such as online payment, invitation acceptance, and AI assistant queries.
 
@@ -253,7 +261,13 @@ Figure 3.4 presents the use-case view of the proposed system.
 
 The use-case model identifies four main human actors: Platform Super Admin, Family Admin, Financial Secretary, and Member. It also includes external actors such as Paystack and AI providers. This separation is important because external services support the system but do not control it. Paystack processes transactions but does not manage family records. The AI provider receives controlled prompts or tool outputs for specific assistant functions, but the Laravel application remains the authority for permissions, data, and financial records.
 
-### 3.8 Implementation Details
+### 3.8 Data Collection Methods
+
+The data used for this methodology came from four practical sources. First, the study used the problem analysis developed in Chapters One and Two, especially the gaps around manual record keeping, payment ambiguity, weak audit trails, and limited reporting for informal family funds. Second, it used observation of typical family-fund workflows: how members are added, how contribution categories are agreed, how payments are reported, and how financial secretaries normally reconcile balances. Third, it used the application's design artefacts and source structure as development evidence, including database entities, user roles, payment flows, report requirements, and security constraints. Finally, it uses test cases and validation scenarios as implementation data, because the system's correctness is judged by whether those scenarios pass.
+
+For the AI and predictive components, the relevant data is not personal survey data at this stage. It is historical contribution behaviour generated by the system: due months, payment dates, payment amounts, outstanding balances, reminders, and report summaries. Such data is used only within the permission boundaries of the family tenant.
+
+### 3.9 Tools, Languages & Technologies Used
 
 The proposed system is implemented with a Laravel and Vue technology stack. The stack was selected because it allows the project to keep most business logic in Laravel while still presenting a modern single-page user interface through Vue and Inertia. This is useful for a final-year system because the application remains manageable while still supporting dashboards, forms, reports, and interactive payment flows.
 
@@ -282,7 +296,9 @@ Laravel handles the backend because, frankly, it ships with most of what an appl
 
 Paystack was the obvious payment choice given that the project targets Nigerian families paying in Naira (Paystack, 2024). Laravel Fortify provides the authentication scaffolding, while WebAuthn passkeys and TOTP-based two-factor authentication add the stronger layers on top. Recent FIDO2 usability research is a good reminder of why passwordless login still needs careful fallbacks: passkeys are excellent when they work, but not every device supports them and not every user understands them (Lyastani et al., 2020; W3C, 2021). The Laravel AI SDK was chosen specifically so that AI provider access and tool-based assistant functions stay inside the application's permission system, rather than being treated as some external service that the application talks to but does not control.
 
-### 3.9 System Testing and Validation
+### 3.10 Implementation Environment
+
+#### 3.10.1 Testing and Validation Environment
 
 Testing and validation are necessary because FamilyFunds handles records that people may later use to settle disputes or confirm financial responsibility. A small error in allocation can make a member appear to owe money that has already been paid. A weak tenant boundary can expose another family's private records. For that reason, testing is planned at several levels rather than only at the end of development. AI features require extra validation because recent studies show that LLMs can produce fluent answers that are still factually wrong or logically weak, especially in financial contexts (de Wynter et al., 2023; Kang & Liu, 2023).
 
@@ -314,7 +330,7 @@ The most important validation scenarios are:
 
 The automated test suite will be run using Pest PHP. For demonstration, the most important acceptance condition is not simply that the interface loads. The critical behaviours must pass: authentication, tenant isolation, role permissions, payment allocation, and financial-report calculations.
 
-### 3.10 Deployment Strategy
+#### 3.10.2 Deployment and Runtime Environment
 
 The system has to run in two very different places: on a developer's machine while it is being built, and on a real server when families actually use it. Both setups share the same Laravel and Vue stack, but the operational details differ.
 
@@ -349,7 +365,7 @@ Evaluation metrics define how the success of the project will be measured. Famil
 
 For the predictive analytics module, raw accuracy is a misleading number. If most members usually pay on time anyway, a model that predicts "paid" for everyone scores 90% without doing any actual work. Recent credit-scoring literature keeps coming back to the same warnings—class imbalance, explainability, model-risk validation—as the things that actually matter when you are predicting defaults (Hussin Adam Khatir & Bee, 2022; Robisco & Carbó Martínez, 2022). Precision, recall, and F1-score paint a much honester picture of whether the system is genuinely identifying the members at risk. Response time also gets considered, because an AI-generated report summary that takes thirty seconds to appear may be technically correct and practically useless at the same time.
 
-### 3.12 Summary
+### 3.12 Chapter Summary
 
 This chapter laid out how FamilyFunds gets built. The system is a secure, AI-enhanced, multi-tenant platform for managing the day-to-day reality of family contribution funds—members, payments, expenses, reports, subscriptions, reminders, and access control all sitting inside one application that each family experiences as its own private workspace.
 

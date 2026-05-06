@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1380" viewBox="0 0 1800 1380">
+
+  <defs>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M1,1 L13,7 L1,13 Z" fill="#111111"/></marker>
+    <style><![CDATA[
+      .title { font: 700 52px Arial, sans-serif; fill: #000; }
+      .subtitle { font: 700 40px Arial, sans-serif; fill: #000; }
+      .section { font: 700 32px Arial, sans-serif; fill: #000; }
+      .label { font: 700 30px Arial, sans-serif; fill: #000; }
+      .label-sm { font: 700 26px Arial, sans-serif; fill: #000; }
+      .body { font: 400 24px Arial, sans-serif; fill: #000; }
+      .small { font: 400 21px Arial, sans-serif; fill: #000; }
+      .tiny { font: 400 18px Arial, sans-serif; fill: #000; }
+      .line { stroke: #111; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .line-soft { stroke: #333; stroke-width: 2.6; fill: none; marker-end: url(#arrow); }
+      .dash { stroke: #111; stroke-width: 3; stroke-dasharray: 10 8; fill: none; marker-end: url(#arrow); }
+    ]]></style>
+  </defs>
+<rect width="1800" height="1380" fill="#fff"/>
+<text x="900" y="72" text-anchor="middle" class="title"><tspan x="900" dy="0">Figure 3.3a: Payment Capture and Verification</tspan></text>
+<rect x="760" y="125" width="280" height="80" rx="40" fill="#e8f1ff" stroke="#111" stroke-width="3" />
+<text x="900" y="149" text-anchor="middle" class="label-sm"><tspan x="900" dy="0">Start</tspan></text>
+<polygon points="900,250 1100,360 900,470 700,360" fill="#fff7ed" stroke="#111" stroke-width="3"/>
+<text x="900" y="344" text-anchor="middle" class="label-sm"><tspan x="900" dy="0">Payment</tspan><tspan x="900" dy="30">source?</tspan></text>
+<rect x="185" y="590" width="430" height="130" rx="16" fill="#ecfdf3" stroke="#111" stroke-width="3" />
+<text x="400" y="639" text-anchor="middle" class="label-sm"><tspan x="400" dy="0">Manual: Admin / Secretary</tspan><tspan x="400" dy="30">records payment</tspan></text>
+<rect x="1130" y="520" width="430" height="130" rx="16" fill="#ecfdf3" stroke="#111" stroke-width="3" />
+<text x="1345" y="569" text-anchor="middle" class="label-sm"><tspan x="1345" dy="0">Online: Member selects</tspan><tspan x="1345" dy="30">unpaid contributions</tspan></text>
+<rect x="1130" y="750" width="430" height="150" rx="16" fill="#ecfdf3" stroke="#111" stroke-width="3" />
+<text x="1345" y="809" text-anchor="middle" class="label-sm"><tspan x="1345" dy="0">Process Paystack checkout</tspan><tspan x="1345" dy="30">and callback / webhook</tspan></text>
+<polygon points="1345,990 1530,1080 1345,1170 1160,1080" fill="#fff7ed" stroke="#111" stroke-width="3"/>
+<text x="1345" y="1064" text-anchor="middle" class="label-sm"><tspan x="1345" dy="0">Valid status</tspan><tspan x="1345" dy="30">and amount?</tspan></text>
+<rect x="1130" y="1240" width="430" height="80" rx="16" fill="#fff" stroke="#111" stroke-width="3" stroke-dasharray="10 8"/>
+<text x="1345" y="1264" text-anchor="middle" class="label-sm"><tspan x="1345" dy="0">No: mark failed / review later</tspan></text>
+<rect x="185" y="950" width="430" height="130" rx="16" fill="#e8f1ff" stroke="#111" stroke-width="3" />
+<text x="400" y="999" text-anchor="middle" class="label-sm"><tspan x="400" dy="0">Send payment to</tspan><tspan x="400" dy="30">allocation service</tspan></text>
+<path class="line-soft" d="M900 205 L900 250"/>
+<path class="line-soft" d="M760 360 L600 470 L400 470 L400 590"/>
+<text x="414" y="460" text-anchor="start" class="tiny"><tspan x="414" dy="0">Manual</tspan></text>
+<path class="line-soft" d="M1040 360 L1345 450 L1345 520"/>
+<text x="1359" y="440" text-anchor="start" class="tiny"><tspan x="1359" dy="0">Online</tspan></text>
+<path class="line-soft" d="M1345 650 L1345 750"/>
+<path class="line-soft" d="M1345 900 L1345 990"/>
+<path class="line-soft" d="M1160 1080 L890 1080 L890 1015 L615 1015"/>
+<text x="904" y="1005" text-anchor="start" class="tiny"><tspan x="904" dy="0">Yes</tspan></text>
+<path class="line-soft" d="M400 720 L400 950"/>
+<path class="line-soft" d="M1345 1170 L1345 1240"/>
+<text x="1359" y="1230" text-anchor="start" class="tiny"><tspan x="1359" dy="0">No</tspan></text>
+</svg>

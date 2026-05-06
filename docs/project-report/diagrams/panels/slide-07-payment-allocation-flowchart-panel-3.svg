@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1200" viewBox="0 0 1800 1200">
+
+  <defs>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M1,1 L13,7 L1,13 Z" fill="#111111"/></marker>
+    <style><![CDATA[
+      .title { font: 700 52px Arial, sans-serif; fill: #000; }
+      .subtitle { font: 700 40px Arial, sans-serif; fill: #000; }
+      .section { font: 700 32px Arial, sans-serif; fill: #000; }
+      .label { font: 700 30px Arial, sans-serif; fill: #000; }
+      .label-sm { font: 700 26px Arial, sans-serif; fill: #000; }
+      .body { font: 400 24px Arial, sans-serif; fill: #000; }
+      .small { font: 400 21px Arial, sans-serif; fill: #000; }
+      .tiny { font: 400 18px Arial, sans-serif; fill: #000; }
+      .line { stroke: #111; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .line-soft { stroke: #333; stroke-width: 2.6; fill: none; marker-end: url(#arrow); }
+      .dash { stroke: #111; stroke-width: 3; stroke-dasharray: 10 8; fill: none; marker-end: url(#arrow); }
+    ]]></style>
+  </defs>
+<rect width="1800" height="1200" fill="#fff"/>
+<text x="900" y="72" text-anchor="middle" class="title"><tspan x="900" dy="0">Figure 3.3c: Save Results, Update Records, Notify</tspan></text>
+<rect x="690" y="115" width="420" height="80" rx="40" fill="#e8f1ff" stroke="#111" stroke-width="3" />
+<text x="900" y="139" text-anchor="middle" class="label-sm"><tspan x="900" dy="0">From Figure 3.3b</tspan><tspan x="900" dy="30">persisted allocation</tspan></text>
+<rect x="635" y="270" width="530" height="120" rx="16" fill="#ecfdf3" stroke="#111" stroke-width="3" />
+<text x="900" y="314" text-anchor="middle" class="label-sm"><tspan x="900" dy="0">Persist payment records</tspan><tspan x="900" dy="30">with recorder and channel</tspan></text>
+<rect x="635" y="475" width="530" height="135" rx="16" fill="#ecfdf3" stroke="#111" stroke-width="3" />
+<text x="900" y="526.5" text-anchor="middle" class="label-sm"><tspan x="900" dy="0">Refresh reports, dashboard,</tspan><tspan x="900" dy="30">and member contribution status</tspan></text>
+<rect x="635" y="700" width="530" height="150" rx="16" fill="#fff7ed" stroke="#111" stroke-width="3" />
+<text x="900" y="759" text-anchor="middle" class="label-sm"><tspan x="900" dy="0">Send email / WhatsApp</tspan><tspan x="900" dy="30">notification when required</tspan></text>
+<rect x="690" y="960" width="420" height="85" rx="42.5" fill="#e8f1ff" stroke="#111" stroke-width="3" />
+<text x="900" y="986.5" text-anchor="middle" class="label-sm"><tspan x="900" dy="0">End: allocation complete</tspan></text>
+<path class="line-soft" d="M900 195 L900 270"/>
+<path class="line-soft" d="M900 390 L900 475"/>
+<path class="line-soft" d="M900 610 L900 700"/>
+<path class="line-soft" d="M900 850 L900 960"/>
+</svg>
