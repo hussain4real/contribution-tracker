@@ -1,10 +1,11 @@
 <?php
 
-use App\Models\Passkey;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
+use Laravel\Passkeys\Actions\VerifyPasskey;
+use Mockery\MockInterface;
 
-test('passkeys settings page can be rendered', function () {
+test('passkeys settings page can be rendered with a fresh empty list', function () {
     $user = User::factory()->withoutTwoFactor()->create();
 
     $this->actingAs($user)
@@ -25,9 +26,12 @@ test('passkeys settings page requires password confirmation', function () {
         ->assertRedirect(route('password.confirm'));
 });
 
-test('passkeys settings page lists registered passkeys', function () {
+test('passkeys settings page lists official passkeys', function () {
     $user = User::factory()->withoutTwoFactor()->create();
-    Passkey::factory()->count(3)->for($user)->create();
+
+    createTestPasskeyFor($user, ['name' => 'Work laptop']);
+    createTestPasskeyFor($user, ['name' => 'Phone']);
+    createTestPasskeyFor($user, ['name' => 'Security key']);
 
     $this->actingAs($user)
         ->withSession(['auth.password_confirmed_at' => time()])
@@ -39,53 +43,97 @@ test('passkeys settings page lists registered passkeys', function () {
         );
 });
 
-test('registration options can be generated', function () {
+test('official registration options can be generated after password confirmation', function () {
     $user = User::factory()->withoutTwoFactor()->create();
 
     $response = $this->actingAs($user)
-        ->postJson(route('passkeys.create-options'));
+        ->withSession(['auth.password_confirmed_at' => time()])
+        ->getJson(route('passkey.registration-options'));
 
     $response->assertOk()
         ->assertJsonStructure([
-            'challenge',
-            'rp' => ['name', 'id'],
-            'user' => ['id', 'name', 'displayName'],
-            'pubKeyCredParams',
-            'authenticatorSelection',
-            'timeout',
-            'attestation',
-        ]);
+            'options' => [
+                'challenge',
+                'rp' => ['name', 'id'],
+                'user' => ['id', 'name', 'displayName'],
+                'pubKeyCredParams',
+                'authenticatorSelection',
+                'timeout',
+                'attestation',
+            ],
+        ])
+        ->assertJsonPath('options.user.name', $user->email)
+        ->assertJsonPath('options.user.displayName', $user->name);
 });
 
-test('registration options include user details', function () {
+test('official registration options exclude existing passkeys', function () {
     $user = User::factory()->withoutTwoFactor()->create();
+
+    createTestPasskeyFor($user);
+    createTestPasskeyFor($user);
 
     $response = $this->actingAs($user)
-        ->postJson(route('passkeys.create-options'));
+        ->withSession(['auth.password_confirmed_at' => time()])
+        ->getJson(route('passkey.registration-options'));
 
     $response->assertOk()
-        ->assertJsonPath('user.name', $user->email)
-        ->assertJsonPath('user.displayName', $user->name);
+        ->assertJsonCount(2, 'options.excludeCredentials');
 });
 
-test('registration options exclude existing passkeys', function () {
+test('official passkey registration validates credential data', function () {
     $user = User::factory()->withoutTwoFactor()->create();
-    Passkey::factory()->count(2)->for($user)->create();
-
-    $response = $this->actingAs($user)
-        ->postJson(route('passkeys.create-options'));
-
-    $response->assertOk()
-        ->assertJsonCount(2, 'excludeCredentials');
-});
-
-test('a passkey can be deleted', function () {
-    $user = User::factory()->withoutTwoFactor()->create();
-    $passkey = Passkey::factory()->for($user)->create();
 
     $this->actingAs($user)
-        ->deleteJson(route('passkeys.destroy', $passkey))
-        ->assertOk();
+        ->withSession(['auth.password_confirmed_at' => time()])
+        ->postJson(route('passkey.store'), [
+            'name' => 'MacBook Pro',
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['credential']);
+});
+
+test('official passkey management routes require password confirmation', function () {
+    $user = User::factory()->withoutTwoFactor()->create();
+    $passkey = createTestPasskeyFor($user);
+
+    $this->actingAs($user)
+        ->get(route('passkey.registration-options'))
+        ->assertRedirect(route('password.confirm'));
+
+    $this->actingAs($user)
+        ->delete(route('passkey.destroy', $passkey))
+        ->assertRedirect(route('password.confirm'));
+});
+
+test('official passkey confirmation can satisfy password confirmation', function () {
+    $user = User::factory()->withoutTwoFactor()->create();
+    $passkey = createTestPasskeyFor($user);
+
+    $this->mock(VerifyPasskey::class, function (MockInterface $mock) use ($passkey) {
+        $mock->shouldReceive('__invoke')->once()->andReturn($passkey);
+    });
+
+    $this->actingAs($user)
+        ->getJson(route('passkey.confirm-options'))
+        ->assertOk()
+        ->assertJsonCount(1, 'options.allowCredentials')
+        ->assertSessionHas('passkey.verification_options');
+
+    $this->postJson(route('passkey.confirm'), [
+        'credential' => fakePasskeyAssertionPayload(),
+    ])->assertOk()
+        ->assertSessionHas('auth.password_confirmed_at');
+});
+
+test('a passkey can be deleted through the official endpoint', function () {
+    $user = User::factory()->withoutTwoFactor()->create();
+    $passkey = createTestPasskeyFor($user);
+
+    $this->actingAs($user)
+        ->withSession(['auth.password_confirmed_at' => time()])
+        ->deleteJson(route('passkey.destroy', $passkey))
+        ->assertOk()
+        ->assertJsonPath('status', 'passkey-deleted');
 
     $this->assertDatabaseMissing('passkeys', ['id' => $passkey->id]);
 });
@@ -93,15 +141,21 @@ test('a passkey can be deleted', function () {
 test('a user cannot delete another users passkey', function () {
     $user = User::factory()->withoutTwoFactor()->create();
     $otherUser = User::factory()->withoutTwoFactor()->create();
-    $passkey = Passkey::factory()->for($otherUser)->create();
+    $passkey = createTestPasskeyFor($otherUser);
 
     $this->actingAs($user)
-        ->deleteJson(route('passkeys.destroy', $passkey))
+        ->withSession(['auth.password_confirmed_at' => time()])
+        ->deleteJson(route('passkey.destroy', $passkey))
         ->assertForbidden();
 
     $this->assertDatabaseHas('passkeys', ['id' => $passkey->id]);
 });
 
 test('passkey routes require authentication', function () {
+    $passkey = createTestPasskeyFor(User::factory()->withoutTwoFactor()->create());
+
     $this->get(route('passkeys.show'))->assertRedirect();
+    $this->get(route('passkey.registration-options'))->assertRedirect(route('login'));
+    $this->post(route('passkey.store'))->assertRedirect(route('login'));
+    $this->delete(route('passkey.destroy', $passkey))->assertRedirect(route('login'));
 });

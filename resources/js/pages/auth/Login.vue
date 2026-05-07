@@ -104,7 +104,7 @@ const handlePasskeyLogin = async (): Promise<void> => {
                         required
                         autofocus
                         :tabindex="1"
-                        autocomplete="email"
+                        autocomplete="email webauthn"
                         placeholder="email@example.com"
                     />
                     <InputError :message="errors.email" />

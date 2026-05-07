@@ -1,98 +1,119 @@
 <?php
 
-use App\Models\Passkey;
 use App\Models\User;
+use Laravel\Passkeys\Actions\VerifyPasskey;
+use Mockery\MockInterface;
 
-test('two factor passkey challenge options can be generated for users with passkeys', function () {
-    $user = User::factory()->create();
-    Passkey::factory()->for($user)->create();
-
-    $response = $this->actingAs($user)
-        ->postJson(route('passkey.two-factor.options'));
-
-    $response->assertOk()
-        ->assertJsonStructure([
-            'challenge',
-            'rpId',
-            'timeout',
-            'userVerification',
-            'allowCredentials',
-        ]);
-});
-
-test('two factor passkey challenge options includes user credentials', function () {
-    $user = User::factory()->create();
-    Passkey::factory()->count(2)->for($user)->create();
-
-    $response = $this->actingAs($user)
-        ->postJson(route('passkey.two-factor.options'));
-
-    $response->assertOk()
-        ->assertJsonCount(2, 'allowCredentials');
-});
-
-test('two factor passkey challenge returns not found for users without passkeys', function () {
-    $user = User::factory()->create();
-
-    $response = $this->actingAs($user)
-        ->postJson(route('passkey.two-factor.options'));
-
-    $response->assertNotFound();
-});
-
-test('two factor passkey verify fails with invalid assertion', function () {
-    $user = User::factory()->create();
-    Passkey::factory()->for($user)->create();
-
-    $this->actingAs($user)
-        ->postJson(route('passkey.two-factor.options'));
-
-    $response = $this->actingAs($user)
-        ->postJson(route('passkey.two-factor.verify'), [
-            'assertion' => [
-                'id' => 'invalid',
-                'rawId' => 'invalid',
-                'response' => [
-                    'clientDataJSON' => base64_encode('{}'),
-                    'authenticatorData' => base64_encode('invalid'),
-                    'signature' => base64_encode('invalid'),
-                ],
-                'type' => 'public-key',
-            ],
-        ]);
-
-    $response->assertUnprocessable();
-});
-
-test('two factor passkey verify requires assertion data', function () {
-    $user = User::factory()->create();
-
-    $response = $this->actingAs($user)
-        ->postJson(route('passkey.two-factor.verify'), []);
-
-    $response->assertUnprocessable()
-        ->assertJsonValidationErrors(['assertion']);
-});
-
-test('has passkeys endpoint returns false when user has no passkeys', function () {
-    $response = $this->postJson(route('passkey.two-factor.has-passkeys'));
-
-    $response->assertOk()
+test('has passkeys endpoint returns false when no two factor login is active', function () {
+    $this->postJson(route('passkey.two-factor.has-passkeys'))
+        ->assertOk()
         ->assertJsonPath('hasPasskeys', false);
 });
 
-test('has passkeys endpoint returns true when user has passkeys', function () {
-    $user = User::factory()->withoutTwoFactor()->create();
-    Passkey::factory()->for($user)->create();
+test('has passkeys endpoint returns false when the challenged user has no passkeys', function () {
+    $user = User::factory()->create();
 
-    $response = $this->withSession(['login.id' => $user->id])
-        ->postJson(route('passkey.two-factor.has-passkeys'));
+    $this->withSession(['login.id' => $user->id])
+        ->postJson(route('passkey.two-factor.has-passkeys'))
+        ->assertOk()
+        ->assertJsonPath('hasPasskeys', false);
+});
 
-    $response->assertOk()
+test('has passkeys endpoint returns true when the challenged user has passkeys', function () {
+    $user = User::factory()->create();
+    createTestPasskeyFor($user);
+
+    $this->withSession(['login.id' => $user->id])
+        ->postJson(route('passkey.two-factor.has-passkeys'))
+        ->assertOk()
         ->assertJsonPath('hasPasskeys', true);
 });
 
-test('two factor passkey routes require a login session', function () {
-    $this->postJson(route('passkey.two-factor.options'))->assertNotFound();
-    $this->postJson(route('passkey.two-factor.verify'))->assertUnprocessable();
+test('two factor passkey options can be generated for the challenged user', function () {
+    $user = User::factory()->create();
+
+    createTestPasskeyFor($user);
+    createTestPasskeyFor($user);
+
+    $response = $this->withSession(['login.id' => $user->id])
+        ->getJson(route('passkey.two-factor.options'));
+
+    $response->assertOk()
+        ->assertJsonStructure([
+            'options' => [
+                'challenge',
+                'rpId',
+                'timeout',
+                'userVerification',
+                'allowCredentials',
+            ],
+        ])
+        ->assertJsonCount(2, 'options.allowCredentials')
+        ->assertSessionHas('passkey.verification_options');
+});
+
+test('two factor passkey options return not found without passkeys', function () {
+    $user = User::factory()->create();
+
+    $this->withSession(['login.id' => $user->id])
+        ->postJson(route('passkey.two-factor.options'))
+        ->assertNotFound();
+});
+
+test('two factor passkey verify requires credential data', function () {
+    $user = User::factory()->create();
+
+    $this->withSession(['login.id' => $user->id])
+        ->postJson(route('passkey.two-factor.verify'), [])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['credential']);
+});
+
+test('two factor passkey verify rejects an unknown credential', function () {
+    $user = User::factory()->create();
+    createTestPasskeyFor($user);
+
+    $this->withSession(['login.id' => $user->id])
+        ->getJson(route('passkey.two-factor.options'))
+        ->assertOk();
+
+    $this->postJson(route('passkey.two-factor.verify'), [
+        'credential' => fakePasskeyAssertionPayload(),
+    ])->assertUnprocessable();
+
+    $this->assertGuest();
+});
+
+test('two factor passkey verify signs in the challenged user', function () {
+    $user = User::factory()->create();
+    $passkey = createTestPasskeyFor($user);
+
+    $this->mock(VerifyPasskey::class, function (MockInterface $mock) use ($passkey) {
+        $mock->shouldReceive('__invoke')->once()->andReturn($passkey);
+    });
+
+    $this->withSession([
+        'login.id' => $user->id,
+        'login.remember' => true,
+    ])->getJson(route('passkey.two-factor.options'))
+        ->assertOk();
+
+    $response = $this->postJson(route('passkey.two-factor.verify'), [
+        'credential' => fakePasskeyAssertionPayload(),
+    ]);
+
+    $response->assertOk()
+        ->assertJsonPath('redirect', route('dashboard'))
+        ->assertSessionMissing('login.id')
+        ->assertSessionMissing('login.remember');
+
+    $this->assertAuthenticatedAs($user);
+    $response->assertCookie(auth()->guard('web')->getRecallerName());
+});
+
+test('two factor passkey verify requires an active login challenge', function () {
+    $this->postJson(route('passkey.two-factor.verify'), [
+        'credential' => fakePasskeyAssertionPayload(),
+    ])->assertUnprocessable()
+        ->assertJsonPath('message', 'No two-factor challenge is active.');
 });
