@@ -1,30 +1,22 @@
 import {
-    challengeOptions as loginChallengeOptions,
+    destroy as destroyPasskey,
+    loginOptions,
     login as passkeyLogin,
-} from '@/actions/App/Http/Controllers/Auth/PasskeyLoginController';
+    registrationOptions,
+    store as storePasskey,
+} from '@/routes/passkey';
 import {
     hasPasskeys as checkHasPasskeys,
-    challengeOptions as twoFactorChallengeOptions,
+    options as twoFactorChallengeOptions,
     verify as twoFactorVerify,
-} from '@/actions/App/Http/Controllers/Auth/PasskeyTwoFactorController';
-import {
-    createOptions,
-    destroy as destroyPasskey,
-    store as storePasskey,
-} from '@/actions/App/Http/Controllers/Settings/PasskeyController';
-import {
-    startAuthentication,
-    startRegistration,
-} from '@simplewebauthn/browser';
+} from '@/routes/passkey/two-factor';
+import { PasskeyError, Passkeys } from '@laravel/passkeys';
 import { ref } from 'vue';
 
 const isSupported = ref<boolean>(false);
 
-if (
-    typeof window !== 'undefined' &&
-    typeof window.PublicKeyCredential !== 'undefined'
-) {
-    isSupported.value = true;
+if (typeof window !== 'undefined') {
+    isSupported.value = Passkeys.isSupported();
 }
 
 const isProcessing = ref<boolean>(false);
@@ -79,27 +71,29 @@ export const useWebAuthn = () => {
 
     const registerPasskey = async (
         name: string,
-    ): Promise<{ id: number; name: string } | null> => {
+    ): Promise<{ id: string; name: string } | null> => {
         clearError();
         isProcessing.value = true;
 
         try {
-            const options = await jsonRequest(createOptions.url());
-
-            const credential = await startRegistration({
-                optionsJSON: options,
-            });
-
-            const result = await jsonRequest(storePasskey.url(), 'POST', {
+            const result = await Passkeys.register({
                 name,
-                credential,
+                routes: {
+                    options: registrationOptions.url(),
+                    submit: storePasskey.url(),
+                },
             });
 
-            return result.passkey;
+            return {
+                id: result.id,
+                name: result.name,
+            };
         } catch (e: any) {
-            if (e.name === 'NotAllowedError') {
+            if (e.name === 'UserCancelledError') {
                 error.value =
                     'Registration was cancelled or not allowed by the browser.';
+            } else if (e instanceof PasskeyError) {
+                error.value = e.message || 'Failed to register passkey.';
             } else {
                 error.value =
                     e.response?.data?.message ||
@@ -118,21 +112,20 @@ export const useWebAuthn = () => {
         isProcessing.value = true;
 
         try {
-            const options = await jsonRequest(loginChallengeOptions.url());
-
-            const assertion = await startAuthentication({
-                optionsJSON: options,
-            });
-
-            const result = await jsonRequest(passkeyLogin.url(), 'POST', {
-                assertion,
+            const result = await Passkeys.verify({
+                routes: {
+                    options: loginOptions.url(),
+                    submit: passkeyLogin.url(),
+                },
             });
 
             return result;
         } catch (e: any) {
-            if (e.name === 'NotAllowedError') {
+            if (e.name === 'UserCancelledError') {
                 error.value =
                     'Authentication was cancelled or not allowed by the browser.';
+            } else if (e instanceof PasskeyError) {
+                error.value = e.message || 'Passkey authentication failed.';
             } else {
                 error.value =
                     e.response?.data?.message ||
@@ -153,21 +146,20 @@ export const useWebAuthn = () => {
         isProcessing.value = true;
 
         try {
-            const options = await jsonRequest(twoFactorChallengeOptions.url());
-
-            const assertion = await startAuthentication({
-                optionsJSON: options,
-            });
-
-            const result = await jsonRequest(twoFactorVerify.url(), 'POST', {
-                assertion,
+            const result = await Passkeys.verify({
+                routes: {
+                    options: twoFactorChallengeOptions.url(),
+                    submit: twoFactorVerify.url(),
+                },
             });
 
             return result;
         } catch (e: any) {
-            if (e.name === 'NotAllowedError') {
+            if (e.name === 'UserCancelledError') {
                 error.value =
                     'Biometric verification was cancelled or not allowed.';
+            } else if (e instanceof PasskeyError) {
+                error.value = e.message || 'Biometric verification failed.';
             } else {
                 error.value =
                     e.response?.data?.message ||

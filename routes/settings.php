@@ -47,7 +47,4 @@ Route::middleware('auth')->group(function () {
         ->name('two-factor.show');
 
     Route::get('settings/passkeys', [PasskeyController::class, 'show'])->name('passkeys.show');
-    Route::post('settings/passkeys/options', [PasskeyController::class, 'createOptions'])->name('passkeys.create-options');
-    Route::post('settings/passkeys', [PasskeyController::class, 'store'])->name('passkeys.store');
-    Route::delete('settings/passkeys/{passkey}', [PasskeyController::class, 'destroy'])->name('passkeys.destroy');
 });

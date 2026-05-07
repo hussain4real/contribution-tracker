@@ -24,7 +24,7 @@ import { onMounted, ref } from 'vue';
 interface PasskeyData {
     id: number;
     name: string;
-    attachment_type: string | null;
+    authenticator: string | null;
     last_used_at: string | null;
     created_at: string;
 }
@@ -189,6 +189,9 @@ const formatDate = (dateString: string | null): string => {
                                     <div
                                         class="flex gap-3 text-xs text-muted-foreground"
                                     >
+                                        <span v-if="passkey.authenticator">
+                                            {{ passkey.authenticator }}
+                                        </span>
                                         <span
                                             >Added
                                             {{

@@ -32,9 +32,9 @@
     },
     "dependencies": {
         "@inertiajs/vue3": "^3.0.0",
+        "@laravel/passkeys": "^0.1.0",
         "@laravel/stream-vue": "^0.3.13",
         "@paystack/inline-js": "^2.22.8",
-        "@simplewebauthn/browser": "^13.3.0",
         "@tailwindcss/typography": "^0.5.19",
         "@vueuse/core": "^12.8.2",
         "class-variance-authority": "^0.7.1",

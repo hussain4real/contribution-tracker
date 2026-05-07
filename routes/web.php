@@ -2,7 +2,6 @@
 
 use App\Features\AiAssistant;
 use App\Http\Controllers\AiChatController;
-use App\Http\Controllers\Auth\PasskeyLoginController;
 use App\Http\Controllers\Auth\PasskeyTwoFactorController;
 use App\Http\Controllers\ChangelogController;
 use App\Http\Controllers\ChangelogSeenController;
@@ -57,18 +56,12 @@ Route::get('webhooks/whatsapp', [WhatsAppWebhookController::class, 'verify'])->n
 Route::post('webhooks/whatsapp', [WhatsAppWebhookController::class, 'handle'])->name('webhooks.whatsapp');
 
 // =========================================================================
-// Passkey Authentication (Guest)
+// Passkey 2FA routes used while Fortify is holding a challenged login in session.
 // =========================================================================
 
-Route::middleware('guest')->group(function () {
-    Route::post('passkey/login/options', [PasskeyLoginController::class, 'challengeOptions'])->name('passkey.login.options');
-    Route::post('passkey/login', [PasskeyLoginController::class, 'login'])->name('passkey.login');
+Route::middleware('throttle:passkeys')->group(function () {
     Route::post('passkey/two-factor/has-passkeys', [PasskeyTwoFactorController::class, 'hasPasskeys'])->name('passkey.two-factor.has-passkeys');
-});
-
-// Passkey 2FA routes (authenticated but not yet 2FA verified)
-Route::middleware('auth')->group(function () {
-    Route::post('passkey/two-factor/options', [PasskeyTwoFactorController::class, 'challengeOptions'])->name('passkey.two-factor.options');
+    Route::match(['get', 'post'], 'passkey/two-factor/options', [PasskeyTwoFactorController::class, 'challengeOptions'])->name('passkey.two-factor.options');
     Route::post('passkey/two-factor/verify', [PasskeyTwoFactorController::class, 'verify'])->name('passkey.two-factor.verify');
 });
 
