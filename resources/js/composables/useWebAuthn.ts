@@ -1,7 +1,7 @@
 import {
     destroy as destroyPasskey,
-    login as passkeyLogin,
     loginOptions,
+    login as passkeyLogin,
     registrationOptions,
     store as storePasskey,
 } from '@/routes/passkey';
