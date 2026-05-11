@@ -1,8 +1,10 @@
 <?php
 
+use App\Http\Controllers\WhatsAppWebhookController;
 use App\Jobs\ProcessWhatsAppWebhook;
 use App\Models\User;
 use App\Models\WhatsAppMessage;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -112,6 +114,25 @@ describe('WhatsApp webhook handler (POST)', function () {
             $body,
         )->assertForbidden();
 
+        Bus::assertNotDispatched(ProcessWhatsAppWebhook::class);
+    });
+
+    it('rejects requests with a non-string signature header', function () {
+        Bus::fake();
+
+        $payload = ['object' => 'whatsapp_business_account', 'entry' => []];
+        $body = json_encode($payload);
+        $request = Request::create(
+            '/webhooks/whatsapp',
+            'POST',
+            server: ['CONTENT_TYPE' => 'application/json'],
+            content: $body,
+        );
+        $request->headers->set('X-Hub-Signature-256', ['sha256=deadbeef']);
+
+        $response = app(WhatsAppWebhookController::class)->handle($request);
+
+        expect($response->getStatusCode())->toBe(403);
         Bus::assertNotDispatched(ProcessWhatsAppWebhook::class);
     });
 

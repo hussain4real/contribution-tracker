@@ -179,12 +179,17 @@ it('smokes authenticated family pages', function () {
     navigateAndAssertBrowserSmoke($page, route('user-password.edit'), 'Update password');
     navigateAndAssertBrowserSmoke($page, route('appearance.edit'), 'Appearance settings');
 
-    $page->navigate(route('password.confirm'))
+    $passwordConfirmPath = parse_url(route('password.confirm'), PHP_URL_PATH) ?: '/user/confirm-password';
+    $twoFactorSettingsPath = parse_url(route('two-factor.show'), PHP_URL_PATH) ?: '/settings/two-factor';
+
+    $page->navigate(route('two-factor.show'))
+        ->assertPathIs($passwordConfirmPath)
         ->fill('password', 'password')
         ->click('@confirm-password-button')
+        ->assertPathIs($twoFactorSettingsPath)
         ->assertNoJavaScriptErrors();
 
-    navigateAndAssertBrowserSmoke($page, route('two-factor.show'), 'Two-factor authentication');
+    assertBrowserSmoke($page, 'Two-factor authentication');
     navigateAndAssertBrowserSmoke($page, route('passkeys.show'), 'Passkeys');
 });
 
