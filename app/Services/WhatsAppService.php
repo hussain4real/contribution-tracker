@@ -164,10 +164,6 @@ class WhatsAppService
         ?string $error,
         ?string $errorCode,
     ): void {
-        if (! class_exists(WhatsAppMessageModel::class)) {
-            return;
-        }
-
         try {
             WhatsAppMessageModel::create([
                 'wa_message_id' => $waMessageId,

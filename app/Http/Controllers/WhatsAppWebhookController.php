@@ -56,14 +56,6 @@ class WhatsAppWebhookController extends Controller
         $signatureHeader = $request->header('X-Hub-Signature-256', '');
         $rawBody = $request->getContent();
 
-        if (! is_string($rawBody)) {
-            $rawBody = '';
-        }
-
-        if (! is_string($signatureHeader)) {
-            $signatureHeader = '';
-        }
-
         if (empty($appSecret)) {
             if (! app()->environment('local', 'testing')) {
                 Log::critical('WhatsApp app_secret is not configured — webhook signature verification is disabled in a non-local environment.');

@@ -10,31 +10,24 @@ use App\Models\User;
 
 describe('Member Management Flow (Browser)', function () {
     beforeEach(function () {
-        $this->admin = User::factory()->admin()->create([
+        $this->family = createBrowserFamily();
+        $this->admin = createBrowserAdmin($this->family, [
             'email' => 'admin@test.com',
-            'password' => bcrypt('password'),
         ]);
     });
 
     it('can navigate to members page from dashboard', function () {
-        $page = visit('/login');
+        $page = loginBrowserAs($this->admin);
 
-        $page->fill('email', 'admin@test.com')
-            ->fill('password', 'password')
-            ->click('Log in')
-            ->assertSee('Dashboard')
-            ->click('Members')
+        $page->click('Members')
             ->assertSee('Family Members')
             ->assertNoJavaScriptErrors();
     });
 
     it('can access create member form', function () {
-        $page = visit('/login');
+        $page = loginBrowserAs($this->admin);
 
-        $page->fill('email', 'admin@test.com')
-            ->fill('password', 'password')
-            ->click('Log in')
-            ->click('Members')
+        $page->click('Members')
             ->assertSee('Family Members')
             ->click('Add Member')
             ->assertSee('Add New Member')
@@ -42,12 +35,9 @@ describe('Member Management Flow (Browser)', function () {
     });
 
     it('can create a new member with student category', function () {
-        $page = visit('/login');
+        $page = loginBrowserAs($this->admin);
 
-        $page->fill('email', 'admin@test.com')
-            ->fill('password', 'password')
-            ->click('Log in')
-            ->click('Members')
+        $page->click('Members')
             ->click('Add Member')
             ->fill('name', 'Test Student')
             ->fill('email', 'student@test.com')
@@ -60,107 +50,109 @@ describe('Member Management Flow (Browser)', function () {
             ->assertSee('Test Student')
             ->assertNoJavaScriptErrors();
 
-        // Verify in database
-        expect(User::where('email', 'student@test.com')->exists())->toBeTrue();
+        expect(User::where('email', 'student@test.com')
+            ->where('family_id', $this->family->id)
+            ->exists())->toBeTrue();
     });
 
     it('displays correct monthly amount for student category', function () {
-        // Create a student member
-        User::factory()->member()->student()->create([
-            'name' => 'Student User',
-        ]);
+        User::factory()
+            ->withoutTwoFactor()
+            ->member()
+            ->student()
+            ->create([
+                'family_id' => $this->family->id,
+                'name' => 'Student User',
+            ]);
 
-        $page = visit('/login');
+        $page = loginBrowserAs($this->admin);
 
-        $page->fill('email', 'admin@test.com')
-            ->fill('password', 'password')
-            ->click('Log in')
-            ->click('Members')
+        $page->click('Members')
             ->assertSee('Student User')
             ->assertSee('₦1,000') // Student monthly amount
             ->assertNoJavaScriptErrors();
     });
 
     it('can edit member category from student to employed', function () {
-        $member = User::factory()->member()->student()->create([
-            'name' => 'Changing Category',
-            'email' => 'change@test.com',
-        ]);
+        $member = User::factory()
+            ->withoutTwoFactor()
+            ->member()
+            ->student()
+            ->create([
+                'family_id' => $this->family->id,
+                'name' => 'Changing Category',
+                'email' => 'change@test.com',
+            ]);
 
-        $page = visit('/login');
+        $page = loginBrowserAs($this->admin);
 
-        $page->fill('email', 'admin@test.com')
-            ->fill('password', 'password')
-            ->click('Log in')
-            ->navigate("/members/{$member->id}/edit")
+        $page->navigate("/members/{$member->id}/edit")
             ->assertSee('Edit Member')
             ->select('category', 'employed')
             ->click('Save Changes')
             ->assertNoJavaScriptErrors();
 
-        // Verify in database
         $member->refresh();
+
         expect($member->category->value)->toBe('employed');
     });
 
     it('can archive a member', function () {
-        $member = User::factory()->member()->create([
+        $member = createBrowserMember($this->family, [
             'name' => 'Archive Me',
         ]);
 
-        $page = visit('/login');
+        $page = loginBrowserAs($this->admin);
 
-        $page->fill('email', 'admin@test.com')
-            ->fill('password', 'password')
-            ->click('Log in')
-            ->navigate("/members/{$member->id}")
+        $page->navigate("/members/{$member->id}")
             ->assertSee('Archive Me')
             ->assertNoJavaScriptErrors();
 
-        // Archive via direct request (button click is fragile in browser tests)
-        $this->actingAs($this->admin)->delete("/members/{$member->id}");
+        $page->script('() => { window.confirm = () => true; }');
 
-        // Verify in database
+        $page->click('@archive-member-button')
+            ->assertSee('Family Members')
+            ->assertNoJavaScriptErrors();
+
         $member->refresh();
+
         expect($member->isArchived())->toBeTrue();
     });
 
     it('can view archived members and restore them', function () {
-        $member = User::factory()->member()->create([
+        $member = createBrowserMember($this->family, [
             'name' => 'Archived User',
             'archived_at' => now(),
         ]);
 
-        $page = visit('/login');
+        $page = loginBrowserAs($this->admin);
 
-        $page->fill('email', 'admin@test.com')
-            ->fill('password', 'password')
-            ->click('Log in')
-            ->click('Members')
+        $page->click('Members')
             ->click('Show Archived')
+            ->assertSee('Archived User')
+            ->navigate("/members/{$member->id}")
+            ->assertSee('This member is archived');
+
+        $page->script('() => { window.confirm = () => true; }');
+
+        $page->click('@restore-member-button')
             ->assertSee('Archived User')
             ->assertNoJavaScriptErrors();
 
-        // Restore via direct request
-        $this->actingAs($this->admin)->post("/members/{$member->id}/restore");
-
-        // Verify in database
         $member->refresh();
+
         expect($member->isArchived())->toBeFalse();
     });
 
     it('shows member details on show page', function () {
-        $member = User::factory()->member()->employed()->create([
+        $member = createBrowserMember($this->family, [
             'name' => 'Detail View User',
             'email' => 'detail@test.com',
         ]);
 
-        $page = visit('/login');
+        $page = loginBrowserAs($this->admin);
 
-        $page->fill('email', 'admin@test.com')
-            ->fill('password', 'password')
-            ->click('Log in')
-            ->navigate("/members/{$member->id}")
+        $page->navigate("/members/{$member->id}")
             ->assertSee('Detail View User')
             ->assertSee('detail@test.com')
             ->assertSee('Employed')
@@ -169,38 +161,24 @@ describe('Member Management Flow (Browser)', function () {
     });
 
     it('member cannot access create member page', function () {
-        $member = User::factory()->member()->create([
+        $member = createBrowserMember($this->family, [
             'email' => 'member@test.com',
-            'password' => bcrypt('password'),
         ]);
 
-        $page = visit('/login');
+        $page = loginBrowserAs($member);
 
-        $page->fill('email', 'member@test.com')
-            ->fill('password', 'password')
-            ->click('Log in')
-            ->assertSee('Dashboard');
-
-        // Try to navigate directly to create member page
-        $page = visit('/members/create');
-        $page->assertSee('403'); // Should be forbidden
+        $page->navigate('/members/create')
+            ->assertSee('403');
     });
 
     it('financial secretary cannot access create member page', function () {
-        $fs = User::factory()->financialSecretary()->create([
+        $fs = createBrowserFinancialSecretary($this->family, [
             'email' => 'fs@test.com',
-            'password' => bcrypt('password'),
         ]);
 
-        $page = visit('/login');
+        $page = loginBrowserAs($fs);
 
-        $page->fill('email', 'fs@test.com')
-            ->fill('password', 'password')
-            ->click('Log in')
-            ->assertSee('Dashboard');
-
-        // Try to navigate directly to create member page
-        $page = visit('/members/create');
-        $page->assertSee('403'); // Should be forbidden
+        $page->navigate('/members/create')
+            ->assertSee('403');
     });
 });

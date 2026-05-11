@@ -32,6 +32,44 @@ test('admin can preview payment recording', function () {
     $this->assertDatabaseCount('payments', 0);
 });
 
+test('payment recording requires a member name', function () {
+    $tool = new RecordPayment($this->admin);
+
+    $result = json_decode($tool->handle(new Request([
+        'amount' => 4000,
+    ])), true);
+
+    expect($result['error'])->toBe('Please provide the member name.');
+});
+
+test('payment recording requires a positive amount', function () {
+    $tool = new RecordPayment($this->admin);
+
+    $result = json_decode($tool->handle(new Request([
+        'member_name' => 'Aminu Hussain',
+        'amount' => 0,
+    ])), true);
+
+    expect($result['error'])->toContain('Amount is required');
+});
+
+test('payment recording preview includes a valid target period', function () {
+    $target = now()->addMonths(2);
+    $tool = new RecordPayment($this->admin);
+
+    $result = json_decode($tool->handle(new Request([
+        'member_name' => 'Aminu Hussain',
+        'amount' => 4000,
+        'target_year' => $target->year,
+        'target_month' => $target->month,
+    ])), true);
+
+    expect($result['status'])->toBe('confirmation_required')
+        ->and($result['message'])->toContain($target->format('F Y'))
+        ->and($result['details']['target_year'])->toBe($target->year)
+        ->and($result['details']['target_month'])->toBe($target->month);
+});
+
 test('admin can execute payment recording with confirmation', function () {
     Contribution::factory()->forUser($this->payingMember)->currentMonth()->create();
 

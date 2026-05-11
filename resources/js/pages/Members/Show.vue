@@ -388,6 +388,7 @@ function restoreMember() {
                                 <Button
                                     variant="outline"
                                     size="sm"
+                                    data-test="archive-member-button"
                                     @click="archiveMember"
                                 >
                                     <Archive
@@ -400,6 +401,7 @@ function restoreMember() {
                                 <Button
                                     variant="outline"
                                     size="sm"
+                                    data-test="restore-member-button"
                                     @click="restoreMember"
                                 >
                                     <RotateCcw

@@ -151,4 +151,28 @@ describe('Send Contribution Reminders Command', function () {
         Notification::assertSentTo($member1, ContributionReminderNotification::class);
         Notification::assertSentTo($member2, ContributionReminderNotification::class);
     });
+
+    it('skips contributions whose user disappears after selection', function () {
+        Notification::fake();
+
+        $family = Family::factory()->create();
+        $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
+
+        $simulateRace = true;
+        Contribution::retrieved(function (Contribution $retrieved) use (&$simulateRace, $contribution, $member): void {
+            if (! $simulateRace || $retrieved->id !== $contribution->id) {
+                return;
+            }
+
+            $simulateRace = false;
+            $member->delete();
+        });
+
+        $this->artisan('contributions:remind', ['--day' => 25])
+            ->expectsOutput('Sent 0 reminder notifications.')
+            ->assertSuccessful();
+
+        Notification::assertNothingSent();
+    });
 });

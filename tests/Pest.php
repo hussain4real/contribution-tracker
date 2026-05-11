@@ -1,8 +1,10 @@
 <?php
 
+use App\Models\Family;
 use App\Models\User;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Laravel\Passkeys\Passkey;
+use Pest\Browser\Api\PendingAwaitablePage;
 use Tests\TestCase;
 
 /*
@@ -75,6 +77,159 @@ function createTestPasskeyFor(User $user, array $attributes = []): Passkey
         ],
         ...$attributes,
     ]);
+}
+
+/**
+ * Create a family fixture for browser tests.
+ *
+ * @param  array<string, mixed>  $attributes
+ */
+function createBrowserFamily(array $attributes = []): Family
+{
+    return Family::factory()->create([
+        'name' => 'Browser Family',
+        ...$attributes,
+    ]);
+}
+
+/**
+ * Create a two-factor-free family admin for browser tests.
+ *
+ * @param  array<string, mixed>  $attributes
+ */
+function createBrowserAdmin(?Family $family = null, array $attributes = []): User
+{
+    $family ??= createBrowserFamily();
+
+    return User::factory()
+        ->withoutTwoFactor()
+        ->admin()
+        ->create([
+            'family_id' => $family->id,
+            'password' => bcrypt('password'),
+            ...$attributes,
+        ]);
+}
+
+/**
+ * Create a two-factor-free financial secretary for browser tests.
+ *
+ * @param  array<string, mixed>  $attributes
+ */
+function createBrowserFinancialSecretary(?Family $family = null, array $attributes = []): User
+{
+    $family ??= createBrowserFamily();
+
+    return User::factory()
+        ->withoutTwoFactor()
+        ->financialSecretary()
+        ->create([
+            'family_id' => $family->id,
+            'password' => bcrypt('password'),
+            ...$attributes,
+        ]);
+}
+
+/**
+ * Create a two-factor-free family member for browser tests.
+ *
+ * @param  array<string, mixed>  $attributes
+ */
+function createBrowserMember(?Family $family = null, array $attributes = []): User
+{
+    $family ??= createBrowserFamily();
+
+    return User::factory()
+        ->withoutTwoFactor()
+        ->member()
+        ->employed()
+        ->create([
+            'family_id' => $family->id,
+            'password' => bcrypt('password'),
+            ...$attributes,
+        ]);
+}
+
+/**
+ * Create a two-factor-free platform super admin for browser tests.
+ *
+ * @param  array<string, mixed>  $attributes
+ */
+function createBrowserSuperAdmin(?Family $family = null, array $attributes = []): User
+{
+    $family ??= createBrowserFamily();
+
+    return User::factory()
+        ->withoutTwoFactor()
+        ->admin()
+        ->superAdmin()
+        ->create([
+            'family_id' => $family->id,
+            'password' => bcrypt('password'),
+            ...$attributes,
+        ]);
+}
+
+function loginBrowserAs(User $user, string $expectedPath = '/dashboard'): PendingAwaitablePage
+{
+    $page = visit(route('login'));
+
+    $page->fill('email', $user->email)
+        ->fill('password', 'password')
+        ->click('@login-button')
+        ->assertPathIs($expectedPath)
+        ->assertNoJavaScriptErrors();
+
+    return $page;
+}
+
+function assertBrowserSmoke(PendingAwaitablePage $page, string $text): PendingAwaitablePage
+{
+    $page->assertSee($text)
+        ->assertNoSmoke();
+
+    return $page;
+}
+
+function navigateAndAssertBrowserSmoke(PendingAwaitablePage $page, string $url, string $text): PendingAwaitablePage
+{
+    $page->navigate($url);
+
+    return assertBrowserSmoke($page, $text);
+}
+
+function fillBrowserFieldWithoutChange(PendingAwaitablePage $page, string $selector, string $value): PendingAwaitablePage
+{
+    $encodedSelector = json_encode($selector, JSON_THROW_ON_ERROR);
+    $encodedValue = json_encode($value, JSON_THROW_ON_ERROR);
+
+    $result = $page->script(<<<JS
+        () => {
+            const field = document.querySelector({$encodedSelector});
+            const fields = Array.from(document.querySelectorAll('input, textarea, select')).map((element) => ({
+                id: element.id,
+                name: element.getAttribute('name'),
+                tag: element.tagName.toLowerCase(),
+            }));
+
+            if (!field || !('value' in field)) {
+                return { filled: false, fields };
+            }
+
+            field.value = {$encodedValue};
+            field.dispatchEvent(new Event('input', { bubbles: true }));
+
+            return { filled: true, fields };
+        }
+    JS);
+
+    $availableFields = collect($result['fields'])
+        ->map(fn (array $field): string => "{$field['tag']}#{$field['id']}[name={$field['name']}]")
+        ->implode(', ');
+
+    expect($result['filled'])->toBeTrue("Expected browser field [{$selector}] to exist. Available fields: {$availableFields}");
+
+    return $page;
 }
 
 /**

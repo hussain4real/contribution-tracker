@@ -36,6 +36,18 @@ test('authenticated users can visit the AI chat page', function () {
         );
 });
 
+test('AI chat index handles users without a family', function () {
+    $user = User::factory()->create(['family_id' => null]);
+
+    $this->actingAs($user)
+        ->get(route('ai.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn ($page) => $page
+            ->component('Ai/Chat')
+            ->where('memberNames', [])
+        );
+});
+
 test('guests cannot post to the AI chat stream', function () {
     $this->post(route('ai.chat'), ['message' => 'Hello'])
         ->assertRedirect();
@@ -264,6 +276,67 @@ test('the AI chat index loads messages for an active conversation', function () 
             ->where('activeConversationId', $conversationId)
             ->has('messages', 1)
             ->where('messages.0.content', 'Hello there')
+        );
+});
+
+test('the AI chat index clears conversation ids the user does not own', function () {
+    $user = User::factory()->create();
+    $otherUser = User::factory()->create();
+    $conversationId = (string) Str::uuid();
+
+    DB::table('agent_conversations')->insert([
+        'id' => $conversationId,
+        'user_id' => $otherUser->id,
+        'title' => 'Other Chat',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('ai.index', ['conversation' => $conversationId]))
+        ->assertSuccessful()
+        ->assertInertia(fn ($page) => $page
+            ->component('Ai/Chat')
+            ->where('activeConversationId', null)
+            ->where('messages', [])
+        );
+});
+
+test('the AI chat index normalizes invalid stored activity payloads', function () {
+    $user = User::factory()->create();
+    $conversationId = (string) Str::uuid();
+
+    DB::table('agent_conversations')->insert([
+        'id' => $conversationId,
+        'user_id' => $user->id,
+        'title' => 'Invalid Payload Chat',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => (string) Str::uuid(),
+        'conversation_id' => $conversationId,
+        'user_id' => $user->id,
+        'agent' => 'App\\Ai\\Agents\\FamilyAssistant',
+        'role' => 'assistant',
+        'content' => 'No valid tool activity was stored.',
+        'attachments' => '[]',
+        'tool_calls' => '"not an array"',
+        'tool_results' => 'null',
+        'usage' => '{}',
+        'meta' => '{}',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('ai.index', ['conversation' => $conversationId]))
+        ->assertSuccessful()
+        ->assertInertia(fn ($page) => $page
+            ->component('Ai/Chat')
+            ->where('messages.0.tool_calls', [])
+            ->where('messages.0.tool_results', [])
         );
 });
 

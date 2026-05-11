@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\Contribution;
+use App\Models\Payment;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -38,12 +40,24 @@ describe('Member Authorization', function () {
 
     // Show - Admin and Financial Secretary can view any member, regular members can only view their own
     it('super admin can view any member profile', function () {
+        $contribution = Contribution::factory()
+            ->forUser($this->targetMember)
+            ->currentMonth()
+            ->create(['expected_amount' => 4000]);
+        Payment::factory()
+            ->forContribution($contribution)
+            ->recordedBy($this->admin)
+            ->create(['amount' => 1500, 'notes' => 'Cash']);
+
         $this->actingAs($this->admin)
             ->get("/members/{$this->targetMember->id}")
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Members/Show')
                 ->has('contributions')
+                ->where('contributions.0.payments.0.amount', 1500)
+                ->where('contributions.0.payments.0.notes', 'Cash')
+                ->where('contributions.0.payments.0.recorder.name', $this->admin->name)
             );
     });
 

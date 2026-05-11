@@ -1,9 +1,14 @@
 <?php
 
+use App\Enums\Role;
+use App\Models\Family;
+use App\Models\FamilyInvitation;
+use App\Models\User;
+
 test('registration screen can be rendered', function () {
     $response = $this->get(route('register'));
 
-    $response->assertStatus(200);
+    $response->assertOk();
 });
 
 test('new users can register', function () {
@@ -17,4 +22,33 @@ test('new users can register', function () {
 
     $this->assertAuthenticated();
     $response->assertRedirect(route('dashboard', absolute: false));
+});
+
+test('new users can register from a family invitation', function () {
+    $family = Family::factory()->create();
+    $inviter = User::factory()->admin()->create(['family_id' => $family->id]);
+    $invitation = FamilyInvitation::factory()->create([
+        'family_id' => $family->id,
+        'email' => 'invited@example.com',
+        'role' => Role::FinancialSecretary,
+        'invited_by' => $inviter->id,
+        'expires_at' => now()->addDays(7),
+    ]);
+
+    $response = $this->post(route('register.store'), [
+        'name' => 'Invited User',
+        'email' => 'invited@example.com',
+        'password' => 'password',
+        'password_confirmation' => 'password',
+        'invitation_token' => $invitation->token,
+    ]);
+
+    $response->assertRedirect(route('dashboard', absolute: false));
+    $this->assertAuthenticated();
+
+    $user = User::query()->where('email', 'invited@example.com')->firstOrFail();
+
+    expect($user->family_id)->toBe($family->id)
+        ->and($user->role)->toBe(Role::FinancialSecretary)
+        ->and($invitation->refresh()->accepted_at)->not->toBeNull();
 });
