@@ -2,6 +2,7 @@
 
 use App\Services\PaystackService;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 beforeEach(function () {
     config([
@@ -93,6 +94,39 @@ it('creates a subaccount', function () {
     expect($result['data']['subaccount_code'])->toBe('ACCT_test123');
 });
 
+it('updates a subaccount', function () {
+    Http::fake([
+        'api.paystack.co/subaccount/ACCT_test123' => Http::response([
+            'status' => true,
+            'message' => 'Subaccount updated',
+            'data' => ['subaccount_code' => 'ACCT_test123'],
+        ]),
+    ]);
+
+    $result = app(PaystackService::class)->updateSubaccount('ACCT_test123', [
+        'business_name' => 'Updated Family',
+    ]);
+
+    expect($result['status'])->toBeTrue();
+});
+
+it('resolves an account number', function () {
+    Http::fake([
+        'api.paystack.co/bank/resolve*' => Http::response([
+            'status' => true,
+            'message' => 'Account number resolved',
+            'data' => [
+                'account_number' => '0123456789',
+                'account_name' => 'Test Family',
+            ],
+        ]),
+    ]);
+
+    $result = app(PaystackService::class)->resolveAccountNumber('0123456789', '058');
+
+    expect($result['data']['account_name'])->toBe('Test Family');
+});
+
 it('lists banks', function () {
     Http::fake([
         'api.paystack.co/bank*' => Http::response([
@@ -122,6 +156,16 @@ it('verifies a valid webhook signature', function () {
     expect($service->verifyWebhookSignature($payload, $signature))->toBeTrue();
 });
 
+it('rejects webhook signatures when no webhook secret is configured', function () {
+    config(['services.paystack.webhook_secret' => null]);
+
+    Log::shouldReceive('warning')
+        ->once()
+        ->with('Paystack webhook secret not configured');
+
+    expect(app(PaystackService::class)->verifyWebhookSignature('{}', 'signature'))->toBeFalse();
+});
+
 it('rejects an invalid webhook signature', function () {
     $service = app(PaystackService::class);
 
@@ -145,3 +189,43 @@ it('throws on API error response', function () {
         'amount' => 0,
     ]);
 })->throws(RuntimeException::class);
+
+it('covers subscription and customer paystack endpoints', function (string $method, string $url, array $payload, array $responseData) {
+    Http::fake([
+        $url => Http::response([
+            'status' => true,
+            'message' => 'OK',
+            'data' => $responseData,
+        ]),
+    ]);
+
+    $result = app(PaystackService::class)->{$method}($payload);
+
+    expect($result['status'])->toBeTrue()
+        ->and($result['data'])->toBe($responseData);
+})->with([
+    'create plan' => [
+        'createPlan',
+        'api.paystack.co/plan',
+        ['name' => 'Starter', 'amount' => 200000, 'interval' => 'monthly'],
+        ['plan_code' => 'PLN_test'],
+    ],
+    'create subscription' => [
+        'createSubscription',
+        'api.paystack.co/subscription',
+        ['customer' => 'CUS_test', 'plan' => 'PLN_test'],
+        ['subscription_code' => 'SUB_test', 'email_token' => 'token_test'],
+    ],
+    'disable subscription' => [
+        'disableSubscription',
+        'api.paystack.co/subscription/disable',
+        ['code' => 'SUB_test', 'token' => 'token_test'],
+        [],
+    ],
+    'create customer' => [
+        'createCustomer',
+        'api.paystack.co/customer',
+        ['email' => 'test@example.com', 'first_name' => 'Test'],
+        ['customer_code' => 'CUS_test'],
+    ],
+]);

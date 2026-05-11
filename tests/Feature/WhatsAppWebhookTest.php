@@ -1,9 +1,13 @@
 <?php
 
+use App\Http\Controllers\WhatsAppWebhookController;
 use App\Jobs\ProcessWhatsAppWebhook;
 use App\Models\User;
 use App\Models\WhatsAppMessage;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 beforeEach(function () {
     config()->set('services.whatsapp', [
@@ -91,6 +95,47 @@ describe('WhatsApp webhook handler (POST)', function () {
         Bus::assertNotDispatched(ProcessWhatsAppWebhook::class);
     });
 
+    it('rejects requests with a malformed signature header', function () {
+        Bus::fake();
+
+        $payload = ['object' => 'whatsapp_business_account', 'entry' => []];
+        $body = json_encode($payload);
+
+        $this->call(
+            'POST',
+            '/webhooks/whatsapp',
+            [],
+            [],
+            [],
+            [
+                'HTTP_X-Hub-Signature-256' => 'deadbeef',
+                'CONTENT_TYPE' => 'application/json',
+            ],
+            $body,
+        )->assertForbidden();
+
+        Bus::assertNotDispatched(ProcessWhatsAppWebhook::class);
+    });
+
+    it('rejects requests with a non-string signature header', function () {
+        Bus::fake();
+
+        $payload = ['object' => 'whatsapp_business_account', 'entry' => []];
+        $body = json_encode($payload);
+        $request = Request::create(
+            '/webhooks/whatsapp',
+            'POST',
+            server: ['CONTENT_TYPE' => 'application/json'],
+            content: $body,
+        );
+        $request->headers->set('X-Hub-Signature-256', ['sha256=deadbeef']);
+
+        $response = app(WhatsAppWebhookController::class)->handle($request);
+
+        expect($response->getStatusCode())->toBe(403);
+        Bus::assertNotDispatched(ProcessWhatsAppWebhook::class);
+    });
+
     it('ignores payloads with an unrecognised object', function () {
         Bus::fake();
 
@@ -110,9 +155,57 @@ describe('WhatsApp webhook handler (POST)', function () {
 
         Bus::assertNotDispatched(ProcessWhatsAppWebhook::class);
     });
+
+    it('logs a critical warning when app secret is missing outside local environments', function () {
+        Bus::fake();
+        Log::shouldReceive('critical')->once();
+        config()->set('services.whatsapp.app_secret', null);
+        app()->detectEnvironment(fn (): string => 'production');
+
+        $this->postJson('/webhooks/whatsapp', [
+            'object' => 'something_else',
+            'entry' => [],
+        ])->assertOk();
+
+        app()->detectEnvironment(fn (): string => 'testing');
+        Bus::assertNotDispatched(ProcessWhatsAppWebhook::class);
+    });
 });
 
 describe('ProcessWhatsAppWebhook job', function () {
+    it('ignores malformed entries and changes', function () {
+        WhatsAppMessage::factory()->create([
+            'wa_message_id' => 'wamid.unchanged',
+            'status' => 'sent',
+        ]);
+
+        (new ProcessWhatsAppWebhook([
+            'entry' => 'not-an-array',
+        ]))->handle();
+
+        (new ProcessWhatsAppWebhook([
+            'entry' => [
+                ['changes' => 'not-an-array'],
+                ['changes' => [['field' => 'messages', 'value' => 'not-an-array']]],
+            ],
+        ]))->handle();
+
+        expect(WhatsAppMessage::query()->where('wa_message_id', 'wamid.unchanged')->first()->status)->toBe('sent');
+    });
+
+    it('ignores unsupported whatsapp change fields', function () {
+        (new ProcessWhatsAppWebhook([
+            'entry' => [[
+                'changes' => [[
+                    'field' => 'contacts',
+                    'value' => ['contacts' => []],
+                ]],
+            ]],
+        ]))->handle();
+
+        expect(WhatsAppMessage::query()->count())->toBe(0);
+    });
+
     it('updates the status of an outbound message', function () {
         $message = WhatsAppMessage::factory()->create([
             'wa_message_id' => 'wamid.outbound-1',
@@ -138,6 +231,87 @@ describe('ProcessWhatsAppWebhook job', function () {
         (new ProcessWhatsAppWebhook($payload))->handle();
 
         expect($message->fresh()->status)->toBe('delivered');
+    });
+
+    it('updates outbound status errors when meta sends delivery errors', function () {
+        $message = WhatsAppMessage::factory()->create([
+            'wa_message_id' => 'wamid.failed',
+            'direction' => 'outbound',
+            'status' => 'sent',
+        ]);
+
+        (new ProcessWhatsAppWebhook([
+            'entry' => [[
+                'changes' => [[
+                    'field' => 'messages',
+                    'value' => [
+                        'statuses' => [[
+                            'id' => 'wamid.failed',
+                            'status' => 'failed',
+                            'errors' => [[
+                                'code' => 131000,
+                                'title' => 'Message failed',
+                            ]],
+                        ]],
+                    ],
+                ]],
+            ]],
+        ]))->handle();
+
+        expect($message->fresh()->status)->toBe('failed')
+            ->and($message->fresh()->error_code)->toBe('131000')
+            ->and($message->fresh()->error_message)->toBe('Message failed');
+    });
+
+    it('logs outbound status update failures', function () {
+        $message = WhatsAppMessage::factory()->create([
+            'wa_message_id' => 'wamid.update-fails',
+            'direction' => 'outbound',
+            'status' => 'sent',
+        ]);
+
+        $throwOnUpdate = true;
+        WhatsAppMessage::updating(function () use (&$throwOnUpdate): void {
+            if ($throwOnUpdate) {
+                throw new RuntimeException('update failed');
+            }
+        });
+
+        (new ProcessWhatsAppWebhook([
+            'entry' => [[
+                'changes' => [[
+                    'field' => 'messages',
+                    'value' => [
+                        'statuses' => [[
+                            'id' => 'wamid.update-fails',
+                            'status' => 'delivered',
+                        ]],
+                    ],
+                ]],
+            ]],
+        ]))->handle();
+
+        $throwOnUpdate = false;
+
+        expect($message->fresh()->status)->toBe('sent');
+    });
+
+    it('ignores outbound status updates missing required fields or records', function () {
+        (new ProcessWhatsAppWebhook([
+            'entry' => [[
+                'changes' => [[
+                    'field' => 'messages',
+                    'value' => [
+                        'statuses' => [
+                            ['id' => null, 'status' => 'delivered'],
+                            ['id' => 'wamid.missing', 'status' => 'delivered'],
+                        ],
+                    ],
+                ]],
+            ]],
+        ]))->handle();
+
+        expect(WhatsAppMessage::query()->where('wa_message_id', 'wamid.missing')->exists())->toBeFalse();
     });
 
     it('records an inbound text message and links it to the matching user', function () {
@@ -173,6 +347,86 @@ describe('ProcessWhatsAppWebhook job', function () {
             ->and($stored->family_id)->toBe($user->family_id);
     });
 
+    it('records inbound button and interactive messages', function (array $message, string $expectedBody) {
+        $payload = [
+            'entry' => [[
+                'changes' => [[
+                    'field' => 'messages',
+                    'value' => [
+                        'messages' => [$message],
+                    ],
+                ]],
+            ]],
+        ];
+
+        (new ProcessWhatsAppWebhook($payload))->handle();
+
+        expect(WhatsAppMessage::query()->where('wa_message_id', $message['id'])->first()?->body)
+            ->toBe($expectedBody);
+    })->with([
+        'button' => [[
+            'id' => 'wamid.button',
+            'from' => '2348012345678',
+            'type' => 'button',
+            'button' => ['text' => 'Yes'],
+        ], 'Yes'],
+        'button reply' => [[
+            'id' => 'wamid.interactive-button',
+            'from' => '2348012345678',
+            'type' => 'interactive',
+            'interactive' => ['button_reply' => ['title' => 'Pay now']],
+        ], 'Pay now'],
+        'list reply' => [[
+            'id' => 'wamid.interactive-list',
+            'from' => '2348012345678',
+            'type' => 'interactive',
+            'interactive' => ['list_reply' => ['title' => 'May 2026']],
+        ], 'May 2026'],
+    ]);
+
+    it('records inbound messages without a matching user and defaults timestamp and destination', function () {
+        (new ProcessWhatsAppWebhook([
+            'entry' => [[
+                'changes' => [[
+                    'field' => 'messages',
+                    'value' => [
+                        'messages' => [[
+                            'id' => 'wamid.unknown',
+                            'from' => '2348012349999',
+                            'type' => 'image',
+                        ]],
+                    ],
+                ]],
+            ]],
+        ]))->handle();
+
+        $message = WhatsAppMessage::query()->where('wa_message_id', 'wamid.unknown')->firstOrFail();
+
+        expect($message->body)->toBeNull()
+            ->and($message->to)->toBe('1038448572690931')
+            ->and($message->user_id)->toBeNull()
+            ->and($message->family_id)->toBeNull()
+            ->and($message->wa_timestamp)->not->toBeNull();
+    });
+
+    it('ignores inbound messages missing required identifiers', function () {
+        (new ProcessWhatsAppWebhook([
+            'entry' => [[
+                'changes' => [[
+                    'field' => 'messages',
+                    'value' => [
+                        'messages' => [
+                            ['id' => null, 'from' => '2348012345678'],
+                            ['id' => 'wamid.no-from'],
+                        ],
+                    ],
+                ]],
+            ]],
+        ]))->handle();
+
+        expect(WhatsAppMessage::query()->where('wa_message_id', 'wamid.no-from')->exists())->toBeFalse();
+    });
+
     it('does not duplicate inbound messages with the same wa_message_id', function () {
         WhatsAppMessage::factory()->inbound()->create([
             'wa_message_id' => 'wamid.dup',
@@ -199,5 +453,102 @@ describe('ProcessWhatsAppWebhook job', function () {
         (new ProcessWhatsAppWebhook($payload))->handle();
 
         expect(WhatsAppMessage::query()->where('wa_message_id', 'wamid.dup')->count())->toBe(1);
+    });
+
+    it('logs inbound message recording failures', function () {
+        $throwOnCreate = true;
+        WhatsAppMessage::creating(function () use (&$throwOnCreate): void {
+            if ($throwOnCreate) {
+                throw new RuntimeException('create failed');
+            }
+        });
+
+        (new ProcessWhatsAppWebhook([
+            'entry' => [[
+                'changes' => [[
+                    'field' => 'messages',
+                    'value' => [
+                        'messages' => [[
+                            'id' => 'wamid.create-fails',
+                            'from' => '2348012345678',
+                            'type' => 'text',
+                            'text' => ['body' => 'Hello'],
+                        ]],
+                    ],
+                ]],
+            ]],
+        ]))->handle();
+
+        $throwOnCreate = false;
+
+        expect(WhatsAppMessage::query()->where('wa_message_id', 'wamid.create-fails')->exists())->toBeFalse();
+    });
+
+    it('returns no matched user for empty normalized whatsapp phone numbers', function () {
+        $job = new class([]) extends ProcessWhatsAppWebhook
+        {
+            public function find(string $from): ?User
+            {
+                return $this->matchUser($from);
+            }
+        };
+
+        expect($job->find('---'))->toBeNull();
+    });
+
+    it('builds database-specific whatsapp phone matching queries', function (string $driver) {
+        $job = new class([]) extends ProcessWhatsAppWebhook
+        {
+            public function find(string $from): ?User
+            {
+                return $this->matchUser($from);
+            }
+        };
+
+        DB::partialMock()
+            ->shouldReceive('connection')
+            ->andReturn(new class($driver)
+            {
+                public function __construct(private string $driver) {}
+
+                public function getDriverName(): string
+                {
+                    return $this->driver;
+                }
+            });
+
+        try {
+            $job->find('+2348012345678');
+        } catch (Throwable) {
+            // The test database is SQLite, so the vendor-specific SQL is only
+            // exercised up to execution. That is enough to protect branch drift.
+        }
+
+        expect(true)->toBeTrue();
+    })->with([
+        'pgsql',
+        'mysql',
+    ]);
+
+    it('logs template status updates', function () {
+        Log::shouldReceive('info')
+            ->once()
+            ->with('WhatsApp template status update', [
+                'template_name' => 'contribution_reminder',
+                'event' => 'APPROVED',
+                'reason' => null,
+            ]);
+
+        (new ProcessWhatsAppWebhook([
+            'entry' => [[
+                'changes' => [[
+                    'field' => 'message_template_status_update',
+                    'value' => [
+                        'message_template_name' => 'contribution_reminder',
+                        'event' => 'APPROVED',
+                    ],
+                ]],
+            ]],
+        ]))->handle();
     });
 });

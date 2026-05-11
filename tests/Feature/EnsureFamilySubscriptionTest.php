@@ -19,6 +19,17 @@ function makeMiddlewareRequest(User $user, string $routeName = 'dashboard', ?str
     return $middleware->handle($request, fn ($r) => response('OK'), $feature);
 }
 
+function makeMiddlewareJsonRequest(User $user, string $routeName = 'dashboard', ?string $feature = null): TestResponse|Response
+{
+    $middleware = new EnsureFamilySubscription;
+
+    $request = Request::create(route($routeName), 'GET', server: ['HTTP_ACCEPT' => 'application/json']);
+    $request->setUserResolver(fn () => $user);
+    $request->setRouteResolver(fn () => app('router')->getRoutes()->getByName($routeName));
+
+    return $middleware->handle($request, fn ($r) => response('OK'), $feature);
+}
+
 it('allows users without a family', function () {
     $user = User::factory()->create(['family_id' => null]);
 
@@ -78,6 +89,27 @@ it('blocks feature access when plan does not include the feature', function () {
     expect($response->getStatusCode())->toBe(302);
 });
 
+it('returns json when plan does not include a requested feature', function () {
+    $plan = PlatformPlan::create([
+        'name' => 'Free',
+        'slug' => 'free',
+        'price' => 0,
+        'max_members' => 5,
+        'features' => ['basic_contributions'],
+        'is_active' => true,
+        'sort_order' => 0,
+    ]);
+    $family = Family::factory()->create(['platform_plan_id' => $plan->id]);
+    $user = User::factory()->create(['family_id' => $family->id]);
+
+    $response = makeMiddlewareJsonRequest($user, 'dashboard', 'online_payments');
+
+    expect($response->getStatusCode())->toBe(403)
+        ->and(json_decode($response->getContent(), true))->toBe([
+            'message' => 'This feature is not available on your current plan. Please upgrade.',
+        ]);
+});
+
 it('allows feature access when plan includes the feature', function () {
     $plan = PlatformPlan::create([
         'name' => 'Starter',
@@ -121,6 +153,30 @@ it('redirects to subscription page for cancelled paid plan', function () {
     $response = makeMiddlewareRequest($user, 'contributions.index');
 
     expect($response->getStatusCode())->toBe(302);
+});
+
+it('returns json for inactive paid subscriptions', function () {
+    $plan = PlatformPlan::create([
+        'name' => 'Starter',
+        'slug' => 'starter',
+        'price' => 2000,
+        'max_members' => 20,
+        'features' => ['basic_contributions'],
+        'is_active' => true,
+        'sort_order' => 1,
+    ]);
+    $family = Family::factory()->create([
+        'platform_plan_id' => $plan->id,
+        'subscription_status' => 'past_due',
+    ]);
+    $user = User::factory()->create(['family_id' => $family->id]);
+
+    $response = makeMiddlewareJsonRequest($user, 'contributions.index');
+
+    expect($response->getStatusCode())->toBe(403)
+        ->and(json_decode($response->getContent(), true))->toBe([
+            'message' => 'Your subscription is inactive. Please update your subscription.',
+        ]);
 });
 
 it('allows dashboard access for cancelled paid plan', function () {
@@ -171,6 +227,27 @@ it('blocks adding members when at the plan limit', function () {
             'category' => 'employed',
         ])
         ->assertRedirect(route('subscription.index'));
+});
+
+it('returns json when adding members would exceed the plan limit', function () {
+    $plan = PlatformPlan::create([
+        'name' => 'Free',
+        'slug' => 'free',
+        'price' => 0,
+        'max_members' => 1,
+        'features' => ['basic_contributions', 'manual_payments'],
+        'is_active' => true,
+        'sort_order' => 0,
+    ]);
+    $family = Family::factory()->create(['platform_plan_id' => $plan->id]);
+    $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+
+    $response = makeMiddlewareJsonRequest($admin, 'family.invitations.store');
+
+    expect($response->getStatusCode())->toBe(403)
+        ->and(json_decode($response->getContent(), true))->toBe([
+            'message' => 'Your plan allows up to 1 members. Please upgrade to add more.',
+        ]);
 });
 
 it('allows adding members when under the plan limit', function () {

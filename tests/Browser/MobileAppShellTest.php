@@ -1,20 +1,21 @@
 <?php
 
 use App\Features\AiAssistant;
-use App\Models\User;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Laravel\Pennant\Feature;
 
 describe('Mobile app shell', function () {
     beforeEach(function () {
-        $this->admin = User::factory()->withoutTwoFactor()->admin()->create([
+        $this->family = createBrowserFamily();
+        $this->admin = createBrowserAdmin($this->family, [
             'name' => 'Admin User',
             'email' => 'admin@test.com',
-            'password' => bcrypt('password'),
         ]);
 
         Feature::for($this->admin)->activate(AiAssistant::class);
         Feature::flushCache();
+        Cache::put('paystack_banks', [], now()->addDay());
     });
 
     it('shows role-aware mobile tabs and the more sheet', function () {
@@ -75,22 +76,27 @@ describe('Mobile app shell', function () {
 
                     button.dispatchEvent(new PointerEvent('pointerdown', {
                         pointerId: 7,
+                        pointerType: 'touch',
                         clientX: startX,
                         clientY: startY,
                         button: 0,
                         bubbles: true,
                     }));
 
-                    button.dispatchEvent(new PointerEvent('pointermove', {
+                    window.dispatchEvent(new PointerEvent('pointermove', {
                         pointerId: 7,
+                        pointerType: 'touch',
                         clientX: endX,
                         clientY: endY,
-                        button: 0,
+                        button: -1,
+                        buttons: 1,
                         bubbles: true,
+                        cancelable: true,
                     }));
 
-                    button.dispatchEvent(new PointerEvent('pointerup', {
+                    window.dispatchEvent(new PointerEvent('pointerup', {
                         pointerId: 7,
+                        pointerType: 'touch',
                         clientX: endX,
                         clientY: endY,
                         button: 0,
@@ -177,14 +183,9 @@ describe('Mobile app shell', function () {
     });
 
     it('only marks the matching sibling navigation item active', function () {
-        $superAdmin = User::factory()
-            ->withoutTwoFactor()
-            ->admin()
-            ->superAdmin()
-            ->create([
-                'email' => 'super@test.com',
-                'password' => bcrypt('password'),
-            ]);
+        $superAdmin = createBrowserSuperAdmin($this->family, [
+            'email' => 'super@test.com',
+        ]);
 
         Feature::for($superAdmin)->activate(AiAssistant::class);
         Feature::flushCache();

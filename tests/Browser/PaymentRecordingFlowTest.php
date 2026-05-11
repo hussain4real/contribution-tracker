@@ -7,20 +7,18 @@
  */
 
 use App\Models\Contribution;
-use App\Models\User;
 
 describe('Payment Recording Flow (Browser)', function () {
     beforeEach(function () {
-        $this->financialSecretary = User::factory()->financialSecretary()->create([
+        $this->family = createBrowserFamily();
+        $this->financialSecretary = createBrowserFinancialSecretary($this->family, [
             'email' => 'fs@test.com',
-            'password' => bcrypt('password'),
         ]);
 
-        $this->member = User::factory()->member()->employed()->create([
+        $this->member = createBrowserMember($this->family, [
             'name' => 'John Doe',
         ]);
 
-        // Create a contribution for a future month so it's not overdue
         $nextMonth = now()->startOfMonth()->addMonth();
         $this->contribution = Contribution::factory()
             ->forUser($this->member)
@@ -30,30 +28,21 @@ describe('Payment Recording Flow (Browser)', function () {
     });
 
     it('allows financial secretary to record a payment through the UI', function () {
-        $page = visit('/login');
+        $page = loginBrowserAs($this->financialSecretary);
 
-        // Login as Financial Secretary
-        $page->fill('email', 'fs@test.com')
-            ->fill('password', 'password')
-            ->click('Log in')
-            ->assertSee('Dashboard');
-
-        // Navigate to member's payment form
         $page->navigate("/members/{$this->member->id}/payments/create")
             ->assertSee('Record Payment')
             ->assertSee($this->member->name)
-            ->assertSee('1 Month')
+            ->assertSee('1 Month');
+
+        fillBrowserFieldWithoutChange($page, '[name="amount"]', '4000');
+        fillBrowserFieldWithoutChange($page, '[name="paid_at"]', now()->format('Y-m-d'));
+
+        $page->click('button[type="submit"]')
+            ->assertSee('Dashboard')
+            ->assertSee('Payment of ₦4,000.00 recorded for John Doe.')
             ->assertNoJavaScriptErrors();
 
-        // The form has precognition/validation issues in browser tests
-        // so we'll verify the form renders correctly and submit via HTTP
-        $this->actingAs($this->financialSecretary)->post('/payments', [
-            'member_id' => $this->member->id,
-            'amount' => 4000,
-            'paid_at' => now()->format('Y-m-d'),
-        ]);
-
-        // Verify contribution is now paid
         expect($this->contribution->fresh()->isPaid())->toBeTrue();
     });
 
@@ -65,11 +54,7 @@ describe('Payment Recording Flow (Browser)', function () {
             'recorded_by' => $this->financialSecretary->id,
         ]);
 
-        $page = visit('/login');
-
-        $page->fill('email', 'fs@test.com')
-            ->fill('password', 'password')
-            ->click('Log in');
+        $page = loginBrowserAs($this->financialSecretary);
 
         $page->navigate("/members/{$this->member->id}/payments/create")
             ->assertSee('Pending Contributions')
@@ -77,13 +62,8 @@ describe('Payment Recording Flow (Browser)', function () {
     });
 
     it('quick amount buttons work correctly', function () {
-        $page = visit('/login');
+        $page = loginBrowserAs($this->financialSecretary);
 
-        $page->fill('email', 'fs@test.com')
-            ->fill('password', 'password')
-            ->click('Log in');
-
-        // Quick amount buttons include the formatted amount like "1 Month (₦4,000.00)"
         $page->navigate("/members/{$this->member->id}/payments/create")
             ->assertSee('1 Month')
             ->assertSee('2 Months')

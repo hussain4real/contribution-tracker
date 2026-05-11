@@ -86,6 +86,16 @@ test('invitation rejects invalid email', function () {
     expect($result['error'])->toContain('valid email');
 });
 
+test('invitation requires a role', function () {
+    $tool = new SendInvitation($this->admin);
+
+    $result = json_decode($tool->handle(new Request([
+        'email' => 'test@example.com',
+    ])), true);
+
+    expect($result['error'])->toContain('A role is required');
+});
+
 test('invitation rejects invalid role', function () {
     $tool = new SendInvitation($this->admin);
 

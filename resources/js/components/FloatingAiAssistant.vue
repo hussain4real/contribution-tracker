@@ -2,6 +2,7 @@
 import { index as aiIndex } from '@/actions/App/Http/Controllers/AiChatController';
 import { router, usePage } from '@inertiajs/vue3';
 import { BotMessageSquare, GripHorizontal, Sparkles } from 'lucide-vue-next';
+import type { CSSProperties } from 'vue';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 const page = usePage();
@@ -29,14 +30,18 @@ const dragStart = ref({
     x: 0,
     y: 0,
 });
+const dragTarget = ref<HTMLElement | null>(null);
 
 const showAssistant = computed(
     () =>
         !!page.props.featureFlags?.ai_assistant && !page.url.startsWith('/ai'),
 );
 
-const buttonStyle = computed(() => ({
+const buttonStyle = computed<CSSProperties>(() => ({
+    touchAction: 'none',
     transform: `translate3d(${position.value.x}px, ${position.value.y}px, 0)`,
+    userSelect: 'none',
+    WebkitUserSelect: 'none',
 }));
 
 function clampPosition(next: Position): Position {
@@ -97,13 +102,28 @@ function storePosition(): void {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(position.value));
 }
 
+function addDragListeners(): void {
+    window.addEventListener('pointermove', handlePointerMove, {
+        passive: false,
+    });
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+}
+
+function removeDragListeners(): void {
+    window.removeEventListener('pointermove', handlePointerMove);
+    window.removeEventListener('pointerup', handlePointerUp);
+    window.removeEventListener('pointercancel', handlePointerUp);
+}
+
 function handlePointerDown(event: PointerEvent): void {
-    if (event.button !== 0) {
+    if (event.pointerType === 'mouse' && event.button !== 0) {
         return;
     }
 
     dragging.value = true;
     suppressClick.value = false;
+    dragTarget.value = event.currentTarget as HTMLElement | null;
     dragStart.value = {
         pointerId: event.pointerId,
         clientX: event.clientX,
@@ -113,12 +133,12 @@ function handlePointerDown(event: PointerEvent): void {
     };
 
     try {
-        (event.currentTarget as HTMLElement | null)?.setPointerCapture?.(
-            event.pointerId,
-        );
+        dragTarget.value?.setPointerCapture?.(event.pointerId);
     } catch {
         // Browser automation can synthesize pointer events without an active pointer.
     }
+
+    addDragListeners();
 }
 
 function handlePointerMove(event: PointerEvent): void {
@@ -150,6 +170,15 @@ function handlePointerUp(event: PointerEvent): void {
     }
 
     dragging.value = false;
+    removeDragListeners();
+
+    try {
+        dragTarget.value?.releasePointerCapture?.(event.pointerId);
+    } catch {
+        // Some synthetic mobile pointer events do not own capture.
+    }
+
+    dragTarget.value = null;
     storePosition();
 
     if (suppressClick.value) {
@@ -185,6 +214,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
     window.removeEventListener('resize', resetWithinViewport);
+    removeDragListeners();
 });
 </script>
 
@@ -202,7 +232,6 @@ onBeforeUnmount(() => {
         title="Open AI assistant"
         @click="openAssistant"
         @pointerdown="handlePointerDown"
-        @pointermove="handlePointerMove"
         @pointerup="handlePointerUp"
         @pointercancel="handlePointerUp"
     >

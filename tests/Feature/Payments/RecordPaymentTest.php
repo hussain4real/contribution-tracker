@@ -2,8 +2,10 @@
 
 use App\Enums\PaymentStatus;
 use App\Models\Contribution;
+use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
+use App\Services\PaymentAllocationService;
 use Inertia\Testing\AssertableInertia as Assert;
 
 describe('Record Full Payment', function () {
@@ -19,6 +21,37 @@ describe('Record Full Payment', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Payments/Create')
                 ->has('member')
+            );
+    });
+
+    it('financial secretary can view member selection for recording payments', function () {
+        $family = Family::factory()->create();
+        $financialSecretary = User::factory()->financialSecretary()->create([
+            'family_id' => $family->id,
+            'category' => null,
+        ]);
+        $activePayingMember = User::factory()->member()->employed()->create([
+            'family_id' => $family->id,
+            'name' => 'Active Paying',
+        ]);
+        User::factory()->member()->nonPaying()->create([
+            'family_id' => $family->id,
+            'name' => 'Non Paying',
+        ]);
+        User::factory()->member()->employed()->archived()->create([
+            'family_id' => $family->id,
+            'name' => 'Archived Paying',
+        ]);
+
+        $this->actingAs($financialSecretary)
+            ->get(route('payments.index'))
+            ->assertSuccessful()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Payments/Index')
+                ->has('members', 1)
+                ->where('members.0.id', $activePayingMember->id)
+                ->where('members.0.name', 'Active Paying')
+                ->where('members.0.monthly_amount', $activePayingMember->getMonthlyAmount())
             );
     });
 
@@ -103,6 +136,20 @@ describe('Record Full Payment', function () {
             ->assertSessionHasErrors('amount');
     });
 
+    it('validates the selected member has a contribution category', function () {
+        $member = User::factory()->member()->nonPaying()->create([
+            'family_id' => $this->financialSecretary->family_id,
+        ]);
+
+        $this->actingAs($this->financialSecretary)
+            ->post(route('payments.store'), [
+                'member_id' => $member->id,
+                'amount' => 1000,
+                'paid_at' => now()->toDateString(),
+            ])
+            ->assertSessionHasErrors('member_id');
+    });
+
     it('validates paid_at is a valid date', function () {
         $this->actingAs($this->financialSecretary)
             ->post(route('payments.store'), [
@@ -111,5 +158,55 @@ describe('Record Full Payment', function () {
                 'paid_at' => 'invalid-date',
             ])
             ->assertSessionHasErrors('paid_at');
+    });
+
+    it('allows admins to delete recent payments', function () {
+        $family = Family::factory()->create();
+        $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+        $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
+        $payment = Payment::factory()
+            ->forContribution($contribution)
+            ->recordedBy($admin)
+            ->create();
+
+        $this->actingAs($admin)
+            ->delete(route('payments.destroy', $payment))
+            ->assertRedirect()
+            ->assertSessionHas('success', 'Payment has been deleted.');
+
+        expect(Payment::whereKey($payment->id)->exists())->toBeFalse();
+    });
+
+    it('skips contributions that become paid after allocation candidates are loaded', function () {
+        $family = Family::factory()->create();
+        $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+        $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($member)->currentMonth()->create([
+            'expected_amount' => 4000,
+        ]);
+
+        $simulateRace = true;
+        Contribution::retrieved(function (Contribution $retrieved) use (&$simulateRace, $contribution, $admin): void {
+            if (! $simulateRace || $retrieved->id !== $contribution->id) {
+                return;
+            }
+
+            $simulateRace = false;
+            Payment::factory()
+                ->forContribution($retrieved)
+                ->recordedBy($admin)
+                ->create(['amount' => 4000]);
+        });
+
+        $payments = app(PaymentAllocationService::class)->allocate(
+            member: $member,
+            amount: 4000,
+            paidAt: now(),
+            recordedBy: $admin,
+        );
+
+        expect($payments)->toHaveCount(1)
+            ->and($payments->first()->contribution_id)->not->toBe($contribution->id);
     });
 });

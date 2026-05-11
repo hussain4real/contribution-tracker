@@ -55,6 +55,14 @@ describe('Platform Impersonate Users', function () {
         $this->assertAuthenticatedAs($superAdmin);
     });
 
+    it('redirects to dashboard when stopping impersonation without an original user', function () {
+        $superAdmin = User::factory()->admin()->superAdmin()->create();
+
+        $this->actingAs($superAdmin)
+            ->post('/platform/stop-impersonating')
+            ->assertRedirect(route('dashboard'));
+    });
+
     it('denies non-super-admin from impersonating', function () {
         $family = Family::factory()->create();
         $admin = User::factory()->admin()->create(['family_id' => $family->id]);

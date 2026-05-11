@@ -1,8 +1,11 @@
 <?php
 
+use App\Http\Controllers\NotificationController;
 use App\Models\Family;
 use App\Models\User;
 use App\Notifications\ContributionReminderNotification;
+use Illuminate\Database\Connection;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -300,4 +303,27 @@ describe('NotificationController', function () {
 
         $response->assertRedirect();
     });
+
+    it('builds driver specific notification type filters', function (string $driver, string $sqlFragment) {
+        $connection = Mockery::mock(Connection::class);
+        $connection->shouldReceive('getQueryGrammar')->andReturn(DB::connection()->getQueryGrammar());
+        $connection->shouldReceive('getDriverName')->andReturn($driver);
+
+        $model = Mockery::mock(DatabaseNotification::class)->makePartial();
+        $model->shouldReceive('getConnection')->andReturn($connection);
+
+        $query = Mockery::mock(Builder::class);
+        $query->shouldReceive('getModel')->andReturn($model);
+        $query->shouldReceive('whereRaw')
+            ->once()
+            ->with(Mockery::on(fn (string $sql): bool => str_contains($sql, $sqlFragment)), ['reminder'])
+            ->andReturnSelf();
+
+        $controller = app(NotificationController::class);
+        $method = (new ReflectionClass($controller))->getMethod('whereNotificationDataType');
+        $method->invoke($controller, $query, 'reminder');
+    })->with([
+        'pgsql' => ['pgsql', '::jsonb'],
+        'sqlsrv' => ['sqlsrv', 'json_value'],
+    ]);
 });

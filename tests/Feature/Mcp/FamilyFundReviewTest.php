@@ -10,7 +10,9 @@ use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
 use App\Notifications\ContributionReminderNotification;
+use App\Services\FamilyContributionReviewService;
 use Illuminate\Http\Request as HttpRequest;
+use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Facades\Notification;
 use Laravel\Mcp\Server\Testing\TestResponse;
 use Laravel\Passport\Client;
@@ -256,6 +258,114 @@ it('marks fully paid contributions as not eligible for reminders', function () {
         ->toHaveKey('reminder_ineligible_reason', 'This contribution is fully paid.');
 });
 
+it('reports missing contributions in review data', function () {
+    User::factory()->member()->employed()->create(['family_id' => $this->family->id]);
+
+    $data = familyFundMcpJson(
+        FamilyFundServer::actingAs($this->admin)->tool(GetFamilyFundReviewData::class)
+    );
+
+    expect($data['members'][0])
+        ->toHaveKey('contribution_id', null)
+        ->toHaveKey('reminder_ineligible_reason', 'No contribution record exists for this period.')
+        ->and($data['members'][0]['reminder_channels'])->toBe([]);
+});
+
+it('reports members without any eligible reminder channel', function () {
+    $member = User::factory()->member()->employed()->create([
+        'family_id' => $this->family->id,
+        'email' => '',
+        'whatsapp_phone' => null,
+        'whatsapp_verified_at' => null,
+    ]);
+    Contribution::factory()
+        ->forUser($member)
+        ->currentMonth()
+        ->create(['expected_amount' => 4000]);
+
+    $data = familyFundMcpJson(
+        FamilyFundServer::actingAs($this->admin)->tool(GetFamilyFundReviewData::class)
+    );
+
+    expect($data['members'][0])
+        ->toHaveKey('reminder_eligible', false)
+        ->toHaveKey('reminder_ineligible_reason', 'No eligible reminder channel is available.');
+});
+
+it('includes whatsapp and webpush in valid reminder selections when available', function () {
+    $member = User::factory()
+        ->member()
+        ->employed()
+        ->withVerifiedWhatsApp('+2348012345678')
+        ->create(['family_id' => $this->family->id]);
+    $member->updatePushSubscription(
+        'https://updates.push.services.mozilla.com/wpush/v2/reminder-test',
+        'test-public-key',
+        'test-auth-token',
+        'aes128gcm',
+    );
+    $contribution = Contribution::factory()
+        ->forUser($member)
+        ->currentMonth()
+        ->create(['expected_amount' => 5000]);
+
+    $preview = familyFundMcpJson(
+        FamilyFundServer::actingAs($this->admin)->tool(SendFamilyFundReviewReminders::class, [
+            'contribution_ids' => [$contribution->id],
+            'channels' => ['mail', 'whatsapp', 'webpush'],
+            'confirmed' => false,
+        ])
+    );
+
+    expect($preview['valid'][0]['channels'])->toBe(['mail', 'whatsapp', 'webpush']);
+});
+
+it('includes whatsapp and webpush channels in review data when available', function () {
+    $member = User::factory()
+        ->member()
+        ->employed()
+        ->withVerifiedWhatsApp('+2348012345678')
+        ->create(['family_id' => $this->family->id]);
+    $member->updatePushSubscription(
+        'https://updates.push.services.mozilla.com/wpush/v2/review-channel-test',
+        'test-public-key',
+        'test-auth-token',
+        'aes128gcm',
+    );
+    Contribution::factory()
+        ->forUser($member)
+        ->currentMonth()
+        ->create(['expected_amount' => 5000]);
+
+    $data = familyFundMcpJson(
+        FamilyFundServer::actingAs($this->admin)->tool(GetFamilyFundReviewData::class)
+    );
+
+    expect($data['members'][0]['reminder_channels'])->toBe(['mail', 'whatsapp', 'webpush']);
+});
+
+it('requires authorization to send family fund review reminders', function () {
+    FamilyFundServer::tool(SendFamilyFundReviewReminders::class, [
+        'contribution_ids' => [1],
+        'channels' => ['mail'],
+    ])->assertHasErrors(['Authentication is required.']);
+});
+
+it('reports missing reminder selections for this family', function () {
+    $preview = familyFundMcpJson(
+        FamilyFundServer::actingAs($this->admin)->tool(SendFamilyFundReviewReminders::class, [
+            'contribution_ids' => [999999],
+            'channels' => ['mail'],
+            'confirmed' => false,
+        ])
+    );
+
+    expect($preview)
+        ->toHaveKey('valid_count', 0)
+        ->toHaveKey('invalid_count', 1)
+        ->and($preview['invalid'][0]['reason'])->toBe('Contribution was not found for this family.');
+});
+
 it('forbids regular members from opening and reading review data', function () {
     $member = User::factory()->member()->employed()->create(['family_id' => $this->family->id]);
 
@@ -266,6 +376,53 @@ it('forbids regular members from opening and reading review data', function () {
     FamilyFundServer::actingAs($member)
         ->tool(GetFamilyFundReviewData::class)
         ->assertHasErrors(['Permission denied']);
+});
+
+it('requires authentication and a family workspace for review tools', function () {
+    FamilyFundServer::tool(GetFamilyFundReviewData::class)
+        ->assertHasErrors(['Authentication is required.']);
+
+    $orphanAdmin = User::factory()->admin()->create(['family_id' => null]);
+
+    FamilyFundServer::actingAs($orphanAdmin)
+        ->tool(GetFamilyFundReviewData::class)
+        ->assertHasErrors(['A family workspace is required.']);
+});
+
+it('exposes mcp tool schemas', function () {
+    $schema = new JsonSchemaTypeFactory;
+
+    expect(array_keys((new GetFamilyFundReviewData(app(FamilyContributionReviewService::class)))->schema($schema)))
+        ->toBe(['year', 'month', 'status'])
+        ->and(array_keys((new SendFamilyFundReviewReminders)->schema($schema)))
+        ->toBe(['contribution_ids', 'channels', 'confirmed']);
+});
+
+it('filters contribution review data by status', function () {
+    $paidMember = User::factory()->member()->employed()->create(['family_id' => $this->family->id]);
+    $paidContribution = Contribution::factory()
+        ->forUser($paidMember)
+        ->currentMonth()
+        ->create(['expected_amount' => 4000]);
+    Payment::factory()
+        ->forContribution($paidContribution)
+        ->recordedBy($this->admin)
+        ->create(['amount' => 4000]);
+
+    $unpaidMember = User::factory()->member()->employed()->create(['family_id' => $this->family->id]);
+    Contribution::factory()
+        ->forUser($unpaidMember)
+        ->currentMonth()
+        ->create(['expected_amount' => 4000]);
+
+    $data = familyFundMcpJson(
+        FamilyFundServer::actingAs($this->admin)->tool(GetFamilyFundReviewData::class, [
+            'status' => 'paid',
+        ])
+    );
+
+    expect($data['members'])->toHaveCount(1)
+        ->and($data['members'][0]['name'])->toBe($paidMember->name);
 });
 
 it('previews valid and invalid reminder selections without sending', function () {
@@ -301,6 +458,59 @@ it('previews valid and invalid reminder selections without sending', function ()
         ->toHaveKey('invalid_count', 1)
         ->and($preview['valid'][0]['contribution_id'])->toBe($validContribution->id)
         ->and($preview['invalid'][0]['contribution_id'])->toBe($paidContribution->id);
+
+    Notification::assertNothingSent();
+});
+
+it('reports unavailable selected reminder channels', function () {
+    $member = User::factory()->member()->employed()->withoutWhatsApp()->create(['family_id' => $this->family->id]);
+    $contribution = Contribution::factory()
+        ->forUser($member)
+        ->currentMonth()
+        ->create(['expected_amount' => 5000]);
+
+    $preview = familyFundMcpJson(
+        FamilyFundServer::actingAs($this->admin)->tool(SendFamilyFundReviewReminders::class, [
+            'contribution_ids' => [$contribution->id],
+            'channels' => ['whatsapp', 'webpush'],
+            'confirmed' => false,
+        ])
+    );
+
+    expect($preview)
+        ->toHaveKey('status', 'confirmation_required')
+        ->toHaveKey('valid_count', 0)
+        ->toHaveKey('invalid_count', 1)
+        ->and($preview['invalid'][0]['reason'])->toBe('No selected reminder channel is available for this member.')
+        ->and($preview['invalid'][0]['eligible_channels'])->toBe(['mail']);
+});
+
+it('returns no valid reminders when all confirmed selections are invalid', function () {
+    Notification::fake();
+
+    $member = User::factory()->member()->employed()->create(['family_id' => $this->family->id]);
+    $contribution = Contribution::factory()
+        ->forUser($member)
+        ->currentMonth()
+        ->create(['expected_amount' => 4000]);
+    Payment::factory()
+        ->forContribution($contribution)
+        ->recordedBy($this->admin)
+        ->create(['amount' => 4000]);
+
+    $result = familyFundMcpJson(
+        FamilyFundServer::actingAs($this->admin)->tool(SendFamilyFundReviewReminders::class, [
+            'contribution_ids' => [$contribution->id],
+            'channels' => ['mail'],
+            'confirmed' => true,
+        ])
+    );
+
+    expect($result)
+        ->toHaveKey('status', 'no_valid_reminders')
+        ->toHaveKey('sent_count', 0)
+        ->toHaveKey('channel_delivery_count', 0)
+        ->and($result['channel_counts'])->toBe(['mail' => 0, 'whatsapp' => 0, 'webpush' => 0]);
 
     Notification::assertNothingSent();
 });

@@ -2,6 +2,7 @@
 
 use App\Enums\MemberCategory;
 use App\Models\User;
+use Illuminate\Support\Facades\Hash;
 use Inertia\Testing\AssertableInertia as Assert;
 
 /**
@@ -104,5 +105,20 @@ describe('Update Member', function () {
             ])
             ->assertRedirect()
             ->assertSessionHasNoErrors();
+    });
+
+    it('can update member password when provided', function () {
+        $this->actingAs($this->admin)
+            ->put("/members/{$this->member->id}", [
+                'name' => $this->member->name,
+                'email' => $this->member->email,
+                'category' => $this->member->category->value,
+                'role' => $this->member->role->value,
+                'password' => 'new-password',
+                'password_confirmation' => 'new-password',
+            ])
+            ->assertRedirect();
+
+        expect(Hash::check('new-password', $this->member->fresh()->password))->toBeTrue();
     });
 });

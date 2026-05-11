@@ -1,11 +1,17 @@
 <?php
 
+use App\Jobs\SyncPaystackSubaccount;
 use App\Models\Family;
+use App\Models\FamilyCategory;
 use App\Models\PlatformPlan;
 use App\Models\User;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 
 beforeEach(function () {
+    Cache::forget('paystack_banks');
+
     config([
         'services.paystack.secret_key' => 'sk_test_secret',
         'services.paystack.public_key' => 'pk_test_public',
@@ -78,12 +84,61 @@ it('updates family settings with bank code', function () {
         ->and($family->account_number)->toBe('0045502216');
 });
 
+it('dispatches paystack subaccount sync only when complete bank details change', function () {
+    Queue::fake();
+
+    $family = Family::factory()->create([
+        'bank_code' => '058',
+        'account_number' => '0045502216',
+    ]);
+    $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+
+    $this->actingAs($admin)
+        ->put(route('family.settings.update'), [
+            'name' => $family->name,
+            'currency' => $family->currency,
+            'due_day' => $family->due_day,
+            'bank_name' => 'Guaranty Trust Bank',
+            'account_name' => 'Aminu Hussain',
+            'account_number' => '0045502216',
+            'bank_code' => '058',
+        ])
+        ->assertRedirect();
+
+    Queue::assertNotPushed(SyncPaystackSubaccount::class);
+
+    $this->actingAs($admin)
+        ->put(route('family.settings.update'), [
+            'name' => $family->name,
+            'currency' => $family->currency,
+            'due_day' => $family->due_day,
+            'bank_name' => 'Guaranty Trust Bank',
+            'account_name' => 'Aminu Hussain',
+            'account_number' => '0045502217',
+            'bank_code' => '058',
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success', 'Family settings updated.');
+
+    Queue::assertPushed(SyncPaystackSubaccount::class);
+});
+
 it('shows family settings page for admin', function () {
     $family = Family::factory()->create([
         'bank_name' => 'Guaranty Trust Bank',
         'bank_code' => '058',
     ]);
     $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+    $category = FamilyCategory::factory()->create([
+        'family_id' => $family->id,
+        'name' => 'Adults',
+        'monthly_amount' => 4000,
+        'sort_order' => 0,
+    ]);
+    User::factory()->member()->create([
+        'family_id' => $family->id,
+        'family_category_id' => $category->id,
+    ]);
 
     $this->actingAs($admin)
         ->get(route('family.settings'))
@@ -91,8 +146,12 @@ it('shows family settings page for admin', function () {
         ->assertInertia(fn ($page) => $page
             ->component('Family/Settings')
             ->has('family')
+            ->has('categories', 1)
             ->where('family.bank_name', 'Guaranty Trust Bank')
             ->where('family.bank_code', '058')
+            ->where('categories.0.name', 'Adults')
+            ->where('categories.0.monthly_amount', 4000)
+            ->where('categories.0.members_count', 1)
         );
 });
 
@@ -105,11 +164,149 @@ it('denies non-admin access to family settings', function () {
         ->assertForbidden();
 });
 
+it('denies non-admin updates to family settings', function () {
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->create(['family_id' => $family->id]);
+
+    $this->actingAs($member)
+        ->put(route('family.settings.update'), [
+            'name' => 'Updated Family',
+            'currency' => '₦',
+            'due_day' => 15,
+        ])
+        ->assertForbidden();
+
+    expect($family->refresh()->name)->not->toBe('Updated Family');
+});
+
 it('denies non-admin access to banks list', function () {
     $family = Family::factory()->create();
     $member = User::factory()->create(['family_id' => $family->id]);
 
     $this->actingAs($member)
         ->getJson(route('family.banks'))
+        ->assertForbidden();
+});
+
+it('returns an empty bank list when paystack does not return a successful response', function () {
+    Http::fake([
+        'https://api.paystack.co/bank*' => Http::response([
+            'status' => false,
+            'message' => 'Unavailable',
+            'data' => [],
+        ]),
+    ]);
+
+    $family = Family::factory()->create();
+    $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+
+    $this->actingAs($admin)
+        ->getJson(route('family.banks'))
+        ->assertSuccessful()
+        ->assertExactJson([]);
+});
+
+it('stores family categories with the next sort order', function () {
+    $family = Family::factory()->create();
+    $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+    FamilyCategory::factory()->create([
+        'family_id' => $family->id,
+        'sort_order' => 2,
+    ]);
+
+    $this->actingAs($admin)
+        ->post(route('family.categories.store'), [
+            'name' => 'Young Adults',
+            'monthly_amount' => 2500,
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success', 'Category added.');
+
+    $this->assertDatabaseHas('family_categories', [
+        'family_id' => $family->id,
+        'name' => 'Young Adults',
+        'slug' => 'young-adults',
+        'monthly_amount' => 2500,
+        'sort_order' => 3,
+    ]);
+});
+
+it('prevents non-admins from storing family categories', function () {
+    $member = User::factory()->member()->create();
+
+    $this->actingAs($member)
+        ->post(route('family.categories.store'), [
+            'name' => 'Young Adults',
+            'monthly_amount' => 2500,
+        ])
+        ->assertForbidden();
+});
+
+it('updates family categories in the admins family', function () {
+    $family = Family::factory()->create();
+    $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+    $category = FamilyCategory::factory()->create(['family_id' => $family->id]);
+
+    $this->actingAs($admin)
+        ->put(route('family.categories.update', $category), [
+            'name' => 'Working Adults',
+            'monthly_amount' => 4500,
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success', 'Category updated.');
+
+    expect($category->refresh()->name)->toBe('Working Adults')
+        ->and($category->slug)->toBe('working-adults')
+        ->and($category->monthly_amount)->toBe(4500);
+});
+
+it('prevents category updates outside the admins family', function () {
+    $admin = User::factory()->admin()->create();
+    $category = FamilyCategory::factory()->create();
+
+    $this->actingAs($admin)
+        ->put(route('family.categories.update', $category), [
+            'name' => 'Working Adults',
+            'monthly_amount' => 4500,
+        ])
+        ->assertForbidden();
+});
+
+it('prevents deleting a category with active members', function () {
+    $family = Family::factory()->create();
+    $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+    $category = FamilyCategory::factory()->create(['family_id' => $family->id]);
+    User::factory()->member()->create([
+        'family_id' => $family->id,
+        'family_category_id' => $category->id,
+    ]);
+
+    $this->actingAs($admin)
+        ->delete(route('family.categories.destroy', $category))
+        ->assertRedirect()
+        ->assertSessionHas('error', 'Cannot delete a category with active members.');
+
+    expect($category->refresh()->exists)->toBeTrue();
+});
+
+it('deletes empty categories in the admins family', function () {
+    $family = Family::factory()->create();
+    $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+    $category = FamilyCategory::factory()->create(['family_id' => $family->id]);
+
+    $this->actingAs($admin)
+        ->delete(route('family.categories.destroy', $category))
+        ->assertRedirect()
+        ->assertSessionHas('success', 'Category deleted.');
+
+    expect(FamilyCategory::whereKey($category->id)->exists())->toBeFalse();
+});
+
+it('prevents deleting categories outside the admins family', function () {
+    $admin = User::factory()->admin()->create();
+    $category = FamilyCategory::factory()->create();
+
+    $this->actingAs($admin)
+        ->delete(route('family.categories.destroy', $category))
         ->assertForbidden();
 });

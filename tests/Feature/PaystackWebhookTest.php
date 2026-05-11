@@ -2,6 +2,7 @@
 
 use App\Enums\TransactionStatus;
 use App\Enums\TransactionType;
+use App\Http\Controllers\PaystackWebhookController;
 use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\PaystackTransaction;
@@ -105,6 +106,80 @@ it('prevents double processing of charge.success', function () {
     expect($transaction->status)->toBe(TransactionStatus::Success);
 });
 
+it('treats non-pending matching charge.success transactions as already processed', function () {
+    $family = Family::factory()->create();
+    $member = User::factory()->create(['family_id' => $family->id]);
+
+    PaystackTransaction::create([
+        'reference' => 'TXN_NON_PENDING',
+        'user_id' => $member->id,
+        'family_id' => $family->id,
+        'type' => TransactionType::Contribution,
+        'amount' => 4000,
+        'status' => TransactionStatus::Failed,
+    ]);
+
+    $payload = json_encode([
+        'event' => 'charge.success',
+        'data' => [
+            'reference' => 'TXN_NON_PENDING',
+            'amount' => 400000,
+        ],
+    ]);
+
+    $this->postJson(route('webhooks.paystack'), json_decode($payload, true), [
+        'X-Paystack-Signature' => signPayload($payload),
+    ])
+        ->assertSuccessful()
+        ->assertJson(['message' => 'Already processed']);
+});
+
+it('logs and skips contribution allocation when the webhook member no longer exists', function () {
+    $transaction = new PaystackTransaction([
+        'reference' => 'TXN_MISSING_MEMBER',
+        'user_id' => 999999,
+        'family_id' => 999999,
+        'type' => TransactionType::Contribution,
+        'amount' => 4000,
+        'status' => TransactionStatus::Pending,
+    ]);
+
+    $controller = app(PaystackWebhookController::class);
+    $method = (new ReflectionClass($controller))->getMethod('allocateContributionPayment');
+    $method->invoke($controller, $transaction, []);
+
+    expect(User::find(999999))->toBeNull();
+});
+
+it('rejects charge.success events without a reference', function () {
+    $payload = json_encode([
+        'event' => 'charge.success',
+        'data' => ['amount' => 400000],
+    ]);
+
+    $this->postJson(route('webhooks.paystack'), json_decode($payload, true), [
+        'X-Paystack-Signature' => signPayload($payload),
+    ])
+        ->assertBadRequest()
+        ->assertJson(['message' => 'No reference']);
+});
+
+it('ignores charge.success events for unknown references', function () {
+    $payload = json_encode([
+        'event' => 'charge.success',
+        'data' => [
+            'reference' => 'TXN_UNKNOWN',
+            'amount' => 400000,
+        ],
+    ]);
+
+    $this->postJson(route('webhooks.paystack'), json_decode($payload, true), [
+        'X-Paystack-Signature' => signPayload($payload),
+    ])
+        ->assertSuccessful()
+        ->assertJson(['message' => 'Unknown reference']);
+});
+
 it('rejects charge.success with amount mismatch', function () {
     $family = Family::factory()->create();
     $member = User::factory()->create(['family_id' => $family->id]);
@@ -158,6 +233,37 @@ it('handles subscription.create event', function () {
         ->and($family->subscription_status)->toBe('active');
 });
 
+it('rejects subscription.create events with missing data', function () {
+    $payload = json_encode([
+        'event' => 'subscription.create',
+        'data' => ['customer' => []],
+    ]);
+
+    $this->postJson(route('webhooks.paystack'), json_decode($payload, true), [
+        'X-Paystack-Signature' => signPayload($payload),
+    ])
+        ->assertBadRequest()
+        ->assertJson(['message' => 'Missing subscription data']);
+});
+
+it('ignores subscription.create events for unknown customers', function () {
+    $payload = json_encode([
+        'event' => 'subscription.create',
+        'data' => [
+            'subscription_code' => 'SUB_unknown',
+            'customer' => [
+                'customer_code' => 'CUS_unknown',
+            ],
+        ],
+    ]);
+
+    $this->postJson(route('webhooks.paystack'), json_decode($payload, true), [
+        'X-Paystack-Signature' => signPayload($payload),
+    ])
+        ->assertSuccessful()
+        ->assertJson(['message' => 'Family not found']);
+});
+
 it('handles subscription.not_renew event', function () {
     $family = Family::factory()->create([
         'paystack_subscription_code' => 'SUB_cancel123',
@@ -177,4 +283,41 @@ it('handles subscription.not_renew event', function () {
 
     $family->refresh();
     expect($family->subscription_status)->toBe('cancelled');
+});
+
+it('records invoice payment failures for known subscriptions', function () {
+    $family = Family::factory()->create([
+        'paystack_subscription_code' => 'SUB_past_due',
+        'subscription_status' => 'active',
+    ]);
+
+    $payload = json_encode([
+        'event' => 'invoice.payment_failed',
+        'data' => [
+            'subscription' => [
+                'subscription_code' => 'SUB_past_due',
+            ],
+        ],
+    ]);
+
+    $this->postJson(route('webhooks.paystack'), json_decode($payload, true), [
+        'X-Paystack-Signature' => signPayload($payload),
+    ])
+        ->assertSuccessful()
+        ->assertJson(['message' => 'Payment failure recorded']);
+
+    expect($family->refresh()->subscription_status)->toBe('past_due');
+});
+
+it('ignores unknown paystack webhook events', function () {
+    $payload = json_encode([
+        'event' => 'customer.created',
+        'data' => [],
+    ]);
+
+    $this->postJson(route('webhooks.paystack'), json_decode($payload, true), [
+        'X-Paystack-Signature' => signPayload($payload),
+    ])
+        ->assertSuccessful()
+        ->assertJson(['message' => 'Event ignored']);
 });

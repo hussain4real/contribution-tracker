@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\HandleInertiaRequests;
 use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\User;
@@ -99,6 +100,25 @@ describe('Generate Monthly Contributions Command', function () {
 });
 
 describe('Generate Contributions via UI', function () {
+    it('shows the contributions index page', function () {
+        config([
+            'inertia.pages.ensure_pages_exist' => false,
+            'inertia.testing.ensure_pages_exist' => false,
+        ]);
+
+        $admin = User::factory()->admin()->create();
+        $version = app(HandleInertiaRequests::class)->version(request());
+
+        $this->actingAs($admin)
+            ->withHeaders([
+                'X-Inertia' => 'true',
+                'X-Inertia-Version' => $version,
+            ])
+            ->get(route('contributions.index'))
+            ->assertSuccessful()
+            ->assertJsonPath('component', 'Contributions/Index');
+    });
+
     it('allows admin to generate contributions', function () {
         $family = Family::factory()->create();
         $admin = User::factory()->admin()->create(['family_id' => $family->id]);

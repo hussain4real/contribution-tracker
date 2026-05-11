@@ -65,6 +65,30 @@ describe('WhatsApp inbox listing', function () {
         );
     });
 
+    it('includes matched member details in inbox threads', function () {
+        $family = Family::factory()->create();
+        $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+        $member = User::factory()->member()->withVerifiedWhatsApp('+2348012345678')->create([
+            'family_id' => $family->id,
+            'name' => 'Matched Member',
+        ]);
+
+        WhatsAppMessage::factory()->inbound()->create([
+            'family_id' => $family->id,
+            'user_id' => $member->id,
+            'from' => '2348012345678',
+        ]);
+
+        $this->actingAs($admin)
+            ->get('/inbox/whatsapp')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Inbox/Index')
+                ->where('threads.0.member_id', $member->id)
+                ->where('threads.0.member_name', 'Matched Member')
+            );
+    });
+
     it('groups multiple messages from the same number into a single thread', function () {
         $family = Family::factory()->create();
         $admin = User::factory()->admin()->create(['family_id' => $family->id]);
@@ -155,6 +179,32 @@ describe('WhatsApp inbox reply', function () {
             && $request->data()['type'] === 'text'
             && $request->data()['text']['body'] === 'Thanks for your message.'
         );
+    });
+
+    it('returns a validation error when the whatsapp reply send fails', function () {
+        Http::fake([
+            'graph.facebook.com/*' => Http::response([
+                'error' => [
+                    'message' => 'Recipient unavailable',
+                    'code' => 131026,
+                ],
+            ], 400),
+        ]);
+
+        $family = Family::factory()->create();
+        $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+
+        WhatsAppMessage::factory()->inbound()->create([
+            'family_id' => $family->id,
+            'from' => '2348012345678',
+            'created_at' => now()->subMinutes(5),
+        ]);
+
+        $this->actingAs($admin)
+            ->post('/inbox/whatsapp/2348012345678/reply', [
+                'body' => 'Thanks for your message.',
+            ])
+            ->assertSessionHasErrors('body');
     });
 
     it('rejects a reply when last inbound is older than 24h', function () {

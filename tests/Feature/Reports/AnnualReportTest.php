@@ -61,7 +61,7 @@ describe('Annual Report', function () {
 
     it('includes annual total summary', function () {
         $admin = User::factory()->admin()->create();
-        $member = User::factory()->employed()->create();
+        $member = User::factory()->employed()->create(['family_id' => $admin->family_id]);
 
         // Create contributions for the year
         for ($month = 1; $month <= 3; $month++) {
@@ -120,8 +120,8 @@ describe('Annual Report', function () {
         $admin = User::factory()->admin()->create();
 
         // Create members with different categories
-        $employed = User::factory()->employed()->create();
-        $student = User::factory()->student()->create();
+        $employed = User::factory()->employed()->create(['family_id' => $admin->family_id]);
+        $student = User::factory()->student()->create(['family_id' => $admin->family_id]);
 
         // Create contributions
         foreach ([$employed, $student] as $member) {
@@ -144,6 +144,29 @@ describe('Annual Report', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Reports/Annual')
                 ->has('by_category')
+            );
+    });
+
+    it('calculates annual collection rates for the current family', function () {
+        $admin = User::factory()->admin()->create();
+        $member = User::factory()->employed()->create(['family_id' => $admin->family_id]);
+        $contribution = Contribution::factory()
+            ->forUser($member)
+            ->forMonth(now()->year, 1)
+            ->create(['expected_amount' => 4000]);
+        Payment::factory()
+            ->forContribution($contribution)
+            ->recordedBy($admin)
+            ->create(['amount' => 1000]);
+
+        $this->actingAs($admin)
+            ->get('/reports/annual?year='.now()->year)
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('total.expected', 4000)
+                ->where('total.collected', 1000)
+                ->where('total.collection_rate', 25)
+                ->where('by_category.employed.count', 1)
             );
     });
 
