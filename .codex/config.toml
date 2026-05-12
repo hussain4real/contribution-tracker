@@ -3,7 +3,6 @@ sandbox_mode = "workspace-write"
 approval_mode = "approve"
 [sandbox_workspace_write]
 network_access = true
-
 [mcp_servers.laravel-boost]
 command = "php"
 args = ["artisan", "boost:mcp"]
