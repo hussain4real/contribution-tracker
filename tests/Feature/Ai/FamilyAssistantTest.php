@@ -1,16 +1,16 @@
 <?php
 
+use App\Ai\Agents\ContributionAnalysisAgent;
+use App\Ai\Agents\ContributionGenerationAgent;
+use App\Ai\Agents\ExpenseAnalysisAgent;
+use App\Ai\Agents\ExpenseRecordingAgent;
 use App\Ai\Agents\FamilyAssistant;
+use App\Ai\Agents\FundAdjustmentRecordingAgent;
+use App\Ai\Agents\FundBalanceAgent;
+use App\Ai\Agents\InvitationAgent;
+use App\Ai\Agents\MemberStatusAgent;
+use App\Ai\Agents\PaymentRecordingAgent;
 use App\Ai\Middleware\LogPrompts;
-use App\Ai\Tools\GenerateContributions;
-use App\Ai\Tools\GetContributionSummary;
-use App\Ai\Tools\GetExpenseSummary;
-use App\Ai\Tools\GetFundBalance;
-use App\Ai\Tools\GetMemberOverview;
-use App\Ai\Tools\RecordExpense;
-use App\Ai\Tools\RecordFundAdjustment;
-use App\Ai\Tools\RecordPayment;
-use App\Ai\Tools\SendInvitation;
 use App\Models\Family;
 use App\Models\User;
 use Laravel\Ai\Enums\Lab;
@@ -39,6 +39,8 @@ it('builds instructions for members without a family workspace', function () {
     expect($instructions)
         ->toContain('the "your family" family contribution tracking group')
         ->toContain('You are speaking with Amina (role: member)')
+        ->toContain('Coordinator')
+        ->toContain('Each sub-agent runs in isolation')
         ->toContain('Cannot record expenses, payments, or fund adjustments')
         ->toContain('Cannot generate contributions or send invitations')
         ->toContain('All monetary values are in ₦');
@@ -59,6 +61,8 @@ it('builds instructions with elevated role capabilities and family currency', fu
     expect($instructions)
         ->toContain('the "Smith Family" family contribution tracking group')
         ->toContain('You are speaking with Ada (role: admin)')
+        ->toContain('contribution_analysis, expense_analysis, fund_balance, and member_status')
+        ->toContain('delegate the same exact action details again WITH confirmed=true')
         ->toContain('Can record expenses for the family')
         ->toContain('Can generate monthly contribution records for all members')
         ->toContain('All monetary values are in NGN')
@@ -77,36 +81,36 @@ it('exposes tools based on the authenticated user role', function (string $state
     'member' => [
         'member',
         [
-            GetContributionSummary::class,
-            GetExpenseSummary::class,
-            GetFundBalance::class,
-            GetMemberOverview::class,
+            ContributionAnalysisAgent::class,
+            ExpenseAnalysisAgent::class,
+            FundBalanceAgent::class,
+            MemberStatusAgent::class,
         ],
     ],
     'financial secretary' => [
         'financialSecretary',
         [
-            GetContributionSummary::class,
-            GetExpenseSummary::class,
-            GetFundBalance::class,
-            GetMemberOverview::class,
-            RecordExpense::class,
-            RecordPayment::class,
-            RecordFundAdjustment::class,
+            ContributionAnalysisAgent::class,
+            ExpenseAnalysisAgent::class,
+            FundBalanceAgent::class,
+            MemberStatusAgent::class,
+            PaymentRecordingAgent::class,
+            ExpenseRecordingAgent::class,
+            FundAdjustmentRecordingAgent::class,
         ],
     ],
     'admin' => [
         'admin',
         [
-            GetContributionSummary::class,
-            GetExpenseSummary::class,
-            GetFundBalance::class,
-            GetMemberOverview::class,
-            RecordExpense::class,
-            RecordPayment::class,
-            RecordFundAdjustment::class,
-            GenerateContributions::class,
-            SendInvitation::class,
+            ContributionAnalysisAgent::class,
+            ExpenseAnalysisAgent::class,
+            FundBalanceAgent::class,
+            MemberStatusAgent::class,
+            PaymentRecordingAgent::class,
+            ExpenseRecordingAgent::class,
+            FundAdjustmentRecordingAgent::class,
+            ContributionGenerationAgent::class,
+            InvitationAgent::class,
         ],
     ],
 ]);
