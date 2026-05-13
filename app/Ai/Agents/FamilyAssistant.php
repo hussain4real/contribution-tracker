@@ -3,15 +3,6 @@
 namespace App\Ai\Agents;
 
 use App\Ai\Middleware\LogPrompts;
-use App\Ai\Tools\GenerateContributions;
-use App\Ai\Tools\GetContributionSummary;
-use App\Ai\Tools\GetExpenseSummary;
-use App\Ai\Tools\GetFundBalance;
-use App\Ai\Tools\GetMemberOverview;
-use App\Ai\Tools\RecordExpense;
-use App\Ai\Tools\RecordFundAdjustment;
-use App\Ai\Tools\RecordPayment;
-use App\Ai\Tools\SendInvitation;
 use App\Models\User;
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Attributes\Temperature;
@@ -22,7 +13,6 @@ use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\HasTools;
-use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Stringable;
@@ -71,23 +61,26 @@ class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasProvid
         Today's date is {$currentDate}. The current year is {$currentYear} and the current month is {$currentMonth}.
 
         Your capabilities:
-        1. **Chat Assistant**: Answer general questions about the family group, contributions, and how the system works.
-        2. **Financial Analyzer**: Analyze contribution payments, expenses, and provide financial insights for the family.
-        3. **Report Summarizer**: Summarize monthly and annual contribution reports, highlight trends, and identify issues.
-        4. **Agentic Actions**: Perform write operations on behalf of the user based on their role permissions.
+        1. **Coordinator**: Understand the user's request, keep the conversation natural, and delegate specialist work.
+        2. **Insight Delegation**: Use contribution_analysis, expense_analysis, fund_balance, and member_status specialists for financial questions.
+        3. **Operations Delegation**: Use the available write specialists for payments, expenses, fund adjustments, contribution generation, and invitations based on the user's role.
+        4. **Response Composer**: Combine specialist responses into a concise answer for the user.
 
         {$userName}'s permissions based on their role:
         {$roleCapabilities}
 
         CRITICAL - Confirm-First Rule for Write Actions:
-        - When using any write tool (recording expenses, payments, fund adjustments, generating contributions, or sending invitations), you MUST call the tool first WITHOUT setting confirmed=true.
+        - When delegating write work (recording expenses, payments, fund adjustments, generating contributions, or sending invitations), you MUST ask the specialist to preview first WITHOUT confirmed=true.
         - Present the preview/summary to the user and ask for their explicit confirmation.
-        - Only after the user confirms (says yes, confirm, go ahead, etc.), call the tool again WITH confirmed=true to execute the action.
+        - Only after the user confirms (says yes, confirm, go ahead, etc.), delegate the same exact action details again WITH confirmed=true to execute the action.
         - NEVER set confirmed=true on the first call. Always preview first.
 
         Guidelines:
         - All monetary values are in {$currency} (Nigerian Naira).
-        - Use the available tools to fetch real-time data before answering financial questions.
+        - Use the available sub-agents to fetch real-time data before answering financial questions.
+        - Each sub-agent runs in isolation and does not receive this parent conversation history, so every delegated task must be clear and self-contained.
+        - Include the user's role, family context, period, requested action details, and confirmation status when delegating.
+        - For multi-part requests, call the relevant specialists and compose their results without inventing missing data.
         - When querying data, always use the current year ({$currentYear}) unless the user specifically asks about a different time period.
         - Be concise but thorough. Use bullet points and tables when helpful.
         - If you don't have enough data, say so rather than guessing.
@@ -101,29 +94,29 @@ class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasProvid
     /**
      * Get the tools available to the agent.
      *
-     * @return Tool[]
+     * @return array<int, Agent>
      */
     public function tools(): iterable
     {
-        $tools = [
-            new GetContributionSummary($this->user),
-            new GetExpenseSummary($this->user),
-            new GetFundBalance($this->user),
-            new GetMemberOverview($this->user),
+        $agents = [
+            new ContributionAnalysisAgent($this->user),
+            new ExpenseAnalysisAgent($this->user),
+            new FundBalanceAgent($this->user),
+            new MemberStatusAgent($this->user),
         ];
 
         if ($this->user->canRecordPayments()) {
-            $tools[] = new RecordExpense($this->user);
-            $tools[] = new RecordPayment($this->user);
-            $tools[] = new RecordFundAdjustment($this->user);
+            $agents[] = new PaymentRecordingAgent($this->user);
+            $agents[] = new ExpenseRecordingAgent($this->user);
+            $agents[] = new FundAdjustmentRecordingAgent($this->user);
         }
 
         if ($this->user->isAdmin()) {
-            $tools[] = new GenerateContributions($this->user);
-            $tools[] = new SendInvitation($this->user);
+            $agents[] = new ContributionGenerationAgent($this->user);
+            $agents[] = new InvitationAgent($this->user);
         }
 
-        return $tools;
+        return $agents;
     }
 
     /**
