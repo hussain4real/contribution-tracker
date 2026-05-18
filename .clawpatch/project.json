@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "projectId": "prj_https-github-com-hussain4real-co_2690a41e73",
+  "name": "vue-starter-kit",
+  "rootPath": "/Users/amisha/www/contribution-tracker",
+  "git": {
+    "remoteUrl": "https://github.com/hussain4real/contribution-tracker.git",
+    "defaultBranch": null,
+    "currentBranch": "dev",
+    "headSha": "a81b1c0493db06cb471df3d367f9ced3f42f78ad"
+  },
+  "detected": {
+    "languages": [
+      "typescript",
+      "javascript",
+      "php"
+    ],
+    "frameworks": [
+      "laravel"
+    ],
+    "packageManagers": [
+      "npm",
+      "composer"
+    ],
+    "commands": {
+      "typecheck": null,
+      "lint": "npm run lint",
+      "format": "npm run format",
+      "test": "composer test"
+    }
+  },
+  "createdAt": "2026-05-18T11:01:39.980Z",
+  "updatedAt": "2026-05-18T11:01:39.980Z"
+}

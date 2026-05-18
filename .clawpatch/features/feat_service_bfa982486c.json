@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_service_bfa982486c",
+  "title": "Laravel service PaymentAllocationService",
+  "summary": "Laravel application service PaymentAllocationService.",
+  "kind": "service",
+  "source": "laravel-service",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "app/Services/PaymentAllocationService.php",
+      "symbol": "PaymentAllocationService",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Services/PaymentAllocationService.php",
+      "reason": "service"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "app/Models/Contribution.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Models/Payment.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Models/User.php",
+      "reason": "imported application class"
+    }
+  ],
+  "tests": [],
+  "tags": [
+    "php",
+    "laravel",
+    "service"
+  ],
+  "trustBoundaries": [
+    "database",
+    "serialization"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

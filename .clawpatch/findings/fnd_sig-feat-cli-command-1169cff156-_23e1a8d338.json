@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-cli-command-1169cff156-_23e1a8d338",
+  "featureId": "feat_cli-command_1169cff156",
+  "title": "The day option accepts invalid values and can send the wrong reminder batch",
+  "category": "api-contract",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "contract-mismatch",
+  "evidence": [
+    {
+      "path": "app/Console/Commands/SendContributionReminders.php",
+      "startLine": 12,
+      "endLine": 12,
+      "symbol": "SendContributionReminders",
+      "quote": "#[Signature('contributions:remind {--day= : Day of month (25 or 28)}')]"
+    },
+    {
+      "path": "app/Console/Commands/SendContributionReminders.php",
+      "startLine": 21,
+      "endLine": 23,
+      "symbol": "SendContributionReminders::handle",
+      "quote": "$day = (int) ($this->option('day') ?? now()->day);\n        $type = $day >= 28 ? 'follow_up' : 'reminder';"
+    },
+    {
+      "path": "tests/Feature/Commands/SendContributionRemindersTest.php",
+      "startLine": 18,
+      "endLine": 18,
+      "symbol": null,
+      "quote": "$this->artisan('contributions:remind', ['--day' => 25])"
+    },
+    {
+      "path": "tests/Feature/Commands/SendContributionRemindersTest.php",
+      "startLine": 35,
+      "endLine": 35,
+      "symbol": null,
+      "quote": "$this->artisan('contributions:remind', ['--day' => 28])"
+    }
+  ],
+  "reasoning": "The command contract documents only day 25 or 28, but the implementation casts any input and maps all values below 28 to `reminder` and all values 28 or higher to `follow_up`. A typo such as `--day=2`, `--day=99`, or `--day=abc` can therefore dispatch a real notification batch instead of failing fast.",
+  "reproduction": "Run `php artisan contributions:remind --day=99`; the command treats it as `follow_up` and processes current-month unpaid contributions even though 99 is outside the documented option contract.",
+  "recommendation": "Validate the option before querying contributions. Accept only 25 and 28, emit an error, and return `self::FAILURE` for any other explicit value. If no option is provided, either validate that today is one of the scheduled days or require the option in scheduled usage.",
+  "whyTestsDoNotAlreadyCoverThis": "The tests cover only the two valid values, 25 and 28, and do not assert that invalid or non-numeric input is rejected without dispatching notifications.",
+  "suggestedRegressionTest": "Add a Pest case that runs `contributions:remind --day=99` and `--day=abc`, asserts a failure exit code, and asserts `Notification::assertNothingSent()`.",
+  "minimumFixScope": "Add option validation in `SendContributionReminders::handle` before `$type` is derived and before the contribution query runs.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-cli-command-1169cff156_93506b6025",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260518T110727-a1e777",
+  "createdAt": "2026-05-18T11:09:41.050Z",
+  "updatedAt": "2026-05-18T11:09:41.050Z"
+}

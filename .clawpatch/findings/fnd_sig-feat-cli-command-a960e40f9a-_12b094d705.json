@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-cli-command-a960e40f9a-_12b094d705",
+  "featureId": "feat_cli-command_a960e40f9a",
+  "title": "Duplicate check and insert are not atomic",
+  "category": "concurrency",
+  "severity": "medium",
+  "confidence": "medium",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "app/Console/Commands/GenerateMonthlyContributions.php",
+      "startLine": 38,
+      "endLine": 52,
+      "symbol": "GenerateMonthlyContributions::handle",
+      "quote": "$exists = Contribution::query()\n                    ->where('family_id', $family->id)\n                    ->where('user_id', $member->id)\n                    ->where('year', $year)\n                    ->where('month', $month)\n                    ->exists();\n\n                if ($exists) {\n                    $totalSkipped++;\n\n                    continue;\n                }"
+    },
+    {
+      "path": "app/Console/Commands/GenerateMonthlyContributions.php",
+      "startLine": 57,
+      "endLine": 65,
+      "symbol": "GenerateMonthlyContributions::handle",
+      "quote": "Contribution::create([\n                    'family_id' => $family->id,\n                    'user_id' => $member->id,\n                    'year' => $year,\n                    'month' => $month,\n                    'expected_amount' => $member->getMonthlyAmount() ?? 0,\n                    'due_date' => Carbon::createFromDate($year, $month, min($dueDay, $date->daysInMonth)),\n                ]);"
+    }
+  ],
+  "reasoning": "The command checks for an existing monthly contribution and then inserts in a separate query. Two overlapping invocations for the same family and period can both observe no existing row before either insert commits, causing duplicate obligations unless a database constraint outside the included files prevents it. Even with a constraint, this path would surface as an unhandled duplicate-key failure instead of a clean skip.",
+  "reproduction": "Start two contributions:generate processes for the same family/month when no contribution exists for a member; both can pass exists() before either creates the row.",
+  "recommendation": "Enforce uniqueness for family_id, user_id, year, and month at the database level, and use an atomic create-or-skip path such as firstOrCreate/upsert with duplicate-key handling.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked tests were provided, and ordinary single-process command tests would not exercise overlapping command execution.",
+  "suggestedRegressionTest": "Add a regression test for the uniqueness invariant on family_id, user_id, year, and month, plus a command test proving repeated runs do not create duplicates.",
+  "minimumFixScope": "Add the uniqueness invariant and update GenerateMonthlyContributions to rely on an atomic write path.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-cli-command-a960e40f9a_4be7c00702",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260518T110727-a1e777",
+  "createdAt": "2026-05-18T11:09:14.834Z",
+  "updatedAt": "2026-05-18T11:09:14.834Z"
+}

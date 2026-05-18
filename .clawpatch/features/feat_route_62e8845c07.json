@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_62e8845c07",
+  "title": "Laravel request StoreMemberRequest",
+  "summary": "Laravel request StoreMemberRequest in app/Http/Requests/StoreMemberRequest.php.",
+  "kind": "route",
+  "source": "laravel-request",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "app/Http/Requests/StoreMemberRequest.php",
+      "symbol": "StoreMemberRequest",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Http/Requests/StoreMemberRequest.php",
+      "reason": "laravel request"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "app/Enums/MemberCategory.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Enums/Role.php",
+      "reason": "imported application class"
+    }
+  ],
+  "tests": [],
+  "tags": [
+    "php",
+    "laravel",
+    "request",
+    "validation"
+  ],
+  "trustBoundaries": [
+    "user-input",
+    "auth"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

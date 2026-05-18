@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-infra-3190b8194b-0bac36_ed90f0705f",
+  "featureId": "feat_infra_3190b8194b",
+  "title": "Default DatabaseSeeder can create known super-admin credentials outside dev data setup",
+  "category": "security",
+  "severity": "high",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "database/seeders/DatabaseSeeder.php",
+      "startLine": 14,
+      "endLine": 17,
+      "symbol": "DatabaseSeeder::run",
+      "quote": "$this->call([\n    PlatformPlanSeeder::class,\n    FamilyMemberSeeder::class,\n]);"
+    },
+    {
+      "path": "database/seeders/FamilyMemberSeeder.php",
+      "startLine": 63,
+      "endLine": 77,
+      "symbol": "FamilyMemberSeeder::run",
+      "quote": "$adminEmail = config('app.admin_email') ?: 'admin@family.test';\n$adminPassword = config('app.admin_password') ?: 'password';\n... 'role' => Role::Admin,\n'is_super_admin' => true,"
+    },
+    {
+      "path": "database/seeders/FamilyMemberSeeder.php",
+      "startLine": 84,
+      "endLine": 123,
+      "symbol": "FamilyMemberSeeder::run",
+      "quote": "User::factory()->create([... 'email' => 'finance@family.test', 'password' => Hash::make('password') ...]);"
+    }
+  ],
+  "reasoning": "The default db:seed path calls FamilyMemberSeeder, which falls back to public email/password values and creates a super-admin plus demo users. If the default seeder is run against any non-isolated environment without explicit admin config, the application gets a known privileged login.",
+  "reproduction": "Run php artisan db:seed in an environment without ADMIN_EMAIL and ADMIN_PASSWORD configured. DatabaseSeeder calls FamilyMemberSeeder, which creates admin@family.test with password password and is_super_admin true.",
+  "recommendation": "Gate demo seeding to local/testing environments or require explicit credentials before creating privileged users. Keep production bootstrapping on ProductionSeeder and make DatabaseSeeder refuse to create known-password accounts outside safe environments.",
+  "whyTestsDoNotAlreadyCoverThis": "ProductionSeederTest verifies ProductionSeeder avoids demo contribution/payment data, but no test runs DatabaseSeeder under a production-like environment or asserts that the known fallback admin is blocked.",
+  "suggestedRegressionTest": "Add a test that sets the environment to production, runs DatabaseSeeder, and asserts admin@family.test is not created and the seeder fails or skips demo users explicitly.",
+  "minimumFixScope": "Add an environment/config guard around DatabaseSeeder or FamilyMemberSeeder and cover it with one seeder safety test.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-infra-3190b8194b_0bac3650d8",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260518T110727-a1e777",
+  "createdAt": "2026-05-18T11:10:30.586Z",
+  "updatedAt": "2026-05-18T11:10:30.586Z"
+}

@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-infra-5c713c0bbf-909113_ab739b15e4",
+  "featureId": "feat_infra_5c713c0bbf",
+  "title": "Calendar columns allow impossible period values at the database boundary",
+  "category": "data-loss",
+  "severity": "medium",
+  "confidence": "medium",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "database/migrations/2025_12_25_112150_create_contributions_table.php",
+      "startLine": 17,
+      "endLine": 18,
+      "symbol": "contributions.year_month",
+      "quote": "$table->smallInteger('year');\n            $table->tinyInteger('month');"
+    },
+    {
+      "path": "database/migrations/2026_03_18_000001_create_families_table.php",
+      "startLine": 16,
+      "endLine": 16,
+      "symbol": "families.due_day",
+      "quote": "$table->tinyInteger('due_day')->unsigned()->default(28);"
+    }
+  ],
+  "reasoning": "The schema accepts contribution months outside 1-12 and family due days outside a valid calendar-day range. If a command, import, factory, AI/tool path, or future code path writes directly to these tables, invalid rows can be persisted and then missed or mishandled by monthly reporting and due-date generation logic that assumes valid month and day values.",
+  "reproduction": null,
+  "recommendation": "Add database-level check constraints for valid month and due_day ranges, and keep request/command validation aligned. For an already-deployed database, add a forward migration that first audits or normalizes existing invalid rows before adding constraints.",
+  "whyTestsDoNotAlreadyCoverThis": "The feature declares no linked tests, and these migrations only define column types; there is no included schema test asserting the database rejects invalid calendar values.",
+  "suggestedRegressionTest": "Add a migration/schema test that attempts to insert contributions with month 0 and 13, and families with due_day 0 and 32, then asserts each insert is rejected by the database.",
+  "minimumFixScope": "A forward migration adding check constraints to contributions.month and families.due_day, plus validation on non-HTTP creation paths that can create these records.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-infra-5c713c0bbf_90911399b4",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260518T110727-a1e777",
+  "createdAt": "2026-05-18T11:10:51.367Z",
+  "updatedAt": "2026-05-18T11:10:51.367Z"
+}

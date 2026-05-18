@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_e4bee41aa8",
+  "title": "Laravel controller PasswordController",
+  "summary": "Laravel HTTP controller PasswordController.",
+  "kind": "route",
+  "source": "laravel-controller",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "app/Http/Controllers/Settings/PasswordController.php",
+      "symbol": "PasswordController",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Http/Controllers/Settings/PasswordController.php",
+      "reason": "controller"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "app/Http/Controllers/Controller.php",
+      "reason": "imported application class"
+    }
+  ],
+  "tests": [],
+  "tags": [
+    "php",
+    "laravel",
+    "controller",
+    "http"
+  ],
+  "trustBoundaries": [
+    "user-input",
+    "auth",
+    "database",
+    "serialization"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

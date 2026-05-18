@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-cli-command-a960e40f9a-_523d25dc66",
+  "featureId": "feat_cli-command_a960e40f9a",
+  "title": "Invalid month option can generate corrupt period data",
+  "category": "bug",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "app/Console/Commands/GenerateMonthlyContributions.php",
+      "startLine": 18,
+      "endLine": 24,
+      "symbol": "GenerateMonthlyContributions::handle",
+      "quote": "$year = (int) ($this->option('year') ?? now()->year);\n        $month = (int) ($this->option('month') ?? now()->month);\n        $familyId = $this->option('family');\n\n        $date = Carbon::createFromDate($year, $month, 1);"
+    },
+    {
+      "path": "app/Console/Commands/GenerateMonthlyContributions.php",
+      "startLine": 57,
+      "endLine": 65,
+      "symbol": "GenerateMonthlyContributions::handle",
+      "quote": "Contribution::create([\n                    'family_id' => $family->id,\n                    'user_id' => $member->id,\n                    'year' => $year,\n                    'month' => $month,\n                    'expected_amount' => $member->getMonthlyAmount() ?? 0,\n                    'due_date' => Carbon::createFromDate($year, $month, min($dueDay, $date->daysInMonth)),\n                ]);"
+    }
+  ],
+  "reasoning": "The signature says --month must be 1-12, but handle() casts arbitrary input and passes it to Carbon. Carbon can normalize overflow values such as 13 into a different calendar month while the raw invalid month is still persisted to contributions.month. That can create rows like year=2026, month=13 with a due_date in January 2027, breaking period identity and later queries that assume months are 1-12.",
+  "reproduction": "Run php artisan contributions:generate --year=2026 --month=13 for a family with an active categorized member, then inspect the generated Contribution row.",
+  "recommendation": "Validate month and year before any date construction or database writes. Reject month values outside 1-12 with a clear error and non-success exit code.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked tests were provided, and there is no included test asserting invalid command options are rejected.",
+  "suggestedRegressionTest": "Add a Pest console test that runs contributions:generate with --month=13 and asserts a failure exit code and zero created Contribution rows.",
+  "minimumFixScope": "Add option validation in GenerateMonthlyContributions::handle and cover invalid date options with a focused console test.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-cli-command-a960e40f9a_3293a923f0",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260518T110727-a1e777",
+  "createdAt": "2026-05-18T11:09:14.834Z",
+  "updatedAt": "2026-05-18T11:09:14.834Z"
+}

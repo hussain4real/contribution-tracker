@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_test-suite_3f5a18efea",
+  "title": "Laravel test suite tests/Browser",
+  "summary": "Laravel tests in tests/Browser.",
+  "kind": "test-suite",
+  "source": "laravel-test-suite",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "tests/Browser",
+      "symbol": "tests/Browser",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "tests/Browser/BrowserCoverageTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Browser/DashboardFlowTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Browser/FinancialOperationsFlowTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Browser/MemberHistoryFlowTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Browser/MemberManagementFlowTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Browser/MobileAppShellTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Browser/PaymentRecordingFlowTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Browser/SmokeCoverageTest.php",
+      "reason": "PHP test"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "tests/Browser/BrowserCoverageTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Browser/DashboardFlowTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Browser/FinancialOperationsFlowTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Browser/MemberHistoryFlowTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Browser/MemberManagementFlowTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Browser/MobileAppShellTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Browser/PaymentRecordingFlowTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Browser/SmokeCoverageTest.php",
+      "reason": "nearby test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/Browser/BrowserCoverageTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Browser/DashboardFlowTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Browser/FinancialOperationsFlowTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Browser/MemberHistoryFlowTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Browser/MemberManagementFlowTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Browser/MobileAppShellTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Browser/PaymentRecordingFlowTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Browser/SmokeCoverageTest.php",
+      "command": "composer test"
+    }
+  ],
+  "tags": [
+    "php",
+    "laravel",
+    "test"
+  ],
+  "trustBoundaries": [],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

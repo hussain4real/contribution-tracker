@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_service_d2ba0dd440",
+  "title": "Laravel service PaystackService",
+  "summary": "Laravel application service PaystackService.",
+  "kind": "service",
+  "source": "laravel-service",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "app/Services/PaystackService.php",
+      "symbol": "PaystackService",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Services/PaystackService.php",
+      "reason": "service"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "tests/Feature/PaystackServiceTest.php",
+      "reason": "associated test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/Feature/PaystackServiceTest.php",
+      "command": "composer test"
+    }
+  ],
+  "tags": [
+    "php",
+    "laravel",
+    "service"
+  ],
+  "trustBoundaries": [
+    "database",
+    "serialization"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

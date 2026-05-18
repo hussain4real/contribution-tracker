@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-infra-0973937ca8-84e08f_b4c5b5f7b5",
+  "featureId": "feat_infra_0973937ca8",
+  "title": "Paystack transaction audit records cascade away",
+  "category": "data-loss",
+  "severity": "medium",
+  "confidence": "medium",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "database/migrations/2026_03_25_110228_create_paystack_transactions_table.php",
+      "startLine": 16,
+      "endLine": 18,
+      "symbol": null,
+      "quote": "$table->string('reference')->unique();\n$table->foreignId('user_id')->constrained()->cascadeOnDelete();\n$table->foreignId('family_id')->constrained()->cascadeOnDelete();"
+    }
+  ],
+  "reasoning": "Paystack transactions are the local record for external payment references, status, response payloads, and webhook idempotency. Cascading them on user or family deletion removes that audit trail and can make later Paystack callbacks or webhooks look like unknown references. This is especially risky because account deletion is a supported user flow in the inspected app.",
+  "reproduction": "Create a PaystackTransaction for a user, delete that user account, and then inspect paystack_transactions or send a webhook for the same reference; the transaction row has been deleted by the foreign key cascade.",
+  "recommendation": "Preserve external payment records independently from user lifecycle. Add a forward migration to make user_id nullable with nullOnDelete, and consider restrictOnDelete or nullable/anonymized family_id depending on family deletion policy. Scrub PII separately rather than deleting the transaction ledger row.",
+  "whyTestsDoNotAlreadyCoverThis": "Paystack tests cover creation, casts, webhook status changes, and double-processing while the transaction exists; profile deletion tests do not seed Paystack transactions or assert audit retention.",
+  "suggestedRegressionTest": "Add a profile deletion test that creates a PaystackTransaction for the deleting user and asserts the transaction reference/status remains available with the expected anonymized or nulled ownership fields.",
+  "minimumFixScope": "Forward migration altering Paystack transaction foreign keys plus account deletion/payment audit regression coverage.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-infra-0973937ca8_84e08fe37a",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260518T110727-a1e777",
+  "createdAt": "2026-05-18T11:14:11.271Z",
+  "updatedAt": "2026-05-18T11:14:11.271Z"
+}

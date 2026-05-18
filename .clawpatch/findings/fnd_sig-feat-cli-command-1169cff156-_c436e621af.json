@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-cli-command-1169cff156-_c436e621af",
+  "featureId": "feat_cli-command_1169cff156",
+  "title": "Concurrent command runs can send duplicate reminders before the sent-at flag is written",
+  "category": "concurrency",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "app/Console/Commands/SendContributionReminders.php",
+      "startLine": 32,
+      "endLine": 39,
+      "symbol": "SendContributionReminders::handle",
+      "quote": "Contribution::query()\n            ->whereNull($sentAtColumn)\n            ...\n            ->chunkById(200, function ($contributions) use (&$totalSent, $sentAtColumn, $type): void {"
+    },
+    {
+      "path": "app/Console/Commands/SendContributionReminders.php",
+      "startLine": 45,
+      "endLine": 46,
+      "symbol": "SendContributionReminders::handle",
+      "quote": "$contribution->user->notify(new ContributionReminderNotification($contribution, $type));\n                    $contribution->forceFill([$sentAtColumn => now()])->save();"
+    },
+    {
+      "path": "tests/Feature/Commands/SendContributionRemindersTest.php",
+      "startLine": 45,
+      "endLine": 60,
+      "symbol": null,
+      "quote": "it('does not send duplicate reminders when rerun', function () {"
+    }
+  ],
+  "reasoning": "The idempotency check is a non-atomic read of a nullable column, and the flag is written only after notification dispatch. If two processes run the command at the same time, both can select the same contribution while the sent-at column is still null, both dispatch the notification, and then both save the timestamp. The existing duplicate test only covers sequential reruns after the first process has already saved the flag, so it does not prove the concurrent case safe.",
+  "reproduction": "Start two `contributions:remind --day=25` processes against the same unpaid contribution at the same time; both can pass the `whereNull(reminder_sent_at)` query before either reaches the save at line 46.",
+  "recommendation": "Claim each contribution atomically before dispatching, for example by updating the sent-at column with a `whereKey($id)->whereNull($sentAtColumn)` condition and only notifying when that update affects one row, or by using an appropriate row lock/transaction around the claim step.",
+  "whyTestsDoNotAlreadyCoverThis": "The test suite checks that a second run after the first has completed sends zero reminders, but it does not simulate two command instances selecting the same rows before either writes the sent-at timestamp.",
+  "suggestedRegressionTest": "Add a test that simulates a stale selected contribution by setting the sent-at column between selection and dispatch, then asserts the command does not notify unless an atomic claim update succeeds.",
+  "minimumFixScope": "Change `SendContributionReminders::handle` so notification dispatch is gated by an atomic sent-at claim for the selected contribution.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-cli-command-1169cff156_597d1138a5",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260518T110727-a1e777",
+  "createdAt": "2026-05-18T11:09:41.049Z",
+  "updatedAt": "2026-05-18T11:09:41.049Z"
+}

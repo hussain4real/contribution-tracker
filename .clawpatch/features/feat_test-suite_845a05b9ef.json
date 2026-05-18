@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_test-suite_845a05b9ef",
+  "title": "Laravel test suite tests/Feature#6",
+  "summary": "Laravel tests in tests/Feature#6.",
+  "kind": "test-suite",
+  "source": "laravel-test-suite",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "tests/Feature#6",
+      "symbol": "tests/Feature#6",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "tests/Feature/Members/RestoreMemberTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Members/RevokeRoleTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Members/UpdateMemberTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Middleware/HandleInertiaRequestsTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Models/ContributionTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Models/ExpenseTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Models/FamilyCategoryTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Models/FamilyInvitationTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Models/FamilyTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Models/FundAdjustmentTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Models/PaymentTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Models/PaystackTransactionTest.php",
+      "reason": "PHP test"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "tests/Feature/Members/RestoreMemberTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Members/RevokeRoleTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Members/UpdateMemberTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Middleware/HandleInertiaRequestsTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Models/ContributionTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Models/ExpenseTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Models/FamilyCategoryTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Models/FamilyInvitationTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Models/FamilyTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Models/FundAdjustmentTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Models/PaymentTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Models/PaystackTransactionTest.php",
+      "reason": "nearby test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/Feature/Members/RestoreMemberTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Members/RevokeRoleTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Members/UpdateMemberTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Middleware/HandleInertiaRequestsTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Models/ContributionTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Models/ExpenseTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Models/FamilyCategoryTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Models/FamilyInvitationTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Models/FamilyTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Models/FundAdjustmentTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Models/PaymentTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Models/PaystackTransactionTest.php",
+      "command": "composer test"
+    }
+  ],
+  "tags": [
+    "php",
+    "laravel",
+    "test"
+  ],
+  "trustBoundaries": [],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_service_5f8894325c",
+  "title": "Laravel model Expense",
+  "summary": "Laravel model Expense in app/Models/Expense.php.",
+  "kind": "service",
+  "source": "laravel-model",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "app/Models/Expense.php",
+      "symbol": "Expense",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Models/Expense.php",
+      "reason": "laravel model"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "tests/Feature/Ai/Tools/GetExpenseSummaryToolTest.php",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/RecordExpenseTest.php",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/Feature/Expenses/ExpenseCrudTest.php",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/Feature/Models/ExpenseTest.php",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/Feature/Policies/ExpensePolicyTest.php",
+      "reason": "associated test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/Feature/Ai/Tools/GetExpenseSummaryToolTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/RecordExpenseTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Expenses/ExpenseCrudTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Models/ExpenseTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Policies/ExpensePolicyTest.php",
+      "command": "composer test"
+    }
+  ],
+  "tags": [
+    "php",
+    "laravel",
+    "model",
+    "eloquent"
+  ],
+  "trustBoundaries": [
+    "database",
+    "serialization"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_ddaf8acc3f",
+  "title": "Laravel request UpdateMemberRequest",
+  "summary": "Laravel request UpdateMemberRequest in app/Http/Requests/UpdateMemberRequest.php.",
+  "kind": "route",
+  "source": "laravel-request",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "app/Http/Requests/UpdateMemberRequest.php",
+      "symbol": "UpdateMemberRequest",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Http/Requests/UpdateMemberRequest.php",
+      "reason": "laravel request"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "app/Enums/MemberCategory.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Enums/Role.php",
+      "reason": "imported application class"
+    }
+  ],
+  "tests": [],
+  "tags": [
+    "php",
+    "laravel",
+    "request",
+    "validation"
+  ],
+  "trustBoundaries": [
+    "user-input",
+    "auth"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_test-suite_22248679c7",
+  "title": "Laravel test suite tests/Feature#8",
+  "summary": "Laravel tests in tests/Feature#8.",
+  "kind": "test-suite",
+  "source": "laravel-test-suite",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "tests/Feature#8",
+      "symbol": "tests/Feature#8",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "tests/Feature/PaystackWebhookTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Platform/PlatformDashboardTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Platform/PlatformExportTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Platform/PlatformFamiliesTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Platform/PlatformFeatureFlagTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Platform/PlatformImpersonateTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Platform/PlatformPasswordResetTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Platform/PlatformSuspendTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Platform/PlatformUsersTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/PlatformPlanTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Policies/ContributionPolicyTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Policies/ExpensePolicyTest.php",
+      "reason": "PHP test"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "tests/Feature/PaystackWebhookTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Platform/PlatformDashboardTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Platform/PlatformExportTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Platform/PlatformFamiliesTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Platform/PlatformFeatureFlagTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Platform/PlatformImpersonateTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Platform/PlatformPasswordResetTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Platform/PlatformSuspendTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Platform/PlatformUsersTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/PlatformPlanTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Policies/ContributionPolicyTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Policies/ExpensePolicyTest.php",
+      "reason": "nearby test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/Feature/PaystackWebhookTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Platform/PlatformDashboardTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Platform/PlatformExportTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Platform/PlatformFamiliesTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Platform/PlatformFeatureFlagTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Platform/PlatformImpersonateTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Platform/PlatformPasswordResetTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Platform/PlatformSuspendTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Platform/PlatformUsersTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/PlatformPlanTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Policies/ContributionPolicyTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Policies/ExpensePolicyTest.php",
+      "command": "composer test"
+    }
+  ],
+  "tags": [
+    "php",
+    "laravel",
+    "test"
+  ],
+  "trustBoundaries": [],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

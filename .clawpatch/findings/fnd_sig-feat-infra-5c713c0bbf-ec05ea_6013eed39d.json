@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-infra-5c713c0bbf-ec05ea_6013eed39d",
+  "featureId": "feat_infra_5c713c0bbf",
+  "title": "families.slug has a redundant secondary index",
+  "category": "performance",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "database/migrations/2026_03_18_000001_create_families_table.php",
+      "startLine": 14,
+      "endLine": 14,
+      "symbol": "families.slug_unique",
+      "quote": "$table->string('slug')->unique();"
+    },
+    {
+      "path": "database/migrations/2026_03_18_000001_create_families_table.php",
+      "startLine": 20,
+      "endLine": 20,
+      "symbol": "families.slug_index",
+      "quote": "$table->index('slug');"
+    }
+  ],
+  "reasoning": "The unique constraint on slug already creates an index that can satisfy slug lookups. The additional non-unique index on the same column adds unnecessary storage and write-maintenance overhead for every family insert or slug update without improving query capability.",
+  "reproduction": null,
+  "recommendation": "Remove the redundant non-unique slug index. If this migration has already run in production, use a forward migration to drop the redundant families_slug_index while preserving the unique index.",
+  "whyTestsDoNotAlreadyCoverThis": "The feature declares no linked tests, and ordinary migration tests usually verify table creation rather than duplicate index metadata or write-amplification costs.",
+  "suggestedRegressionTest": "Add a schema assertion that the families table has the unique slug index but does not have a separate non-unique slug-only index.",
+  "minimumFixScope": "Remove $table->index('slug') before release, or add a forward migration that drops families_slug_index after confirming families_slug_unique remains.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-infra-5c713c0bbf_ec05eae3d4",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260518T110727-a1e777",
+  "createdAt": "2026-05-18T11:10:51.367Z",
+  "updatedAt": "2026-05-18T11:10:51.367Z"
+}

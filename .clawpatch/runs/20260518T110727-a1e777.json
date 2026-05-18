@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "runId": "20260518T110727-a1e777",
+  "command": "review",
+  "args": [
+    "review",
+    "--limit",
+    "10"
+  ],
+  "rootPath": "/Users/amisha/www/contribution-tracker",
+  "headSha": "a81b1c0493db06cb471df3d367f9ced3f42f78ad",
+  "startedAt": "2026-05-18T11:07:27.865Z",
+  "finishedAt": "2026-05-18T11:14:11.274Z",
+  "status": "completed",
+  "claimedFeatureIds": [
+    "feat_cli-command_1169cff156",
+    "feat_cli-command_a960e40f9a",
+    "feat_config_0c1c23856a",
+    "feat_config_6985b610e3",
+    "feat_config_7528cb5b98",
+    "feat_config_7d0b0fea4a",
+    "feat_config_cd6cc21cdd",
+    "feat_infra_0973937ca8",
+    "feat_infra_3190b8194b",
+    "feat_infra_5c713c0bbf"
+  ],
+  "findingIds": [
+    "fnd_sig-feat-config-7528cb5b98-e2cd8_a2b225195f",
+    "fnd_sig-feat-cli-command-a960e40f9a-_a9ac384537",
+    "fnd_sig-feat-cli-command-a960e40f9a-_523d25dc66",
+    "fnd_sig-feat-cli-command-a960e40f9a-_12b094d705",
+    "fnd_sig-feat-cli-command-1169cff156-_c436e621af",
+    "fnd_sig-feat-cli-command-1169cff156-_23e1a8d338",
+    "fnd_sig-feat-infra-3190b8194b-fe873d_bd90df2c1f",
+    "fnd_sig-feat-infra-3190b8194b-15ffcf_9057a3b2ae",
+    "fnd_sig-feat-infra-3190b8194b-0bac36_ed90f0705f",
+    "fnd_sig-feat-infra-5c713c0bbf-909113_ab739b15e4",
+    "fnd_sig-feat-infra-5c713c0bbf-ec05ea_6013eed39d",
+    "fnd_sig-feat-infra-0973937ca8-84eefa_709f7ee9a6",
+    "fnd_sig-feat-infra-0973937ca8-e35543_768c431018",
+    "fnd_sig-feat-infra-0973937ca8-84e08f_b4c5b5f7b5"
+  ],
+  "patchAttemptIds": [],
+  "errors": []
+}

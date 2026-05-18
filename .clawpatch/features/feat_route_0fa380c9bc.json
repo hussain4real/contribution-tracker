@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_0fa380c9bc",
+  "title": "Laravel controller Controller",
+  "summary": "Laravel HTTP controller Controller.",
+  "kind": "route",
+  "source": "laravel-controller",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "app/Http/Controllers/Controller.php",
+      "symbol": "Controller",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Http/Controllers/Controller.php",
+      "reason": "controller"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "tests/Feature/Notifications/NotificationControllerTest.php",
+      "reason": "associated test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/Feature/Notifications/NotificationControllerTest.php",
+      "command": "composer test"
+    }
+  ],
+  "tags": [
+    "php",
+    "laravel",
+    "controller",
+    "http"
+  ],
+  "trustBoundaries": [
+    "user-input",
+    "auth",
+    "database",
+    "serialization"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

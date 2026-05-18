@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_infra_d3a530706e",
+  "title": "Laravel migrations database/migrations#2",
+  "summary": "Laravel migrations in database/migrations#2.",
+  "kind": "infra",
+  "source": "laravel-migration",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "database/migrations#2",
+      "symbol": "database/migrations#2",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "database/migrations/2026_03_18_000003_create_family_invitations_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_03_18_000004_add_family_columns_to_users_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_03_18_000005_add_family_id_to_contributions_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_03_18_000006_add_family_id_to_expenses_and_fund_adjustments_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_03_18_000007_migrate_existing_data_to_families.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_03_18_155228_add_billing_columns_to_families_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_03_19_082946_add_bank_details_to_families_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_03_20_142959_add_suspended_at_to_families_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_03_21_164047_create_passkeys_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_03_22_173354_create_notifications_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_03_25_110200_create_platform_plans_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_03_25_110213_add_paystack_columns_to_families_table.php",
+      "reason": "migration"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "php",
+    "laravel",
+    "migration"
+  ],
+  "trustBoundaries": [
+    "database"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

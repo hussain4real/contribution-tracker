@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_service_4d7c622ea9",
+  "title": "Laravel model FamilyInvitation",
+  "summary": "Laravel model FamilyInvitation in app/Models/FamilyInvitation.php.",
+  "kind": "service",
+  "source": "laravel-model",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "app/Models/FamilyInvitation.php",
+      "symbol": "FamilyInvitation",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Models/FamilyInvitation.php",
+      "reason": "laravel model"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "app/Enums/Role.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "tests/Feature/Models/FamilyInvitationTest.php",
+      "reason": "associated test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/Feature/Models/FamilyInvitationTest.php",
+      "command": "composer test"
+    }
+  ],
+  "tags": [
+    "php",
+    "laravel",
+    "model",
+    "eloquent"
+  ],
+  "trustBoundaries": [
+    "database",
+    "serialization"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-config-7528cb5b98-e2cd8_a2b225195f",
+  "featureId": "feat_config_7528cb5b98",
+  "title": "Lint script mutates files instead of checking them",
+  "category": "build-release",
+  "severity": "low",
+  "confidence": "high",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "package.json",
+      "startLine": 9,
+      "endLine": 9,
+      "symbol": "scripts.lint",
+      "quote": "\"lint\": \"eslint . --fix\""
+    }
+  ],
+  "reasoning": "The project metadata exposes `npm run lint` as the lint command, but the script runs ESLint with `--fix`. In CI, release checks, or review automation this can rewrite source files during validation rather than failing on uncommitted lint errors, which can hide problems behind a dirty worktree and make lint results non-repeatable.",
+  "reproduction": "Run `npm run lint` on a file with auto-fixable ESLint violations; the command modifies the file instead of acting as a pure validation step.",
+  "recommendation": "Change `lint` to a non-mutating check such as `eslint .`, and add a separate explicit fixer script such as `lint:fix` for local cleanup.",
+  "whyTestsDoNotAlreadyCoverThis": "No linked tests exercise package scripts or assert that quality gates are non-mutating.",
+  "suggestedRegressionTest": "Add a lightweight package-script check that asserts the `lint` script does not include `--fix`, while an explicit `lint:fix` script may include it.",
+  "minimumFixScope": "Update the `scripts.lint` entry in `package.json` and optionally add `scripts.lint:fix`.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-config-7528cb5b98_e2cd8b8b68",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260518T110727-a1e777",
+  "createdAt": "2026-05-18T11:07:59.731Z",
+  "updatedAt": "2026-05-18T11:07:59.731Z"
+}

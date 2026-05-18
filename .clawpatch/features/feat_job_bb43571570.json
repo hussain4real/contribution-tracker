@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_job_bb43571570",
+  "title": "Laravel job ProcessWhatsAppWebhook",
+  "summary": "Laravel job ProcessWhatsAppWebhook in app/Jobs/ProcessWhatsAppWebhook.php.",
+  "kind": "job",
+  "source": "laravel-job",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "app/Jobs/ProcessWhatsAppWebhook.php",
+      "symbol": "ProcessWhatsAppWebhook",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Jobs/ProcessWhatsAppWebhook.php",
+      "reason": "laravel job"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "app/Models/User.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Models/WhatsAppMessage.php",
+      "reason": "imported application class"
+    }
+  ],
+  "tests": [],
+  "tags": [
+    "php",
+    "laravel",
+    "job"
+  ],
+  "trustBoundaries": [
+    "database",
+    "concurrency",
+    "external-api"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

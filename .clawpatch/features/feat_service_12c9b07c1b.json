@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_service_12c9b07c1b",
+  "title": "Laravel model Payment",
+  "summary": "Laravel model Payment in app/Models/Payment.php.",
+  "kind": "service",
+  "source": "laravel-model",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "app/Models/Payment.php",
+      "symbol": "Payment",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Models/Payment.php",
+      "reason": "laravel model"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "tests/Browser/PaymentRecordingFlowTest.php",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/RecordPaymentTest.php",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/Feature/Contributions/PartialPaymentDetailsTest.php",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/Feature/MemberPaymentTest.php",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/Feature/Models/PaymentTest.php",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/Feature/Payments/AdvancePaymentLimitTest.php",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/Feature/Payments/AdvancePaymentTest.php",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/Feature/Payments/PaymentAuthorizationTest.php",
+      "reason": "associated test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/Browser/PaymentRecordingFlowTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/RecordPaymentTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Contributions/PartialPaymentDetailsTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/MemberPaymentTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Models/PaymentTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Payments/AdvancePaymentLimitTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Payments/AdvancePaymentTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Payments/PaymentAuthorizationTest.php",
+      "command": "composer test"
+    }
+  ],
+  "tags": [
+    "php",
+    "laravel",
+    "model",
+    "eloquent"
+  ],
+  "trustBoundaries": [
+    "database",
+    "serialization"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

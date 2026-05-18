@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_cli-command_1169cff156",
+  "title": "Laravel command contributions:remind",
+  "summary": "Laravel Artisan command 'contributions:remind' in app/Console/Commands/SendContributionReminders.php.",
+  "kind": "cli-command",
+  "source": "laravel-artisan-command",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "app/Console/Commands/SendContributionReminders.php",
+      "symbol": "SendContributionReminders",
+      "route": null,
+      "command": "contributions:remind"
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Console/Commands/SendContributionReminders.php",
+      "reason": "Artisan command"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "app/Models/Contribution.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Notifications/ContributionReminderNotification.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "tests/Feature/Commands/SendContributionRemindersTest.php",
+      "reason": "associated test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/Feature/Commands/SendContributionRemindersTest.php",
+      "command": "composer test"
+    }
+  ],
+  "tags": [
+    "php",
+    "laravel",
+    "artisan",
+    "cli"
+  ],
+  "trustBoundaries": [
+    "user-input",
+    "filesystem",
+    "process-exec",
+    "database"
+  ],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-cli-command-1169cff156-_c436e621af",
+    "fnd_sig-feat-cli-command-1169cff156-_23e1a8d338"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260518T110727-a1e777",
+      "kind": "review",
+      "summary": "2 finding(s)",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-18T11:09:41.051Z"
+    }
+  ],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:09:41.051Z"
+}

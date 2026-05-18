@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_library_7aec801bea",
+  "title": "Node package .",
+  "summary": "Node package . with package metadata and review context rooted at ..",
+  "kind": "library",
+  "source": "node-package",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "package.json",
+      "symbol": ".",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "package.json",
+      "reason": "package manifest"
+    },
+    {
+      "path": "tsconfig.json",
+      "reason": "typescript configuration"
+    },
+    {
+      "path": "vite.config.ts",
+      "reason": "build configuration"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "AGENTS.md",
+      "reason": "package context"
+    }
+  ],
+  "tests": [],
+  "tags": [
+    "node",
+    "package",
+    "project:.",
+    "project-root:."
+  ],
+  "trustBoundaries": [],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

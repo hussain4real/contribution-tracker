@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_service_be70c8f6aa",
+  "title": "Laravel model User",
+  "summary": "Laravel model User in app/Models/User.php.",
+  "kind": "service",
+  "source": "laravel-model",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "app/Models/User.php",
+      "symbol": "User",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Models/User.php",
+      "reason": "laravel model"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "app/Enums/MemberCategory.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Enums/Role.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "tests/Feature/Models/UserTest.php",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/Feature/Platform/PlatformUsersTest.php",
+      "reason": "associated test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/Feature/Models/UserTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Platform/PlatformUsersTest.php",
+      "command": "composer test"
+    }
+  ],
+  "tags": [
+    "php",
+    "laravel",
+    "model",
+    "eloquent"
+  ],
+  "trustBoundaries": [
+    "database",
+    "serialization"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

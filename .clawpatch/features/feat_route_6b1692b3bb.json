@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_6b1692b3bb",
+  "title": "Laravel controller ProfileController",
+  "summary": "Laravel HTTP controller ProfileController.",
+  "kind": "route",
+  "source": "laravel-controller",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "app/Http/Controllers/Settings/ProfileController.php",
+      "symbol": "ProfileController",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Http/Controllers/Settings/ProfileController.php",
+      "reason": "controller"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "app/Http/Controllers/Controller.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Http/Requests/Settings/ProfileUpdateRequest.php",
+      "reason": "imported application class"
+    }
+  ],
+  "tests": [],
+  "tags": [
+    "php",
+    "laravel",
+    "controller",
+    "http"
+  ],
+  "trustBoundaries": [
+    "user-input",
+    "auth",
+    "database",
+    "serialization"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}
