@@ -18,7 +18,15 @@ class SendContributionReminders extends Command
      */
     public function handle(): int
     {
-        $day = (int) ($this->option('day') ?? now()->day);
+        $dayOption = $this->option('day') ?? now()->day;
+
+        if (! in_array((string) $dayOption, ['25', '28'], true)) {
+            $this->error('The --day option must be 25 or 28.');
+
+            return self::FAILURE;
+        }
+
+        $day = (int) $dayOption;
         $type = $day >= 28 ? 'follow_up' : 'reminder';
         $sentAtColumn = $this->sentAtColumnFor($type);
 

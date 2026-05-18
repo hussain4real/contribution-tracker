@@ -79,6 +79,28 @@ describe('Send Contribution Reminders Command', function () {
         expect($contribution->fresh()->follow_up_sent_at)->not->toBeNull();
     });
 
+    it('rejects invalid day options without sending notifications', function (int|string $day) {
+        Notification::fake();
+
+        $family = Family::factory()->create();
+        $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
+
+        $this->artisan('contributions:remind', ['--day' => $day])
+            ->expectsOutput('The --day option must be 25 or 28.')
+            ->assertFailed();
+
+        Notification::assertNothingSent();
+
+        $freshContribution = $contribution->fresh();
+
+        expect($freshContribution->reminder_sent_at)->toBeNull()
+            ->and($freshContribution->follow_up_sent_at)->toBeNull();
+    })->with([
+        'out of range day' => 99,
+        'non-numeric day' => 'abc',
+    ]);
+
     it('skips members who have fully paid', function () {
         Notification::fake();
 

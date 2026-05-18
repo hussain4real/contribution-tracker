@@ -43,11 +43,13 @@
   "whyTestsDoNotAlreadyCoverThis": "The tests cover only the two valid values, 25 and 28, and do not assert that invalid or non-numeric input is rejected without dispatching notifications.",
   "suggestedRegressionTest": "Add a Pest case that runs `contributions:remind --day=99` and `--day=abc`, asserts a failure exit code, and asserts `Notification::assertNothingSent()`.",
   "minimumFixScope": "Add option validation in `SendContributionReminders::handle` before `$type` is derived and before the contribution query runs.",
-  "status": "open",
+  "status": "uncertain",
   "history": [],
   "signature": "sig_feat-cli-command-1169cff156_93506b6025",
-  "linkedPatchAttemptIds": [],
+  "linkedPatchAttemptIds": [
+    "pat_fnd-sig-feat-cli-command-1169cff_2cd40c33f0"
+  ],
   "createdByRunId": "20260518T110727-a1e777",
   "createdAt": "2026-05-18T11:09:41.050Z",
-  "updatedAt": "2026-05-18T11:09:41.050Z"
+  "updatedAt": "2026-05-18T18:21:52.445Z"
 }
