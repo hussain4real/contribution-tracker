@@ -36,11 +36,13 @@
   "whyTestsDoNotAlreadyCoverThis": "The test suite checks that a second run after the first has completed sends zero reminders, but it does not simulate two command instances selecting the same rows before either writes the sent-at timestamp.",
   "suggestedRegressionTest": "Add a test that simulates a stale selected contribution by setting the sent-at column between selection and dispatch, then asserts the command does not notify unless an atomic claim update succeeds.",
   "minimumFixScope": "Change `SendContributionReminders::handle` so notification dispatch is gated by an atomic sent-at claim for the selected contribution.",
-  "status": "open",
+  "status": "uncertain",
   "history": [],
   "signature": "sig_feat-cli-command-1169cff156_597d1138a5",
-  "linkedPatchAttemptIds": [],
+  "linkedPatchAttemptIds": [
+    "pat_fnd-sig-feat-cli-command-1169cff_e4812566fe"
+  ],
   "createdByRunId": "20260518T110727-a1e777",
   "createdAt": "2026-05-18T11:09:41.049Z",
-  "updatedAt": "2026-05-18T11:09:41.049Z"
+  "updatedAt": "2026-05-18T18:34:31.394Z"
 }

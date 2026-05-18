@@ -50,8 +50,18 @@ class SendContributionReminders extends Command
                         continue;
                     }
 
+                    $claimedAt = now();
+                    $claimed = Contribution::query()
+                        ->whereKey($contribution->id)
+                        ->whereNull($sentAtColumn)
+                        ->update([$sentAtColumn => $claimedAt]);
+
+                    if ($claimed !== 1) {
+                        continue;
+                    }
+
+                    $contribution->forceFill([$sentAtColumn => $claimedAt]);
                     $contribution->user->notify(new ContributionReminderNotification($contribution, $type));
-                    $contribution->forceFill([$sentAtColumn => now()])->save();
                     $totalSent++;
                 }
             });

@@ -60,6 +60,34 @@ describe('Send Contribution Reminders Command', function () {
         expect($contribution->fresh()->reminder_sent_at)->not->toBeNull();
     });
 
+    it('does not send reminders when another run claims the contribution after selection', function () {
+        Notification::fake();
+
+        $family = Family::factory()->create();
+        $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
+
+        $simulateRace = true;
+        Contribution::retrieved(function (Contribution $retrieved) use (&$simulateRace, $contribution): void {
+            if (! $simulateRace || $retrieved->id !== $contribution->id) {
+                return;
+            }
+
+            $simulateRace = false;
+
+            Contribution::query()
+                ->whereKey($retrieved->id)
+                ->update(['reminder_sent_at' => now()->subMinute()]);
+        });
+
+        $this->artisan('contributions:remind', ['--day' => 25])
+            ->expectsOutput('Sent 0 reminder notifications.')
+            ->assertSuccessful();
+
+        Notification::assertNothingSent();
+        expect($contribution->fresh()->reminder_sent_at)->not->toBeNull();
+    });
+
     it('tracks follow-up reminders independently from early reminders', function () {
         Notification::fake();
 
