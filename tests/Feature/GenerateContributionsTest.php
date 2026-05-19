@@ -3,6 +3,7 @@
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Models\Contribution;
 use App\Models\Family;
+use App\Models\FamilyCategory;
 use App\Models\User;
 use Illuminate\Database\UniqueConstraintViolationException;
 
@@ -21,6 +22,34 @@ describe('Generate Monthly Contributions Command', function () {
         expect($contribution->year)->toBe(now()->year)
             ->and($contribution->month)->toBe(now()->month)
             ->and($contribution->expected_amount)->toBe($member1->getMonthlyAmount());
+    });
+
+    it('creates contributions for members assigned only to a family category', function () {
+        $family = Family::factory()->create();
+        $familyCategory = FamilyCategory::factory()->create([
+            'family_id' => $family->id,
+            'monthly_amount' => 7500,
+        ]);
+        $member = User::factory()->member()->nonPaying()->create([
+            'family_id' => $family->id,
+            'family_category_id' => $familyCategory->id,
+        ]);
+
+        $this->artisan('contributions:generate', [
+            '--family' => $family->id,
+            '--year' => 2026,
+            '--month' => 5,
+        ])->assertSuccessful();
+
+        $contribution = Contribution::query()
+            ->where('user_id', $member->id)
+            ->where('year', 2026)
+            ->where('month', 5)
+            ->first();
+
+        expect($contribution)->not->toBeNull()
+            ->and($contribution->family_id)->toBe($family->id)
+            ->and($contribution->expected_amount)->toBe($familyCategory->monthly_amount);
     });
 
     it('skips members that already have contributions for the month', function () {

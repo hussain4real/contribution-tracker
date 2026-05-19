@@ -36,11 +36,13 @@
   "whyTestsDoNotAlreadyCoverThis": "The feature metadata lists no linked tests, so there is no evidence of a console test covering family-specific category members.",
   "suggestedRegressionTest": "Add a Pest console test that creates a family, a FamilyCategory, and an active member assigned only to that FamilyCategory, then runs contributions:generate and asserts a contribution is created with the tier's monthly_amount.",
   "minimumFixScope": "Update the member query in app/Console/Commands/GenerateMonthlyContributions.php and add a focused console regression test.",
-  "status": "open",
+  "status": "uncertain",
   "history": [],
   "signature": "sig_feat-cli-command-a960e40f9a_91c7e75fc7",
-  "linkedPatchAttemptIds": [],
+  "linkedPatchAttemptIds": [
+    "pat_fnd-sig-feat-cli-command-a960e40_8c3f41f138"
+  ],
   "createdByRunId": "20260518T110727-a1e777",
   "createdAt": "2026-05-18T11:09:14.834Z",
-  "updatedAt": "2026-05-18T11:09:14.834Z"
+  "updatedAt": "2026-05-19T04:24:55.289Z"
 }

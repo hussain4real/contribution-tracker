@@ -9,6 +9,7 @@ use Carbon\Carbon;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Builder;
 
 #[Signature('contributions:generate {--month= : Month (1-12)} {--year= : Year} {--family= : Specific family ID}')]
 #[Description('Generate monthly contribution records for all active family members')]
@@ -48,9 +49,13 @@ class GenerateMonthlyContributions extends Command
 
         foreach ($families as $family) {
             $members = User::query()
+                ->with('familyCategory')
                 ->where('family_id', $family->id)
                 ->active()
-                ->whereNotNull('category')
+                ->where(function (Builder $query): void {
+                    $query->whereNotNull('family_category_id')
+                        ->orWhereNotNull('category');
+                })
                 ->get();
 
             foreach ($members as $member) {
