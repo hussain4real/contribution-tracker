@@ -111,6 +111,25 @@ describe('Generate Monthly Contributions Command', function () {
             ->and($contribution->month)->toBe(6);
     });
 
+    it('rejects invalid month options without creating contributions', function (int|string $month) {
+        $family = Family::factory()->create();
+        User::factory()->member()->employed()->create(['family_id' => $family->id]);
+
+        $this->artisan('contributions:generate', [
+            '--family' => $family->id,
+            '--year' => 2026,
+            '--month' => $month,
+        ])
+            ->expectsOutput('The --month option must be an integer between 1 and 12.')
+            ->assertFailed();
+
+        expect(Contribution::where('family_id', $family->id)->count())->toBe(0);
+    })->with([
+        'overflow month' => 13,
+        'zero month' => 0,
+        'non-numeric month' => 'abc',
+    ]);
+
     it('uses family due_day for the due date', function () {
         $family = Family::factory()->create(['due_day' => 15]);
         User::factory()->member()->employed()->create(['family_id' => $family->id]);

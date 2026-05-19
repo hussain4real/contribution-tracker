@@ -20,7 +20,15 @@ class GenerateMonthlyContributions extends Command
     public function handle(): int
     {
         $year = (int) ($this->option('year') ?? now()->year);
-        $month = (int) ($this->option('month') ?? now()->month);
+        $monthOption = $this->option('month') ?? now()->month;
+
+        if (filter_var($monthOption, FILTER_VALIDATE_INT) === false || (int) $monthOption < 1 || (int) $monthOption > 12) {
+            $this->error('The --month option must be an integer between 1 and 12.');
+
+            return self::FAILURE;
+        }
+
+        $month = (int) $monthOption;
         $familyId = $this->option('family');
 
         $date = Carbon::createFromDate($year, $month, 1);

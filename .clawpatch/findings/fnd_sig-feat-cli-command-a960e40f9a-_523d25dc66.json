@@ -29,11 +29,13 @@
   "whyTestsDoNotAlreadyCoverThis": "No linked tests were provided, and there is no included test asserting invalid command options are rejected.",
   "suggestedRegressionTest": "Add a Pest console test that runs contributions:generate with --month=13 and asserts a failure exit code and zero created Contribution rows.",
   "minimumFixScope": "Add option validation in GenerateMonthlyContributions::handle and cover invalid date options with a focused console test.",
-  "status": "open",
+  "status": "uncertain",
   "history": [],
   "signature": "sig_feat-cli-command-a960e40f9a_3293a923f0",
-  "linkedPatchAttemptIds": [],
+  "linkedPatchAttemptIds": [
+    "pat_fnd-sig-feat-cli-command-a960e40_b1b1a7273b"
+  ],
   "createdByRunId": "20260518T110727-a1e777",
   "createdAt": "2026-05-18T11:09:14.834Z",
-  "updatedAt": "2026-05-18T11:09:14.834Z"
+  "updatedAt": "2026-05-19T04:04:55.940Z"
 }
