@@ -46,31 +46,23 @@ class GenerateMonthlyContributions extends Command
                 ->get();
 
             foreach ($members as $member) {
-                $exists = Contribution::query()
-                    ->where('family_id', $family->id)
-                    ->where('user_id', $member->id)
-                    ->where('year', $year)
-                    ->where('month', $month)
-                    ->exists();
-
-                if ($exists) {
-                    $totalSkipped++;
-
-                    continue;
-                }
-
                 $dueDay = $family->due_day ?? Contribution::DUE_DAY;
 
-                Contribution::create([
-                    'family_id' => $family->id,
+                $contribution = Contribution::query()->firstOrCreate([
                     'user_id' => $member->id,
                     'year' => $year,
                     'month' => $month,
+                ], [
+                    'family_id' => $family->id,
                     'expected_amount' => $member->getMonthlyAmount() ?? 0,
                     'due_date' => Carbon::createFromDate($year, $month, min($dueDay, $date->daysInMonth)),
                 ]);
 
-                $totalCreated++;
+                if ($contribution->wasRecentlyCreated) {
+                    $totalCreated++;
+                } else {
+                    $totalSkipped++;
+                }
             }
         }
 

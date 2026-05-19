@@ -4,6 +4,7 @@ use App\Http\Middleware\HandleInertiaRequests;
 use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\User;
+use Illuminate\Database\UniqueConstraintViolationException;
 
 describe('Generate Monthly Contributions Command', function () {
     it('creates contribution records for all active members', function () {
@@ -32,6 +33,41 @@ describe('Generate Monthly Contributions Command', function () {
             ->assertSuccessful();
 
         expect(Contribution::where('user_id', $member->id)->count())->toBe(1);
+    });
+
+    it('does not create duplicate contributions when run repeatedly', function () {
+        $family = Family::factory()->create();
+        $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+
+        $this->artisan('contributions:generate', [
+            '--family' => $family->id,
+            '--year' => 2026,
+            '--month' => 5,
+        ])->assertSuccessful();
+
+        $this->artisan('contributions:generate', [
+            '--family' => $family->id,
+            '--year' => 2026,
+            '--month' => 5,
+        ])
+            ->expectsOutput('Created 0 contributions, skipped 1 (already exist).')
+            ->assertSuccessful();
+
+        expect(Contribution::query()
+            ->where('user_id', $member->id)
+            ->where('year', 2026)
+            ->where('month', 5)
+            ->count())->toBe(1);
+    });
+
+    it('enforces one contribution per member per month at the database level', function () {
+        $family = Family::factory()->create();
+        $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+
+        Contribution::factory()->forUser($member)->forMonth(2026, 5)->create();
+
+        expect(fn () => Contribution::factory()->forUser($member)->forMonth(2026, 5)->create())
+            ->toThrow(UniqueConstraintViolationException::class);
     });
 
     it('skips archived members', function () {

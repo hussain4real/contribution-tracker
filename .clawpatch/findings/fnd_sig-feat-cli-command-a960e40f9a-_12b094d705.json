@@ -29,11 +29,13 @@
   "whyTestsDoNotAlreadyCoverThis": "No linked tests were provided, and ordinary single-process command tests would not exercise overlapping command execution.",
   "suggestedRegressionTest": "Add a regression test for the uniqueness invariant on family_id, user_id, year, and month, plus a command test proving repeated runs do not create duplicates.",
   "minimumFixScope": "Add the uniqueness invariant and update GenerateMonthlyContributions to rely on an atomic write path.",
-  "status": "open",
+  "status": "uncertain",
   "history": [],
   "signature": "sig_feat-cli-command-a960e40f9a_4be7c00702",
-  "linkedPatchAttemptIds": [],
+  "linkedPatchAttemptIds": [
+    "pat_fnd-sig-feat-cli-command-a960e40_c303140ab6"
+  ],
   "createdByRunId": "20260518T110727-a1e777",
   "createdAt": "2026-05-18T11:09:14.834Z",
-  "updatedAt": "2026-05-18T11:09:14.834Z"
+  "updatedAt": "2026-05-18T18:43:28.201Z"
 }
