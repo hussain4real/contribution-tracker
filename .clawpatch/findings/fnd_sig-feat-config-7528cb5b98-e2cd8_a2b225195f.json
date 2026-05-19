@@ -22,11 +22,13 @@
   "whyTestsDoNotAlreadyCoverThis": "No linked tests exercise package scripts or assert that quality gates are non-mutating.",
   "suggestedRegressionTest": "Add a lightweight package-script check that asserts the `lint` script does not include `--fix`, while an explicit `lint:fix` script may include it.",
   "minimumFixScope": "Update the `scripts.lint` entry in `package.json` and optionally add `scripts.lint:fix`.",
-  "status": "open",
+  "status": "uncertain",
   "history": [],
   "signature": "sig_feat-config-7528cb5b98_e2cd8b8b68",
-  "linkedPatchAttemptIds": [],
+  "linkedPatchAttemptIds": [
+    "pat_fnd-sig-feat-config-7528cb5b98-e_ded6b66038"
+  ],
   "createdByRunId": "20260518T110727-a1e777",
   "createdAt": "2026-05-18T11:07:59.731Z",
-  "updatedAt": "2026-05-18T11:07:59.731Z"
+  "updatedAt": "2026-05-19T05:21:15.413Z"
 }
