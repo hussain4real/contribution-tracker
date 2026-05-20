@@ -111,6 +111,8 @@ describe('Member Management Flow (Browser)', function () {
         $page->script('() => { window.confirm = () => true; }');
 
         $page->click('@archive-member-button')
+            ->wait(0.5)
+            ->assertPathIs('/members')
             ->assertSee('Family Members')
             ->assertNoJavaScriptErrors();
 
@@ -136,6 +138,8 @@ describe('Member Management Flow (Browser)', function () {
         $page->script('() => { window.confirm = () => true; }');
 
         $page->click('@restore-member-button')
+            ->wait(0.5)
+            ->assertPathIs("/members/{$member->id}")
             ->assertSee('Archived User')
             ->assertNoJavaScriptErrors();
 

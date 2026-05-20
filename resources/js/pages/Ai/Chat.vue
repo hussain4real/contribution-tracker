@@ -38,6 +38,7 @@ import {
 } from 'lucide-vue-next';
 import { marked } from 'marked';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { toast } from 'vue-sonner';
 
 // Configure marked for safe rendering
 marked.setOptions({
@@ -713,18 +714,47 @@ const isListening = ref(false);
 const isTranscribing = ref(false);
 const speechSupported = ref(false);
 const recordingSeconds = ref(0);
+const recordingLevel = ref(0);
 const MAX_RECORDING_SECONDS = 30;
+const RECORDING_MIME_TYPES = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/mp4',
+    'audio/ogg;codecs=opus',
+    'audio/ogg',
+];
 let recognition: SpeechRecognition | null = null;
 let mediaRecorder: MediaRecorder | null = null;
 let audioChunks: Blob[] = [];
 let recordingTimer: ReturnType<typeof setInterval> | null = null;
+let recordingStartedAt = 0;
+let recordingPeakLevel = 0;
+let recordingChunkCount = 0;
+let audioContext: AudioContext | null = null;
+let audioSource: MediaStreamAudioSourceNode | null = null;
+let audioAnalyser: AnalyserNode | null = null;
+let audioLevelFrame: number | null = null;
 
 // Use server-side transcription when available, fall back to Web Speech API
 const useServerTranscription = computed(
     () =>
         props.transcriptionAvailable &&
         typeof navigator !== 'undefined' &&
-        !!navigator.mediaDevices,
+        !!navigator.mediaDevices &&
+        typeof MediaRecorder !== 'undefined',
+);
+
+const recordingLevelBars = computed(() =>
+    Array.from({ length: 12 }, (_, index) => {
+        const threshold = (index + 1) / 12;
+        const active = recordingLevel.value >= threshold;
+
+        return {
+            active,
+            height: `${6 + Math.min(index + 1, 7) * 2}px`,
+            opacity: active ? 1 : 0.28,
+        };
+    }),
 );
 
 function initSpeechRecognition(): void {
@@ -778,54 +808,176 @@ function initSpeechRecognition(): void {
     };
 }
 
+function supportedRecordingMimeType(): string {
+    if (
+        typeof MediaRecorder === 'undefined' ||
+        typeof MediaRecorder.isTypeSupported !== 'function'
+    ) {
+        return '';
+    }
+
+    return (
+        RECORDING_MIME_TYPES.find((mimeType) =>
+            MediaRecorder.isTypeSupported(mimeType),
+        ) ?? ''
+    );
+}
+
+function normalizeRecordedMimeType(mimeType: string): string {
+    const baseType = mimeType.split(';')[0]?.trim().toLowerCase() ?? '';
+
+    switch (baseType) {
+        case 'audio/webm':
+        case 'video/webm':
+            return 'audio/webm';
+        case 'audio/mp4':
+        case 'audio/m4a':
+        case 'audio/x-m4a':
+        case 'video/mp4':
+            return 'audio/mp4';
+        case 'audio/ogg':
+            return 'audio/ogg';
+        default:
+            return 'audio/webm';
+    }
+}
+
+function extensionForAudioMimeType(mimeType: string): string {
+    if (mimeType.includes('mp4')) return 'mp4';
+    if (mimeType.includes('ogg')) return 'ogg';
+
+    return 'webm';
+}
+
+function resetRecordingDiagnostics(): void {
+    recordingStartedAt = Date.now();
+    recordingPeakLevel = 0;
+    recordingLevel.value = 0;
+    recordingChunkCount = 0;
+}
+
+function startAudioLevelMonitor(stream: MediaStream): void {
+    stopAudioLevelMonitor();
+
+    const AudioContextConstructor =
+        window.AudioContext ||
+        (window as Window & { webkitAudioContext?: typeof AudioContext })
+            .webkitAudioContext;
+
+    if (!AudioContextConstructor) return;
+
+    audioContext = new AudioContextConstructor();
+    audioSource = audioContext.createMediaStreamSource(stream);
+    audioAnalyser = audioContext.createAnalyser();
+    audioAnalyser.fftSize = 1024;
+    audioSource.connect(audioAnalyser);
+
+    const samples = new Uint8Array(audioAnalyser.fftSize);
+
+    const measure = () => {
+        if (!audioAnalyser) return;
+
+        audioAnalyser.getByteTimeDomainData(samples);
+
+        let peak = 0;
+        for (const sample of samples) {
+            peak = Math.max(peak, Math.abs(sample - 128) / 128);
+        }
+
+        recordingPeakLevel = Math.max(recordingPeakLevel, peak);
+        recordingLevel.value = Math.min(1, peak * 6);
+        audioLevelFrame = window.requestAnimationFrame(measure);
+    };
+
+    measure();
+}
+
+function stopAudioLevelMonitor(): void {
+    if (audioLevelFrame !== null) {
+        window.cancelAnimationFrame(audioLevelFrame);
+        audioLevelFrame = null;
+    }
+
+    audioSource?.disconnect();
+    audioSource = null;
+    audioAnalyser = null;
+
+    if (audioContext) {
+        void audioContext.close();
+        audioContext = null;
+    }
+}
+
 async function startMediaRecording(): Promise<void> {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({
-            audio: true,
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+            },
         });
         audioChunks = [];
+        resetRecordingDiagnostics();
+        startAudioLevelMonitor(stream);
 
-        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-            ? 'audio/webm;codecs=opus'
-            : MediaRecorder.isTypeSupported('audio/webm')
-              ? 'audio/webm'
-              : '';
+        const mimeType = supportedRecordingMimeType();
+        const recorderOptions: MediaRecorderOptions = {
+            audioBitsPerSecond: 128000,
+        };
 
-        mediaRecorder = new MediaRecorder(
-            stream,
-            mimeType ? { mimeType } : undefined,
-        );
+        if (mimeType) {
+            recorderOptions.mimeType = mimeType;
+        }
+
+        mediaRecorder = new MediaRecorder(stream, recorderOptions);
 
         mediaRecorder.ondataavailable = (event) => {
             if (event.data.size > 0) {
                 audioChunks.push(event.data);
+                recordingChunkCount++;
             }
         };
 
         mediaRecorder.onstop = async () => {
             // Stop all tracks to release the microphone
             stream.getTracks().forEach((track) => track.stop());
+            stopAudioLevelMonitor();
             clearRecordingTimer();
 
-            if (audioChunks.length === 0) return;
+            if (audioChunks.length === 0) {
+                toast.error(
+                    'No microphone audio was captured. Check your microphone and try again.',
+                );
+                return;
+            }
 
-            // Use the actual mimeType from the recorder
-            const actualType = mediaRecorder?.mimeType || 'audio/webm';
-            const ext = actualType.includes('mp4')
-                ? 'mp4'
-                : actualType.includes('ogg')
-                  ? 'ogg'
-                  : 'webm';
+            const durationSeconds = Math.max(
+                0,
+                (Date.now() - recordingStartedAt) / 1000,
+            );
+            const actualType = normalizeRecordedMimeType(
+                mediaRecorder?.mimeType || mimeType,
+            );
+            const ext = extensionForAudioMimeType(actualType);
             const audioBlob = new Blob(audioChunks, { type: actualType });
             audioChunks = [];
-            await sendAudioForTranscription(audioBlob, ext);
+
+            await sendAudioForTranscription(audioBlob, ext, {
+                durationSeconds,
+                audioLevel: recordingPeakLevel,
+                chunkCount: recordingChunkCount,
+                mimeType: actualType,
+            });
         };
 
-        mediaRecorder.start();
+        mediaRecorder.start(250);
         isListening.value = true;
         startRecordingTimer();
     } catch {
         isListening.value = false;
+        stopAudioLevelMonitor();
+        toast.error('Could not access your microphone.');
     }
 }
 
@@ -849,6 +1001,11 @@ function clearRecordingTimer(): void {
 
 function stopMediaRecording(): void {
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        try {
+            mediaRecorder.requestData();
+        } catch {
+            // Continue stopping even if the browser has no pending data chunk.
+        }
         mediaRecorder.stop();
     }
     isListening.value = false;
@@ -857,12 +1014,25 @@ function stopMediaRecording(): void {
 async function sendAudioForTranscription(
     audioBlob: Blob,
     ext: string,
+    metadata: {
+        durationSeconds: number;
+        audioLevel: number;
+        chunkCount: number;
+        mimeType: string;
+    },
 ): Promise<void> {
     isTranscribing.value = true;
 
     try {
         const formData = new FormData();
         formData.append('audio', audioBlob, `recording.${ext}`);
+        formData.append(
+            'duration_seconds',
+            metadata.durationSeconds.toFixed(2),
+        );
+        formData.append('audio_level', metadata.audioLevel.toFixed(4));
+        formData.append('chunk_count', String(metadata.chunkCount));
+        formData.append('client_mime_type', metadata.mimeType);
 
         const response = await fetch(aiTranscribe().url, {
             method: 'POST',
@@ -881,14 +1051,28 @@ async function sendAudioForTranscription(
             body: formData,
         });
 
-        if (!response.ok) throw new Error('Transcription failed');
+        if (!response.ok) {
+            const errorData = (await response.json().catch(() => null)) as {
+                message?: string;
+            } | null;
+
+            throw new Error(errorData?.message || 'Transcription failed.');
+        }
 
         const data = (await response.json()) as { text: string };
         if (data.text) {
             messageInput.value = correctTranscript(data.text);
+        } else {
+            throw new Error(
+                'No speech was recognized. Check your microphone and try again.',
+            );
         }
-    } catch {
-        // Silently fail — user can still type manually
+    } catch (error) {
+        toast.error(
+            error instanceof Error
+                ? error.message
+                : 'Transcription failed. Please try again.',
+        );
     } finally {
         isTranscribing.value = false;
     }
@@ -926,6 +1110,7 @@ onUnmounted(() => {
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
         mediaRecorder.stop();
     }
+    stopAudioLevelMonitor();
     clearRecordingTimer();
 });
 
@@ -1570,6 +1755,23 @@ function confirmDelete(): void {
                         />
                         Recording {{ recordingSeconds }}s /
                         {{ MAX_RECORDING_SECONDS }}s — tap mic to stop
+                        <span
+                            class="ml-2 flex h-5 items-center gap-0.5"
+                            aria-hidden="true"
+                        >
+                            <span
+                                v-for="(bar, index) in recordingLevelBars"
+                                :key="index"
+                                class="w-1 rounded-full bg-red-500 transition-all duration-75 ease-out dark:bg-red-400"
+                                :style="{
+                                    height: bar.height,
+                                    opacity: bar.opacity,
+                                    transform: bar.active
+                                        ? 'scaleY(1)'
+                                        : 'scaleY(0.45)',
+                                }"
+                            />
+                        </span>
                     </div>
                     <div class="flex gap-2">
                         <Input

@@ -98,6 +98,11 @@ return [
         'gemini' => [
             'driver' => 'gemini',
             'key' => env('GEMINI_API_KEY'),
+            'models' => [
+                'transcription' => [
+                    'default' => env('GEMINI_TRANSCRIPTION_MODEL', 'gemini-3.5-flash'),
+                ],
+            ],
         ],
 
         'groq' => [

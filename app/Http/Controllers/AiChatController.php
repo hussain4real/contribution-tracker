@@ -10,17 +10,24 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Files\Base64Audio;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Transcription;
 
 class AiChatController extends Controller
 {
+    private const int MIN_TRANSCRIPTION_AUDIO_BYTES = 4096;
+
+    private const float MIN_TRANSCRIPTION_AUDIO_LEVEL = 0.01;
+
     /**
      * Normalize stored JSON activity payloads to indexed arrays.
      *
@@ -87,15 +94,12 @@ class AiChatController extends Controller
                 ->toArray()
             : [];
 
-        $transcriptionAvailable = ! empty(config('ai.providers.openai.key'))
-            || ! empty(config('ai.providers.mistral.key'));
-
         return Inertia::render('Ai/Chat', [
             'conversations' => $conversations,
             'messages' => $messages,
             'activeConversationId' => $activeConversationId,
             'memberNames' => $memberNames,
-            'transcriptionAvailable' => $transcriptionAvailable,
+            'transcriptionAvailable' => $this->transcriptionProviders() !== [],
         ]);
     }
 
@@ -105,27 +109,147 @@ class AiChatController extends Controller
     public function transcribe(TranscribeAudioRequest $request): JsonResponse
     {
         $file = $request->file('audio');
+        $audio = Base64Audio::fromUpload($file, $this->transcriptionAudioMimeType($file));
+        $recordingMetadata = $this->transcriptionRecordingMetadata($request);
 
-        $providers = array_filter([
-            ! empty(config('ai.providers.openai.key')) ? Lab::OpenAI : null,
-            ! empty(config('ai.providers.mistral.key')) ? Lab::Mistral : null,
-        ]);
+        $providers = $this->transcriptionProviders();
 
-        $response = Transcription::of($file)
+        if (
+            $file->getSize() < self::MIN_TRANSCRIPTION_AUDIO_BYTES
+            && (float) ($recordingMetadata['audio_level'] ?? 0.0) < self::MIN_TRANSCRIPTION_AUDIO_LEVEL
+        ) {
+            Log::warning('AI Transcription skipped because uploaded audio was too small', [
+                ...$this->transcriptionLogContext($file, $audio, $recordingMetadata),
+                'minimum_file_size' => self::MIN_TRANSCRIPTION_AUDIO_BYTES,
+                'minimum_audio_level' => self::MIN_TRANSCRIPTION_AUDIO_LEVEL,
+            ]);
+
+            return response()->json([
+                'message' => 'No microphone audio was captured. Check your microphone and try again.',
+            ], 422);
+        }
+
+        $response = Transcription::of($audio)
             ->language('en')
             ->timeout(30)
             ->generate($providers ?: null);
+        $text = trim($response->text);
 
         Log::info('AI Transcription completed', [
             'provider' => $response->meta->provider ?? null,
             'model' => $response->meta->model ?? null,
-            'file_size' => $file->getSize(),
-            'mime_type' => $file->getMimeType(),
+            ...$this->transcriptionLogContext($file, $audio, $recordingMetadata),
             'text_length' => mb_strlen($response->text),
             'usage' => $response->usage ?? null,
         ]);
 
-        return response()->json(['text' => $response->text]);
+        if ($text === '') {
+            Log::warning('AI Transcription completed without recognized speech', [
+                'provider' => $response->meta->provider ?? null,
+                'model' => $response->meta->model ?? null,
+                ...$this->transcriptionLogContext($file, $audio, $recordingMetadata),
+                'usage' => $response->usage ?? null,
+            ]);
+
+            return response()->json([
+                'message' => 'No speech was recognized. Check your microphone and try again.',
+            ], 422);
+        }
+
+        return response()->json(['text' => $text]);
+    }
+
+    /**
+     * Get the configured transcription providers in failover order.
+     *
+     * @return array<int, Lab>
+     */
+    private function transcriptionProviders(): array
+    {
+        $providers = [
+            Lab::OpenAI->value => Lab::OpenAI,
+            Lab::Gemini->value => Lab::Gemini,
+            Lab::Mistral->value => Lab::Mistral,
+        ];
+
+        $configuredProviders = array_filter(
+            $providers,
+            fn (Lab $provider): bool => ! empty(config("ai.providers.{$provider->value}.key"))
+        );
+
+        $defaultProvider = Lab::tryFrom((string) config('ai.default_for_transcription'));
+
+        if ($defaultProvider instanceof Lab && array_key_exists($defaultProvider->value, $configuredProviders)) {
+            $configuredProviders = [
+                $defaultProvider->value => $defaultProvider,
+            ] + array_diff_key($configuredProviders, [$defaultProvider->value => true]);
+        }
+
+        return array_values($configuredProviders);
+    }
+
+    private function transcriptionAudioMimeType(UploadedFile $file): string
+    {
+        $mimeType = Str::of($file->getClientMimeType() ?: $file->getMimeType() ?: '')
+            ->before(';')
+            ->trim()
+            ->lower()
+            ->toString();
+
+        return match ($mimeType) {
+            'audio/webm', 'video/webm' => 'audio/webm',
+            'audio/mp4', 'audio/m4a', 'audio/x-m4a', 'video/mp4', 'application/mp4' => 'audio/mp4',
+            'audio/mp3', 'audio/mpeg', 'audio/mpga' => 'audio/mpeg',
+            'application/octet-stream', '' => $this->transcriptionAudioMimeTypeFromExtension($file),
+            default => $mimeType,
+        };
+    }
+
+    private function transcriptionAudioMimeTypeFromExtension(UploadedFile $file): string
+    {
+        $mimeTypes = [
+            'webm' => 'audio/webm',
+            'mp4' => 'audio/mp4',
+            'm4a' => 'audio/mp4',
+            'mp3' => 'audio/mpeg',
+            'mpeg' => 'audio/mpeg',
+            'mpga' => 'audio/mpeg',
+            'ogg' => 'audio/ogg',
+            'oga' => 'audio/ogg',
+            'wav' => 'audio/wav',
+            'wave' => 'audio/wav',
+            'flac' => 'audio/flac',
+        ];
+
+        return $mimeTypes[Str::lower($file->getClientOriginalExtension())] ?? 'audio/webm';
+    }
+
+    /**
+     * @return array{duration_seconds: float|null, audio_level: float|null, chunk_count: int|null, client_mime_type: string|null}
+     */
+    private function transcriptionRecordingMetadata(TranscribeAudioRequest $request): array
+    {
+        return [
+            'duration_seconds' => $request->float('duration_seconds') ?: null,
+            'audio_level' => $request->float('audio_level') ?: null,
+            'chunk_count' => $request->integer('chunk_count') ?: null,
+            'client_mime_type' => $request->string('client_mime_type')->toString() ?: null,
+        ];
+    }
+
+    /**
+     * @param  array{duration_seconds: float|null, audio_level: float|null, chunk_count: int|null, client_mime_type: string|null}  $recordingMetadata
+     * @return array<string, mixed>
+     */
+    private function transcriptionLogContext(UploadedFile $file, Base64Audio $audio, array $recordingMetadata): array
+    {
+        return [
+            'file_size' => $file->getSize(),
+            'client_mime_type' => $file->getClientMimeType(),
+            'detected_mime_type' => $file->getMimeType(),
+            'provider_mime_type' => $audio->mimeType(),
+            'recording' => $recordingMetadata,
+        ];
     }
 
     /**
