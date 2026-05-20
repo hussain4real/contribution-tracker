@@ -8,11 +8,14 @@ use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Cache;
 
 #[Signature('contributions:remind {--day= : Day of month (25 or 28)}')]
 #[Description('Send contribution payment reminders to members with unpaid contributions')]
 class SendContributionReminders extends Command
 {
+    private const REMINDER_DELIVERY_LOCK_SECONDS = 30;
+
     /**
      * Execute the console command.
      */
@@ -46,23 +49,7 @@ class SendContributionReminders extends Command
             ->with(['user', 'family', 'payments'])
             ->chunkById(200, function ($contributions) use (&$totalSent, $sentAtColumn, $type): void {
                 foreach ($contributions as $contribution) {
-                    if (! $contribution->user) {
-                        continue;
-                    }
-
-                    $claimedAt = now();
-                    $claimed = Contribution::query()
-                        ->whereKey($contribution->id)
-                        ->whereNull($sentAtColumn)
-                        ->update([$sentAtColumn => $claimedAt]);
-
-                    if ($claimed !== 1) {
-                        continue;
-                    }
-
-                    $contribution->forceFill([$sentAtColumn => $claimedAt]);
-                    $contribution->user->notify(new ContributionReminderNotification($contribution, $type));
-                    $totalSent++;
+                    $totalSent += (int) $this->sendReminderIfUnsent($contribution, $sentAtColumn, $type);
                 }
             });
 
@@ -74,5 +61,35 @@ class SendContributionReminders extends Command
     private function sentAtColumnFor(string $type): string
     {
         return $type === 'follow_up' ? 'follow_up_sent_at' : 'reminder_sent_at';
+    }
+
+    private function sendReminderIfUnsent(Contribution $contribution, string $sentAtColumn, string $type): bool
+    {
+        return (bool) Cache::lock(
+            $this->reminderLockKey($contribution, $sentAtColumn),
+            self::REMINDER_DELIVERY_LOCK_SECONDS,
+        )->get(function () use ($contribution, $sentAtColumn, $type): bool {
+            $freshContribution = Contribution::query()
+                ->whereKey($contribution->id)
+                ->whereNull($sentAtColumn)
+                ->with(['user', 'family', 'payments'])
+                ->first();
+
+            if (! $freshContribution || ! $freshContribution->user) {
+                return false;
+            }
+
+            $sentAt = now();
+
+            $freshContribution->user->notify(new ContributionReminderNotification($freshContribution, $type));
+            $freshContribution->forceFill([$sentAtColumn => $sentAt])->save();
+
+            return true;
+        });
+    }
+
+    private function reminderLockKey(Contribution $contribution, string $sentAtColumn): string
+    {
+        return "contribution-reminder:{$sentAtColumn}:{$contribution->id}";
     }
 }

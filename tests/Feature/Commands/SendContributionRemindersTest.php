@@ -5,6 +5,7 @@ use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
 use App\Notifications\ContributionReminderNotification;
+use Illuminate\Contracts\Notifications\Dispatcher as NotificationDispatcher;
 use Illuminate\Support\Facades\Notification;
 
 describe('Send Contribution Reminders Command', function () {
@@ -58,6 +59,30 @@ describe('Send Contribution Reminders Command', function () {
 
         Notification::assertSentToTimes($member, ContributionReminderNotification::class, 1);
         expect($contribution->fresh()->reminder_sent_at)->not->toBeNull();
+    });
+
+    it('does not mark reminders as sent when notification dispatch fails', function () {
+        $family = Family::factory()->create();
+        $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
+
+        $this->app->instance(NotificationDispatcher::class, new class implements NotificationDispatcher
+        {
+            public function send($notifiables, $notification)
+            {
+                throw new RuntimeException('Notification dispatch failed.');
+            }
+
+            public function sendNow($notifiables, $notification, ?array $channels = null)
+            {
+                throw new RuntimeException('Notification dispatch failed.');
+            }
+        });
+
+        expect(fn () => $this->artisan('contributions:remind', ['--day' => 25])->run())
+            ->toThrow(RuntimeException::class, 'Notification dispatch failed.');
+
+        expect($contribution->fresh()->reminder_sent_at)->toBeNull();
     });
 
     it('does not send reminders when another run claims the contribution after selection', function () {
