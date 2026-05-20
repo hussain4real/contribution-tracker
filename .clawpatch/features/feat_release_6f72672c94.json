@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_release_6f72672c94",
+  "title": "Composer script dev",
+  "summary": "Composer script 'dev': Composer\\Config::disableProcessTimeout && npx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1\" \"php artisan pail --timeout=0\" \"npm run dev\" --names=server,queue,logs,vite --kill-others",
+  "kind": "release",
+  "source": "composer-script",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "composer.json",
+      "symbol": "dev",
+      "route": null,
+      "command": "dev"
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "composer.json",
+      "reason": "composer script"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "php",
+    "composer",
+    "script"
+  ],
+  "trustBoundaries": [
+    "process-exec",
+    "filesystem"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

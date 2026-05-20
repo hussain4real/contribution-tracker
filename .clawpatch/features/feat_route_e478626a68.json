@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_e478626a68",
+  "title": "Laravel controller WhatsAppWebhookController",
+  "summary": "Laravel HTTP controller for GET /webhooks/whatsapp#verify, POST /webhooks/whatsapp#handle.",
+  "kind": "route",
+  "source": "laravel-controller",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "app/Http/Controllers/WhatsAppWebhookController.php",
+      "symbol": "WhatsAppWebhookController",
+      "route": "/webhooks/whatsapp",
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Http/Controllers/WhatsAppWebhookController.php",
+      "reason": "controller"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "routes/web.php",
+      "reason": "route definition"
+    },
+    {
+      "path": "app/Jobs/ProcessWhatsAppWebhook.php",
+      "reason": "imported application class"
+    }
+  ],
+  "tests": [],
+  "tags": [
+    "php",
+    "laravel",
+    "controller",
+    "http"
+  ],
+  "trustBoundaries": [
+    "user-input",
+    "auth",
+    "database",
+    "serialization"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

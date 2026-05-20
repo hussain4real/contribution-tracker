@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_test-suite_cdf635f59e",
+  "title": "Laravel test suite tests/Unit",
+  "summary": "Laravel tests in tests/Unit.",
+  "kind": "test-suite",
+  "source": "laravel-test-suite",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "tests/Unit",
+      "symbol": "tests/Unit",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "tests/Unit/Channels/WhatsAppMessageTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Unit/Enums/PaymentStatusTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Unit/Enums/RoleTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Unit/Enums/TransactionEnumTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Unit/ExampleTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Unit/MemberCategoryAmountTest.php",
+      "reason": "PHP test"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "tests/Unit/Channels/WhatsAppMessageTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Unit/Enums/PaymentStatusTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Unit/Enums/RoleTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Unit/Enums/TransactionEnumTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Unit/ExampleTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Unit/MemberCategoryAmountTest.php",
+      "reason": "nearby test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/Unit/Channels/WhatsAppMessageTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Unit/Enums/PaymentStatusTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Unit/Enums/RoleTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Unit/Enums/TransactionEnumTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Unit/ExampleTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Unit/MemberCategoryAmountTest.php",
+      "command": "composer test"
+    }
+  ],
+  "tags": [
+    "php",
+    "laravel",
+    "test"
+  ],
+  "trustBoundaries": [],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

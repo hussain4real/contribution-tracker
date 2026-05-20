@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_release_bb2d70e45f",
+  "title": "Composer script setup",
+  "summary": "Composer script 'setup': composer install && @php -r \"file_exists('.env') || copy('.env.example', '.env');\" && @php artisan key:generate && @php artisan migrate --force && npm install && npm run build",
+  "kind": "release",
+  "source": "composer-script",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "composer.json",
+      "symbol": "setup",
+      "route": null,
+      "command": "setup"
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "composer.json",
+      "reason": "composer script"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "php",
+    "composer",
+    "script"
+  ],
+  "trustBoundaries": [
+    "process-exec",
+    "filesystem"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

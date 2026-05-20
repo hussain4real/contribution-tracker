@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-cli-command-a960e40f9a-_a9ac384537",
+  "featureId": "feat_cli-command_a960e40f9a",
+  "title": "Members using family-specific contribution tiers are skipped",
+  "category": "bug",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "app/Console/Commands/GenerateMonthlyContributions.php",
+      "startLine": 32,
+      "endLine": 36,
+      "symbol": "GenerateMonthlyContributions::handle",
+      "quote": "$members = User::query()\n                ->where('family_id', $family->id)\n                ->active()\n                ->whereNotNull('category')\n                ->get();"
+    },
+    {
+      "path": "app/Models/User.php",
+      "startLine": 82,
+      "endLine": 87,
+      "symbol": "User::familyCategory",
+      "quote": "public function familyCategory(): BelongsTo\n    {\n        return $this->belongsTo(FamilyCategory::class);\n    }"
+    },
+    {
+      "path": "app/Models/User.php",
+      "startLine": 196,
+      "endLine": 199,
+      "symbol": "User::getMonthlyAmount",
+      "quote": "public function getMonthlyAmount(): ?int\n    {\n        return $this->familyCategory?->monthly_amount ?? $this->category?->monthlyAmount();\n    }"
+    }
+  ],
+  "reasoning": "The command only selects users with a non-null legacy category, but User::getMonthlyAmount() explicitly supports the newer familyCategory relationship as the primary source of a member's monthly amount. An active member with family_category_id set and category null has a valid monthly contribution amount but will never receive a generated contribution.",
+  "reproduction": "Create an active user with family_id and family_category_id set, category null, and a FamilyCategory monthly_amount. Run php artisan contributions:generate for that family/month; no Contribution row is created for that user.",
+  "recommendation": "Select members who have either a family_category_id or a category, and eager-load familyCategory before calling getMonthlyAmount(). Prefer a single scope that matches getMonthlyAmount()'s supported sources of contribution amounts.",
+  "whyTestsDoNotAlreadyCoverThis": "The feature metadata lists no linked tests, so there is no evidence of a console test covering family-specific category members.",
+  "suggestedRegressionTest": "Add a Pest console test that creates a family, a FamilyCategory, and an active member assigned only to that FamilyCategory, then runs contributions:generate and asserts a contribution is created with the tier's monthly_amount.",
+  "minimumFixScope": "Update the member query in app/Console/Commands/GenerateMonthlyContributions.php and add a focused console regression test.",
+  "status": "uncertain",
+  "history": [],
+  "signature": "sig_feat-cli-command-a960e40f9a_91c7e75fc7",
+  "linkedPatchAttemptIds": [
+    "pat_fnd-sig-feat-cli-command-a960e40_8c3f41f138"
+  ],
+  "createdByRunId": "20260518T110727-a1e777",
+  "createdAt": "2026-05-18T11:09:14.834Z",
+  "updatedAt": "2026-05-19T04:24:55.289Z"
+}

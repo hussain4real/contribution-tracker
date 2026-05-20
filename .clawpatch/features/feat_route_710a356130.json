@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_710a356130",
+  "title": "Laravel request VerifyWhatsAppCodeRequest",
+  "summary": "Laravel request VerifyWhatsAppCodeRequest in app/Http/Requests/Settings/VerifyWhatsAppCodeRequest.php.",
+  "kind": "route",
+  "source": "laravel-request",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "app/Http/Requests/Settings/VerifyWhatsAppCodeRequest.php",
+      "symbol": "VerifyWhatsAppCodeRequest",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Http/Requests/Settings/VerifyWhatsAppCodeRequest.php",
+      "reason": "laravel request"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "php",
+    "laravel",
+    "request",
+    "validation"
+  ],
+  "trustBoundaries": [
+    "user-input",
+    "auth"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

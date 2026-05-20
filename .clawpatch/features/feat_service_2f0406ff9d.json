@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_service_2f0406ff9d",
+  "title": "Laravel model Family",
+  "summary": "Laravel model Family in app/Models/Family.php.",
+  "kind": "service",
+  "source": "laravel-model",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "app/Models/Family.php",
+      "symbol": "Family",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Models/Family.php",
+      "reason": "laravel model"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "tests/Feature/Ai/FamilyAssistantTest.php",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/Feature/Ai/FamilySubAgentsTest.php",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/Feature/EnsureFamilySubscriptionTest.php",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/Feature/FamilySettingsTest.php",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/Feature/Mcp/FamilyFundReviewTest.php",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/Feature/Models/FamilyCategoryTest.php",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/Feature/Models/FamilyInvitationTest.php",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/Feature/Models/FamilyTest.php",
+      "reason": "associated test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/Feature/Ai/FamilyAssistantTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Ai/FamilySubAgentsTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/EnsureFamilySubscriptionTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/FamilySettingsTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Mcp/FamilyFundReviewTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Models/FamilyCategoryTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Models/FamilyInvitationTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Models/FamilyTest.php",
+      "command": "composer test"
+    }
+  ],
+  "tags": [
+    "php",
+    "laravel",
+    "model",
+    "eloquent"
+  ],
+  "trustBoundaries": [
+    "database",
+    "serialization"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

@@ -23,7 +23,11 @@ class TranscribeAudioRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'audio' => ['required', 'file', 'max:10240', 'mimetypes:audio/webm,video/webm,audio/mp4,audio/mpeg,audio/ogg,audio/wav,audio/x-m4a,application/octet-stream'],
+            'audio' => ['required', 'file', 'max:10240', 'mimetypes:audio/webm,video/webm,audio/mp4,video/mp4,application/mp4,audio/mpeg,audio/mp3,audio/ogg,audio/wav,audio/flac,audio/x-m4a,audio/x-flac,application/octet-stream'],
+            'duration_seconds' => ['nullable', 'numeric', 'min:0', 'max:60'],
+            'audio_level' => ['nullable', 'numeric', 'min:0', 'max:1'],
+            'chunk_count' => ['nullable', 'integer', 'min:0'],
+            'client_mime_type' => ['nullable', 'string', 'max:100'],
         ];
     }
 }

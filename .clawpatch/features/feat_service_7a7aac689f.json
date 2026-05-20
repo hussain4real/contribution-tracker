@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_service_7a7aac689f",
+  "title": "Laravel model Contribution",
+  "summary": "Laravel model Contribution in app/Models/Contribution.php.",
+  "kind": "service",
+  "source": "laravel-model",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "app/Models/Contribution.php",
+      "symbol": "Contribution",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Models/Contribution.php",
+      "reason": "laravel model"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "app/Enums/PaymentStatus.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/GenerateContributionsTest.php",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/GetContributionSummaryToolTest.php",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/Feature/Commands/SendContributionRemindersTest.php",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/Feature/ContributionDueDateTest.php",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/Feature/ContributionStatusTest.php",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/Feature/Contributions/MyContributionsTest.php",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/Feature/GenerateContributionsTest.php",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/Feature/Models/ContributionTest.php",
+      "reason": "associated test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/Feature/Ai/Tools/GenerateContributionsTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/GetContributionSummaryToolTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Commands/SendContributionRemindersTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/ContributionDueDateTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/ContributionStatusTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Contributions/MyContributionsTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/GenerateContributionsTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Models/ContributionTest.php",
+      "command": "composer test"
+    }
+  ],
+  "tags": [
+    "php",
+    "laravel",
+    "model",
+    "eloquent"
+  ],
+  "trustBoundaries": [
+    "database",
+    "serialization"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

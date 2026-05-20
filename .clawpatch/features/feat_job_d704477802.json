@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_job_d704477802",
+  "title": "Laravel job SyncPaystackSubaccount",
+  "summary": "Laravel job SyncPaystackSubaccount in app/Jobs/SyncPaystackSubaccount.php.",
+  "kind": "job",
+  "source": "laravel-job",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "app/Jobs/SyncPaystackSubaccount.php",
+      "symbol": "SyncPaystackSubaccount",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Jobs/SyncPaystackSubaccount.php",
+      "reason": "laravel job"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "app/Models/Family.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Services/PaystackService.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "tests/Feature/Jobs/SyncPaystackSubaccountTest.php",
+      "reason": "associated test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/Feature/Jobs/SyncPaystackSubaccountTest.php",
+      "command": "composer test"
+    }
+  ],
+  "tags": [
+    "php",
+    "laravel",
+    "job"
+  ],
+  "trustBoundaries": [
+    "database",
+    "concurrency",
+    "external-api"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

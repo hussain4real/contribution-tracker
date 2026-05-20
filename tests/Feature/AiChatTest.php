@@ -7,6 +7,9 @@ use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Laravel\Ai\Prompts\TranscriptionPrompt;
+use Laravel\Ai\Providers\GeminiProvider;
+use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Transcription;
 
 beforeEach(function () {
@@ -16,6 +19,13 @@ beforeEach(function () {
         'value' => 'true',
         'created_at' => now(),
         'updated_at' => now(),
+    ]);
+
+    config([
+        'ai.default_for_transcription' => 'openai',
+        'ai.providers.openai.key' => null,
+        'ai.providers.gemini.key' => null,
+        'ai.providers.mistral.key' => null,
     ]);
 });
 
@@ -45,6 +55,46 @@ test('AI chat index handles users without a family', function () {
         ->assertInertia(fn ($page) => $page
             ->component('Ai/Chat')
             ->where('memberNames', [])
+        );
+});
+
+test('AI chat index reports transcription unavailable without a configured provider', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->get(route('ai.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn ($page) => $page
+            ->component('Ai/Chat')
+            ->where('transcriptionAvailable', false)
+        );
+});
+
+test('AI chat index reports transcription available when only Gemini is configured', function () {
+    config(['ai.providers.gemini.key' => 'gemini-key']);
+
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->get(route('ai.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn ($page) => $page
+            ->component('Ai/Chat')
+            ->where('transcriptionAvailable', true)
+        );
+});
+
+test('AI chat index preserves Mistral transcription availability', function () {
+    config(['ai.providers.mistral.key' => 'mistral-key']);
+
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->get(route('ai.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn ($page) => $page
+            ->component('Ai/Chat')
+            ->where('transcriptionAvailable', true)
         );
 });
 
@@ -439,6 +489,8 @@ test('the transcribe endpoint rejects non-audio files', function () {
 });
 
 test('the transcribe endpoint returns transcribed text', function () {
+    config(['ai.providers.openai.key' => 'openai-key']);
+
     $user = User::factory()->create();
 
     Transcription::fake(['Hello Suleiman, how are you?']);
@@ -450,5 +502,161 @@ test('the transcribe endpoint returns transcribed text', function () {
         ->assertSuccessful()
         ->assertJson(['text' => 'Hello Suleiman, how are you?']);
 
-    Transcription::assertGenerated(fn () => true);
+    Transcription::assertGenerated(fn (TranscriptionPrompt $prompt) => $prompt->provider instanceof OpenAiProvider
+        && $prompt->model === 'gpt-4o-mini-transcribe'
+        && $prompt->audio->mimeType() === 'audio/webm'
+        && $prompt->language === 'en'
+        && ! $prompt->isDiarized());
 });
+
+test('the transcribe endpoint uses Gemini when it is the only configured provider', function () {
+    config(['ai.providers.gemini.key' => 'gemini-key']);
+
+    $user = User::factory()->create();
+
+    Transcription::fake(['Gemini transcript.']);
+
+    $this->actingAs($user)
+        ->postJson(route('ai.transcribe'), [
+            'audio' => UploadedFile::fake()->create('recording.webm', 100, 'audio/webm'),
+        ])
+        ->assertSuccessful()
+        ->assertJson(['text' => 'Gemini transcript.']);
+
+    Transcription::assertGenerated(fn (TranscriptionPrompt $prompt) => $prompt->provider instanceof GeminiProvider
+        && $prompt->model === 'gemini-3.5-flash'
+        && $prompt->audio->mimeType() === 'audio/webm'
+        && $prompt->language === 'en'
+        && ! $prompt->isDiarized());
+});
+
+test('the transcribe endpoint respects Gemini as the configured default provider', function () {
+    config([
+        'ai.default_for_transcription' => 'gemini',
+        'ai.providers.openai.key' => 'openai-key',
+        'ai.providers.gemini.key' => 'gemini-key',
+    ]);
+
+    $user = User::factory()->create();
+
+    Transcription::fake(['Gemini default transcript.']);
+
+    $this->actingAs($user)
+        ->postJson(route('ai.transcribe'), [
+            'audio' => UploadedFile::fake()->create('recording.webm', 100, 'audio/webm'),
+        ])
+        ->assertSuccessful()
+        ->assertJson(['text' => 'Gemini default transcript.']);
+
+    Transcription::assertGenerated(fn (TranscriptionPrompt $prompt) => $prompt->provider instanceof GeminiProvider
+        && $prompt->model === 'gemini-3.5-flash'
+        && $prompt->audio->mimeType() === 'audio/webm'
+        && $prompt->language === 'en'
+        && ! $prompt->isDiarized());
+});
+
+test('the transcribe endpoint rejects near empty recordings before calling a provider', function () {
+    config(['ai.providers.openai.key' => 'openai-key']);
+
+    $user = User::factory()->create();
+
+    Transcription::fake()->preventStrayTranscriptions();
+
+    $this->actingAs($user)
+        ->postJson(route('ai.transcribe'), [
+            'audio' => UploadedFile::fake()->create('recording.webm', 1, 'audio/webm'),
+            'duration_seconds' => 10,
+            'audio_level' => 0,
+            'chunk_count' => 1,
+            'client_mime_type' => 'audio/webm',
+        ])
+        ->assertUnprocessable()
+        ->assertJson([
+            'message' => 'No microphone audio was captured. Check your microphone and try again.',
+        ]);
+
+    Transcription::assertNothingGenerated();
+});
+
+test('the transcribe endpoint accepts small recordings when microphone level was detected', function () {
+    config(['ai.providers.openai.key' => 'openai-key']);
+
+    $user = User::factory()->create();
+
+    Transcription::fake(['Small but audible transcript.']);
+
+    $this->actingAs($user)
+        ->postJson(route('ai.transcribe'), [
+            'audio' => UploadedFile::fake()->create('recording.webm', 1, 'audio/webm'),
+            'duration_seconds' => 2,
+            'audio_level' => 0.12,
+            'chunk_count' => 1,
+            'client_mime_type' => 'audio/webm',
+        ])
+        ->assertSuccessful()
+        ->assertJson(['text' => 'Small but audible transcript.']);
+
+    Transcription::assertGenerated(fn (TranscriptionPrompt $prompt) => $prompt->provider instanceof OpenAiProvider
+        && $prompt->audio->mimeType() === 'audio/webm');
+});
+
+test('the transcribe endpoint returns an error when no speech is recognized', function () {
+    config(['ai.providers.openai.key' => 'openai-key']);
+
+    $user = User::factory()->create();
+
+    Transcription::fake(['']);
+
+    $this->actingAs($user)
+        ->postJson(route('ai.transcribe'), [
+            'audio' => UploadedFile::fake()->create('recording.webm', 100, 'audio/webm'),
+        ])
+        ->assertUnprocessable()
+        ->assertJson([
+            'message' => 'No speech was recognized. Check your microphone and try again.',
+        ]);
+
+    Transcription::assertGenerated(fn (TranscriptionPrompt $prompt) => $prompt->provider instanceof OpenAiProvider
+        && $prompt->audio->mimeType() === 'audio/webm');
+});
+
+test('the transcribe endpoint normalizes uploaded recording mime types', function (
+    string $filename,
+    string $clientMimeType,
+    string $providerMimeType,
+) {
+    config(['ai.providers.gemini.key' => 'gemini-key']);
+
+    $user = User::factory()->create();
+    $promptProvider = null;
+    $promptMimeType = null;
+
+    Transcription::fake(function (TranscriptionPrompt $prompt) use (&$promptProvider, &$promptMimeType) {
+        $promptProvider = $prompt->provider::class;
+        $promptMimeType = $prompt->audio->mimeType();
+
+        return 'Normalized transcript.';
+    });
+
+    $this->actingAs($user)
+        ->postJson(route('ai.transcribe'), [
+            'audio' => UploadedFile::fake()->create($filename, 100, $clientMimeType),
+        ])
+        ->assertSuccessful()
+        ->assertJson(['text' => 'Normalized transcript.']);
+
+    expect($promptProvider)->toBe(GeminiProvider::class)
+        ->and($promptMimeType)->toBe($providerMimeType);
+})->with([
+    'audio webm' => ['recording.webm', 'audio/webm', 'audio/webm'],
+    'video webm from media recorder' => ['recording.webm', 'video/webm', 'audio/webm'],
+    'mp4 container' => ['recording.mp4', 'video/mp4', 'audio/mp4'],
+    'mpeg audio' => ['recording.mp3', 'audio/mpeg', 'audio/mpeg'],
+    'octet-stream webm' => ['recording.webm', 'application/octet-stream', 'audio/webm'],
+    'octet-stream mp4' => ['recording.mp4', 'application/octet-stream', 'audio/mp4'],
+    'octet-stream mp3' => ['recording.mp3', 'application/octet-stream', 'audio/mpeg'],
+    'octet-stream ogg' => ['recording.ogg', 'application/octet-stream', 'audio/ogg'],
+    'octet-stream wav' => ['recording.wav', 'application/octet-stream', 'audio/wav'],
+    'octet-stream flac' => ['recording.flac', 'application/octet-stream', 'audio/flac'],
+    'octet-stream unknown extension' => ['recording.bin', 'application/octet-stream', 'audio/webm'],
+]);

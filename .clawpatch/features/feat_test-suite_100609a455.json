@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_test-suite_100609a455",
+  "title": "Laravel test suite tests/Feature#4",
+  "summary": "Laravel tests in tests/Feature#4.",
+  "kind": "test-suite",
+  "source": "laravel-test-suite",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "tests/Feature#4",
+      "symbol": "tests/Feature#4",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "tests/Feature/Dashboard/OverdueHighlightingTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/DashboardTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/EnsureFamilySubscriptionTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/ExampleTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Expenses/ExpenseCrudTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/FamilySettingsTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/FundAdjustments/FundAdjustmentCrudTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/GenerateContributionsTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/GitHubReleaseServiceTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/InvitationTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Jobs/SyncPaystackSubaccountTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/LegalPagesTest.php",
+      "reason": "PHP test"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "tests/Feature/Dashboard/OverdueHighlightingTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/DashboardTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/EnsureFamilySubscriptionTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/ExampleTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Expenses/ExpenseCrudTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/FamilySettingsTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/FundAdjustments/FundAdjustmentCrudTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/GenerateContributionsTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/GitHubReleaseServiceTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/InvitationTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Jobs/SyncPaystackSubaccountTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/LegalPagesTest.php",
+      "reason": "nearby test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/Feature/Dashboard/OverdueHighlightingTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/DashboardTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/EnsureFamilySubscriptionTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/ExampleTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Expenses/ExpenseCrudTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/FamilySettingsTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/FundAdjustments/FundAdjustmentCrudTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/GenerateContributionsTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/GitHubReleaseServiceTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/InvitationTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Jobs/SyncPaystackSubaccountTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/LegalPagesTest.php",
+      "command": "composer test"
+    }
+  ],
+  "tags": [
+    "php",
+    "laravel",
+    "test"
+  ],
+  "trustBoundaries": [],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

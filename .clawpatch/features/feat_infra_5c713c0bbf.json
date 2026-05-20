@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_infra_5c713c0bbf",
+  "title": "Laravel migrations database/migrations#1",
+  "summary": "Laravel migrations in database/migrations#1.",
+  "kind": "infra",
+  "source": "laravel-migration",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "database/migrations#1",
+      "symbol": "database/migrations#1",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "database/migrations/0001_01_01_000000_create_users_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/0001_01_01_000001_create_cache_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/0001_01_01_000002_create_jobs_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2025_08_14_170933_add_two_factor_columns_to_users_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2025_12_25_112119_add_role_and_category_to_users_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2025_12_25_112140_add_role_and_category_to_users_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2025_12_25_112150_create_contributions_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2025_12_25_112219_create_payments_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_03_16_140151_create_expenses_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_03_16_140724_create_fund_adjustments_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_03_18_000001_create_families_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_03_18_000002_create_family_categories_table.php",
+      "reason": "migration"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "php",
+    "laravel",
+    "migration"
+  ],
+  "trustBoundaries": [
+    "database"
+  ],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-infra-5c713c0bbf-909113_ab739b15e4",
+    "fnd_sig-feat-infra-5c713c0bbf-ec05ea_6013eed39d"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260518T110727-a1e777",
+      "kind": "review",
+      "summary": "2 finding(s)",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-18T11:10:51.369Z"
+    }
+  ],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:10:51.369Z"
+}

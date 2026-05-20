@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_infra_3190b8194b",
+  "title": "Laravel seeders database/seeders",
+  "summary": "Laravel seeders in database/seeders.",
+  "kind": "infra",
+  "source": "laravel-seeder",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "database/seeders",
+      "symbol": "database/seeders",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "database/seeders/DatabaseSeeder.php",
+      "reason": "seeder"
+    },
+    {
+      "path": "database/seeders/FamilyMemberSeeder.php",
+      "reason": "seeder"
+    },
+    {
+      "path": "database/seeders/PlatformPlanSeeder.php",
+      "reason": "seeder"
+    },
+    {
+      "path": "database/seeders/ProductionSeeder.php",
+      "reason": "seeder"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "php",
+    "laravel",
+    "seeder"
+  ],
+  "trustBoundaries": [
+    "database"
+  ],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-infra-3190b8194b-fe873d_bd90df2c1f",
+    "fnd_sig-feat-infra-3190b8194b-15ffcf_9057a3b2ae",
+    "fnd_sig-feat-infra-3190b8194b-0bac36_ed90f0705f"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260518T110727-a1e777",
+      "kind": "review",
+      "summary": "3 finding(s)",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-18T11:10:30.588Z"
+    }
+  ],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:10:30.588Z"
+}

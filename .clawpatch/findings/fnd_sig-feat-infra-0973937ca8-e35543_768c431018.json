@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-infra-0973937ca8-e35543_768c431018",
+  "featureId": "feat_infra_0973937ca8",
+  "title": "AI conversation rows outlive deleted users",
+  "category": "security",
+  "severity": "medium",
+  "confidence": "medium",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "database/migrations/2026_04_05_131950_create_agent_conversations_table.php",
+      "startLine": 14,
+      "endLine": 17,
+      "symbol": null,
+      "quote": "Schema::create('agent_conversations', function (Blueprint $table) {\n    $table->string('id', 36)->primary();\n    $table->foreignId('user_id')->nullable();\n    $table->string('title');"
+    },
+    {
+      "path": "database/migrations/2026_04_05_131950_create_agent_conversations_table.php",
+      "startLine": 25,
+      "endLine": 34,
+      "symbol": null,
+      "quote": "$table->string('conversation_id', 36)->index();\n$table->foreignId('user_id')->nullable();\n$table->string('agent');\n$table->string('role', 25);\n$table->text('content');"
+    }
+  ],
+  "reasoning": "The migration stores AI conversation content but leaves both user_id columns unconstrained and leaves message conversation_id as an index only. In this app the assistant is user-scoped and account deletion hard-deletes the user, so private financial chat content can remain orphaned with stale user IDs. The missing conversation foreign key also means database-level integrity does not protect messages from becoming orphaned outside the controller's manual delete path.",
+  "reproduction": "Create a user with an AI conversation and message, then delete the user account. The user row is gone, but the agent_conversations and agent_conversation_messages rows remain because no foreign key or account-deletion cleanup applies.",
+  "recommendation": "Decide the retention policy explicitly. For privacy, add a forward migration that cascades or nulls user references and constrains agent_conversation_messages.conversation_id to agent_conversations.id with cascadeOnDelete; alternatively add account-deletion cleanup/anonymization and keep the schema intentionally unconstrained with tests.",
+  "whyTestsDoNotAlreadyCoverThis": "AiChatTest covers deleting a conversation through the AI endpoint, and ProfileUpdateTest covers deleting the user, but no test combines account deletion with existing AI conversation rows.",
+  "suggestedRegressionTest": "Add a feature test that seeds an AI conversation/message for a user, deletes the account through profile.destroy, and asserts the configured retention behavior: rows are deleted, anonymized, or user_id is nulled.",
+  "minimumFixScope": "Forward migration for AI conversation referential integrity or explicit account-deletion cleanup plus a profile deletion regression test.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-infra-0973937ca8_e355431e47",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260518T110727-a1e777",
+  "createdAt": "2026-05-18T11:14:11.271Z",
+  "updatedAt": "2026-05-18T11:14:11.271Z"
+}

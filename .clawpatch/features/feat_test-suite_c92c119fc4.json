@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_test-suite_c92c119fc4",
+  "title": "Laravel test suite tests/Feature#1",
+  "summary": "Laravel tests in tests/Feature#1.",
+  "kind": "test-suite",
+  "source": "laravel-test-suite",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "tests/Feature#1",
+      "symbol": "tests/Feature#1",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "tests/Feature/Ai/FamilyAssistantTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Ai/FamilySubAgentsTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Ai/Middleware/LogPromptsTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/GenerateContributionsTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/GetContributionSummaryToolTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/GetExpenseSummaryToolTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/GetFundBalanceToolTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/GetMemberOverviewToolTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/RecordExpenseTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/RecordFundAdjustmentTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/RecordPaymentTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/SendInvitationTest.php",
+      "reason": "PHP test"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "tests/Feature/Ai/FamilyAssistantTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Ai/FamilySubAgentsTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Ai/Middleware/LogPromptsTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/GenerateContributionsTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/GetContributionSummaryToolTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/GetExpenseSummaryToolTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/GetFundBalanceToolTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/GetMemberOverviewToolTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/RecordExpenseTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/RecordFundAdjustmentTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/RecordPaymentTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/SendInvitationTest.php",
+      "reason": "nearby test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/Feature/Ai/FamilyAssistantTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Ai/FamilySubAgentsTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Ai/Middleware/LogPromptsTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/GenerateContributionsTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/GetContributionSummaryToolTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/GetExpenseSummaryToolTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/GetFundBalanceToolTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/GetMemberOverviewToolTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/RecordExpenseTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/RecordFundAdjustmentTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/RecordPaymentTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Ai/Tools/SendInvitationTest.php",
+      "command": "composer test"
+    }
+  ],
+  "tags": [
+    "php",
+    "laravel",
+    "test"
+  ],
+  "trustBoundaries": [],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

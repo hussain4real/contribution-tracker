@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_service_688912d79d",
+  "title": "Laravel model PaystackTransaction",
+  "summary": "Laravel model PaystackTransaction in app/Models/PaystackTransaction.php.",
+  "kind": "service",
+  "source": "laravel-model",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "app/Models/PaystackTransaction.php",
+      "symbol": "PaystackTransaction",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Models/PaystackTransaction.php",
+      "reason": "laravel model"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "app/Enums/TransactionStatus.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Enums/TransactionType.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "tests/Feature/Models/PaystackTransactionTest.php",
+      "reason": "associated test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/Feature/Models/PaystackTransactionTest.php",
+      "command": "composer test"
+    }
+  ],
+  "tags": [
+    "php",
+    "laravel",
+    "model",
+    "eloquent"
+  ],
+  "trustBoundaries": [
+    "database",
+    "serialization"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

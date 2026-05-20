@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_c9b2cd9978",
+  "title": "Laravel controller AiChatController",
+  "summary": "Laravel HTTP controller AiChatController.",
+  "kind": "route",
+  "source": "laravel-controller",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "app/Http/Controllers/AiChatController.php",
+      "symbol": "AiChatController",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Http/Controllers/AiChatController.php",
+      "reason": "controller"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "app/Ai/Agents/FamilyAssistant.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Http/Requests/RenameAiConversationRequest.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Http/Requests/StreamAiChatRequest.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Http/Requests/TranscribeAudioRequest.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Models/User.php",
+      "reason": "imported application class"
+    }
+  ],
+  "tests": [],
+  "tags": [
+    "php",
+    "laravel",
+    "controller",
+    "http"
+  ],
+  "trustBoundaries": [
+    "user-input",
+    "auth",
+    "database",
+    "serialization"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

@@ -177,6 +177,7 @@ function loginBrowserAs(User $user, string $expectedPath = '/dashboard'): Pendin
     $page->fill('email', $user->email)
         ->fill('password', 'password')
         ->click('@login-button')
+        ->wait(0.5)
         ->assertPathIs($expectedPath)
         ->assertNoJavaScriptErrors();
 
