@@ -34,7 +34,7 @@
 
 <br/>
 
-### MARCH, 2026
+### MAY, 2026
 
 </div>
 
@@ -89,11 +89,11 @@ The management of shared financial contributions within families and cooperative
 
 This project presents the design and implementation of an AI-enhanced multi-tenant web-based family fund management system. The system employs a multi-tenant software architecture to provide isolated operational environments for each family group on a single platform. It implements a role-based access control model with three tiers—Administrator, Financial Secretary, and Member—to enforce appropriate permissions across fund management operations. Core modules include contribution tracking with partial payment support and an oldest-balance-first allocation algorithm, expense recording, fund balance management, and online payment processing via the Paystack payment gateway.
 
-The system further integrates predictive analytics using machine learning to forecast member payment behaviour—identifying members likely to default or pay on time—and employs Large Language Model (LLM) technology to generate human-readable narrative summaries of financial reports. Security is reinforced through WebAuthn passkey authentication and two-factor authentication mechanisms.
+The system further integrates controlled AI assistant and report-summary features through Large Language Model (LLM) technology, allowing authorised users to ask permitted questions and receive human-readable narrative summaries of financial reports. The project also defines a predictive analytics pathway for future payment-behaviour analysis, subject to the availability of sufficient historical contribution data. Security is reinforced through WebAuthn passkey authentication and two-factor authentication mechanisms.
 
 The application is developed using Laravel (PHP) for the backend, Vue.js with Inertia.js for the frontend single-page application, PostgreSQL for the database, and Tailwind CSS for responsive styling. The outcome is a comprehensive, secure, and intelligent platform that modernises family fund management while providing actionable financial insights through artificial intelligence.
 
-**Keywords:** Multi-Tenancy, Family Fund Management, Role-Based Access Control, Predictive Analytics, Large Language Model, Payment Gateway, WebAuthn, Laravel, Vue.js
+**Keywords:** Multi-Tenancy, Family Fund Management, Role-Based Access Control, Payment Allocation, Large Language Model, Payment Gateway, WebAuthn, Laravel, Vue.js, PostgreSQL
 
 ---
 
@@ -110,34 +110,40 @@ The application is developed using Laravel (PHP) for the backend, Vue.js with In
   - [List of Figures](#list-of-figures)
   - [List of Abbreviations](#list-of-abbreviations)
 - [Chapter One: Introduction](chapter-1.md)
-  - [1.1 Background of the Study](chapter-1.md#11-background-of-the-study)
+  - [1.1 Background to the Study](chapter-1.md#11-background-to-the-study)
   - [1.2 Statement of the Problem](chapter-1.md#12-statement-of-the-problem)
-  - [1.3 Aim, Objectives, and Research Questions of the Study](chapter-1.md#13-aim-objectives-and-research-questions-of-the-study)
-  - [1.4 Scope of the Study](chapter-1.md#14-scope-of-the-study)
-  - [1.5 Significance of the Study](chapter-1.md#15-significance-of-the-study)
-  - [1.6 Motivation for the Study](chapter-1.md#16-motivation-for-the-study)
-  - [1.7 Limitations of the Study](chapter-1.md#17-limitations-of-the-study)
-  - [1.8 Definition of Terms](chapter-1.md#18-definition-of-terms)
-  - [1.9 Organization of the Report](chapter-1.md#19-organization-of-the-report)
+  - [1.3 Aim of the Study](chapter-1.md#13-aim-of-the-study)
+  - [1.4 Objectives of the Study](chapter-1.md#14-objectives-of-the-study)
+  - [1.5 Research Questions](chapter-1.md#15-research-questions)
+  - [1.7 Significance of the Study](chapter-1.md#17-significance-of-the-study)
+  - [1.8 Scope of the Study](chapter-1.md#18-scope-of-the-study)
+  - [1.9 Limitations of the Study](chapter-1.md#19-limitations-of-the-study)
+  - [1.10 Definition of Terms](chapter-1.md#110-definition-of-terms)
+  - [1.11 Organisation of the Report](chapter-1.md#111-organisation-of-the-report)
 - [Chapter Two: Literature Review](chapter-2.md)
-  - [2.1 Historical Perspectives of Family Fund Management Systems](chapter-2.md#21-historical-perspectives-of-family-fund-management-systems)
-  - [2.2 Theoretical Framework](chapter-2.md#22-theoretical-framework)
-  - [2.3 Review of Related Work](chapter-2.md#23-review-of-related-work)
-  - [2.4 Gaps in Existing Research](chapter-2.md#24-gaps-in-existing-research)
-  - [2.5 Summary of the Literature Review](chapter-2.md#25-summary-of-the-literature-review)
+  - [2.1 Introduction to the Chapter](chapter-2.md#21-introduction-to-the-chapter)
+  - [2.2 Conceptual Review](chapter-2.md#22-conceptual-review)
+  - [2.3 Theoretical Framework](chapter-2.md#23-theoretical-framework)
+  - [2.4 Empirical Review of Related Works](chapter-2.md#24-empirical-review-of-related-works)
+  - [2.5 Review of Existing Systems/Tools](chapter-2.md#25-review-of-existing-systemstools)
+  - [2.6 Comparative Analysis of Related Works](chapter-2.md#26-comparative-analysis-of-related-works)
+  - [2.7 Identified Research Gap](chapter-2.md#27-identified-research-gap)
+  - [2.8 Summary of the Chapter](chapter-2.md#28-summary-of-the-chapter)
 - [Chapter Three: Methodology](chapter-3.md)
-  - [3.1 Introduction](chapter-3.md#31-introduction)
-  - [3.2 Research Design](chapter-3.md#32-research-design)
-  - [3.3 Research Paradigm / Philosophy](chapter-3.md#33-research-paradigm--philosophy)
-  - [3.4 System Analysis](chapter-3.md#34-system-analysis)
-  - [3.5 System Design (DFD, UML, ER Diagrams)](chapter-3.md#35-system-design-dfd-uml-er-diagrams)
-  - [3.6 Algorithm / Model Description](chapter-3.md#36-algorithm--model-description)
-  - [3.7 Population & Sampling](chapter-3.md#37-population--sampling)
-  - [3.8 Data Collection Methods](chapter-3.md#38-data-collection-methods)
-  - [3.9 Tools, Languages & Technologies Used](chapter-3.md#39-tools-languages--technologies-used)
-  - [3.10 Implementation Environment](chapter-3.md#310-implementation-environment)
-  - [3.11 Evaluation Metrics](chapter-3.md#311-evaluation-metrics)
-  - [3.12 Chapter Summary](chapter-3.md#312-chapter-summary)
+  - [3.1 Introduction to the Chapter](chapter-3.md#31-introduction-to-the-chapter)
+  - [3.2 Research Design / Project Approach](chapter-3.md#32-research-design--project-approach)
+  - [3.3 Analysis of Existing System](chapter-3.md#33-analysis-of-existing-system)
+  - [3.4 Proposed System Overview](chapter-3.md#34-proposed-system-overview)
+  - [3.5 System Requirements](chapter-3.md#35-system-requirements)
+  - [3.6 Data Collection Methods](chapter-3.md#36-data-collection-methods)
+  - [3.7 Population and Sampling](chapter-3.md#37-population-and-sampling)
+  - [3.8 System Architecture / Design](chapter-3.md#38-system-architecture--design)
+  - [3.9 Use Case / UML Diagrams](chapter-3.md#39-use-case--uml-diagrams)
+  - [3.10 Database Design](chapter-3.md#310-database-design)
+  - [3.11 Algorithm / Model Design](chapter-3.md#311-algorithm--model-design)
+  - [3.12 Tools and Technologies](chapter-3.md#312-tools-and-technologies)
+  - [3.13 Ethical Considerations](chapter-3.md#313-ethical-considerations)
+  - [3.14 Summary of the Chapter](chapter-3.md#314-summary-of-the-chapter)
 - Chapter Four: System Implementation and Testing
   - 4.1 Implementation of the System Design
   - 4.2 Module Integration and Coding
@@ -157,15 +163,17 @@ The application is developed using Laravel (PHP) for the backend, Vue.js with In
 | Table No. | Title | Page |
 | --- | --- | --- |
 | 1.1 | Comparison of Existing Financial Management Platforms | — |
-| 1.2 | Technical Stack Overview | — |
-| 1.3 | Definition of Key Terms | — |
+| 1.2 | Definition of Key Terms | — |
+| 2.1 | Empirical Review of Related Works | — |
+| 2.2 | Review of Existing Systems and Tools | — |
+| 2.3 | Comparative Analysis of Related Works | — |
 | 3.1 | Summary of Proposed System Features | — |
 | 3.2 | Functional Requirements | — |
 | 3.3 | Non-Functional Requirements | — |
-| 3.4 | Major Database Entities | — |
-| 3.5 | Implementation Technologies | — |
-| 3.6 | Testing and Validation Plan | — |
-| 3.7 | Evaluation Metrics | — |
+| 3.4 | Deployment Requirements | — |
+| 3.5 | Major Database Entities | — |
+| 3.6 | Oldest-Balance-First Payment Allocation Algorithm | — |
+| 3.7 | Tools and Technologies | — |
 
 *\[To be updated as the document progresses.]*
 
@@ -175,10 +183,11 @@ The application is developed using Laravel (PHP) for the backend, Vue.js with In
 
 | Figure No. | Title | Page |
 | --- | --- | --- |
-| 3.1 | System Architecture Diagram | — |
-| 3.2 | Entity-Relationship Diagram (ERD) | — |
-| 3.3 | Payment Allocation Flowchart | — |
-| 3.4 | Use Case Diagram | — |
+| 3.1 | Existing Manual Family Fund Process | — |
+| 3.2 | System Architecture Diagram | — |
+| 3.3 | Use Case Diagram | — |
+| 3.4 | Payment Allocation Flowchart | — |
+| 3.5 | Entity-Relationship Diagram (ERD) | — |
 
 *\[To be updated as the document progresses.]*
 

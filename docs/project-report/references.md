@@ -22,6 +22,8 @@ Ardener, S., & Burman, S. (Eds.). (1995). *Money-go-rounds: The importance of ro
 
 Aryeetey, E. (2008). From informal finance to formal finance in Sub-Saharan Africa: Lessons from linkage efforts. In *African Finance for the 21st Century* (pp. 1–24). International Monetary Fund.
 
+Amazon Web Services. (2020). *SaaS tenant isolation strategies: Isolating resources in a multi-tenant environment.* https://docs.aws.amazon.com/whitepapers/latest/saas-tenant-isolation-strategies/saas-tenant-isolation-strategies.html
+
 Bascom, W. R. (1952). The Esusu: A credit institution of the Yoruba. *Journal of the Royal Anthropological Institute of Great Britain and Ireland, 82*(1), 63–69. https://doi.org/10.2307/2844040
 
 Beck, K., Beedle, M., van Bennekum, A., Cockburn, A., Cunningham, W., Fowler, M., Grenning, J., Highsmith, J., Hunt, A., Jeffries, R., Kern, J., Marick, B., Martin, R. C., Mellor, S., Schwaber, K., Sutherland, J., & Thomas, D. (2001). *Manifesto for Agile Software Development.* https://agilemanifesto.org
@@ -60,6 +62,8 @@ EFInA. (2023). *Access to Financial Services in Nigeria 2023 Survey.* Enhancing 
 
 Ferraiolo, D. F., Sandhu, R., Gavrila, S., Kuhn, D. R., & Chandramouli, R. (2001). Proposed NIST standard for role-based access control. *ACM Transactions on Information and Systems Security, 4*(3), 224–274. https://doi.org/10.1145/501978.501980
 
+Federal Republic of Nigeria. (2023). *Nigeria Data Protection Act, 2023.* https://ndpc.gov.ng
+
 FIDO Alliance. (2022). *FIDO2: Web Authentication (WebAuthn).* https://fidoalliance.org/fido2/fido2-web-authentication-webauthn/
 
 Fielding, R. T. (2000). *Architectural styles and the design of network-based software architectures* (Doctoral dissertation, University of California, Irvine).
@@ -93,6 +97,8 @@ Khandani, A. E., Kim, A. J., & Lo, A. W. (2010). Consumer credit-risk models via
 Karhapää, P., Behutiye, W., Rodríguez, P., Oivo, M., Costal, D., Franch, X., Aaramaa, S., Choraś, M., Partanen, J., & Abherve, A. (2021). Strategies to manage quality requirements in agile software development: A multiple case study. *Empirical Software Engineering, 26*, Article 28. https://doi.org/10.1007/s10664-020-09903-x
 
 Krasner, G. E., & Pope, S. T. (1988). A description of the model-view-controller user interface paradigm in the Smalltalk-80 system. *Journal of Object-Oriented Programming, 1*(3), 26–49.
+
+Kouandou, A., & Zeh, I. P. (2024). Insuring consumption against shocks: The role of informal savings in Nigeria. *Food Policy, 129*, Article 102737. https://doi.org/10.1016/j.foodpol.2024.102737
 
 Lessmann, S., Baesens, B., Seow, H. V., & Thomas, L. C. (2015). Benchmarking state-of-the-art classification algorithms for credit scoring: An update of research. *European Journal of Operational Research, 247*(1), 124–136. https://doi.org/10.1016/j.ejor.2015.05.030
 
@@ -141,5 +147,7 @@ Thomas, L. C. (2000). A survey of credit and behavioural scoring: Forecasting fi
 Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., Kaiser, Ł., & Polosukhin, I. (2017). Attention is all you need. In *Advances in Neural Information Processing Systems, 30*, 5998–6008.
 
 W3C. (2021). *Web Authentication: An API for accessing Public Key Credentials Level 2.* World Wide Web Consortium. https://www.w3.org/TR/webauthn-2/
+
+Wezel, T., & Ree, J. J. (2023). *Nigeria: Fostering financial inclusion through digital financial services* (Selected Issues Paper No. 2023/020). International Monetary Fund. https://doi.org/10.5089/9798400237195.018
 
 You, E. (2024). *Vue.js — The progressive JavaScript framework.* https://vuejs.org
