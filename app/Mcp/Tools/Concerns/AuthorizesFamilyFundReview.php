@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Mcp\Tools\Concerns;
 
 use App\Models\User;

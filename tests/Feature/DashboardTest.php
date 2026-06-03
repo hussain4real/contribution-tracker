@@ -1,8 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\User;
+use Inertia\Testing\AssertableInertia as Assert;
 
 test('guests are redirected away from dashboard', function () {
     $response = $this->get(route('dashboard'));
@@ -31,7 +34,7 @@ test('admin dashboard includes overdue_members with overdue contribution details
     $response = $this->actingAs($admin)->get(route('dashboard'));
 
     $response->assertSuccessful();
-    $response->assertInertia(fn ($page) => $page
+    $response->assertInertia(fn (Assert $page) => $page
         ->component('Dashboard/Index')
         ->has('overdue_members')
         ->where('overdue_members.0.name', $member->name)
@@ -51,7 +54,7 @@ test('admin dashboard overdue_members is empty when no overdue contributions exi
     $response = $this->actingAs($admin)->get(route('dashboard'));
 
     $response->assertSuccessful();
-    $response->assertInertia(fn ($page) => $page
+    $response->assertInertia(fn (Assert $page) => $page
         ->component('Dashboard/Index')
         ->has('overdue_members', 0)
     );
@@ -71,7 +74,7 @@ test('member_statuses accrued_balance sums outstanding across all months', funct
     $response = $this->actingAs($admin)->get(route('dashboard'));
 
     $response->assertSuccessful();
-    $response->assertInertia(fn ($page) => $page
+    $response->assertInertia(fn (Assert $page) => $page
         ->component('Dashboard/Index')
         ->has('member_statuses', 1)
         ->where('member_statuses.0.accrued_balance', $member->getMonthlyAmount() * 2)

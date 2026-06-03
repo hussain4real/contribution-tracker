@@ -2,6 +2,7 @@
 import {
     destroy,
     index,
+    store,
 } from '@/actions/App/Http/Controllers/InvitationController';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
@@ -19,12 +20,22 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Form, Head, Link, router, usePage } from '@inertiajs/vue3';
-import { ArrowUpCircle, Mail, Plus, Trash2 } from 'lucide-vue-next';
+import {
+    ArrowUpCircle,
+    Mail,
+    MessageCircle,
+    Plus,
+    Trash2,
+} from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 interface Invitation {
     id: number;
-    email: string;
+    email: string | null;
+    delivery_method: 'email' | 'whatsapp';
+    delivery_method_label: string;
+    whatsapp_phone: string | null;
+    contact: string;
     role: string;
     role_label: string;
     invited_by: string | null;
@@ -53,6 +64,7 @@ const showInviteForm = ref(false);
 const showDeleteDialog = ref(false);
 const deletingInvitation = ref<Invitation | null>(null);
 const deleting = ref(false);
+const deliveryMethod = ref<'email' | 'whatsapp'>('email');
 
 const page = usePage();
 const subscription = computed(() => page.props.subscription);
@@ -64,7 +76,9 @@ function promptDelete(invitation: Invitation): void {
 }
 
 function confirmDelete(): void {
-    if (!deletingInvitation.value) return;
+    if (!deletingInvitation.value) {
+        return;
+    }
 
     deleting.value = true;
     router.delete(destroy(deletingInvitation.value.id).url, {
@@ -140,14 +154,59 @@ function statusBadge(invitation: Invitation): { text: string; class: string } {
             <!-- Invite Form -->
             <Form
                 v-if="showInviteForm"
-                action="/family/invitations"
-                method="post"
+                v-bind="store.form()"
                 #default="{ errors, processing }"
                 class="space-y-4 rounded-lg border p-4"
-                @success="showInviteForm = false"
+                @success="
+                    () => {
+                        showInviteForm = false;
+                        deliveryMethod = 'email';
+                    }
+                "
             >
+                <input
+                    type="hidden"
+                    name="delivery_method"
+                    :value="deliveryMethod"
+                />
+
+                <div class="grid gap-2">
+                    <Label>Invite via</Label>
+                    <div
+                        class="grid grid-cols-2 rounded-md border bg-muted/40 p-1"
+                    >
+                        <button
+                            type="button"
+                            class="inline-flex h-9 items-center justify-center gap-2 rounded-sm px-3 text-sm font-medium transition-colors"
+                            :class="
+                                deliveryMethod === 'email'
+                                    ? 'bg-background text-foreground shadow-xs'
+                                    : 'text-muted-foreground hover:text-foreground'
+                            "
+                            @click="deliveryMethod = 'email'"
+                        >
+                            <Mail class="h-4 w-4" />
+                            Email
+                        </button>
+                        <button
+                            type="button"
+                            class="inline-flex h-9 items-center justify-center gap-2 rounded-sm px-3 text-sm font-medium transition-colors"
+                            :class="
+                                deliveryMethod === 'whatsapp'
+                                    ? 'bg-background text-foreground shadow-xs'
+                                    : 'text-muted-foreground hover:text-foreground'
+                            "
+                            @click="deliveryMethod = 'whatsapp'"
+                        >
+                            <MessageCircle class="h-4 w-4" />
+                            WhatsApp
+                        </button>
+                    </div>
+                    <InputError :message="errors.delivery_method" />
+                </div>
+
                 <div class="grid gap-4 sm:grid-cols-2">
-                    <div class="grid gap-2">
+                    <div v-if="deliveryMethod === 'email'" class="grid gap-2">
                         <Label for="email">Email Address</Label>
                         <Input
                             id="email"
@@ -157,6 +216,18 @@ function statusBadge(invitation: Invitation): { text: string; class: string } {
                             required
                         />
                         <InputError :message="errors.email" />
+                    </div>
+                    <div v-else class="grid gap-2">
+                        <Label for="whatsapp_phone">WhatsApp Number</Label>
+                        <Input
+                            id="whatsapp_phone"
+                            name="whatsapp_phone"
+                            type="tel"
+                            placeholder="+2348012345678"
+                            autocomplete="tel"
+                            required
+                        />
+                        <InputError :message="errors.whatsapp_phone" />
                     </div>
                     <div class="grid gap-2">
                         <Label for="role">Role</Label>
@@ -177,7 +248,11 @@ function statusBadge(invitation: Invitation): { text: string; class: string } {
                 </div>
                 <div class="flex gap-2">
                     <Button type="submit" :disabled="processing">
-                        <Mail class="mr-1 h-4 w-4" />
+                        <Mail
+                            v-if="deliveryMethod === 'email'"
+                            class="mr-1 h-4 w-4"
+                        />
+                        <MessageCircle v-else class="mr-1 h-4 w-4" />
                         Send Invitation
                     </Button>
                     <Button
@@ -196,15 +271,27 @@ function statusBadge(invitation: Invitation): { text: string; class: string } {
                     :key="invitation.id"
                     class="flex items-center justify-between rounded-lg border p-4"
                 >
-                    <div>
-                        <p class="font-medium">{{ invitation.email }}</p>
-                        <p class="text-sm text-muted-foreground">
-                            {{ invitation.role_label }} &middot; Invited
-                            {{ invitation.created_at }}
-                            <template v-if="invitation.invited_by">
-                                by {{ invitation.invited_by }}</template
-                            >
-                        </p>
+                    <div class="flex items-start gap-3">
+                        <div
+                            class="mt-0.5 flex h-8 w-8 items-center justify-center rounded-md bg-muted text-muted-foreground"
+                        >
+                            <Mail
+                                v-if="invitation.delivery_method === 'email'"
+                                class="h-4 w-4"
+                            />
+                            <MessageCircle v-else class="h-4 w-4" />
+                        </div>
+                        <div>
+                            <p class="font-medium">{{ invitation.contact }}</p>
+                            <p class="text-sm text-muted-foreground">
+                                {{ invitation.delivery_method_label }} &middot;
+                                {{ invitation.role_label }} &middot; Invited
+                                {{ invitation.created_at }}
+                                <template v-if="invitation.invited_by">
+                                    by {{ invitation.invited_by }}</template
+                                >
+                            </p>
+                        </div>
                     </div>
                     <div class="flex items-center gap-2">
                         <span
@@ -251,7 +338,7 @@ function statusBadge(invitation: Invitation): { text: string; class: string } {
                     <DialogTitle>Cancel Invitation</DialogTitle>
                     <DialogDescription>
                         Are you sure you want to cancel the invitation to
-                        <strong>{{ deletingInvitation?.email }}</strong
+                        <strong>{{ deletingInvitation?.contact }}</strong
                         >? This action cannot be undone.
                     </DialogDescription>
                 </DialogHeader>

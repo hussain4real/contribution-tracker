@@ -1,10 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services;
 
 use App\Enums\MemberCategory;
 use App\Enums\PaymentStatus;
 use App\Models\Contribution;
+use App\Models\Family;
+use App\Models\Payment;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
@@ -27,16 +31,21 @@ class FamilyContributionReviewService
     {
         $user->loadMissing('family');
 
-        $members = $this->membersForPeriod($user, $year, $month);
-        $rows = $members->map(fn (User $member): array => $this->memberRow($member));
+        $members = $this->membersForPeriod($user);
+        $contributions = $this->contributionsForPeriod($user, $year, $month);
+        $rows = $members->map(fn (User $member): array => $this->memberRow(
+            $member,
+            $contributions->firstWhere('user_id', $member->id),
+        ));
         $allRows = $rows->values();
         $filteredRows = $this->filterRows($allRows, $status);
-        $period = CarbonImmutable::create($year, $month, 1);
+        $period = CarbonImmutable::parse(sprintf('%04d-%02d-01', $year, $month));
+        $family = $user->family;
 
         return [
             'family' => [
-                'name' => $user->family?->name,
-                'currency' => $user->family?->currency ?? 'NGN',
+                'name' => $family instanceof Family ? $family->name : null,
+                'currency' => $family instanceof Family ? $family->currency : 'NGN',
                 'period' => $period->format('F Y'),
                 'year' => $year,
                 'month' => $month,
@@ -57,33 +66,43 @@ class FamilyContributionReviewService
     /**
      * @return EloquentCollection<int, User>
      */
-    private function membersForPeriod(User $user, int $year, int $month): EloquentCollection
+    private function membersForPeriod(User $user): EloquentCollection
     {
         return User::query()
             ->where('family_id', $user->family_id)
             ->active()
             ->payingMembers()
-            ->with(['familyCategory:id,name,monthly_amount', 'contributions' => function ($query) use ($year, $month): void {
-                $query->where('year', $year)
-                    ->where('month', $month)
-                    ->with('payments:id,contribution_id,amount');
-            }])
+            ->with('familyCategory:id,name,monthly_amount')
             ->withExists('pushSubscriptions')
             ->orderBy('name')
             ->get();
     }
 
     /**
+     * @return EloquentCollection<int, Contribution>
+     */
+    private function contributionsForPeriod(User $user, int $year, int $month): EloquentCollection
+    {
+        return Contribution::query()
+            ->where('family_id', $user->family_id)
+            ->forMonth($year, $month)
+            ->with('payments:id,contribution_id,amount')
+            ->get();
+    }
+
+    /**
      * @return array<string, mixed>
      */
-    private function memberRow(User $member): array
+    private function memberRow(User $member, ?Contribution $contribution): array
     {
-        /** @var Contribution|null $contribution */
-        $contribution = $member->contributions->first();
-        $expectedAmount = $contribution?->expected_amount ?? $member->getMonthlyAmount() ?? 0;
-        $paidAmount = (int) ($contribution?->payments->sum('amount') ?? 0);
+        $expectedAmount = $contribution instanceof Contribution
+            ? $contribution->expected_amount
+            : ($member->getMonthlyAmount() ?? 0);
+        $paidAmount = $contribution instanceof Contribution
+            ? (int) $contribution->payments->sum(fn (Payment $payment): int => $payment->amount)
+            : 0;
         $balance = max(0, $expectedAmount - $paidAmount);
-        $status = $contribution?->status ?? PaymentStatus::Unpaid;
+        $status = $contribution instanceof Contribution ? $contribution->status : PaymentStatus::Unpaid;
         $eligibleChannels = $this->eligibleChannels($member);
         $isReminderEligible = $contribution !== null && $balance > 0 && $eligibleChannels !== [];
 
@@ -92,7 +111,7 @@ class FamilyContributionReviewService
             'name' => $member->name,
             'email' => $member->email,
             'category' => $member->category?->value,
-            'category_label' => $member->familyCategory?->name ?? $member->category?->label(),
+            'category_label' => $member->familyCategory->name ?? $member->category?->label(),
             'expected_amount' => $expectedAmount,
             'paid_amount' => $paidAmount,
             'balance' => $balance,
@@ -168,8 +187,8 @@ class FamilyContributionReviewService
      */
     private function summary(Collection $rows): array
     {
-        $totalExpected = (int) $rows->sum('expected_amount');
-        $totalCollected = (int) $rows->sum('paid_amount');
+        $totalExpected = (int) $rows->sum(fn (array $row): int => $this->integerValue($row['expected_amount'] ?? 0));
+        $totalCollected = (int) $rows->sum(fn (array $row): int => $this->integerValue($row['paid_amount'] ?? 0));
         $totalOutstanding = max(0, $totalExpected - $totalCollected);
 
         return [
@@ -198,8 +217,8 @@ class FamilyContributionReviewService
 
         foreach (MemberCategory::cases() as $category) {
             $categoryRows = $rows->where('category', $category->value);
-            $expected = (int) $categoryRows->sum('expected_amount');
-            $collected = (int) $categoryRows->sum('paid_amount');
+            $expected = (int) $categoryRows->sum(fn (array $row): int => $this->integerValue($row['expected_amount'] ?? 0));
+            $collected = (int) $categoryRows->sum(fn (array $row): int => $this->integerValue($row['paid_amount'] ?? 0));
 
             $categories[$category->value] = [
                 'label' => $category->label(),
@@ -211,5 +230,10 @@ class FamilyContributionReviewService
         }
 
         return $categories;
+    }
+
+    private function integerValue(mixed $value): int
+    {
+        return is_numeric($value) ? (int) $value : 0;
     }
 }

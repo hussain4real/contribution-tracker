@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Ai\Agents\FamilyAssistant;
 use App\Features\AiAssistant;
 use App\Models\Family;
@@ -7,6 +9,7 @@ use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Inertia\Testing\AssertableInertia as Assert;
 use Laravel\Ai\Prompts\TranscriptionPrompt;
 use Laravel\Ai\Providers\GeminiProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
@@ -39,7 +42,7 @@ test('authenticated users can visit the AI chat page', function () {
     $this->actingAs($user)
         ->get(route('ai.index'))
         ->assertSuccessful()
-        ->assertInertia(fn ($page) => $page
+        ->assertInertia(fn (Assert $page) => $page
             ->component('Ai/Chat')
             ->has('conversations')
             ->has('messages')
@@ -52,7 +55,7 @@ test('AI chat index handles users without a family', function () {
     $this->actingAs($user)
         ->get(route('ai.index'))
         ->assertSuccessful()
-        ->assertInertia(fn ($page) => $page
+        ->assertInertia(fn (Assert $page) => $page
             ->component('Ai/Chat')
             ->where('memberNames', [])
         );
@@ -64,7 +67,7 @@ test('AI chat index reports transcription unavailable without a configured provi
     $this->actingAs($user)
         ->get(route('ai.index'))
         ->assertSuccessful()
-        ->assertInertia(fn ($page) => $page
+        ->assertInertia(fn (Assert $page) => $page
             ->component('Ai/Chat')
             ->where('transcriptionAvailable', false)
         );
@@ -78,7 +81,7 @@ test('AI chat index reports transcription available when only Gemini is configur
     $this->actingAs($user)
         ->get(route('ai.index'))
         ->assertSuccessful()
-        ->assertInertia(fn ($page) => $page
+        ->assertInertia(fn (Assert $page) => $page
             ->component('Ai/Chat')
             ->where('transcriptionAvailable', true)
         );
@@ -92,7 +95,7 @@ test('AI chat index preserves Mistral transcription availability', function () {
     $this->actingAs($user)
         ->get(route('ai.index'))
         ->assertSuccessful()
-        ->assertInertia(fn ($page) => $page
+        ->assertInertia(fn (Assert $page) => $page
             ->component('Ai/Chat')
             ->where('transcriptionAvailable', true)
         );
@@ -321,7 +324,7 @@ test('the AI chat index loads messages for an active conversation', function () 
     $this->actingAs($user)
         ->get(route('ai.index', ['conversation' => $conversationId]))
         ->assertSuccessful()
-        ->assertInertia(fn ($page) => $page
+        ->assertInertia(fn (Assert $page) => $page
             ->component('Ai/Chat')
             ->where('activeConversationId', $conversationId)
             ->has('messages', 1)
@@ -345,7 +348,7 @@ test('the AI chat index clears conversation ids the user does not own', function
     $this->actingAs($user)
         ->get(route('ai.index', ['conversation' => $conversationId]))
         ->assertSuccessful()
-        ->assertInertia(fn ($page) => $page
+        ->assertInertia(fn (Assert $page) => $page
             ->component('Ai/Chat')
             ->where('activeConversationId', null)
             ->where('messages', [])
@@ -383,7 +386,7 @@ test('the AI chat index normalizes invalid stored activity payloads', function (
     $this->actingAs($user)
         ->get(route('ai.index', ['conversation' => $conversationId]))
         ->assertSuccessful()
-        ->assertInertia(fn ($page) => $page
+        ->assertInertia(fn (Assert $page) => $page
             ->component('Ai/Chat')
             ->where('messages.0.tool_calls', [])
             ->where('messages.0.tool_results', [])
@@ -437,12 +440,57 @@ test('the AI chat index includes stored tool activity for assistant messages', f
     $this->actingAs($user)
         ->get(route('ai.index', ['conversation' => $conversationId]))
         ->assertSuccessful()
-        ->assertInertia(fn ($page) => $page
+        ->assertInertia(fn (Assert $page) => $page
             ->component('Ai/Chat')
             ->where('activeConversationId', $conversationId)
             ->where('messages.0.tool_calls.0.name', 'GetContributionSummary')
             ->where('messages.0.tool_results.0.id', 'tool-call-1')
             ->where('messages.0.tool_results.0.result.period', 'Year 2026')
+        );
+});
+
+test('the AI chat index drops malformed items from stored tool activity lists', function () {
+    $user = User::factory()->create();
+    $conversationId = (string) Str::uuid();
+
+    DB::table('agent_conversations')->insert([
+        'id' => $conversationId,
+        'user_id' => $user->id,
+        'title' => 'Malformed activity',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => (string) Str::uuid(),
+        'conversation_id' => $conversationId,
+        'user_id' => $user->id,
+        'agent' => 'App\\Ai\\Agents\\FamilyAssistant',
+        'role' => 'assistant',
+        'content' => 'Done',
+        'attachments' => '[]',
+        'tool_calls' => json_encode([
+            'invalid-activity',
+            ['name' => 'GetContributionSummary'],
+        ], JSON_THROW_ON_ERROR),
+        'tool_results' => json_encode([
+            null,
+            ['id' => 'tool-call-1'],
+        ], JSON_THROW_ON_ERROR),
+        'usage' => '{}',
+        'meta' => '{}',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('ai.index', ['conversation' => $conversationId]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('messages.0.tool_calls.0.name', 'GetContributionSummary')
+            ->where('messages.0.tool_results.0.id', 'tool-call-1')
+            ->missing('messages.0.tool_calls.1')
+            ->missing('messages.0.tool_results.1')
         );
 });
 

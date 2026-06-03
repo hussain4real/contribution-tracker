@@ -1,7 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Http\RedirectResponse;
@@ -18,8 +21,9 @@ class NotificationController extends Controller
     public function index(Request $request): Response
     {
         $filters = $this->filters($request);
+        $user = $this->user($request);
 
-        $notificationFeed = $request->user()
+        $notificationFeed = $user
             ->notifications()
             ->latest()
             ->when($filters['status'] === 'unread', fn (Builder $query) => $query->whereNull('read_at'))
@@ -27,13 +31,7 @@ class NotificationController extends Controller
             ->when($filters['type'] !== 'all', fn (Builder $query) => $this->whereNotificationDataType($query, $filters['type']))
             ->paginate(12)
             ->withQueryString()
-            ->through(fn (DatabaseNotification $notification): array => [
-                'id' => $notification->id,
-                'type' => $notification->type,
-                'data' => $notification->data,
-                'read_at' => $notification->read_at?->toIso8601String(),
-                'created_at' => $notification->created_at?->toIso8601String(),
-            ]);
+            ->through(fn (DatabaseNotification $notification): array => $this->notificationPayload($notification));
 
         return Inertia::render('Notifications/Index', [
             'notificationFeed' => $notificationFeed,
@@ -47,7 +45,9 @@ class NotificationController extends Controller
      */
     public function markAsRead(Request $request, DatabaseNotification $notification): RedirectResponse
     {
-        abort_unless((int) $notification->notifiable_id === $request->user()->id, 403);
+        $user = $this->user($request);
+
+        abort_unless((int) $notification->notifiable_id === $user->id, 403);
 
         $notification->markAsRead();
 
@@ -59,7 +59,7 @@ class NotificationController extends Controller
      */
     public function markAllAsRead(Request $request): RedirectResponse
     {
-        $request->user()->unreadNotifications()->update(['read_at' => now()]);
+        $this->user($request)->unreadNotifications()->update(['read_at' => now()]);
 
         return back();
     }
@@ -83,30 +83,49 @@ class NotificationController extends Controller
      */
     private function summary(Request $request): array
     {
-        $total = $request->user()->notifications()->count();
-        $unread = $request->user()->unreadNotifications()->count();
+        $user = $this->user($request);
+
+        $total = $user->notifications()->count();
+        $unread = $user->unreadNotifications()->count();
 
         return [
             'total' => $total,
             'unread' => $unread,
             'read' => $total - $unread,
-            'reminders' => $this->whereNotificationDataType($request->user()->notifications(), 'reminder')->count(),
-            'follow_ups' => $this->whereNotificationDataType($request->user()->notifications(), 'follow_up')->count(),
+            'reminders' => $this->whereNotificationDataType($user->notifications(), 'reminder')->count(),
+            'follow_ups' => $this->whereNotificationDataType($user->notifications(), 'follow_up')->count(),
         ];
     }
 
+    /**
+     * @param  Builder<DatabaseNotification>|MorphMany<DatabaseNotification, User>  $query
+     * @return Builder<DatabaseNotification>|MorphMany<DatabaseNotification, User>
+     */
     private function whereNotificationDataType(Builder|MorphMany $query, string $type): Builder|MorphMany
     {
         $connection = $query instanceof MorphMany
             ? $query->getRelated()->getConnection()
             : $query->getModel()->getConnection();
-        $column = $connection->getQueryGrammar()->wrap('data');
 
         return match ($connection->getDriverName()) {
-            'pgsql' => $query->whereRaw("({$column})::jsonb ->> 'type' = ?", [$type]),
-            'sqlite' => $query->whereRaw("json_extract({$column}, '$.type') = ?", [$type]),
-            'sqlsrv' => $query->whereRaw("json_value({$column}, '$.type') = ?", [$type]),
-            default => $query->whereRaw("json_unquote(json_extract({$column}, '$.type')) = ?", [$type]),
+            'pgsql' => $query->whereRaw("(data)::jsonb ->> 'type' = ?", [$type]),
+            'sqlite' => $query->whereRaw("json_extract(data, '$.type') = ?", [$type]),
+            'sqlsrv' => $query->whereRaw("json_value(data, '$.type') = ?", [$type]),
+            default => $query->whereRaw("json_unquote(json_extract(data, '$.type')) = ?", [$type]),
         };
+    }
+
+    /**
+     * @return array{id: string, type: string, data: array<mixed>, read_at: string|null, created_at: string|null}
+     */
+    private function notificationPayload(DatabaseNotification $notification): array
+    {
+        return [
+            'id' => $notification->id,
+            'type' => $notification->type,
+            'data' => $notification->data,
+            'read_at' => $notification->read_at?->toIso8601String(),
+            'created_at' => $notification->created_at?->toIso8601String(),
+        ];
     }
 }

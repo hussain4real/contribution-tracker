@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Console\Commands;
 
 use App\Models\Contribution;
@@ -30,7 +32,7 @@ class SendContributionReminders extends Command
         }
 
         $day = (int) $dayOption;
-        $type = $day >= 28 ? 'follow_up' : 'reminder';
+        $type = $this->reminderTypeForDay($day);
         $sentAtColumn = $this->sentAtColumnFor($type);
 
         $year = now()->year;
@@ -43,7 +45,7 @@ class SendContributionReminders extends Command
         Contribution::query()
             ->whereNull($sentAtColumn)
             ->whereHas('family', fn (Builder $query): Builder => $query->has('members'))
-            ->whereHas('user', fn (Builder $query): Builder => $query->active())
+            ->whereHas('user', fn (Builder $query): Builder => $query->whereNull('archived_at'))
             ->forMonth($year, $month)
             ->incomplete()
             ->with(['user', 'family', 'payments'])
@@ -58,11 +60,25 @@ class SendContributionReminders extends Command
         return self::SUCCESS;
     }
 
+    /**
+     * @return 'follow_up'|'reminder'
+     */
+    private function reminderTypeForDay(int $day): string
+    {
+        return $day >= 28 ? 'follow_up' : 'reminder';
+    }
+
+    /**
+     * @param  'follow_up'|'reminder'  $type
+     */
     private function sentAtColumnFor(string $type): string
     {
         return $type === 'follow_up' ? 'follow_up_sent_at' : 'reminder_sent_at';
     }
 
+    /**
+     * @param  'follow_up'|'reminder'  $type
+     */
     private function sendReminderIfUnsent(Contribution $contribution, string $sentAtColumn, string $type): bool
     {
         return (bool) Cache::lock(

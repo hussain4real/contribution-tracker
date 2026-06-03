@@ -8,9 +8,10 @@ use App\Enums\MemberCategory;
 use App\Enums\Role;
 use App\Http\Requests\StoreMemberRequest;
 use App\Http\Requests\UpdateMemberRequest;
+use App\Models\Contribution;
+use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -23,8 +24,7 @@ class MemberController extends Controller
      */
     public function index(): Response
     {
-        /** @var User $currentUser */
-        $currentUser = Auth::user();
+        $currentUser = $this->authUser();
 
         $members = User::query()
             ->where('family_id', $currentUser->family_id)
@@ -61,13 +61,10 @@ class MemberController extends Controller
                 'is_archived' => true,
             ]);
 
-        /** @var User $user */
-        $user = Auth::user();
-
         return Inertia::render('Members/Index', [
             'members' => $members,
             'archivedMembers' => $archivedMembers,
-            'canManageMembers' => $user->canManageMembers(),
+            'canManageMembers' => $currentUser->canManageMembers(),
         ]);
     }
 
@@ -77,8 +74,7 @@ class MemberController extends Controller
      */
     public function create(): Response
     {
-        /** @var User $user */
-        $user = Auth::user();
+        $user = $this->authUser();
 
         if (! $user->canManageMembers()) {
             abort(403);
@@ -97,14 +93,16 @@ class MemberController extends Controller
     public function store(StoreMemberRequest $request): RedirectResponse
     {
         $validated = $request->validated();
+        $attributes = $this->memberAttributes($validated);
+        $currentUser = $this->user($request);
 
         User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => Hash::make($validated['password']),
-            'category' => MemberCategory::from($validated['category']),
-            'role' => Role::from($validated['role']),
-            'family_id' => $request->user()->family_id,
+            'name' => $attributes['name'],
+            'email' => $attributes['email'],
+            'password' => Hash::make($attributes['password'] ?? ''),
+            'category' => $attributes['category'],
+            'role' => $attributes['role'],
+            'family_id' => $currentUser->family_id,
         ]);
 
         return redirect()
@@ -120,26 +118,27 @@ class MemberController extends Controller
      */
     public function show(User $member): Response
     {
-        /** @var User $currentUser */
-        $currentUser = Auth::user();
+        $currentUser = $this->authUser();
 
         // Determine if user can view contribution history
         // (own profile OR has elevated permissions)
         $canViewContributions = $currentUser->canViewAllMembers() || $currentUser->id === $member->id;
 
         // Only load contributions if user has permission
-        $contributions = collect();
+        $contributions = [];
         $totalExpected = 0;
         $totalPaid = 0;
 
         if ($canViewContributions) {
-            $contributions = $member->contributions()
+            $contributionModels = $member->contributions()
                 ->with('payments.recorder')
                 ->orderByDesc('year')
                 ->orderByDesc('month')
                 ->take(12) // Last 12 months
-                ->get()
-                ->map(fn ($contribution) => [
+                ->get();
+
+            $contributions = $contributionModels
+                ->map(fn (Contribution $contribution): array => [
                     'id' => $contribution->id,
                     'year' => $contribution->year,
                     'month' => $contribution->month,
@@ -150,20 +149,20 @@ class MemberController extends Controller
                     'status' => $contribution->status->value,
                     'status_label' => $contribution->status->label(),
                     'due_date' => $contribution->due_date->toDateString(),
-                    'payments' => $contribution->payments->map(fn ($payment) => [
+                    'payments' => $contribution->payments->map(fn (Payment $payment): array => [
                         'id' => $payment->id,
                         'amount' => $payment->amount,
                         'paid_at' => $payment->paid_at->toDateString(),
                         'notes' => $payment->notes,
                         'recorder' => [
-                            'name' => $payment->recorder->name,
+                            'name' => $payment->recorder?->name,
                         ],
-                    ]),
-                ]);
+                    ])->values()->all(),
+                ])->values()->all();
 
             // Calculate summary statistics
-            $totalExpected = $contributions->sum('expected_amount');
-            $totalPaid = $contributions->sum('total_paid');
+            $totalExpected = (int) $contributionModels->sum(fn (Contribution $contribution): int => $contribution->expected_amount);
+            $totalPaid = (int) $contributionModels->sum(fn (Contribution $contribution): int => $contribution->total_paid);
         }
 
         return Inertia::render('Members/Show', [
@@ -187,13 +186,13 @@ class MemberController extends Controller
                 'total_expected' => $totalExpected,
                 'total_paid' => $totalPaid,
                 'total_outstanding' => $totalExpected - $totalPaid,
-                'contribution_count' => $contributions->count(),
+                'contribution_count' => count($contributions),
             ],
-            'canManageMembers' => Auth::user()?->canManageMembers() ?? false,
+            'canManageMembers' => $currentUser->canManageMembers(),
             'canViewContributions' => $canViewContributions,
-            'canSendEmailReminder' => Auth::user()?->canRecordPayments() ?? false,
-            'canSendWhatsAppReminder' => Auth::user()?->canRecordPayments() ?? false,
-            'canSendWebPushReminder' => Auth::user()?->canRecordPayments() ?? false,
+            'canSendEmailReminder' => $currentUser->canRecordPayments(),
+            'canSendWhatsAppReminder' => $currentUser->canRecordPayments(),
+            'canSendWebPushReminder' => $currentUser->canRecordPayments(),
         ]);
     }
 
@@ -203,8 +202,7 @@ class MemberController extends Controller
      */
     public function edit(User $member): Response
     {
-        /** @var User $user */
-        $user = Auth::user();
+        $user = $this->authUser();
 
         if (! $user->canManageMembers()) {
             abort(403);
@@ -231,10 +229,10 @@ class MemberController extends Controller
     public function update(UpdateMemberRequest $request, User $member): RedirectResponse
     {
         $validated = $request->validated();
+        $attributes = $this->memberAttributes($validated, includePassword: false);
 
-        /** @var User $currentUser */
-        $currentUser = Auth::user();
-        $newRole = Role::from($validated['role']);
+        $currentUser = $this->authUser();
+        $newRole = $attributes['role'];
         $oldRole = $member->role;
         $roleChanged = $oldRole !== $newRole;
 
@@ -259,14 +257,14 @@ class MemberController extends Controller
         }
 
         $data = [
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'category' => MemberCategory::from($validated['category']),
+            'name' => $attributes['name'],
+            'email' => $attributes['email'],
+            'category' => $attributes['category'],
             'role' => $newRole,
         ];
 
-        if (! empty($validated['password'])) {
-            $data['password'] = Hash::make($validated['password']);
+        if ($attributes['password'] !== null) {
+            $data['password'] = Hash::make($attributes['password']);
         }
 
         $member->update($data);
@@ -288,8 +286,7 @@ class MemberController extends Controller
      */
     public function destroy(User $member): RedirectResponse
     {
-        /** @var User $user */
-        $user = Auth::user();
+        $user = $this->authUser();
 
         if (! $user->canManageMembers()) {
             abort(403);
@@ -318,8 +315,7 @@ class MemberController extends Controller
      */
     public function restore(User $member): RedirectResponse
     {
-        /** @var User $user */
-        $user = Auth::user();
+        $user = $this->authUser();
 
         if (! $user->canManageMembers()) {
             abort(403);
@@ -339,14 +335,14 @@ class MemberController extends Controller
      */
     private function getCategoryOptions(): array
     {
-        return collect(MemberCategory::cases())
-            ->map(fn (MemberCategory $category) => [
+        return array_map(
+            fn (MemberCategory $category): array => [
                 'value' => $category->value,
                 'label' => $category->label(),
                 'amount' => $category->monthlyAmount(),
-            ])
-            ->values()
-            ->toArray();
+            ],
+            MemberCategory::cases(),
+        );
     }
 
     /**
@@ -356,12 +352,39 @@ class MemberController extends Controller
      */
     private function getRoleOptions(): array
     {
-        return collect(Role::cases())
-            ->map(fn (Role $role) => [
+        return array_map(
+            fn (Role $role): array => [
                 'value' => $role->value,
                 'label' => $role->label(),
-            ])
-            ->values()
-            ->toArray();
+            ],
+            Role::cases(),
+        );
+    }
+
+    /**
+     * @return array{name: string, email: string, password: string|null, category: MemberCategory, role: Role}
+     */
+    private function memberAttributes(mixed $validated, bool $includePassword = true): array
+    {
+        $validated = is_array($validated) ? $validated : [];
+        $password = $this->nullableString($validated['password'] ?? null);
+
+        return [
+            'name' => $this->stringValue($validated['name'] ?? null),
+            'email' => $this->stringValue($validated['email'] ?? null),
+            'password' => $includePassword ? $this->stringValue($validated['password'] ?? null) : $password,
+            'category' => MemberCategory::from($this->stringValue($validated['category'] ?? MemberCategory::Employed->value)),
+            'role' => Role::from($this->stringValue($validated['role'] ?? Role::Member->value)),
+        ];
+    }
+
+    private function stringValue(mixed $value): string
+    {
+        return is_scalar($value) ? (string) $value : '';
+    }
+
+    private function nullableString(mixed $value): ?string
+    {
+        return is_string($value) && $value !== '' ? $value : null;
     }
 }

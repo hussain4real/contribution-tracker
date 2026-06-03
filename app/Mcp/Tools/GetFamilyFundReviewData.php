@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Mcp\Tools;
 
 use App\Mcp\Resources\FamilyFundReviewApp;
@@ -39,14 +41,14 @@ class GetFamilyFundReviewData extends Tool
 
         return Response::json($this->reviewService->monthly(
             user: $user,
-            year: (int) ($validated['year'] ?? now()->year),
-            month: (int) ($validated['month'] ?? now()->month),
-            status: $validated['status'] ?? null,
+            year: $this->integerValue($validated['year'] ?? null, now()->year),
+            month: $this->integerValue($validated['month'] ?? null, now()->month),
+            status: $this->nullableString($validated['status'] ?? null),
         ));
     }
 
     /**
-     * @return array<string, JsonSchema>
+     * @return array<string, mixed>
      */
     public function schema(JsonSchema $schema): array
     {
@@ -63,5 +65,15 @@ class GetFamilyFundReviewData extends Tool
                 ->enum(['all', 'paid', 'partial', 'unpaid', 'overdue'])
                 ->description('Optional member status filter.'),
         ];
+    }
+
+    private function integerValue(mixed $value, int $default): int
+    {
+        return is_numeric($value) ? (int) $value : $default;
+    }
+
+    private function nullableString(mixed $value): ?string
+    {
+        return is_string($value) ? $value : null;
     }
 }

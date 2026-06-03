@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\Contribution;
 use App\Models\Expense;
 use App\Models\Family;

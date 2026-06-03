@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Ai\Agents\ContributionAnalysisAgent;
 use App\Ai\Agents\ContributionGenerationAgent;
 use App\Ai\Agents\ExpenseAnalysisAgent;
@@ -37,7 +39,7 @@ it('builds instructions for members without a family workspace', function () {
     $instructions = (new FamilyAssistant($user))->instructions();
 
     expect($instructions)
-        ->toContain('the "your family" family contribution tracking group')
+        ->toContain('the "the family" family contribution tracking group')
         ->toContain('You are speaking with Amina (role: member)')
         ->toContain('Coordinator')
         ->toContain('Each sub-agent runs in isolation')
@@ -70,7 +72,11 @@ it('builds instructions with elevated role capabilities and family currency', fu
 });
 
 it('exposes tools based on the authenticated user role', function (string $state, array $expectedTools) {
-    $user = User::factory()->{$state}()->create();
+    $user = match ($state) {
+        'admin' => User::factory()->admin()->create(),
+        'financialSecretary' => User::factory()->financialSecretary()->create(),
+        default => User::factory()->member()->create(),
+    };
 
     $tools = collect((new FamilyAssistant($user))->tools())
         ->map(fn (object $tool): string => $tool::class)

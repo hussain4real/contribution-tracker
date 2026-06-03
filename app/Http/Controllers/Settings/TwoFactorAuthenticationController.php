@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
@@ -28,9 +30,10 @@ class TwoFactorAuthenticationController extends Controller implements HasMiddlew
     public function show(TwoFactorAuthenticationRequest $request): Response
     {
         $request->ensureStateIsValid();
+        $user = $this->user($request);
 
         return Inertia::render('settings/TwoFactor', [
-            'twoFactorEnabled' => $request->user()->hasEnabledTwoFactorAuthentication(),
+            'twoFactorEnabled' => $user->hasEnabledTwoFactorAuthentication(),
             'requiresConfirmation' => Features::optionEnabled(Features::twoFactorAuthentication(), 'confirm'),
         ]);
     }

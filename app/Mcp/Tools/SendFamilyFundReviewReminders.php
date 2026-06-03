@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Mcp\Tools;
 
 use App\Mcp\Resources\FamilyFundReviewApp;
@@ -44,12 +46,10 @@ class SendFamilyFundReviewReminders extends Tool
             'confirmed' => ['nullable', 'boolean'],
         ]);
 
-        $contributionIds = collect($validated['contribution_ids'])
-            ->map(fn (mixed $id): int => (int) $id)
+        $contributionIds = collect($this->integerList($validated['contribution_ids'] ?? []))
             ->unique()
             ->values();
-        $channels = collect($validated['channels'])
-            ->intersect(self::CHANNELS)
+        $channels = collect($this->channelList($validated['channels'] ?? []))
             ->unique()
             ->values();
 
@@ -67,14 +67,23 @@ class SendFamilyFundReviewReminders extends Tool
         }
 
         foreach ($preview['valid'] as $entry) {
-            $entry['member']->notify(
-                (new ContributionReminderNotification($entry['contribution'], $entry['type']))
-                    ->onlyChannels($entry['channels'])
-            );
+            $member = $entry['member'] ?? null;
+            $contribution = $entry['contribution'] ?? null;
+            $type = $entry['type'] ?? null;
+
+            if ($member instanceof User && $contribution instanceof Contribution && in_array($type, ['reminder', 'follow_up'], true)) {
+                $member->notify(
+                    (new ContributionReminderNotification($contribution, $type))
+                        ->onlyChannels($this->stringList($entry['channels'] ?? []))
+                );
+            }
         }
 
         $sentCount = count($preview['valid']);
-        $channelDeliveryCount = collect($preview['valid'])->sum(fn (array $entry): int => count($entry['channels']));
+        $channelDeliveryCount = array_sum(array_map(
+            fn (array $entry): int => count($this->stringList($entry['channels'] ?? [])),
+            $preview['valid'],
+        ));
 
         return Response::json([
             'status' => $sentCount > 0 ? 'success' : 'no_valid_reminders',
@@ -91,7 +100,7 @@ class SendFamilyFundReviewReminders extends Tool
     }
 
     /**
-     * @return array<string, JsonSchema>
+     * @return array<string, mixed>
      */
     public function schema(JsonSchema $schema): array
     {
@@ -123,7 +132,7 @@ class SendFamilyFundReviewReminders extends Tool
         $contributions = Contribution::query()
             ->where('family_id', $user->family_id)
             ->whereIn('id', $contributionIds)
-            ->with(['user' => fn ($query) => $query->withExists('pushSubscriptions'), 'family', 'payments'])
+            ->with(['user', 'family', 'payments'])
             ->get()
             ->keyBy('id');
 
@@ -202,7 +211,7 @@ class SendFamilyFundReviewReminders extends Tool
             $channels[] = 'whatsapp';
         }
 
-        if ((bool) ($member->push_subscriptions_exists ?? false)) {
+        if ($member->hasWebPushSubscription()) {
             $channels[] = 'webpush';
         }
 
@@ -231,7 +240,7 @@ class SendFamilyFundReviewReminders extends Tool
         ];
 
         foreach ($valid as $entry) {
-            foreach ($entry['channels'] as $channel) {
+            foreach ($this->stringList($entry['channels'] ?? []) as $channel) {
                 $counts[$channel]++;
             }
         }
@@ -256,5 +265,45 @@ class SendFamilyFundReviewReminders extends Tool
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function integerList(mixed $value): array
+    {
+        $items = [];
+
+        foreach (is_array($value) ? $value : [] as $item) {
+            if (is_numeric($item)) {
+                $items[] = (int) $item;
+            }
+        }
+
+        return $items;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function channelList(mixed $value): array
+    {
+        return array_values(array_intersect($this->stringList($value), self::CHANNELS));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function stringList(mixed $value): array
+    {
+        $items = [];
+
+        foreach (is_array($value) ? $value : [] as $item) {
+            if (is_string($item)) {
+                $items[] = $item;
+            }
+        }
+
+        return $items;
     }
 }

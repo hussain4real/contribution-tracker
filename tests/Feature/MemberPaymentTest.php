@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Enums\TransactionStatus;
 use App\Enums\TransactionType;
 use App\Models\Contribution;
@@ -106,7 +108,69 @@ it('marks the transaction failed when paystack initialization fails', function (
         ->assertServerError()
         ->assertJson(['message' => 'Failed to initialize payment. Please try again.']);
 
-    expect(PaystackTransaction::first()->status)->toBe(TransactionStatus::Failed);
+    expect(PaystackTransaction::query()->firstOrFail()->status)->toBe(TransactionStatus::Failed);
+});
+
+it('marks the transaction failed when paystack initialization returns malformed data', function () {
+    Http::fake([
+        'api.paystack.co/transaction/initialize' => Http::response([
+            'status' => true,
+            'data' => null,
+        ]),
+    ]);
+
+    $family = Family::factory()->create([
+        'bank_name' => 'Kuda Bank',
+        'bank_code' => '090267',
+        'account_number' => '1234567890',
+    ]);
+    $member = User::factory()->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->create([
+        'family_id' => $family->id,
+        'user_id' => $member->id,
+        'expected_amount' => 4000,
+    ]);
+
+    $this->actingAs($member)
+        ->postJson(route('pay.initiate'), [
+            'contribution_ids' => [$contribution->id],
+        ])
+        ->assertServerError()
+        ->assertJson(['message' => 'Failed to initialize payment. Please try again.']);
+
+    expect(PaystackTransaction::query()->firstOrFail()->status)->toBe(TransactionStatus::Failed);
+});
+
+it('marks the transaction failed when paystack initialization omits required checkout fields', function () {
+    Http::fake([
+        'api.paystack.co/transaction/initialize' => Http::response([
+            'status' => true,
+            'data' => [
+                'authorization_url' => 'https://checkout.paystack.com/missing-access-code',
+            ],
+        ]),
+    ]);
+
+    $family = Family::factory()->create([
+        'bank_name' => 'Kuda Bank',
+        'bank_code' => '090267',
+        'account_number' => '1234567890',
+    ]);
+    $member = User::factory()->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->create([
+        'family_id' => $family->id,
+        'user_id' => $member->id,
+        'expected_amount' => 4000,
+    ]);
+
+    $this->actingAs($member)
+        ->postJson(route('pay.initiate'), [
+            'contribution_ids' => [$contribution->id],
+        ])
+        ->assertServerError()
+        ->assertJson(['message' => 'Failed to initialize payment. Please try again.']);
+
+    expect(PaystackTransaction::query()->firstOrFail()->status)->toBe(TransactionStatus::Failed);
 });
 
 it('fails to initiate without bank details', function () {

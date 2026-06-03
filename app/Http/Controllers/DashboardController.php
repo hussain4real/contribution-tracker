@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use App\Enums\PaymentStatus;
@@ -9,7 +11,6 @@ use App\Models\FundAdjustment;
 use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -23,8 +24,7 @@ class DashboardController extends Controller
      */
     public function index(): Response
     {
-        /** @var User $user */
-        $user = Auth::user();
+        $user = $this->authUser();
         $currentYear = now()->year;
         $currentMonth = now()->month;
 
@@ -55,7 +55,7 @@ class DashboardController extends Controller
             'can_record_payments' => $canRecordPayments,
             'can_generate_contributions' => $user->isAdmin(),
             'has_pending_contributions' => $membersNeedingContributions,
-            'fund_balance' => $this->calculateFundBalance(),
+            'fund_balance' => $this->calculateFundBalance((int) $user->family_id),
         ];
 
         if ($canSeeAllMembers) {
@@ -76,37 +76,26 @@ class DashboardController extends Controller
     /**
      * Calculate summary statistics for current month.
      *
-     * @param  Collection<Contribution>  $currentMonthContributions
-     * @param  Collection<Contribution>  $allContributions
+     * @param  Collection<int, Contribution>  $currentMonthContributions
+     * @param  Collection<int, Contribution>  $allContributions
+     * @return array<string, mixed>
      */
-    private function calculateSummary($currentMonthContributions, $allContributions): array
+    private function calculateSummary(Collection $currentMonthContributions, Collection $allContributions): array
     {
-        /** @var User $user */
-        $user = Auth::user();
+        $user = $this->authUser();
         $totalMembers = User::where('family_id', $user->family_id)->active()->count();
-        $totalExpected = $currentMonthContributions->sum('expected_amount');
-        $currentMonthCollected = $currentMonthContributions->sum(fn ($c) => $c->payments->sum('amount'));
+        $totalExpected = (int) $currentMonthContributions->sum(fn (Contribution $contribution): int => $contribution->expected_amount);
+        $currentMonthCollected = (int) $currentMonthContributions->sum(fn (Contribution $contribution): int => $this->paidAmount($contribution));
         $totalOutstanding = $totalExpected - $currentMonthCollected;
 
         // All-time collected across all months
-        $allTimeCollected = $allContributions->sum(fn ($c) => $c->payments->sum('amount'));
+        $allTimeCollected = (int) $allContributions->sum(fn (Contribution $contribution): int => $this->paidAmount($contribution));
 
         // Monthly breakdown for the modal (grouped by year-month, sorted descending)
-        $monthlyBreakdown = $allContributions
-            ->groupBy(fn ($c) => $c->year.'-'.str_pad((string) $c->month, 2, '0', STR_PAD_LEFT))
-            ->map(fn ($contributions, $key) => [
-                'period' => $key,
-                'year' => $contributions->first()->year,
-                'month' => $contributions->first()->month,
-                'expected' => $contributions->sum('expected_amount'),
-                'collected' => $contributions->sum(fn ($c) => $c->payments->sum('amount')),
-            ])
-            ->sortByDesc('period')
-            ->values()
-            ->all();
+        $monthlyBreakdown = $this->monthlyBreakdown($allContributions);
 
         // Count all overdue contributions across all months (FR-006)
-        $overdueCount = $allContributions->filter(fn ($c) => $c->status === PaymentStatus::Overdue)->count();
+        $overdueCount = $allContributions->filter(fn (Contribution $contribution): bool => $contribution->status === PaymentStatus::Overdue)->count();
 
         return [
             'total_members' => $totalMembers,
@@ -125,34 +114,33 @@ class DashboardController extends Controller
     /**
      * Get all members' contribution statuses for the current month.
      *
-     * @param  Collection<Contribution>  $currentMonthContributions
-     * @param  Collection<Contribution>  $allContributions
+     * @param  Collection<int, Contribution>  $currentMonthContributions
+     * @param  Collection<int, Contribution>  $allContributions
+     * @return list<array<string, mixed>>
      */
-    private function getMemberStatuses($currentMonthContributions, $allContributions): array
+    private function getMemberStatuses(Collection $currentMonthContributions, Collection $allContributions): array
     {
-        // Group all contributions by user to check for overdue
-        $overdueByUser = $allContributions
-            ->filter(fn ($c) => $c->status === PaymentStatus::Overdue)
-            ->groupBy('user_id')
-            ->map(fn ($contributions) => $contributions->isNotEmpty());
+        $overdueByUser = [];
+        $accruedByUser = [];
 
-        // Calculate total outstanding balance across all months per user
-        $accruedByUser = $allContributions
-            ->groupBy('user_id')
-            ->map(fn ($contributions) => $contributions->sum(
-                fn ($c) => max(0, $c->expected_amount - $c->payments->sum('amount'))
-            ));
+        foreach ($allContributions as $contribution) {
+            $overdueByUser[$contribution->user_id] = ($overdueByUser[$contribution->user_id] ?? false)
+                || $contribution->status === PaymentStatus::Overdue;
+            $accruedByUser[$contribution->user_id] = ($accruedByUser[$contribution->user_id] ?? 0)
+                + max(0, $contribution->expected_amount - $this->paidAmount($contribution));
+        }
 
-        return $currentMonthContributions->map(function ($contribution) use ($overdueByUser, $accruedByUser) {
-            $totalPaid = $contribution->payments->sum('amount');
+        $statuses = $currentMonthContributions->map(function (Contribution $contribution) use ($overdueByUser, $accruedByUser): array {
+            $member = $contribution->user;
+            $totalPaid = $this->paidAmount($contribution);
             $balance = $contribution->expected_amount - $totalPaid;
-            $hasOverdue = $overdueByUser->get($contribution->user_id, false);
-            $accruedBalance = $accruedByUser->get($contribution->user_id, 0);
+            $hasOverdue = $overdueByUser[$contribution->user_id] ?? false;
+            $accruedBalance = $accruedByUser[$contribution->user_id] ?? 0;
 
             return [
-                'id' => $contribution->user->id,
-                'name' => $contribution->user->name,
-                'category' => $contribution->user->category?->value,
+                'id' => $member?->id,
+                'name' => $member?->name,
+                'category' => $member?->category?->value,
                 'expected_amount' => $contribution->expected_amount,
                 'total_paid' => $totalPaid,
                 'current_month_status' => $contribution->status->value,
@@ -161,44 +149,51 @@ class DashboardController extends Controller
                 'contribution_id' => $contribution->id,
                 'has_overdue' => $hasOverdue,
             ];
-        })->values()->toArray();
+        })->values()->all();
+
+        return array_values($statuses);
     }
 
     /**
      * Get recent payments (last 10) from already-loaded contributions.
      *
      * @param  Collection<int, Contribution>  $allContributions
+     * @return list<array<string, mixed>>
      */
     private function getRecentPayments(Collection $allContributions): array
     {
-        return $allContributions
-            ->flatMap(fn ($contribution) => $contribution->payments->map(
-                fn ($payment) => [
+        $payments = [];
+
+        foreach ($allContributions as $contribution) {
+            foreach ($contribution->payments as $payment) {
+                $payments[] = [
                     'id' => $payment->id,
                     'amount' => $payment->amount,
                     'paid_at' => $payment->paid_at->toDateString(),
-                    'member_name' => $contribution->user->name,
-                    'category' => $contribution->user->category,
+                    'member_name' => $contribution->user instanceof User ? $contribution->user->name : 'Unknown',
+                    'category' => $contribution->user?->category,
                     'recorded_by' => $payment->recorder?->name,
                     'month' => $contribution->month,
                     'year' => $contribution->year,
-                ]
-            ))
-            ->sortByDesc(fn ($p) => [$p['paid_at'], $p['id']])
-            ->take(10)
-            ->values()
-            ->toArray();
+                ];
+            }
+        }
+
+        usort($payments, fn (array $first, array $second): int => [$second['paid_at'], $second['id']] <=> [$first['paid_at'], $first['id']]);
+
+        return array_slice($payments, 0, 10);
     }
 
     /**
      * Calculate family aggregate stats for member view (FR-015).
      *
-     * @param  Collection<Contribution>  $contributions
+     * @param  Collection<int, Contribution>  $contributions
+     * @return array<string, int|float>
      */
-    private function calculateFamilyAggregate($contributions): array
+    private function calculateFamilyAggregate(Collection $contributions): array
     {
-        $totalExpected = $contributions->sum('expected_amount');
-        $totalCollected = $contributions->sum(fn ($c) => $c->payments->sum('amount'));
+        $totalExpected = (int) $contributions->sum(fn (Contribution $contribution): int => $contribution->expected_amount);
+        $totalCollected = (int) $contributions->sum(fn (Contribution $contribution): int => $this->paidAmount($contribution));
         $totalOutstanding = $totalExpected - $totalCollected;
 
         return [
@@ -213,6 +208,8 @@ class DashboardController extends Controller
 
     /**
      * Get personal contribution status for the logged-in member.
+     *
+     * @return array<string, int|string>
      */
     private function getPersonalStatus(User $user, int $year, int $month): array
     {
@@ -232,7 +229,7 @@ class DashboardController extends Controller
             ];
         }
 
-        $totalPaid = $contribution->payments->sum('amount');
+        $totalPaid = $this->paidAmount($contribution);
         $balance = $contribution->expected_amount - $totalPaid;
 
         return [
@@ -247,29 +244,43 @@ class DashboardController extends Controller
      * Get detailed list of overdue members with their overdue contributions.
      *
      * @param  Collection<int, Contribution>  $allContributions
+     * @return list<array<string, mixed>>
      */
     private function getOverdueMembers(Collection $allContributions): array
     {
-        return $allContributions
-            ->filter(fn ($c) => $c->status === PaymentStatus::Overdue)
-            ->map(function ($contribution) {
-                $totalPaid = $contribution->payments->sum('amount');
+        $members = [];
 
-                return [
-                    'id' => $contribution->user->id,
-                    'name' => $contribution->user->name,
-                    'category' => $contribution->user->category?->value,
-                    'month' => $contribution->month,
-                    'year' => $contribution->year,
-                    'expected_amount' => $contribution->expected_amount,
-                    'total_paid' => $totalPaid,
-                    'balance' => $contribution->expected_amount - $totalPaid,
-                    'contribution_id' => $contribution->id,
-                ];
-            })
-            ->sortBy([['name', 'asc'], ['year', 'desc'], ['month', 'desc']])
-            ->values()
-            ->toArray();
+        foreach ($allContributions as $contribution) {
+            if ($contribution->status !== PaymentStatus::Overdue) {
+                continue;
+            }
+
+            $totalPaid = $this->paidAmount($contribution);
+
+            $members[] = [
+                'id' => $contribution->user?->id,
+                'name' => $contribution->user instanceof User ? $contribution->user->name : 'Unknown',
+                'category' => $contribution->user?->category?->value,
+                'month' => $contribution->month,
+                'year' => $contribution->year,
+                'expected_amount' => $contribution->expected_amount,
+                'total_paid' => $totalPaid,
+                'balance' => $contribution->expected_amount - $totalPaid,
+                'contribution_id' => $contribution->id,
+            ];
+        }
+
+        usort($members, fn (array $first, array $second): int => [
+            $first['name'],
+            -$first['year'],
+            -$first['month'],
+        ] <=> [
+            $second['name'],
+            -$second['year'],
+            -$second['month'],
+        ]);
+
+        return $members;
     }
 
     /**
@@ -277,18 +288,50 @@ class DashboardController extends Controller
      *
      * Fund Balance = SUM(payments) + SUM(fund_adjustments) - SUM(expenses)
      */
-    private function calculateFundBalance(): int
+    private function calculateFundBalance(int $familyId): int
     {
-        /** @var User $user */
-        $user = Auth::user();
-        $familyId = $user->family_id;
-
         $totalPayments = (int) Payment::query()
-            ->whereHas('contribution', fn ($q) => $q->where('family_id', $familyId))
+            ->whereIn(
+                'contribution_id',
+                Contribution::query()->where('family_id', $familyId)->select('id'),
+            )
             ->sum('amount');
         $totalAdjustments = (int) FundAdjustment::query()->where('family_id', $familyId)->sum('amount');
         $totalExpenses = (int) Expense::query()->where('family_id', $familyId)->sum('amount');
 
         return $totalPayments + $totalAdjustments - $totalExpenses;
+    }
+
+    private function paidAmount(Contribution $contribution): int
+    {
+        return (int) $contribution->payments->sum(fn (Payment $payment): int => $payment->amount);
+    }
+
+    /**
+     * @param  Collection<int, Contribution>  $allContributions
+     * @return list<array{period: string, year: int, month: int, expected: int, collected: int}>
+     */
+    private function monthlyBreakdown(Collection $allContributions): array
+    {
+        $breakdown = [];
+
+        foreach ($allContributions as $contribution) {
+            $key = $contribution->year.'-'.str_pad((string) $contribution->month, 2, '0', STR_PAD_LEFT);
+
+            $breakdown[$key] ??= [
+                'period' => $key,
+                'year' => $contribution->year,
+                'month' => $contribution->month,
+                'expected' => 0,
+                'collected' => 0,
+            ];
+
+            $breakdown[$key]['expected'] += $contribution->expected_amount;
+            $breakdown[$key]['collected'] += $this->paidAmount($contribution);
+        }
+
+        krsort($breakdown);
+
+        return array_values($breakdown);
     }
 }

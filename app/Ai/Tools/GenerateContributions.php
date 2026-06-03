@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Ai\Tools;
 
 use App\Models\User;
@@ -8,7 +10,6 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\Artisan;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
-use Stringable;
 
 class GenerateContributions implements Tool
 {
@@ -17,7 +18,7 @@ class GenerateContributions implements Tool
     /**
      * Get the description of the tool's purpose.
      */
-    public function description(): Stringable|string
+    public function description(): string
     {
         return 'Generates contribution records for all active family members for a given month and year. This creates the expected contribution entries that members need to pay. Only admins can use this. Always call without confirmed=true first to preview.';
     }
@@ -25,15 +26,15 @@ class GenerateContributions implements Tool
     /**
      * Execute the tool.
      */
-    public function handle(Request $request): Stringable|string
+    public function handle(Request $request): string
     {
         if (! $this->user->isAdmin()) {
             return json_encode(['error' => 'Only family admins can generate contributions.'], JSON_THROW_ON_ERROR);
         }
 
-        $year = $request['year'] ?? now()->year;
-        $month = $request['month'] ?? now()->month;
-        $confirmed = $request['confirmed'] ?? false;
+        $year = $this->integerFromRequest($request['year'] ?? null, now()->year);
+        $month = $this->integerFromRequest($request['month'] ?? null, now()->month);
+        $confirmed = ($request['confirmed'] ?? false) === true;
 
         $periodLabel = Carbon::createFromDate($year, $month, 1)->format('F Y');
 
@@ -74,5 +75,10 @@ class GenerateContributions implements Tool
             'month' => $schema->integer()->min(1)->max(12),
             'confirmed' => $schema->boolean(),
         ];
+    }
+
+    private function integerFromRequest(mixed $value, int $default): int
+    {
+        return is_numeric($value) ? (int) $value : $default;
     }
 }

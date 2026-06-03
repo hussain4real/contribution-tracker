@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 /**
  * Browser test for Payment Recording Flow
  *
@@ -43,7 +45,7 @@ describe('Payment Recording Flow (Browser)', function () {
             ->assertSee('Payment of ₦4,000.00 recorded for John Doe.')
             ->assertNoJavaScriptErrors();
 
-        expect($this->contribution->fresh()->isPaid())->toBeTrue();
+        expect($this->contribution->refresh()->isPaid())->toBeTrue();
     });
 
     it('shows pending contributions on payment form', function () {

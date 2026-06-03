@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Jobs;
 
 use App\Models\User;
@@ -35,18 +37,12 @@ class ProcessWhatsAppWebhook implements ShouldQueue
             return;
         }
 
-        foreach ($entries as $entry) {
-            $changes = $entry['changes'] ?? [];
-
-            if (! is_array($changes)) {
-                continue;
-            }
-
-            foreach ($changes as $change) {
+        foreach ($this->arrayList($entries) as $entry) {
+            foreach ($this->arrayList($entry['changes'] ?? []) as $change) {
                 $field = $change['field'] ?? null;
-                $value = $change['value'] ?? [];
+                $value = $this->stringKeyedArray($change['value'] ?? null);
 
-                if (! is_array($value)) {
+                if ($value === null) {
                     continue;
                 }
 
@@ -66,16 +62,12 @@ class ProcessWhatsAppWebhook implements ShouldQueue
      */
     protected function handleMessagesField(array $value): void
     {
-        foreach (($value['statuses'] ?? []) as $status) {
-            if (is_array($status)) {
-                $this->updateOutboundStatus($status);
-            }
+        foreach ($this->arrayList($value['statuses'] ?? []) as $status) {
+            $this->updateOutboundStatus($status);
         }
 
-        foreach (($value['messages'] ?? []) as $message) {
-            if (is_array($message)) {
-                $this->recordInboundMessage($message, $value);
-            }
+        foreach ($this->arrayList($value['messages'] ?? []) as $message) {
+            $this->recordInboundMessage($message, $value);
         }
     }
 
@@ -103,10 +95,13 @@ class ProcessWhatsAppWebhook implements ShouldQueue
             $errors = $status['errors'] ?? [];
             $firstError = is_array($errors) && isset($errors[0]) && is_array($errors[0]) ? $errors[0] : null;
 
+            $errorCode = $firstError['code'] ?? null;
+            $errorMessage = $firstError['title'] ?? $firstError['message'] ?? null;
+
             $message->update([
                 'status' => $newStatus,
-                'error_code' => isset($firstError['code']) ? (string) $firstError['code'] : $message->error_code,
-                'error_message' => $firstError['title'] ?? $firstError['message'] ?? $message->error_message,
+                'error_code' => is_scalar($errorCode) ? (string) $errorCode : $message->error_code,
+                'error_message' => is_scalar($errorMessage) ? (string) $errorMessage : $message->error_message,
             ]);
         } catch (Throwable $e) {
             Log::warning('Failed to update outbound WhatsApp status', [
@@ -137,23 +132,31 @@ class ProcessWhatsAppWebhook implements ShouldQueue
             return;
         }
 
+        $text = $this->stringKeyedArray($message['text'] ?? null);
+        $button = $this->stringKeyedArray($message['button'] ?? null);
+        $interactive = $this->stringKeyedArray($message['interactive'] ?? null);
+        $buttonReply = $this->stringKeyedArray($interactive['button_reply'] ?? null);
+        $listReply = $this->stringKeyedArray($interactive['list_reply'] ?? null);
+
         $body = match ($type) {
-            'text' => $message['text']['body'] ?? null,
-            'button' => $message['button']['text'] ?? null,
-            'interactive' => $message['interactive']['button_reply']['title']
-                ?? $message['interactive']['list_reply']['title']
+            'text' => $text['body'] ?? null,
+            'button' => $button['text'] ?? null,
+            'interactive' => $buttonReply['title']
+                ?? $listReply['title']
                 ?? null,
             default => null,
         };
 
         $user = $this->matchUser($from);
+        $metadata = $this->stringKeyedArray($value['metadata'] ?? null);
+        $phoneNumberId = $metadata['phone_number_id'] ?? config('services.whatsapp.phone_number_id');
 
         try {
             WhatsAppMessage::create([
                 'wa_message_id' => $waMessageId,
                 'direction' => 'inbound',
                 'from' => $from,
-                'to' => $value['metadata']['phone_number_id'] ?? config('services.whatsapp.phone_number_id'),
+                'to' => is_scalar($phoneNumberId) ? (string) $phoneNumberId : '',
                 'type' => is_string($type) ? $type : 'text',
                 'body' => is_string($body) ? $body : null,
                 'template_name' => null,
@@ -227,5 +230,47 @@ class ProcessWhatsAppWebhook implements ShouldQueue
             'event' => $value['event'] ?? null,
             'reason' => $value['reason'] ?? null,
         ]);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function arrayList(mixed $value): array
+    {
+        if (! is_array($value)) {
+            return [];
+        }
+
+        $items = [];
+
+        foreach ($value as $item) {
+            $item = $this->stringKeyedArray($item);
+
+            if ($item !== null) {
+                $items[] = $item;
+            }
+        }
+
+        return $items;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function stringKeyedArray(mixed $value): ?array
+    {
+        if (! is_array($value)) {
+            return null;
+        }
+
+        $items = [];
+
+        foreach ($value as $key => $item) {
+            if (is_string($key)) {
+                $items[$key] = $item;
+            }
+        }
+
+        return $items;
     }
 }

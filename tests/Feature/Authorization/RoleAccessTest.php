@@ -1,5 +1,8 @@
 <?php
 
+declare(strict_types=1);
+
+use App\Enums\MemberCategory;
 use App\Enums\Role;
 use App\Models\Contribution;
 use App\Models\User;
@@ -25,7 +28,7 @@ describe('Role Access', function () {
             ->put("/members/{$newFs->id}", [
                 'name' => $newFs->name,
                 'email' => $newFs->email,
-                'category' => $newFs->category->value,
+                'category' => MemberCategory::Employed->value,
                 'role' => 'financial_secretary',
             ]);
 
@@ -45,7 +48,7 @@ describe('Role Access', function () {
             ->put("/members/{$newFs->id}", [
                 'name' => $newFs->name,
                 'email' => $newFs->email,
-                'category' => $newFs->category->value,
+                'category' => MemberCategory::Employed->value,
                 'role' => 'financial_secretary',
             ]);
 
@@ -79,7 +82,7 @@ describe('Role Access', function () {
             ->put("/members/{$fs->id}", [
                 'name' => $fs->name,
                 'email' => $fs->email,
-                'category' => $fs->category->value,
+                'category' => MemberCategory::Employed->value,
                 'role' => 'member',
             ]);
 
@@ -99,7 +102,7 @@ describe('Role Access', function () {
             ->put("/members/{$fs->id}", [
                 'name' => $fs->name,
                 'email' => $fs->email,
-                'category' => $fs->category->value,
+                'category' => MemberCategory::Employed->value,
                 'role' => 'member',
             ]);
 
@@ -123,7 +126,7 @@ describe('Role Access', function () {
             ->put("/members/{$newAdmin->id}", [
                 'name' => $newAdmin->name,
                 'email' => $newAdmin->email,
-                'category' => $newAdmin->category->value,
+                'category' => MemberCategory::Employed->value,
                 'role' => 'admin',
             ]);
 
@@ -144,7 +147,7 @@ describe('Role Access', function () {
             ->put("/members/{$newAdmin->id}", [
                 'name' => $newAdmin->name,
                 'email' => $newAdmin->email,
-                'category' => $newAdmin->category->value,
+                'category' => MemberCategory::Employed->value,
                 'role' => 'admin',
             ]);
 
@@ -155,7 +158,7 @@ describe('Role Access', function () {
             ->put("/members/{$targetMember->id}", [
                 'name' => $targetMember->name,
                 'email' => $targetMember->email,
-                'category' => $targetMember->category->value,
+                'category' => MemberCategory::Employed->value,
                 'role' => 'financial_secretary',
             ])
             ->assertRedirect();
@@ -173,7 +176,7 @@ describe('Role Access', function () {
             ->put("/members/{$anotherAdmin->id}", [
                 'name' => $anotherAdmin->name,
                 'email' => $anotherAdmin->email,
-                'category' => $anotherAdmin->category->value,
+                'category' => MemberCategory::Employed->value,
                 'role' => 'member',
             ]);
 

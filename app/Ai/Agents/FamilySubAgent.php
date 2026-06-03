@@ -1,8 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Ai\Agents;
 
 use App\Ai\Middleware\LogPrompts;
+use App\Models\Family;
 use App\Models\User;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\CanActAsTool;
@@ -20,12 +23,16 @@ abstract class FamilySubAgent implements Agent, CanActAsTool, HasMiddleware, Has
 
     public function provider(): string
     {
-        return config('ai.agent.provider', 'ollama');
+        $provider = config('ai.agent.provider', 'ollama');
+
+        return is_string($provider) ? $provider : 'ollama';
     }
 
     public function model(): string
     {
-        return config('ai.agent.model', 'llama3.2');
+        $model = config('ai.agent.model', 'llama3.2');
+
+        return is_string($model) ? $model : 'llama3.2';
     }
 
     public function maxSteps(): int
@@ -73,8 +80,9 @@ abstract class FamilySubAgent implements Agent, CanActAsTool, HasMiddleware, Has
 
     protected function familyContext(): string
     {
-        $familyName = $this->user->family?->name ?? 'your family';
-        $currency = $this->user->family?->currency ?? '₦';
+        $family = $this->user->family;
+        $familyName = $family instanceof Family ? $family->name : 'the family';
+        $currency = $family instanceof Family ? $family->currency : '₦';
         $currentDate = now()->format('F j, Y');
         $currentYear = now()->year;
         $currentMonth = now()->month;

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\Contribution;
 use App\Models\Payment;
 use App\Models\User;
@@ -24,13 +26,18 @@ it('casts payment values and exposes relationships', function () {
             'amount' => 123456,
             'paid_at' => '2026-05-11 09:30:00',
         ]);
+    $paymentMember = $payment->getMember();
+
+    if (! $paymentMember instanceof User) {
+        throw new RuntimeException('Expected payment to resolve its member.');
+    }
 
     expect($payment->amount)->toBe(123456)
         ->and($payment->paid_at)->toBeInstanceOf(Carbon::class)
         ->and($payment->formatted_amount)->toBe("\u{20A6}123,456.00")
-        ->and($payment->contribution->is($contribution))->toBeTrue()
-        ->and($payment->recorder->is($recorder))->toBeTrue()
-        ->and($payment->getMember()->is($member))->toBeTrue()
+        ->and($payment->contribution()->firstOrFail()->is($contribution))->toBeTrue()
+        ->and($payment->recorder()->firstOrFail()->is($recorder))->toBeTrue()
+        ->and($paymentMember->is($member))->toBeTrue()
         ->and($payment->getPeriodLabel())->toBe('May 2026');
 });
 

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Channels\WhatsAppMessage;
 
 it('builds text message payloads', function () {
@@ -27,16 +29,19 @@ it('builds template message payloads with body and button components', function 
         ->button('url', '0', '123456');
 
     $payload = $message->toPayload('2348012345678');
+    $template = resultArray($payload, 'template');
+    $language = resultArray($template, 'language');
+    $components = resultArray($template, 'components');
 
     expect($message->getKind())->toBe('template')
         ->and($message->getTemplateName())->toBe('verify_whatsapp')
         ->and($message->getLanguageCode())->toBe('en_US')
         ->and($message->getBodyParameters())->toBe(['Amisha', '123456', '45.67'])
         ->and($payload['type'])->toBe('template')
-        ->and($payload['template']['name'])->toBe('verify_whatsapp')
-        ->and($payload['template']['language']['code'])->toBe('en_US')
-        ->and($payload['template']['components'])->toHaveCount(2)
-        ->and($payload['template']['components'][0])->toBe([
+        ->and($template['name'])->toBe('verify_whatsapp')
+        ->and($language['code'])->toBe('en_US')
+        ->and($components)->toHaveCount(2)
+        ->and($components[0])->toBe([
             'type' => 'body',
             'parameters' => [
                 ['type' => 'text', 'text' => 'Amisha'],
@@ -44,7 +49,7 @@ it('builds template message payloads with body and button components', function 
                 ['type' => 'text', 'text' => '45.67'],
             ],
         ])
-        ->and($payload['template']['components'][1])->toBe([
+        ->and($components[1])->toBe([
             'type' => 'button',
             'sub_type' => 'url',
             'index' => '0',
@@ -58,8 +63,9 @@ it('omits template components when no parameters are provided', function () {
     $payload = (new WhatsAppMessage)
         ->template('contribution_reminder')
         ->toPayload('2348012345678');
+    $template = resultArray($payload, 'template');
 
-    expect($payload['template'])
+    expect($template)
         ->toHaveKey('name', 'contribution_reminder')
         ->not->toHaveKey('components');
 });

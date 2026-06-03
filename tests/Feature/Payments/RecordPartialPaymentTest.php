@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Enums\PaymentStatus;
 use App\Models\Contribution;
 use App\Models\Family;
@@ -60,8 +62,10 @@ describe('Record Partial Payment', function () {
                 'target_month' => $futureMonth->month,
             ]);
 
-        expect($contribution->fresh()->total_paid)->toBe(1000);
-        expect($contribution->fresh()->status)->toBe(PaymentStatus::Partial);
+        $contribution->refresh();
+
+        expect($contribution->total_paid)->toBe(1000);
+        expect($contribution->status)->toBe(PaymentStatus::Partial);
 
         // Second partial payment - ₦1,500
         $this->actingAs($this->financialSecretary)
@@ -73,9 +77,11 @@ describe('Record Partial Payment', function () {
                 'target_month' => $futureMonth->month,
             ]);
 
-        expect($contribution->fresh()->total_paid)->toBe(2500);
-        expect($contribution->fresh()->balance)->toBe(1500);
-        expect($contribution->fresh()->status)->toBe(PaymentStatus::Partial);
+        $contribution->refresh();
+
+        expect($contribution->total_paid)->toBe(2500);
+        expect($contribution->balance)->toBe(1500);
+        expect($contribution->status)->toBe(PaymentStatus::Partial);
 
         // Third payment - remaining ₦1,500
         $this->actingAs($this->financialSecretary)
@@ -87,9 +93,11 @@ describe('Record Partial Payment', function () {
                 'target_month' => $futureMonth->month,
             ]);
 
-        expect($contribution->fresh()->total_paid)->toBe(4000);
-        expect($contribution->fresh()->balance)->toBe(0);
-        expect($contribution->fresh()->status)->toBe(PaymentStatus::Paid);
+        $contribution->refresh();
+
+        expect($contribution->total_paid)->toBe(4000);
+        expect($contribution->balance)->toBe(0);
+        expect($contribution->status)->toBe(PaymentStatus::Paid);
     });
 
     it('shows partial payment details on contribution page', function () {

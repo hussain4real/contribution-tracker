@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
 
     /*
@@ -68,6 +70,12 @@ return [
         'webhook_verify_token' => env('WHATSAPP_WEBHOOK_VERIFY_TOKEN'),
         'app_secret' => env('WHATSAPP_APP_SECRET'),
         'rate_limit_per_minute' => (int) env('WHATSAPP_RATE_LIMIT_PER_MINUTE', 60),
+        'templates' => [
+            'invitation' => [
+                'name' => env('WHATSAPP_INVITATION_TEMPLATE_NAME'),
+                'language' => env('WHATSAPP_INVITATION_TEMPLATE_LANGUAGE', 'en'),
+            ],
+        ],
     ],
 
 ];

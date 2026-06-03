@@ -1,17 +1,40 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use App\Enums\PaymentStatus;
 use Carbon\Carbon;
+use Database\Factories\ContributionFactory;
+use DateTimeInterface;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property int $id
+ * @property int $family_id
+ * @property int $user_id
+ * @property int $expected_amount
+ * @property int $month
+ * @property int $year
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property Carbon $due_date
+ * @property PaymentStatus $status
+ * @property string $period_label
+ * @property Family|null $family
+ * @property User|null $user
+ * @property Collection<int, Payment> $payments
+ * @property-read int $total_paid
+ * @property-read int $balance
+ */
 class Contribution extends Model
 {
+    /** @use HasFactory<ContributionFactory> */
     use HasFactory;
 
     /**
@@ -58,6 +81,8 @@ class Contribution extends Model
 
     /**
      * The family this contribution belongs to.
+     *
+     * @return BelongsTo<Family, $this>
      */
     public function family(): BelongsTo
     {
@@ -66,6 +91,8 @@ class Contribution extends Model
 
     /**
      * The user this contribution belongs to.
+     *
+     * @return BelongsTo<User, $this>
      */
     public function user(): BelongsTo
     {
@@ -74,6 +101,8 @@ class Contribution extends Model
 
     /**
      * Payments made toward this contribution.
+     *
+     * @return HasMany<Payment, $this>
      */
     public function payments(): HasMany
     {
@@ -86,6 +115,9 @@ class Contribution extends Model
 
     /**
      * Scope to contributions for a specific month and year.
+     *
+     * @param  Builder<Contribution>  $query
+     * @return Builder<Contribution>
      */
     public function scopeForMonth(Builder $query, int $year, int $month): Builder
     {
@@ -94,6 +126,9 @@ class Contribution extends Model
 
     /**
      * Scope to contributions for the current month.
+     *
+     * @param  Builder<Contribution>  $query
+     * @return Builder<Contribution>
      */
     public function scopeCurrentMonth(Builder $query): Builder
     {
@@ -102,6 +137,9 @@ class Contribution extends Model
 
     /**
      * Scope to contributions for a specific user.
+     *
+     * @param  Builder<Contribution>  $query
+     * @return Builder<Contribution>
      */
     public function scopeForUser(Builder $query, int|User $user): Builder
     {
@@ -112,6 +150,9 @@ class Contribution extends Model
 
     /**
      * Scope to contributions that are overdue.
+     *
+     * @param  Builder<Contribution>  $query
+     * @return Builder<Contribution>
      */
     public function scopeOverdue(Builder $query): Builder
     {
@@ -120,6 +161,9 @@ class Contribution extends Model
 
     /**
      * Scope to incomplete contributions (not fully paid).
+     *
+     * @param  Builder<Contribution>  $query
+     * @return Builder<Contribution>
      */
     public function scopeIncomplete(Builder $query): Builder
     {
@@ -130,6 +174,9 @@ class Contribution extends Model
 
     /**
      * Scope to contributions ordered by oldest first (for balance-first rule).
+     *
+     * @param  Builder<Contribution>  $query
+     * @return Builder<Contribution>
      */
     public function scopeOldestFirst(Builder $query): Builder
     {
@@ -149,10 +196,12 @@ class Contribution extends Model
     public function getTotalPaidAttribute(): int
     {
         if ($this->relationLoaded('payments')) {
-            return (int) $this->payments->sum('amount');
+            return (int) $this->payments->sum(fn (Payment $payment): int => $payment->amount);
         }
 
-        return (int) $this->payments()->sum('amount');
+        $total = $this->payments()->sum('amount');
+
+        return (int) $total;
     }
 
     /**
@@ -186,8 +235,10 @@ class Contribution extends Model
      */
     public function getDueDateAttribute(): Carbon
     {
-        if ($this->attributes['due_date'] ?? null) {
-            return Carbon::parse($this->attributes['due_date']);
+        $dueDate = $this->attributes['due_date'] ?? null;
+
+        if ($dueDate instanceof DateTimeInterface || is_string($dueDate) || is_int($dueDate) || is_float($dueDate)) {
+            return Carbon::parse($dueDate);
         }
 
         return Carbon::createFromDate($this->year, $this->month, self::DUE_DAY);

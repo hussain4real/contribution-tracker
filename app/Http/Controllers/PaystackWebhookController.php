@@ -34,15 +34,15 @@ class PaystackWebhookController extends Controller
         }
 
         $event = $request->input('event');
-        $data = $request->input('data');
+        $data = $this->stringKeyedArray($request->input('data'));
 
         Log::info('Paystack webhook received', ['event' => $event]);
 
         return match ($event) {
-            'charge.success' => $this->handleChargeSuccess($data),
-            'subscription.create' => $this->handleSubscriptionCreate($data),
-            'subscription.not_renew' => $this->handleSubscriptionNotRenew($data),
-            'invoice.payment_failed' => $this->handleInvoicePaymentFailed($data),
+            'charge.success' => $this->handleChargeSuccess($data ?? []),
+            'subscription.create' => $this->handleSubscriptionCreate($data ?? []),
+            'subscription.not_renew' => $this->handleSubscriptionNotRenew($data ?? []),
+            'invoice.payment_failed' => $this->handleInvoicePaymentFailed($data ?? []),
             default => response()->json(['message' => 'Event ignored']),
         };
     }
@@ -54,7 +54,7 @@ class PaystackWebhookController extends Controller
     {
         $reference = $data['reference'] ?? null;
 
-        if (! $reference) {
+        if (! is_string($reference) || $reference === '') {
             return response()->json(['message' => 'No reference'], 400);
         }
 
@@ -72,7 +72,7 @@ class PaystackWebhookController extends Controller
         }
 
         // Verify amount matches (Paystack sends amount in kobo, we store in Naira)
-        $paystackAmountKobo = $data['amount'] ?? 0;
+        $paystackAmountKobo = is_numeric($data['amount'] ?? null) ? (int) $data['amount'] : 0;
         $expectedAmountKobo = $transaction->amount * 100;
         if ($paystackAmountKobo !== $expectedAmountKobo) {
             Log::warning('Paystack webhook: amount mismatch', [
@@ -110,6 +110,9 @@ class PaystackWebhookController extends Controller
         return response()->json(['message' => 'Success']);
     }
 
+    /**
+     * @param  array<string, mixed>  $data
+     */
     private function allocateContributionPayment(PaystackTransaction $transaction, array $data): void
     {
         $member = User::find($transaction->user_id);
@@ -123,15 +126,16 @@ class PaystackWebhookController extends Controller
         $metadata = $transaction->metadata ?? [];
         $targetYear = $metadata['target_year'] ?? null;
         $targetMonth = $metadata['target_month'] ?? null;
+        $paidAt = $data['paid_at'] ?? now()->toDateString();
 
         $this->allocationService->allocate(
             member: $member,
             amount: $transaction->amount,
-            paidAt: $data['paid_at'] ?? now()->toDateString(),
+            paidAt: is_scalar($paidAt) ? (string) $paidAt : now()->toDateString(),
             recordedBy: $member,
             notes: "Paystack payment (ref: {$transaction->reference})",
-            targetYear: $targetYear ? (int) $targetYear : null,
-            targetMonth: $targetMonth ? (int) $targetMonth : null,
+            targetYear: is_numeric($targetYear) ? (int) $targetYear : null,
+            targetMonth: is_numeric($targetMonth) ? (int) $targetMonth : null,
         );
     }
 
@@ -141,9 +145,10 @@ class PaystackWebhookController extends Controller
     private function handleSubscriptionCreate(array $data): JsonResponse
     {
         $subscriptionCode = $data['subscription_code'] ?? null;
-        $customerCode = $data['customer']['customer_code'] ?? null;
+        $customer = $this->stringKeyedArray($data['customer'] ?? null);
+        $customerCode = $customer['customer_code'] ?? null;
 
-        if (! $subscriptionCode || ! $customerCode) {
+        if (! is_string($subscriptionCode) || ! is_string($customerCode)) {
             return response()->json(['message' => 'Missing subscription data'], 400);
         }
 
@@ -172,6 +177,10 @@ class PaystackWebhookController extends Controller
     {
         $subscriptionCode = $data['subscription_code'] ?? null;
 
+        if (! is_string($subscriptionCode)) {
+            return response()->json(['message' => 'Missing subscription data'], 400);
+        }
+
         $family = Family::where('paystack_subscription_code', $subscriptionCode)->first();
 
         if ($family) {
@@ -188,7 +197,12 @@ class PaystackWebhookController extends Controller
      */
     private function handleInvoicePaymentFailed(array $data): JsonResponse
     {
-        $subscriptionCode = $data['subscription']['subscription_code'] ?? null;
+        $subscription = $this->stringKeyedArray($data['subscription'] ?? null);
+        $subscriptionCode = $subscription['subscription_code'] ?? null;
+
+        if (! is_string($subscriptionCode)) {
+            return response()->json(['message' => 'Missing subscription data'], 400);
+        }
 
         $family = Family::where('paystack_subscription_code', $subscriptionCode)->first();
 
@@ -199,5 +213,25 @@ class PaystackWebhookController extends Controller
         }
 
         return response()->json(['message' => 'Payment failure recorded']);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function stringKeyedArray(mixed $value): ?array
+    {
+        if (! is_array($value)) {
+            return null;
+        }
+
+        $items = [];
+
+        foreach ($value as $key => $item) {
+            if (is_string($key)) {
+                $items[$key] = $item;
+            }
+        }
+
+        return $items;
     }
 }

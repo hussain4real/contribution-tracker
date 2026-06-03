@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\Contribution;
 use App\Models\Expense;
 use App\Models\Family;
@@ -66,12 +68,12 @@ it('exposes family ownership, plan, and child relationships', function () {
     $fundAdjustment = FundAdjustment::factory()->create(['family_id' => $family->id]);
     $invitation = FamilyInvitation::factory()->create(['family_id' => $family->id]);
 
-    expect($family->owner->is($owner))->toBeTrue()
-        ->and($family->platformPlan->is($plan))->toBeTrue()
-        ->and($family->members->first()->is($member))->toBeTrue()
-        ->and($family->categories->first()->is($category))->toBeTrue()
-        ->and($family->contributions->first()->is($contribution))->toBeTrue()
-        ->and($family->expenses->first()->is($expense))->toBeTrue()
-        ->and($family->fundAdjustments->first()->is($fundAdjustment))->toBeTrue()
-        ->and($family->invitations->first()->is($invitation))->toBeTrue();
+    expect($family->owner()->firstOrFail()->is($owner))->toBeTrue()
+        ->and($family->platformPlan()->firstOrFail()->is($plan))->toBeTrue()
+        ->and($family->members()->firstOrFail()->is($member))->toBeTrue()
+        ->and($family->categories()->firstOrFail()->is($category))->toBeTrue()
+        ->and($family->contributions()->firstOrFail()->is($contribution))->toBeTrue()
+        ->and($family->expenses()->firstOrFail()->is($expense))->toBeTrue()
+        ->and($family->fundAdjustments()->firstOrFail()->is($fundAdjustment))->toBeTrue()
+        ->and($family->invitations()->firstOrFail()->is($invitation))->toBeTrue();
 });

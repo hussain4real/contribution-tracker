@@ -1,6 +1,9 @@
 <?php
 
+declare(strict_types=1);
+
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -16,7 +19,7 @@ return new class extends Migration
     public function up(): void
     {
         $nonDefaultCount = DB::table('families')
-            ->where(function ($q) {
+            ->where(function (Builder $q): void {
                 $q->where('plan', '!=', 'free')
                     ->orWhereNull('plan');
             })

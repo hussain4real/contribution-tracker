@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
@@ -83,10 +85,10 @@ class PasskeyTwoFactorController extends Controller
     {
         $userId = $request->session()->get('login.id');
 
-        if (! $userId) {
+        if (! is_numeric($userId)) {
             return null;
         }
 
-        return User::query()->find($userId);
+        return User::query()->find((int) $userId);
     }
 }

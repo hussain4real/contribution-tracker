@@ -1,10 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreFundAdjustmentRequest;
 use App\Models\FundAdjustment;
-use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -18,8 +19,7 @@ class FundAdjustmentController extends Controller
     {
         $this->authorize('viewAny', FundAdjustment::class);
 
-        /** @var User $user */
-        $user = request()->user();
+        $user = $this->authUser();
 
         $adjustments = FundAdjustment::query()
             ->where('family_id', $user->family_id)
@@ -33,12 +33,12 @@ class FundAdjustmentController extends Controller
                 'description' => $adjustment->description,
                 'recorded_at' => $adjustment->recorded_at->toDateString(),
                 'recorded_by' => $adjustment->recorder?->name,
-                'created_at' => $adjustment->created_at->toDateString(),
+                'created_at' => $adjustment->created_at?->toDateString(),
             ]);
 
         return Inertia::render('FundAdjustments/Index', [
             'adjustments' => $adjustments,
-            'can_create' => request()->user()->canRecordPayments(),
+            'can_create' => $user->canRecordPayments(),
         ]);
     }
 
@@ -47,15 +47,18 @@ class FundAdjustmentController extends Controller
      */
     public function store(StoreFundAdjustmentRequest $request): RedirectResponse
     {
+        $user = $this->user($request);
+        $amount = $request->integer('amount');
+
         FundAdjustment::create([
-            'family_id' => $request->user()->family_id,
-            'amount' => $request->amount,
-            'description' => $request->description,
-            'recorded_at' => $request->recorded_at,
-            'recorded_by' => $request->user()->id,
+            'family_id' => $user->family_id,
+            'amount' => $amount,
+            'description' => $request->string('description')->toString(),
+            'recorded_at' => $request->string('recorded_at')->toString(),
+            'recorded_by' => $user->id,
         ]);
 
-        $formattedAmount = '₦'.number_format($request->amount, 2);
+        $formattedAmount = '₦'.number_format($amount, 2);
 
         return redirect()->route('fund-adjustments.index')
             ->with('success', "Fund adjustment of {$formattedAmount} recorded successfully.");

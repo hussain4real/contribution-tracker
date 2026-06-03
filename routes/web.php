@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Features\AiAssistant;
 use App\Http\Controllers\AiChatController;
 use App\Http\Controllers\Auth\PasskeyTwoFactorController;

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Enums\TransactionStatus;
 use App\Enums\TransactionType;
 use App\Models\Family;
@@ -199,6 +201,67 @@ it('returns a friendly error when subscription initialization fails', function (
         'sort_order' => 1,
     ]);
     $family = Family::factory()->create();
+    $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+
+    $this->actingAs($admin)
+        ->postJson(route('subscription.subscribe'), [
+            'plan_id' => $plan->id,
+        ])
+        ->assertServerError()
+        ->assertJson(['message' => 'Failed to initialize subscription. Please try again.']);
+});
+
+it('returns a friendly error when paystack plan creation returns malformed data', function () {
+    Http::fake([
+        'api.paystack.co/plan' => Http::response([
+            'status' => true,
+            'data' => null,
+        ]),
+    ]);
+
+    $plan = PlatformPlan::create([
+        'name' => 'Starter',
+        'slug' => 'starter',
+        'price' => 2000,
+        'max_members' => 20,
+        'features' => [],
+        'is_active' => true,
+        'sort_order' => 1,
+    ]);
+    $family = Family::factory()->create();
+    $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+
+    $this->actingAs($admin)
+        ->postJson(route('subscription.subscribe'), [
+            'plan_id' => $plan->id,
+        ])
+        ->assertServerError()
+        ->assertJson(['message' => 'Failed to initialize subscription. Please try again.']);
+});
+
+it('returns a friendly error when subscription checkout omits required paystack fields', function () {
+    Http::fake([
+        'api.paystack.co/transaction/initialize' => Http::response([
+            'status' => true,
+            'data' => [
+                'authorization_url' => 'https://checkout.paystack.com/missing-access-code',
+            ],
+        ]),
+    ]);
+
+    $plan = PlatformPlan::create([
+        'name' => 'Starter',
+        'slug' => 'starter',
+        'price' => 2000,
+        'max_members' => 20,
+        'features' => [],
+        'is_active' => true,
+        'sort_order' => 1,
+        'paystack_plan_code' => 'PLN_existing',
+    ]);
+    $family = Family::factory()->create([
+        'paystack_customer_code' => 'CUS_existing',
+    ]);
     $admin = User::factory()->admin()->create(['family_id' => $family->id]);
 
     $this->actingAs($admin)

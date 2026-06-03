@@ -1,14 +1,15 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Http\Middleware\EnsureFamilySubscription;
 use App\Models\Family;
 use App\Models\PlatformPlan;
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Testing\TestResponse;
 use Symfony\Component\HttpFoundation\Response;
 
-function makeMiddlewareRequest(User $user, string $routeName = 'dashboard', ?string $feature = null): TestResponse|Response
+function makeMiddlewareRequest(User $user, string $routeName = 'dashboard', ?string $feature = null): Response
 {
     $middleware = new EnsureFamilySubscription;
 
@@ -19,7 +20,7 @@ function makeMiddlewareRequest(User $user, string $routeName = 'dashboard', ?str
     return $middleware->handle($request, fn ($r) => response('OK'), $feature);
 }
 
-function makeMiddlewareJsonRequest(User $user, string $routeName = 'dashboard', ?string $feature = null): TestResponse|Response
+function makeMiddlewareJsonRequest(User $user, string $routeName = 'dashboard', ?string $feature = null): Response
 {
     $middleware = new EnsureFamilySubscription;
 
@@ -35,7 +36,7 @@ it('allows users without a family', function () {
 
     $response = makeMiddlewareRequest($user);
 
-    expect($response->getContent())->toBe('OK');
+    expect(responseContent($response))->toBe('OK');
 });
 
 it('allows users on free plan (no plan assigned)', function () {
@@ -43,7 +44,7 @@ it('allows users on free plan (no plan assigned)', function () {
 
     $response = makeMiddlewareRequest($user);
 
-    expect($response->getContent())->toBe('OK');
+    expect(responseContent($response))->toBe('OK');
 });
 
 it('allows users when plan has unlimited members', function () {
@@ -65,7 +66,7 @@ it('allows users when plan has unlimited members', function () {
 
     $response = makeMiddlewareRequest($user);
 
-    expect($response->getContent())->toBe('OK');
+    expect(responseContent($response))->toBe('OK');
 });
 
 it('blocks feature access when plan does not include the feature', function () {
@@ -105,7 +106,7 @@ it('returns json when plan does not include a requested feature', function () {
     $response = makeMiddlewareJsonRequest($user, 'dashboard', 'online_payments');
 
     expect($response->getStatusCode())->toBe(403)
-        ->and(json_decode($response->getContent(), true))->toBe([
+        ->and(decodeJsonObject(responseContent($response)))->toBe([
             'message' => 'This feature is not available on your current plan. Please upgrade.',
         ]);
 });
@@ -129,7 +130,7 @@ it('allows feature access when plan includes the feature', function () {
 
     $response = makeMiddlewareRequest($user, 'dashboard', 'online_payments');
 
-    expect($response->getContent())->toBe('OK');
+    expect(responseContent($response))->toBe('OK');
 });
 
 it('redirects to subscription page for cancelled paid plan', function () {
@@ -174,7 +175,7 @@ it('returns json for inactive paid subscriptions', function () {
     $response = makeMiddlewareJsonRequest($user, 'contributions.index');
 
     expect($response->getStatusCode())->toBe(403)
-        ->and(json_decode($response->getContent(), true))->toBe([
+        ->and(decodeJsonObject(responseContent($response)))->toBe([
             'message' => 'Your subscription is inactive. Please update your subscription.',
         ]);
 });
@@ -198,7 +199,7 @@ it('allows dashboard access for cancelled paid plan', function () {
 
     $response = makeMiddlewareRequest($user, 'dashboard');
 
-    expect($response->getContent())->toBe('OK');
+    expect(responseContent($response))->toBe('OK');
 });
 
 it('blocks adding members when at the plan limit', function () {
@@ -245,7 +246,7 @@ it('returns json when adding members would exceed the plan limit', function () {
     $response = makeMiddlewareJsonRequest($admin, 'family.invitations.store');
 
     expect($response->getStatusCode())->toBe(403)
-        ->and(json_decode($response->getContent(), true))->toBe([
+        ->and(decodeJsonObject(responseContent($response)))->toBe([
             'message' => 'Your plan allows up to 1 members. Please upgrade to add more.',
         ]);
 });

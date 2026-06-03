@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Models\Contribution;
 use App\Models\Family;
@@ -18,7 +20,7 @@ describe('Generate Monthly Contributions Command', function () {
 
         expect(Contribution::where('family_id', $family->id)->count())->toBe(2);
 
-        $contribution = Contribution::where('user_id', $member1->id)->first();
+        $contribution = Contribution::where('user_id', $member1->id)->firstOrFail();
         expect($contribution->year)->toBe(now()->year)
             ->and($contribution->month)->toBe(now()->month)
             ->and($contribution->expected_amount)->toBe($member1->getMonthlyAmount());
@@ -45,10 +47,9 @@ describe('Generate Monthly Contributions Command', function () {
             ->where('user_id', $member->id)
             ->where('year', 2026)
             ->where('month', 5)
-            ->first();
+            ->firstOrFail();
 
-        expect($contribution)->not->toBeNull()
-            ->and($contribution->family_id)->toBe($family->id)
+        expect($contribution->family_id)->toBe($family->id)
             ->and($contribution->expected_amount)->toBe($familyCategory->monthly_amount);
     });
 
@@ -135,7 +136,7 @@ describe('Generate Monthly Contributions Command', function () {
             '--month' => 6,
         ])->assertSuccessful();
 
-        $contribution = Contribution::where('family_id', $family->id)->first();
+        $contribution = Contribution::where('family_id', $family->id)->firstOrFail();
         expect($contribution->year)->toBe(2025)
             ->and($contribution->month)->toBe(6);
     });
@@ -166,7 +167,7 @@ describe('Generate Monthly Contributions Command', function () {
         $this->artisan('contributions:generate', ['--family' => $family->id])
             ->assertSuccessful();
 
-        $contribution = Contribution::where('family_id', $family->id)->first();
+        $contribution = Contribution::where('family_id', $family->id)->firstOrFail();
         expect($contribution->due_date->day)->toBe(15);
     });
 

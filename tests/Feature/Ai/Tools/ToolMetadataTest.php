@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Ai\Tools\GenerateContributions;
 use App\Ai\Tools\GetContributionSummary;
 use App\Ai\Tools\GetExpenseSummary;
@@ -11,8 +13,14 @@ use App\Ai\Tools\RecordPayment;
 use App\Ai\Tools\SendInvitation;
 use App\Models\User;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Laravel\Ai\Contracts\Tool;
 
+/**
+ * @param  class-string<Tool>  $toolClass
+ * @param  list<string>  $expectedSchemaKeys
+ */
 it('exposes descriptions and json schemas for all ai tools', function (string $toolClass, array $expectedSchemaKeys) {
+    $toolClass = classStringOf($toolClass, Tool::class);
     $tool = new $toolClass(User::factory()->admin()->create());
     $schema = $tool->schema(new JsonSchemaTypeFactory);
 
@@ -27,5 +35,5 @@ it('exposes descriptions and json schemas for all ai tools', function (string $t
     'record expense' => [RecordExpense::class, ['amount', 'description', 'spent_at', 'confirmed']],
     'record fund adjustment' => [RecordFundAdjustment::class, ['amount', 'description', 'recorded_at', 'confirmed']],
     'record payment' => [RecordPayment::class, ['member_name', 'amount', 'paid_at', 'notes', 'target_year', 'target_month', 'confirmed']],
-    'send invitation' => [SendInvitation::class, ['email', 'role', 'confirmed']],
+    'send invitation' => [SendInvitation::class, ['delivery_method', 'email', 'whatsapp_phone', 'role', 'confirmed']],
 ]);

@@ -1,7 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\Contribution;
 use App\Models\Family;
+use App\Models\Payment;
 use App\Models\User;
 use App\Notifications\ContributionReminderNotification;
 use Illuminate\Support\Facades\Notification;
@@ -166,12 +169,10 @@ describe('Manual web push contribution reminder', function () {
             ->currentMonth()
             ->create(['expected_amount' => 1000]);
 
-        $contribution->payments()->create([
-            'user_id' => $member->id,
-            'amount' => 1000,
-            'paid_at' => now(),
-            'recorded_by' => $admin->id,
-        ]);
+        Payment::factory()
+            ->forContribution($contribution)
+            ->recordedBy($admin)
+            ->create(['amount' => 1000]);
 
         $this->actingAs($admin)
             ->from('/members/'.$member->id)

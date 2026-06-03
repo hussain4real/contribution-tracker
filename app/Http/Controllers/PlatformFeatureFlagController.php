@@ -42,8 +42,10 @@ class PlatformFeatureFlagController extends Controller
                 ")
                 ->first();
 
-            $activatedCount = (int) ($row->activated_count ?? 0);
-            $totalResolved = (int) ($row->total_resolved ?? 0);
+            $activatedCountValue = $row->activated_count ?? null;
+            $totalResolvedValue = $row->total_resolved ?? null;
+            $activatedCount = is_numeric($activatedCountValue) ? (int) $activatedCountValue : 0;
+            $totalResolved = is_numeric($totalResolvedValue) ? (int) $totalResolvedValue : 0;
             $isGlobal = (bool) ($row->is_global ?? false);
 
             $status = match (true) {
@@ -53,14 +55,19 @@ class PlatformFeatureFlagController extends Controller
             };
 
             // Collect user IDs with explicit 'true' activation records
-            $activatedUserIds = DB::table('features')
+            $scopes = DB::table('features')
                 ->where('name', $featureClass)
                 ->where('scope', '!=', '')
                 ->where('value', 'true')
                 ->pluck('scope')
-                ->map(fn (string $scope) => (int) str($scope)->afterLast('|')->toString())
-                ->values()
                 ->all();
+            $activatedUserIds = [];
+
+            foreach ($scopes as $scope) {
+                if (is_string($scope)) {
+                    $activatedUserIds[] = (int) str($scope)->afterLast('|')->toString();
+                }
+            }
 
             return [
                 'key' => $key,
@@ -131,7 +138,9 @@ class PlatformFeatureFlagController extends Controller
     {
         $meta = $this->resolveFeature($feature);
 
-        $user = User::findOrFail($request->validated('user_id'));
+        $user = User::query()
+            ->whereKey($request->integer('user_id'))
+            ->firstOrFail();
 
         Feature::for($user)->activate($meta['class']);
 
@@ -142,7 +151,9 @@ class PlatformFeatureFlagController extends Controller
     {
         $meta = $this->resolveFeature($feature);
 
-        $user = User::findOrFail($request->validated('user_id'));
+        $user = User::query()
+            ->whereKey($request->integer('user_id'))
+            ->firstOrFail();
 
         Feature::for($user)->deactivate($meta['class']);
 

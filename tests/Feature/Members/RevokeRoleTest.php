@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Enums\MemberCategory;
 use App\Enums\Role;
 use App\Models\User;
@@ -21,7 +23,7 @@ describe('Revoke Role', function () {
             ->put("/members/{$financialSecretary->id}", [
                 'name' => $financialSecretary->name,
                 'email' => $financialSecretary->email,
-                'category' => $financialSecretary->category->value,
+                'category' => memberCategoryValue($financialSecretary),
                 'role' => 'member',
             ])
             ->assertRedirect();
@@ -41,7 +43,7 @@ describe('Revoke Role', function () {
             ->put("/members/{$financialSecretary->id}", [
                 'name' => $financialSecretary->name,
                 'email' => $financialSecretary->email,
-                'category' => $financialSecretary->category->value,
+                'category' => memberCategoryValue($financialSecretary),
                 'role' => 'member',
             ]);
 
@@ -59,7 +61,7 @@ describe('Revoke Role', function () {
             ->put("/members/{$anotherAdmin->id}", [
                 'name' => $anotherAdmin->name,
                 'email' => $anotherAdmin->email,
-                'category' => $anotherAdmin->category->value,
+                'category' => memberCategoryValue($anotherAdmin),
                 'role' => 'member',
             ])
             ->assertRedirect();
@@ -76,7 +78,7 @@ describe('Revoke Role', function () {
             ->put("/members/{$this->admin->id}", [
                 'name' => $this->admin->name,
                 'email' => $this->admin->email,
-                'category' => $this->admin->category->value,
+                'category' => memberCategoryValue($this->admin),
                 'role' => 'member',
             ]);
 
@@ -93,7 +95,7 @@ describe('Revoke Role', function () {
             ->put("/members/{$anotherFs->id}", [
                 'name' => $anotherFs->name,
                 'email' => $anotherFs->email,
-                'category' => $anotherFs->category->value,
+                'category' => memberCategoryValue($anotherFs),
                 'role' => 'member',
             ])
             ->assertForbidden();

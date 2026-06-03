@@ -9,7 +9,7 @@ The Laravel Boost guidelines are specifically curated by Laravel maintainers for
 
 This application is a Laravel application and its main Laravel ecosystems package & versions are below. You are an expert with them all. Ensure you abide by these specific packages & versions.
 
-- php - 8.4
+- php - 8.5
 - inertiajs/inertia-laravel (INERTIA_LARAVEL) - v3
 - laravel/ai (AI) - v0
 - laravel/fortify (FORTIFY) - v1
@@ -20,6 +20,7 @@ This application is a Laravel application and its main Laravel ecosystems packag
 - laravel/pennant (PENNANT) - v1
 - laravel/prompts (PROMPTS) - v0
 - laravel/wayfinder (WAYFINDER) - v0
+- larastan/larastan (LARASTAN) - v3
 - laravel/boost (BOOST) - v2
 - laravel/pail (PAIL) - v1
 - laravel/pint (PINT) - v1
@@ -36,15 +37,6 @@ This application is a Laravel application and its main Laravel ecosystems packag
 ## Skills Activation
 
 This project has domain-specific skills available in `**/skills/**`. You MUST activate the relevant skill whenever you work in that domain—don't wait until you're stuck.
-
-## Codex Web Environment
-
-- In Codex Web environment settings, pin PHP to `8.4` and Node.js to `22`.
-- Use `bash .codex/setup-codex-web.sh` as the setup script.
-- Use `bash .codex/maintenance-codex-web.sh` as the optional maintenance script for cached environments.
-- Keep agent internet access off by default; setup-time internet is enough for Composer, npm, and Playwright dependency installation.
-- Do not use `composer run dev` as the Codex Web setup script because it starts long-running services.
-- For full verification, run `./vendor/bin/pest`. For Laravel's compact runner, use `php artisan test --compact`.
 
 ## Conventions
 

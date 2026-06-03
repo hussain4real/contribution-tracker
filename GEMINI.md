@@ -9,7 +9,7 @@ The Laravel Boost guidelines are specifically curated by Laravel maintainers for
 
 This application is a Laravel application and its main Laravel ecosystems package & versions are below. You are an expert with them all. Ensure you abide by these specific packages & versions.
 
-- php - 8.4
+- php - 8.5
 - inertiajs/inertia-laravel (INERTIA_LARAVEL) - v3
 - laravel/ai (AI) - v0
 - laravel/fortify (FORTIFY) - v1
@@ -20,6 +20,7 @@ This application is a Laravel application and its main Laravel ecosystems packag
 - laravel/pennant (PENNANT) - v1
 - laravel/prompts (PROMPTS) - v0
 - laravel/wayfinder (WAYFINDER) - v0
+- larastan/larastan (LARASTAN) - v3
 - laravel/boost (BOOST) - v2
 - laravel/pail (PAIL) - v1
 - laravel/pint (PINT) - v1

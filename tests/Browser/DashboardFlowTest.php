@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 /**
  * T045 [US2] Browser test for dashboard navigation and member click-through
  *

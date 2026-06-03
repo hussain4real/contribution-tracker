@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -11,7 +13,18 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::connection(config('webpush.database_connection'))->create(config('webpush.table_name'), function (Blueprint $table) {
+        $connection = config('webpush.database_connection');
+        $tableName = config('webpush.table_name');
+
+        if (! is_string($connection) && $connection !== null) {
+            $connection = null;
+        }
+
+        if (! is_string($tableName)) {
+            $tableName = 'push_subscriptions';
+        }
+
+        Schema::connection($connection)->create($tableName, function (Blueprint $table) {
             $table->bigIncrements('id');
             $table->morphs('subscribable', 'push_subscriptions_subscribable_morph_idx');
             $table->string('endpoint', 500)->unique();
@@ -27,6 +40,17 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::connection(config('webpush.database_connection'))->dropIfExists(config('webpush.table_name'));
+        $connection = config('webpush.database_connection');
+        $tableName = config('webpush.table_name');
+
+        if (! is_string($connection) && $connection !== null) {
+            $connection = null;
+        }
+
+        if (! is_string($tableName)) {
+            $tableName = 'push_subscriptions';
+        }
+
+        Schema::connection($connection)->dropIfExists($tableName);
     }
 };

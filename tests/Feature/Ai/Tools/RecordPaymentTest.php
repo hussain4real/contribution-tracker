@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Ai\Tools\RecordPayment;
 use App\Models\Contribution;
 use App\Models\Family;
@@ -19,11 +21,11 @@ beforeEach(function () {
 test('admin can preview payment recording', function () {
     $tool = new RecordPayment($this->admin);
 
-    $result = json_decode($tool->handle(new Request([
+    $result = decodeToolResult($tool->handle(new Request([
         'member_name' => 'Aminu',
         'amount' => 4000,
         'paid_at' => '2026-04-01',
-    ])), true);
+    ])));
 
     expect($result['status'])->toBe('confirmation_required')
         ->and($result['message'])->toContain('4,000')
@@ -35,9 +37,9 @@ test('admin can preview payment recording', function () {
 test('payment recording requires a member name', function () {
     $tool = new RecordPayment($this->admin);
 
-    $result = json_decode($tool->handle(new Request([
+    $result = decodeToolResult($tool->handle(new Request([
         'amount' => 4000,
-    ])), true);
+    ])));
 
     expect($result['error'])->toBe('Please provide the member name.');
 });
@@ -45,10 +47,10 @@ test('payment recording requires a member name', function () {
 test('payment recording requires a positive amount', function () {
     $tool = new RecordPayment($this->admin);
 
-    $result = json_decode($tool->handle(new Request([
+    $result = decodeToolResult($tool->handle(new Request([
         'member_name' => 'Aminu Hussain',
         'amount' => 0,
-    ])), true);
+    ])));
 
     expect($result['error'])->toContain('Amount is required');
 });
@@ -57,17 +59,17 @@ test('payment recording preview includes a valid target period', function () {
     $target = now()->addMonths(2);
     $tool = new RecordPayment($this->admin);
 
-    $result = json_decode($tool->handle(new Request([
+    $result = decodeToolResult($tool->handle(new Request([
         'member_name' => 'Aminu Hussain',
         'amount' => 4000,
         'target_year' => $target->year,
         'target_month' => $target->month,
-    ])), true);
+    ])));
 
     expect($result['status'])->toBe('confirmation_required')
         ->and($result['message'])->toContain($target->format('F Y'))
-        ->and($result['details']['target_year'])->toBe($target->year)
-        ->and($result['details']['target_month'])->toBe($target->month);
+        ->and(resultArray($result, 'details')['target_year'])->toBe($target->year)
+        ->and(resultArray($result, 'details')['target_month'])->toBe($target->month);
 });
 
 test('admin can execute payment recording with confirmation', function () {
@@ -75,12 +77,12 @@ test('admin can execute payment recording with confirmation', function () {
 
     $tool = new RecordPayment($this->admin);
 
-    $result = json_decode($tool->handle(new Request([
+    $result = decodeToolResult($tool->handle(new Request([
         'member_name' => 'Aminu',
         'amount' => 4000,
         'paid_at' => '2026-04-01',
         'confirmed' => true,
-    ])), true);
+    ])));
 
     expect($result['status'])->toBe('success')
         ->and($result['payments_created'])->toBeGreaterThanOrEqual(1)
@@ -90,11 +92,11 @@ test('admin can execute payment recording with confirmation', function () {
 test('member cannot record payments', function () {
     $tool = new RecordPayment($this->member);
 
-    $result = json_decode($tool->handle(new Request([
+    $result = decodeToolResult($tool->handle(new Request([
         'member_name' => 'Aminu',
         'amount' => 4000,
         'confirmed' => true,
-    ])), true);
+    ])));
 
     expect($result['error'])->toContain('do not have permission');
 });
@@ -102,10 +104,10 @@ test('member cannot record payments', function () {
 test('payment recording returns error for unknown member', function () {
     $tool = new RecordPayment($this->admin);
 
-    $result = json_decode($tool->handle(new Request([
+    $result = decodeToolResult($tool->handle(new Request([
         'member_name' => 'Nonexistent Person',
         'amount' => 4000,
-    ])), true);
+    ])));
 
     expect($result['error'])->toContain('No active family member found');
 });
@@ -118,10 +120,10 @@ test('payment recording handles ambiguous member names', function () {
 
     $tool = new RecordPayment($this->admin);
 
-    $result = json_decode($tool->handle(new Request([
+    $result = decodeToolResult($tool->handle(new Request([
         'member_name' => 'Aminu',
         'amount' => 4000,
-    ])), true);
+    ])));
 
     expect($result['error'])->toContain('Multiple members')
         ->and($result['matching_members'])->toContain('Aminu Hussain')
@@ -136,10 +138,10 @@ test('payment recording validates member has contribution category', function ()
 
     $tool = new RecordPayment($this->admin);
 
-    $result = json_decode($tool->handle(new Request([
+    $result = decodeToolResult($tool->handle(new Request([
         'member_name' => 'Unique Nopay',
         'amount' => 4000,
-    ])), true);
+    ])));
 
     expect($result['error'])->toContain('does not have a contribution category');
 });
@@ -147,12 +149,12 @@ test('payment recording validates member has contribution category', function ()
 test('payment recording validates advance payment limit', function () {
     $tool = new RecordPayment($this->admin);
 
-    $result = json_decode($tool->handle(new Request([
+    $result = decodeToolResult($tool->handle(new Request([
         'member_name' => 'Aminu Hussain',
         'amount' => 4000,
         'target_year' => now()->addMonths(7)->year,
         'target_month' => now()->addMonths(7)->month,
-    ])), true);
+    ])));
 
     expect($result['error'])->toContain('limited to 6 months');
 });

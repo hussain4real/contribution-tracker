@@ -53,7 +53,7 @@ class EnsureFamilySubscription
 
         // Check feature access if a specific feature is requested
         if ($feature) {
-            $features = $plan->features ?? [];
+            $features = $plan->features;
 
             if (! in_array($feature, $features, true)) {
                 if ($request->expectsJson()) {

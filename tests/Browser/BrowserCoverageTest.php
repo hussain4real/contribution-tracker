@@ -1,9 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 use Illuminate\Routing\Route;
 use Illuminate\Support\Facades\Route as RouteFacade;
 use Illuminate\Support\Str;
 
+/**
+ * @return list<string>
+ */
 function browserPageRouteNames(): array
 {
     return [
@@ -58,6 +63,9 @@ function browserPageRouteNames(): array
     ];
 }
 
+/**
+ * @return list<string>
+ */
 function browserCoveredRouteNames(): array
 {
     return array_keys(browserCoverageAssignments());
@@ -151,10 +159,10 @@ function browserCoverageExcludedRouteName(string $routeName): bool
 }
 
 it('classifies every browser reachable GET page route', function () {
-    $getRouteNames = collect(RouteFacade::getRoutes())
+    $getRouteNames = collect(RouteFacade::getRoutes()->getRoutes())
         ->filter(fn (Route $route): bool => in_array('GET', $route->methods(), true))
         ->map(fn (Route $route): ?string => $route->getName())
-        ->filter()
+        ->filter(fn (?string $routeName): bool => is_string($routeName) && $routeName !== '')
         ->values();
 
     $classifiedRouteNames = collect([
@@ -164,7 +172,9 @@ it('classifies every browser reachable GET page route', function () {
             ->all(),
     ]);
 
-    expect($getRouteNames->diff($classifiedRouteNames)->values()->all())->toBe([]);
+    $missingRouteNames = array_values(array_diff($getRouteNames->all(), $classifiedRouteNames->all()));
+
+    expect($missingRouteNames)->toBe([]);
 });
 
 it('has browser coverage assigned for every browser page route', function () {

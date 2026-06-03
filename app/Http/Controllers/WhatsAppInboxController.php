@@ -10,7 +10,6 @@ use App\Models\User;
 use App\Models\WhatsAppMessage;
 use App\Services\WhatsAppService;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -41,8 +40,7 @@ class WhatsAppInboxController extends Controller
     {
         $this->authorizeInboxAccess();
 
-        /** @var User $user */
-        $user = Auth::user();
+        $user = $this->authUser();
 
         // Subquery to fetch the latest message body per phone number for the family.
         $latestBodySub = WhatsAppMessage::query()
@@ -62,18 +60,26 @@ class WhatsAppInboxController extends Controller
             ->get();
 
         // Batch-load matched users to avoid N+1.
-        $userIds = $rows->pluck('user_id')->filter()->unique()->values();
-        $users = $userIds->isEmpty()
-            ? collect()
-            : User::query()->whereIn('id', $userIds)->get()->keyBy('id');
+        $userIds = [];
 
-        $threads = $rows->map(function ($row) use ($users): array {
+        foreach ($rows as $row) {
+            if ($row->user_id !== null) {
+                $userIds[] = $row->user_id;
+            }
+        }
+
+        $users = User::query()
+            ->whereIn('id', array_values(array_unique($userIds)))
+            ->get()
+            ->keyBy('id');
+
+        $threads = $rows->map(function (WhatsAppMessage $row) use ($users): array {
             $member = $row->user_id ? $users->get($row->user_id) : null;
 
             return [
                 'phone' => $row->phone,
-                'member_id' => $member?->id,
-                'member_name' => $member?->name,
+                'member_id' => $member instanceof User ? $member->id : null,
+                'member_name' => $member instanceof User ? $member->name : null,
                 'last_at' => $row->last_at,
                 'last_body' => $row->last_body,
                 'message_count' => (int) $row->message_count,
@@ -92,8 +98,7 @@ class WhatsAppInboxController extends Controller
     {
         $this->authorizeInboxAccess();
 
-        /** @var User $user */
-        $user = Auth::user();
+        $user = $this->authUser();
 
         $messages = WhatsAppMessage::query()
             ->where('family_id', $user->family_id)
@@ -149,8 +154,7 @@ class WhatsAppInboxController extends Controller
 
         $validated = $request->validated();
 
-        /** @var User $user */
-        $user = Auth::user();
+        $user = $this->authUser();
 
         $lastInbound = WhatsAppMessage::query()
             ->where('family_id', $user->family_id)
@@ -165,7 +169,8 @@ class WhatsAppInboxController extends Controller
             ]);
         }
 
-        $message = (new WhatsAppMessageBuilder)->text($validated['body']);
+        $body = is_string($validated['body'] ?? null) ? $validated['body'] : '';
+        $message = (new WhatsAppMessageBuilder)->text($body);
 
         $result = $this->whatsapp->send($this->whatsapp->normalisePhone($phone), $message);
 
@@ -183,9 +188,6 @@ class WhatsAppInboxController extends Controller
      */
     protected function authorizeInboxAccess(): void
     {
-        /** @var User|null $user */
-        $user = Auth::user();
-
-        abort_unless($user && $user->role->canViewAllMembers(), 403);
+        abort_unless($this->authUser()->role->canViewAllMembers(), 403);
     }
 }

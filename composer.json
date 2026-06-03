@@ -28,6 +28,7 @@
     "require-dev": {
         "barryvdh/laravel-debugbar": "^4.1",
         "fakerphp/faker": "^1.23",
+        "larastan/larastan": "^3.10",
         "laravel/boost": "^2.3",
         "laravel/pail": "^1.2.2",
         "laravel/pao": "^1.0",
@@ -74,6 +75,15 @@
         "test": [
             "@php artisan config:clear --ansi",
             "@php artisan test"
+        ],
+        "analyse": "PAO_DISABLE=1 vendor/bin/phpstan analyse -c phpstan.neon.dist --memory-limit=2G --debug",
+        "ci:check": [
+            "@analyse",
+            "vendor/bin/pint --test",
+            "npm run format:check",
+            "npm run lint",
+            "npm run build",
+            "@php artisan test --coverage --parallel --compact --min=100"
         ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",

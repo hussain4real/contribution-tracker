@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use Database\Factories\FamilyCategoryFactory;
@@ -8,6 +10,16 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property int $id
+ * @property int $family_id
+ * @property string $name
+ * @property string $slug
+ * @property int $monthly_amount
+ * @property int $sort_order
+ * @property-read string $formatted_amount
+ * @property-read string $label_with_amount
+ */
 class FamilyCategory extends Model
 {
     /** @use HasFactory<FamilyCategoryFactory> */
@@ -45,6 +57,8 @@ class FamilyCategory extends Model
 
     /**
      * The family this category belongs to.
+     *
+     * @return BelongsTo<Family, $this>
      */
     public function family(): BelongsTo
     {
@@ -53,6 +67,8 @@ class FamilyCategory extends Model
 
     /**
      * Users assigned to this category.
+     *
+     * @return HasMany<User, $this>
      */
     public function users(): HasMany
     {

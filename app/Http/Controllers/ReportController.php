@@ -1,10 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use App\Enums\MemberCategory;
 use App\Enums\PaymentStatus;
 use App\Models\Contribution;
+use App\Models\Payment;
 use App\Models\User;
 use App\Services\FamilyContributionReviewService;
 use Carbon\Carbon;
@@ -38,12 +41,11 @@ class ReportController extends Controller
      */
     public function monthly(Request $request): Response
     {
-        $year = (int) $request->get('year', now()->year);
-        $month = (int) $request->get('month', now()->month);
-        $monthDate = Carbon::create($year, $month, 1);
+        $year = $this->integerInput($request->get('year'), now()->year);
+        $month = $this->integerInput($request->get('month'), now()->month);
+        $monthDate = Carbon::parse(sprintf('%04d-%02d-01', $year, $month));
 
-        /** @var User $currentUser */
-        $currentUser = $request->user();
+        $currentUser = $this->user($request);
         $familyId = $currentUser->family_id;
 
         // Get all active members
@@ -51,22 +53,20 @@ class ReportController extends Controller
             ->where('family_id', $familyId)
             ->whereNull('archived_at')
             ->whereNotNull('category')
-            ->with(['contributions' => function ($query) use ($year, $month) {
-                $query->where('year', $year)
-                    ->where('month', $month)
-                    ->with('payments');
-            }])
+            ->with('contributions.payments')
             ->paginate(15)
-            ->through(function ($member) {
-                $contribution = $member->contributions->first();
-                $expectedAmount = $member->category->monthlyAmount();
-                $paidAmount = $contribution ? $contribution->payments->sum('amount') : 0;
+            ->through(function (User $member) use ($year, $month): array {
+                $contribution = $member->contributions->first(
+                    fn (Contribution $contribution): bool => $contribution->year === $year && $contribution->month === $month,
+                );
+                $expectedAmount = $member->getMonthlyAmount() ?? 0;
+                $paidAmount = $contribution instanceof Contribution ? $this->paidAmount($contribution) : 0;
 
                 return [
                     'id' => $member->id,
                     'name' => $member->name,
-                    'category' => $member->category->value,
-                    'category_label' => $member->category->label(),
+                    'category' => $member->category?->value,
+                    'category_label' => $member->familyCategory->name ?? $member->category?->label(),
                     'expected_amount' => $expectedAmount,
                     'paid_amount' => $paidAmount,
                     'balance' => $expectedAmount - $paidAmount,
@@ -92,10 +92,9 @@ class ReportController extends Controller
      */
     public function annual(Request $request): Response
     {
-        $year = (int) $request->get('year', now()->year);
+        $year = $this->integerInput($request->get('year'), now()->year);
 
-        /** @var User $currentUser */
-        $currentUser = $request->user();
+        $currentUser = $this->user($request);
         $familyId = $currentUser->family_id;
 
         // Fetch all contributions for the year in a single query
@@ -113,15 +112,14 @@ class ReportController extends Controller
             'outstanding' => 0,
         ];
 
-        $contributionsByMonth = $allContributions->groupBy('month');
-
         for ($month = 1; $month <= 12; $month++) {
-            $monthDate = Carbon::create($year, $month, 1);
+            $monthDate = Carbon::parse(sprintf('%04d-%02d-01', $year, $month));
+            $monthContributions = $allContributions->filter(
+                fn (Contribution $contribution): bool => $contribution->month === $month,
+            );
 
-            $contributions = $contributionsByMonth->get($month, collect());
-
-            $expected = $contributions->sum('expected_amount');
-            $collected = $contributions->sum(fn ($c) => $c->payments->sum('amount'));
+            $expected = (int) $monthContributions->sum(fn (Contribution $contribution): int => $contribution->expected_amount);
+            $collected = (int) $monthContributions->sum(fn (Contribution $contribution): int => $this->paidAmount($contribution));
             $outstanding = $expected - $collected;
             $collectionRate = $expected > 0 ? round(($collected / $expected) * 100, 1) : 0;
 
@@ -133,7 +131,7 @@ class ReportController extends Controller
                 'collected' => $collected,
                 'outstanding' => $outstanding,
                 'collection_rate' => $collectionRate,
-                'contribution_count' => $contributions->count(),
+                'contribution_count' => $monthContributions->count(),
             ];
 
             $yearlyTotal['expected'] += $expected;
@@ -149,12 +147,12 @@ class ReportController extends Controller
         // Calculate by category for the year using already-loaded data
         $byCategory = [];
         foreach (MemberCategory::cases() as $category) {
-            $categoryContributions = $allContributions->filter(function ($c) use ($category) {
-                return $c->user && $c->user->category === $category;
+            $categoryContributions = $allContributions->filter(function (Contribution $contribution) use ($category): bool {
+                return $contribution->user !== null && $contribution->user->category === $category;
             });
 
-            $categoryExpected = $categoryContributions->sum('expected_amount');
-            $categoryCollected = $categoryContributions->sum(fn ($c) => $c->payments->sum('amount'));
+            $categoryExpected = (int) $categoryContributions->sum(fn (Contribution $contribution): int => $contribution->expected_amount);
+            $categoryCollected = (int) $categoryContributions->sum(fn (Contribution $contribution): int => $this->paidAmount($contribution));
 
             $byCategory[$category->value] = [
                 'label' => $category->label(),
@@ -171,5 +169,15 @@ class ReportController extends Controller
             'total' => $yearlyTotal,
             'by_category' => $byCategory,
         ]);
+    }
+
+    private function integerInput(mixed $value, int $default): int
+    {
+        return is_numeric($value) ? (int) $value : $default;
+    }
+
+    private function paidAmount(Contribution $contribution): int
+    {
+        return (int) $contribution->payments->sum(fn (Payment $payment): int => $payment->amount);
     }
 }

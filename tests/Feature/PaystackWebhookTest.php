@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Enums\TransactionStatus;
 use App\Enums\TransactionType;
 use App\Http\Controllers\PaystackWebhookController;
@@ -22,9 +24,9 @@ function signPayload(string $payload): string
 }
 
 it('rejects webhooks with invalid signature', function () {
-    $payload = json_encode(['event' => 'charge.success', 'data' => []]);
+    $payload = encodeJsonPayload(['event' => 'charge.success', 'data' => []]);
 
-    $this->postJson(route('webhooks.paystack'), json_decode($payload, true), [
+    $this->postJson(route('webhooks.paystack'), decodeJsonObject($payload), [
         'X-Paystack-Signature' => 'invalid',
         'Content-Type' => 'application/json',
     ])->assertForbidden();
@@ -58,7 +60,7 @@ it('processes charge.success for contribution payment', function () {
         ],
     ]);
 
-    $payload = json_encode([
+    $payload = encodeJsonPayload([
         'event' => 'charge.success',
         'data' => [
             'reference' => 'TXN_TEST001',
@@ -68,7 +70,7 @@ it('processes charge.success for contribution payment', function () {
         ],
     ]);
 
-    $this->postJson(route('webhooks.paystack'), json_decode($payload, true), [
+    $this->postJson(route('webhooks.paystack'), decodeJsonObject($payload), [
         'X-Paystack-Signature' => signPayload($payload),
     ])->assertSuccessful();
 
@@ -89,7 +91,7 @@ it('prevents double processing of charge.success', function () {
         'status' => TransactionStatus::Success, // already processed
     ]);
 
-    $payload = json_encode([
+    $payload = encodeJsonPayload([
         'event' => 'charge.success',
         'data' => [
             'reference' => 'TXN_DOUBLE',
@@ -97,7 +99,7 @@ it('prevents double processing of charge.success', function () {
         ],
     ]);
 
-    $this->postJson(route('webhooks.paystack'), json_decode($payload, true), [
+    $this->postJson(route('webhooks.paystack'), decodeJsonObject($payload), [
         'X-Paystack-Signature' => signPayload($payload),
     ])->assertSuccessful();
 
@@ -119,7 +121,7 @@ it('treats non-pending matching charge.success transactions as already processed
         'status' => TransactionStatus::Failed,
     ]);
 
-    $payload = json_encode([
+    $payload = encodeJsonPayload([
         'event' => 'charge.success',
         'data' => [
             'reference' => 'TXN_NON_PENDING',
@@ -127,7 +129,7 @@ it('treats non-pending matching charge.success transactions as already processed
         ],
     ]);
 
-    $this->postJson(route('webhooks.paystack'), json_decode($payload, true), [
+    $this->postJson(route('webhooks.paystack'), decodeJsonObject($payload), [
         'X-Paystack-Signature' => signPayload($payload),
     ])
         ->assertSuccessful()
@@ -152,12 +154,12 @@ it('logs and skips contribution allocation when the webhook member no longer exi
 });
 
 it('rejects charge.success events without a reference', function () {
-    $payload = json_encode([
+    $payload = encodeJsonPayload([
         'event' => 'charge.success',
         'data' => ['amount' => 400000],
     ]);
 
-    $this->postJson(route('webhooks.paystack'), json_decode($payload, true), [
+    $this->postJson(route('webhooks.paystack'), decodeJsonObject($payload), [
         'X-Paystack-Signature' => signPayload($payload),
     ])
         ->assertBadRequest()
@@ -165,7 +167,7 @@ it('rejects charge.success events without a reference', function () {
 });
 
 it('ignores charge.success events for unknown references', function () {
-    $payload = json_encode([
+    $payload = encodeJsonPayload([
         'event' => 'charge.success',
         'data' => [
             'reference' => 'TXN_UNKNOWN',
@@ -173,7 +175,7 @@ it('ignores charge.success events for unknown references', function () {
         ],
     ]);
 
-    $this->postJson(route('webhooks.paystack'), json_decode($payload, true), [
+    $this->postJson(route('webhooks.paystack'), decodeJsonObject($payload), [
         'X-Paystack-Signature' => signPayload($payload),
     ])
         ->assertSuccessful()
@@ -193,7 +195,7 @@ it('rejects charge.success with amount mismatch', function () {
         'status' => TransactionStatus::Pending,
     ]);
 
-    $payload = json_encode([
+    $payload = encodeJsonPayload([
         'event' => 'charge.success',
         'data' => [
             'reference' => 'TXN_MISMATCH',
@@ -201,7 +203,7 @@ it('rejects charge.success with amount mismatch', function () {
         ],
     ]);
 
-    $this->postJson(route('webhooks.paystack'), json_decode($payload, true), [
+    $this->postJson(route('webhooks.paystack'), decodeJsonObject($payload), [
         'X-Paystack-Signature' => signPayload($payload),
     ])->assertStatus(400);
 });
@@ -211,7 +213,7 @@ it('handles subscription.create event', function () {
         'paystack_customer_code' => 'CUS_test123',
     ]);
 
-    $payload = json_encode([
+    $payload = encodeJsonPayload([
         'event' => 'subscription.create',
         'data' => [
             'subscription_code' => 'SUB_abc123',
@@ -223,7 +225,7 @@ it('handles subscription.create event', function () {
         ],
     ]);
 
-    $this->postJson(route('webhooks.paystack'), json_decode($payload, true), [
+    $this->postJson(route('webhooks.paystack'), decodeJsonObject($payload), [
         'X-Paystack-Signature' => signPayload($payload),
     ])->assertSuccessful();
 
@@ -234,12 +236,12 @@ it('handles subscription.create event', function () {
 });
 
 it('rejects subscription.create events with missing data', function () {
-    $payload = json_encode([
+    $payload = encodeJsonPayload([
         'event' => 'subscription.create',
         'data' => ['customer' => []],
     ]);
 
-    $this->postJson(route('webhooks.paystack'), json_decode($payload, true), [
+    $this->postJson(route('webhooks.paystack'), decodeJsonObject($payload), [
         'X-Paystack-Signature' => signPayload($payload),
     ])
         ->assertBadRequest()
@@ -247,7 +249,7 @@ it('rejects subscription.create events with missing data', function () {
 });
 
 it('ignores subscription.create events for unknown customers', function () {
-    $payload = json_encode([
+    $payload = encodeJsonPayload([
         'event' => 'subscription.create',
         'data' => [
             'subscription_code' => 'SUB_unknown',
@@ -257,7 +259,7 @@ it('ignores subscription.create events for unknown customers', function () {
         ],
     ]);
 
-    $this->postJson(route('webhooks.paystack'), json_decode($payload, true), [
+    $this->postJson(route('webhooks.paystack'), decodeJsonObject($payload), [
         'X-Paystack-Signature' => signPayload($payload),
     ])
         ->assertSuccessful()
@@ -270,19 +272,32 @@ it('handles subscription.not_renew event', function () {
         'subscription_status' => 'active',
     ]);
 
-    $payload = json_encode([
+    $payload = encodeJsonPayload([
         'event' => 'subscription.not_renew',
         'data' => [
             'subscription_code' => 'SUB_cancel123',
         ],
     ]);
 
-    $this->postJson(route('webhooks.paystack'), json_decode($payload, true), [
+    $this->postJson(route('webhooks.paystack'), decodeJsonObject($payload), [
         'X-Paystack-Signature' => signPayload($payload),
     ])->assertSuccessful();
 
     $family->refresh();
     expect($family->subscription_status)->toBe('cancelled');
+});
+
+it('rejects subscription.not_renew events with missing data', function () {
+    $payload = encodeJsonPayload([
+        'event' => 'subscription.not_renew',
+        'data' => [],
+    ]);
+
+    $this->postJson(route('webhooks.paystack'), decodeJsonObject($payload), [
+        'X-Paystack-Signature' => signPayload($payload),
+    ])
+        ->assertBadRequest()
+        ->assertJson(['message' => 'Missing subscription data']);
 });
 
 it('records invoice payment failures for known subscriptions', function () {
@@ -291,7 +306,7 @@ it('records invoice payment failures for known subscriptions', function () {
         'subscription_status' => 'active',
     ]);
 
-    $payload = json_encode([
+    $payload = encodeJsonPayload([
         'event' => 'invoice.payment_failed',
         'data' => [
             'subscription' => [
@@ -300,7 +315,7 @@ it('records invoice payment failures for known subscriptions', function () {
         ],
     ]);
 
-    $this->postJson(route('webhooks.paystack'), json_decode($payload, true), [
+    $this->postJson(route('webhooks.paystack'), decodeJsonObject($payload), [
         'X-Paystack-Signature' => signPayload($payload),
     ])
         ->assertSuccessful()
@@ -309,13 +324,41 @@ it('records invoice payment failures for known subscriptions', function () {
     expect($family->refresh()->subscription_status)->toBe('past_due');
 });
 
+it('rejects invoice payment failures with missing subscription data', function () {
+    $payload = encodeJsonPayload([
+        'event' => 'invoice.payment_failed',
+        'data' => [
+            'subscription' => null,
+        ],
+    ]);
+
+    $this->postJson(route('webhooks.paystack'), decodeJsonObject($payload), [
+        'X-Paystack-Signature' => signPayload($payload),
+    ])
+        ->assertBadRequest()
+        ->assertJson(['message' => 'Missing subscription data']);
+});
+
+it('handles malformed paystack webhook data as missing data', function () {
+    $payload = encodeJsonPayload([
+        'event' => 'subscription.not_renew',
+        'data' => 'not-an-object',
+    ]);
+
+    $this->postJson(route('webhooks.paystack'), decodeJsonObject($payload), [
+        'X-Paystack-Signature' => signPayload($payload),
+    ])
+        ->assertBadRequest()
+        ->assertJson(['message' => 'Missing subscription data']);
+});
+
 it('ignores unknown paystack webhook events', function () {
-    $payload = json_encode([
+    $payload = encodeJsonPayload([
         'event' => 'customer.created',
         'data' => [],
     ]);
 
-    $this->postJson(route('webhooks.paystack'), json_decode($payload, true), [
+    $this->postJson(route('webhooks.paystack'), decodeJsonObject($payload), [
         'X-Paystack-Signature' => signPayload($payload),
     ])
         ->assertSuccessful()

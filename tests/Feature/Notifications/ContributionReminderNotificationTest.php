@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Channels\WhatsAppChannel;
 use App\Channels\WhatsAppMessage;
 use App\Models\Contribution;
@@ -152,12 +154,18 @@ describe('ContributionReminderNotification', function () {
 
         $notification = new ContributionReminderNotification($contribution, 'reminder');
         $payload = $notification->toWhatsApp($user)->toPayload('2348012345678');
+        $template = resultArray($payload, 'template');
+        $language = resultArray($template, 'language');
+        $components = resultArray($template, 'components');
+        $bodyComponent = firstResultArray($template, 'components');
+        $parameters = resultArray($bodyComponent, 'parameters');
 
         expect($payload['type'])->toBe('template')
-            ->and($payload['template']['name'])->toBe('contribution_reminder')
-            ->and($payload['template']['language']['code'])->toBe('en')
-            ->and($payload['template']['components'][0]['type'])->toBe('body')
-            ->and($payload['template']['components'][0]['parameters'])->toHaveCount(5);
+            ->and($template['name'] ?? null)->toBe('contribution_reminder')
+            ->and($language['code'] ?? null)->toBe('en')
+            ->and($components)->toHaveCount(1)
+            ->and($bodyComponent['type'] ?? null)->toBe('body')
+            ->and($parameters)->toHaveCount(5);
     });
 
     it('uses follow-up wording in whatsapp template for follow_up type', function () {
@@ -170,9 +178,12 @@ describe('ContributionReminderNotification', function () {
 
         expect($message)->toBeInstanceOf(WhatsAppMessage::class);
 
-        $params = $message->toPayload('2348012345678')['template']['components'][0]['parameters'];
+        $payload = $message->toPayload('2348012345678');
+        $component = firstResultArray(resultArray($payload, 'template'), 'components');
+        $params = resultArray($component, 'parameters');
+        $wording = resultArray($params, 1);
 
-        expect($params[1]['text'])->toBe('follow-up');
+        expect($wording['text'] ?? null)->toBe('follow-up');
     });
 
     it('builds a web push message for reminder type', function () {
@@ -185,6 +196,7 @@ describe('ContributionReminderNotification', function () {
         $notification = new ContributionReminderNotification($contribution, 'reminder');
         $message = $notification->toWebPush($user, $notification);
         $payload = $message->toArray();
+        $data = resultArray($payload, 'data');
 
         expect($message)->toBeInstanceOf(WebPushMessage::class)
             ->and($payload['title'])->toBe('Contribution due soon')
@@ -193,9 +205,9 @@ describe('ContributionReminderNotification', function () {
             ->and($payload['icon'])->toBe('/pwa-192x192.png')
             ->and($payload['badge'])->toBe('/pwa-192x192.png')
             ->and($payload['tag'])->toBe("contribution-{$contribution->id}-reminder")
-            ->and($payload['data']['contribution_id'])->toBe($contribution->id)
-            ->and($payload['data']['url'])->toBe(route('contributions.show', $contribution))
-            ->and($payload['data']['type'])->toBe('reminder')
+            ->and($data['contribution_id'] ?? null)->toBe($contribution->id)
+            ->and($data['url'] ?? null)->toBe(route('contributions.show', $contribution))
+            ->and($data['type'] ?? null)->toBe('reminder')
             ->and($message->getOptions())->toBe(['TTL' => 60 * 60 * 24]);
     });
 
@@ -206,9 +218,10 @@ describe('ContributionReminderNotification', function () {
 
         $notification = new ContributionReminderNotification($contribution, 'follow_up');
         $payload = $notification->toWebPush($user, $notification)->toArray();
+        $data = resultArray($payload, 'data');
 
         expect($payload['title'])->toBe('Contribution due today')
             ->and($payload['tag'])->toBe("contribution-{$contribution->id}-follow_up")
-            ->and($payload['data']['type'])->toBe('follow_up');
+            ->and($data['type'] ?? null)->toBe('follow_up');
     });
 });

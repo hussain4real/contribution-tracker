@@ -1,13 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Ai\Tools;
 
 use App\Models\Contribution;
+use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Database\Eloquent\Builder;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
-use Stringable;
 
 class GetContributionSummary implements Tool
 {
@@ -16,7 +19,7 @@ class GetContributionSummary implements Tool
     /**
      * Get the description of the tool's purpose.
      */
-    public function description(): Stringable|string
+    public function description(): string
     {
         return 'Retrieves contribution summary data for the family. Can filter by year and month. Returns total expected, total paid, outstanding balance, and per-member breakdown.';
     }
@@ -24,34 +27,39 @@ class GetContributionSummary implements Tool
     /**
      * Execute the tool.
      */
-    public function handle(Request $request): Stringable|string
+    public function handle(Request $request): string
     {
-        $year = $request['year'] ?? now()->year;
-        $month = $request['month'] ?? null;
+        $year = $this->integerFromRequest($request['year'] ?? null, now()->year);
+        $month = $this->nullableIntegerFromRequest($request['month'] ?? null);
 
         $query = Contribution::query()
             ->where('family_id', $this->user->family_id)
             ->where('year', $year)
             ->with(['user:id,name', 'payments:id,contribution_id,amount'])
-            ->whereHas('user', fn ($q) => $q->whereNull('archived_at'));
+            ->whereHas('user', fn (Builder $query): Builder => $query->whereNull('archived_at'));
 
-        if ($month) {
+        if ($month !== null) {
             $query->where('month', $month);
         }
 
         $contributions = $query->get();
 
-        $totalExpected = $contributions->sum('expected_amount');
-        $totalPaid = $contributions->sum(fn ($c) => $c->payments->sum('amount'));
+        $totalExpected = (int) $contributions->sum(fn (Contribution $contribution): int => $contribution->expected_amount);
+        $totalPaid = (int) $contributions->sum(
+            fn (Contribution $contribution): int => (int) $contribution->payments->sum(fn (Payment $payment): int => $payment->amount)
+        );
         $outstanding = $totalExpected - $totalPaid;
 
-        $memberBreakdown = $contributions->groupBy('user_id')->map(function ($userContributions) {
-            $user = $userContributions->first()->user;
-            $expected = $userContributions->sum('expected_amount');
-            $paid = $userContributions->sum(fn ($c) => $c->payments->sum('amount'));
+        $memberBreakdown = $contributions->groupBy('user_id')->map(function ($userContributions): array {
+            $firstContribution = $userContributions->first();
+            $user = $firstContribution instanceof Contribution ? $firstContribution->user : null;
+            $expected = (int) $userContributions->sum(fn (Contribution $contribution): int => $contribution->expected_amount);
+            $paid = (int) $userContributions->sum(
+                fn (Contribution $contribution): int => (int) $contribution->payments->sum(fn (Payment $payment): int => $payment->amount)
+            );
 
             return [
-                'name' => $user->name,
+                'name' => $user instanceof User ? $user->name : 'Unknown',
                 'expected' => $expected,
                 'paid' => $paid,
                 'outstanding' => $expected - $paid,
@@ -83,5 +91,15 @@ class GetContributionSummary implements Tool
             'year' => $schema->integer()->min(2020)->max(2030),
             'month' => $schema->integer()->min(1)->max(12),
         ];
+    }
+
+    private function integerFromRequest(mixed $value, int $default): int
+    {
+        return is_numeric($value) ? (int) $value : $default;
+    }
+
+    private function nullableIntegerFromRequest(mixed $value): ?int
+    {
+        return is_numeric($value) ? (int) $value : null;
     }
 }

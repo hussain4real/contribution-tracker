@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\Family;
 use App\Models\User;
 use App\Models\WhatsAppMessage;
@@ -26,8 +28,8 @@ it('exposes family and user relationships', function () {
         'user_id' => $user->id,
     ]);
 
-    expect($message->family->is($family))->toBeTrue()
-        ->and($message->user->is($user))->toBeTrue();
+    expect($message->family()->firstOrFail()->is($family))->toBeTrue()
+        ->and($message->user()->firstOrFail()->is($user))->toBeTrue();
 });
 
 it('filters whatsapp messages with local query scopes', function () {

@@ -1,0 +1,326 @@
+<?php
+
+namespace Symfony\Component\HttpFoundation {
+
+class Response
+{
+    public function getContent(): string {}
+
+    public function getStatusCode(): int {}
+}
+
+class ResponseHeaderBag
+{
+    public function get(string $key, ?string $default = null): ?string {}
+}
+
+}
+
+namespace Illuminate\Foundation {
+
+class Application {}
+
+}
+
+namespace Illuminate\Http {
+
+class Response extends \Symfony\Component\HttpFoundation\Response {}
+
+}
+
+namespace Illuminate\Foundation\Testing {
+
+abstract class TestCase {}
+
+}
+
+namespace Inertia\Testing {
+
+class AssertableInertia
+{
+    /**
+     * @param  \Illuminate\Testing\TestResponse<\Illuminate\Http\Response>  $response
+     */
+    public static function fromTestResponse(\Illuminate\Testing\TestResponse $response): self {}
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function toArray(): array {}
+
+    public function component(?string $value = null, mixed $shouldExist = null): static {}
+
+    public function url(string $value): static {}
+
+    public function has(mixed $key, mixed $length = null, ?\Closure $callback = null): static {}
+
+    public function where(string $key, mixed $expected): static {}
+
+    public function missing(string $key): static {}
+
+    public function etc(): static {}
+
+    public function first(\Closure $callback): static {}
+}
+
+class TestResponseMacros
+{
+    /**
+     * @return \Closure((\Closure(\Inertia\Testing\AssertableInertia): mixed)|null): \Illuminate\Testing\TestResponse<\Symfony\Component\HttpFoundation\Response>
+     */
+    public function assertInertia(): \Closure {}
+
+    /**
+     * @return \Closure(string|null): mixed
+     */
+    public function inertiaProps(): \Closure {}
+
+    /**
+     * @return \Closure(): array<string, mixed>
+     */
+    public function inertiaPage(): \Closure {}
+}
+
+}
+
+namespace Illuminate\Testing {
+
+/**
+ * @template TResponse of \Symfony\Component\HttpFoundation\Response
+ */
+class TestResponse
+{
+    /**
+     * @var \Symfony\Component\HttpFoundation\ResponseHeaderBag
+     */
+    public $headers;
+
+    /**
+     * @param  \Closure(\Inertia\Testing\AssertableInertia): mixed|null  $callback
+     */
+    public function assertInertia(?\Closure $callback = null): static {}
+
+    public function getContent(): string {}
+
+    public function getStatusCode(): int {}
+
+    public function assertOk(): static {}
+
+    public function assertSuccessful(): static {}
+
+    public function assertForbidden(): static {}
+
+    public function assertBadRequest(): static {}
+
+    public function assertStatus(int $status): static {}
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    public function assertJson(array $data): static {}
+}
+
+class PendingCommand
+{
+    public function assertSuccessful(): static {}
+
+    public function expectsOutput(string $output): static {}
+
+    public function expectsOutputToContain(string $string): static {}
+
+    public function run(): int {}
+}
+
+}
+
+namespace App\Models {
+
+class Contribution {}
+
+class Expense {}
+
+class Family {}
+
+class FundAdjustment {}
+
+class Payment {}
+
+class User {}
+
+}
+
+namespace App\Policies {
+
+class ContributionPolicy {}
+
+class ExpensePolicy {}
+
+class FundAdjustmentPolicy {}
+
+class PaymentPolicy {}
+
+}
+
+namespace Mockery {
+
+interface MockInterface {}
+
+}
+
+namespace Tests {
+
+/**
+ * @property \App\Models\User $admin
+ * @property \App\Models\User $archivedMember
+ * @property \App\Models\User $employedMember
+ * @property \App\Models\User $financialSecretary
+ * @property \App\Models\User $member
+ * @property \App\Models\User $otherMember
+ * @property \App\Models\User $outsider
+ * @property \App\Models\User $payingMember
+ * @property \App\Models\User $recorder
+ * @property \App\Models\User $studentMember
+ * @property \App\Models\User $targetMember
+ * @property \App\Models\User $user
+ * @property \App\Models\Family $family
+ * @property \App\Models\Family $otherFamily
+ * @property \App\Models\Contribution $contribution
+ * @property \App\Models\Contribution $employedContribution
+ * @property \App\Models\Contribution $memberContribution
+ * @property \App\Models\Contribution $otherContribution
+ * @property \App\Models\Contribution $studentContribution
+ * @property \App\Models\Expense $expense
+ * @property \App\Models\FundAdjustment $fundAdjustment
+ * @property \App\Models\Payment $otherPayment
+ * @property \App\Models\Payment $payment
+ * @property \App\Policies\ContributionPolicy|\App\Policies\ExpensePolicy|\App\Policies\FundAdjustmentPolicy|\App\Policies\PaymentPolicy $policy
+ */
+abstract class PestStaticAnalysisTestCase extends \Illuminate\Foundation\Testing\TestCase
+{
+    /**
+     * @var \Illuminate\Foundation\Application
+     */
+    public $app;
+
+    /**
+     * @param  string  $command
+     * @param  array<string, mixed>  $parameters
+     */
+    public function artisan($command, $parameters = []): \Illuminate\Testing\PendingCommand {}
+
+    public function withoutVite(): static {}
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return \Illuminate\Testing\TestResponse<\Symfony\Component\HttpFoundation\Response>
+     */
+    public function view(string $view, array $data = []): \Illuminate\Testing\TestResponse {}
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    public function renderTestViewWithoutVite(string $view, array $data = []): string {}
+
+    /**
+     * @param  class-string  $abstract
+     */
+    public function mock($abstract, ?\Closure $mock = null): \Mockery\MockInterface {}
+
+    /**
+     * @param  class-string  $abstract
+     */
+    public function partialMock($abstract, ?\Closure $mock = null): \Mockery\MockInterface {}
+
+    /**
+     * @param  class-string  $abstract
+     */
+    public function spy($abstract, ?\Closure $mock = null): \Mockery\MockInterface {}
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Model|class-string<\Illuminate\Database\Eloquent\Model>|string  $table
+     * @param  array<string, mixed>  $data
+     */
+    public function assertDatabaseHas($table, array $data = [], mixed $connection = null): static {}
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Model|class-string<\Illuminate\Database\Eloquent\Model>|string  $table
+     * @param  array<string, mixed>  $data
+     */
+    public function assertDatabaseMissing($table, array $data = [], mixed $connection = null): static {}
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Model|class-string<\Illuminate\Database\Eloquent\Model>|string  $table
+     */
+    public function assertDatabaseCount($table, int $count, mixed $connection = null): static {}
+}
+
+}
+
+namespace Pest\PendingCalls {
+
+class TestCall
+{
+    public function with(mixed ...$data): self {}
+
+    public function group(string ...$groups): self {}
+
+    public function skip(bool|string $conditionOrMessage = true, ?string $message = null): self {}
+}
+
+class BeforeEachCall {}
+
+class AfterEachCall {}
+
+}
+
+namespace Pest\Support {
+
+class HigherOrderTapProxy {}
+
+}
+
+namespace {
+
+/**
+ * @param-closure-this \Tests\PestStaticAnalysisTestCase  $closure
+ *
+ * @return ($description is string ? \Pest\PendingCalls\TestCall : \Pest\Support\HigherOrderTapProxy|\Pest\PendingCalls\TestCall)
+ */
+function test(?string $description = null, ?\Closure $closure = null): \Pest\Support\HigherOrderTapProxy|\Pest\PendingCalls\TestCall {}
+
+/**
+ * @param-closure-this \Tests\PestStaticAnalysisTestCase  $closure
+ */
+function it(string $description, ?\Closure $closure = null): \Pest\PendingCalls\TestCall {}
+
+/**
+ * @param-closure-this \Tests\PestStaticAnalysisTestCase  $closure
+ */
+function beforeEach(?\Closure $closure = null): \Pest\PendingCalls\BeforeEachCall {}
+
+/**
+ * @param-closure-this \Tests\PestStaticAnalysisTestCase  $closure
+ */
+function afterEach(?\Closure $closure = null): \Pest\PendingCalls\AfterEachCall {}
+
+}
+
+namespace Mockery {
+
+/**
+ * @method self once()
+ * @method self zeroOrMoreTimes()
+ * @method self with(...$args)
+ * @method self withArgs(array<int, mixed>|\Closure $args)
+ */
+interface ExpectationInterface {}
+
+/**
+ * @method \Mockery\ExpectationInterface once()
+ * @method \Mockery\ExpectationInterface zeroOrMoreTimes()
+ * @method \Mockery\ExpectationInterface with(...$args)
+ * @method \Mockery\ExpectationInterface andReturn(...$args)
+ */
+class HigherOrderMessage {}
+
+}

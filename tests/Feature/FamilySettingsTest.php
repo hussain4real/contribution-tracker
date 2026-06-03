@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Jobs\SyncPaystackSubaccount;
 use App\Models\Family;
 use App\Models\FamilyCategory;
@@ -8,6 +10,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
+use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
     Cache::forget('paystack_banks');
@@ -143,7 +146,7 @@ it('shows family settings page for admin', function () {
     $this->actingAs($admin)
         ->get(route('family.settings'))
         ->assertSuccessful()
-        ->assertInertia(fn ($page) => $page
+        ->assertInertia(fn (Assert $page) => $page
             ->component('Family/Settings')
             ->has('family')
             ->has('categories', 1)
@@ -194,6 +197,24 @@ it('returns an empty bank list when paystack does not return a successful respon
             'status' => false,
             'message' => 'Unavailable',
             'data' => [],
+        ]),
+    ]);
+
+    $family = Family::factory()->create();
+    $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+
+    $this->actingAs($admin)
+        ->getJson(route('family.banks'))
+        ->assertSuccessful()
+        ->assertExactJson([]);
+});
+
+it('returns an empty bank list when paystack bank data is malformed', function () {
+    Http::fake([
+        'https://api.paystack.co/bank*' => Http::response([
+            'status' => true,
+            'message' => 'Banks retrieved',
+            'data' => 'not-a-bank-list',
         ]),
     ]);
 

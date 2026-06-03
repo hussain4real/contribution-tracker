@@ -1,13 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Ai\Tools;
 
+use App\Models\Family;
+use App\Models\Payment;
 use App\Models\User;
 use App\Services\PaymentAllocationService;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
-use Stringable;
 
 class RecordPayment implements Tool
 {
@@ -16,7 +19,7 @@ class RecordPayment implements Tool
     /**
      * Get the description of the tool's purpose.
      */
-    public function description(): Stringable|string
+    public function description(): string
     {
         return 'Records a payment for a family member. Accepts the member name (or part of it), amount in Naira, payment date, optional notes, and optional target year/month. The payment is automatically allocated to the oldest unpaid contribution first. Always call without confirmed=true first to preview.';
     }
@@ -24,19 +27,19 @@ class RecordPayment implements Tool
     /**
      * Execute the tool.
      */
-    public function handle(Request $request): Stringable|string
+    public function handle(Request $request): string
     {
         if (! $this->user->canRecordPayments()) {
             return json_encode(['error' => 'You do not have permission to record payments. Only admins and financial secretaries can do this.'], JSON_THROW_ON_ERROR);
         }
 
-        $memberName = $request['member_name'] ?? null;
-        $amount = $request['amount'] ?? null;
-        $paidAt = $request['paid_at'] ?? now()->toDateString();
-        $notes = $request['notes'] ?? null;
-        $targetYear = $request['target_year'] ?? null;
-        $targetMonth = $request['target_month'] ?? null;
-        $confirmed = $request['confirmed'] ?? false;
+        $memberName = $this->nullableStringFromRequest($request['member_name'] ?? null);
+        $amount = $this->nullableIntegerFromRequest($request['amount'] ?? null);
+        $paidAt = $this->stringFromRequest($request['paid_at'] ?? null, now()->toDateString());
+        $notes = $this->nullableStringFromRequest($request['notes'] ?? null);
+        $targetYear = $this->nullableIntegerFromRequest($request['target_year'] ?? null);
+        $targetMonth = $this->nullableIntegerFromRequest($request['target_month'] ?? null);
+        $confirmed = ($request['confirmed'] ?? false) === true;
 
         if (! $memberName) {
             return json_encode(['error' => 'Please provide the member name.'], JSON_THROW_ON_ERROR);
@@ -73,8 +76,8 @@ class RecordPayment implements Tool
         }
 
         // Validate advance payment limit
-        if ($targetYear && $targetMonth) {
-            $targetDate = now()->setYear((int) $targetYear)->setMonth((int) $targetMonth)->startOfMonth();
+        if ($targetYear !== null && $targetMonth !== null) {
+            $targetDate = now()->setYear($targetYear)->setMonth($targetMonth)->startOfMonth();
             $maxAdvanceDate = now()->addMonths(6)->startOfMonth();
 
             if ($targetDate->gt($maxAdvanceDate)) {
@@ -82,9 +85,10 @@ class RecordPayment implements Tool
             }
         }
 
-        $currency = $this->user->family?->currency ?? '₦';
+        $family = $this->user->family;
+        $currency = $family instanceof Family ? $family->currency : '₦';
         $formattedAmount = $currency.number_format($amount, 2);
-        $targetInfo = ($targetYear && $targetMonth)
+        $targetInfo = ($targetYear !== null && $targetMonth !== null)
             ? ' for '.now()->setYear($targetYear)->setMonth($targetMonth)->format('F Y')
             : '';
 
@@ -111,11 +115,11 @@ class RecordPayment implements Tool
             paidAt: $paidAt,
             recordedBy: $this->user,
             notes: $notes,
-            targetYear: $targetYear ? (int) $targetYear : null,
-            targetMonth: $targetMonth ? (int) $targetMonth : null,
+            targetYear: $targetYear,
+            targetMonth: $targetMonth,
         );
 
-        $totalAllocated = $payments->sum('amount');
+        $totalAllocated = (int) $payments->sum(fn (Payment $payment): int => $payment->amount);
         $formattedAllocated = $currency.number_format($totalAllocated, 2);
 
         return json_encode([
@@ -140,5 +144,20 @@ class RecordPayment implements Tool
             'target_month' => $schema->integer()->min(1)->max(12),
             'confirmed' => $schema->boolean(),
         ];
+    }
+
+    private function nullableIntegerFromRequest(mixed $value): ?int
+    {
+        return is_numeric($value) ? (int) $value : null;
+    }
+
+    private function nullableStringFromRequest(mixed $value): ?string
+    {
+        return is_scalar($value) && (string) $value !== '' ? (string) $value : null;
+    }
+
+    private function stringFromRequest(mixed $value, string $default): string
+    {
+        return is_scalar($value) ? (string) $value : $default;
     }
 }

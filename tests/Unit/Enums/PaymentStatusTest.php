@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Enums\PaymentStatus;
 
 it('exposes payment status presentation metadata', function (

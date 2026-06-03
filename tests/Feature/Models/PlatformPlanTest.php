@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\Family;
 use App\Models\PlatformPlan;
 
@@ -28,5 +30,5 @@ it('formats free and paid plans and exposes families', function () {
         ->and($paid->formattedPrice())->toBe("\u{20A6}2,000")
         ->and($paid->isPaid())->toBeTrue()
         ->and($paid->hasUnlimitedMembers())->toBeTrue()
-        ->and($paid->families->first()->is($family))->toBeTrue();
+        ->and($paid->families()->firstOrFail()->is($family))->toBeTrue();
 });

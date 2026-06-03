@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use App\Enums\MemberCategory;
@@ -24,8 +26,7 @@ class PaymentController extends Controller
     {
         $this->authorize('create', Payment::class);
 
-        /** @var User $currentUser */
-        $currentUser = auth()->user();
+        $currentUser = $this->authUser();
 
         $members = User::query()
             ->where('family_id', $currentUser->family_id)
@@ -33,7 +34,7 @@ class PaymentController extends Controller
             ->whereNotNull('category')
             ->orderBy('name')
             ->get()
-            ->map(fn ($member) => [
+            ->map(fn (User $member): array => [
                 'id' => $member->id,
                 'name' => $member->name,
                 'email' => $member->email,
@@ -59,7 +60,7 @@ class PaymentController extends Controller
             ->incomplete()
             ->oldestFirst()
             ->get()
-            ->map(fn ($contribution) => [
+            ->map(fn ($contribution): array => [
                 'id' => $contribution->id,
                 'year' => $contribution->year,
                 'month' => $contribution->month,
@@ -87,19 +88,22 @@ class PaymentController extends Controller
      */
     public function store(StorePaymentRequest $request): RedirectResponse
     {
-        $member = User::findOrFail($request->member_id);
+        $recordedBy = $this->user($request);
+        $member = User::query()
+            ->whereKey($request->integer('member_id'))
+            ->firstOrFail();
 
         $payments = $this->allocationService->allocate(
             member: $member,
-            amount: $request->amount,
-            paidAt: $request->paid_at,
-            recordedBy: $request->user(),
-            notes: $request->notes,
-            targetYear: $request->target_year ? (int) $request->target_year : null,
-            targetMonth: $request->target_month ? (int) $request->target_month : null,
+            amount: $request->integer('amount'),
+            paidAt: $request->string('paid_at')->toString(),
+            recordedBy: $recordedBy,
+            notes: $request->filled('notes') ? $request->string('notes')->toString() : null,
+            targetYear: $request->filled('target_year') ? $request->integer('target_year') : null,
+            targetMonth: $request->filled('target_month') ? $request->integer('target_month') : null,
         );
 
-        $totalAllocated = $payments->sum('amount');
+        $totalAllocated = (int) $payments->sum(fn (Payment $payment): int => $payment->amount);
         $formattedAmount = '₦'.number_format($totalAllocated, 2);
 
         return redirect()->route('dashboard')

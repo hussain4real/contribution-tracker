@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services;
 
 use App\Channels\WhatsAppMessage;
@@ -28,8 +30,10 @@ class WhatsAppService
 
         $response = $this->post('messages', $payload);
 
-        $waMessageId = $response['success']
-            ? ($response['data']['messages'][0]['id'] ?? null)
+        $messages = $response['data']['messages'] ?? null;
+        $firstMessage = is_array($messages) && isset($messages[0]) && is_array($messages[0]) ? $messages[0] : [];
+        $waMessageId = $response['success'] && is_string($firstMessage['id'] ?? null)
+            ? $firstMessage['id']
             : null;
 
         $this->recordOutbound(
@@ -64,6 +68,33 @@ class WhatsAppService
     }
 
     /**
+     * Send a family invitation using a pre-approved WhatsApp template.
+     *
+     * @return array{success: bool, wa_message_id: ?string, error: ?string}
+     */
+    public function sendInvitation(string $to, string $familyName, string $roleLabel, string $acceptUrl): array
+    {
+        $template = $this->invitationTemplate();
+
+        if ($template === null) {
+            Log::warning('WhatsApp invitation template is not configured');
+
+            return [
+                'success' => false,
+                'wa_message_id' => null,
+                'error' => 'WhatsApp invitation template is not configured.',
+            ];
+        }
+
+        return $this->sendTemplate(
+            to: $this->normalisePhone($to),
+            templateName: $template['name'],
+            bodyParameters: [$familyName, $roleLabel, $acceptUrl],
+            languageCode: $template['language'],
+        );
+    }
+
+    /**
      * Send a plain text message. Only valid inside the 24h customer service window.
      *
      * @return array{success: bool, wa_message_id: ?string, error: ?string}
@@ -94,7 +125,7 @@ class WhatsAppService
      */
     protected function post(string $endpoint, array $payload): array
     {
-        $config = config('services.whatsapp');
+        $config = $this->config();
 
         $url = sprintf(
             '%s/%s/%s/%s',
@@ -124,11 +155,13 @@ class WhatsAppService
             ];
         }
 
-        $data = $response->json() ?? [];
+        $data = $this->stringKeyedArray($response->json());
 
         if ($response->failed()) {
-            $error = $data['error']['message'] ?? 'WhatsApp API request failed';
-            $errorCode = isset($data['error']['code']) ? (string) $data['error']['code'] : null;
+            $errorData = $this->stringKeyedArray($data['error'] ?? null);
+            $error = $errorData['message'] ?? 'WhatsApp API request failed';
+            $error = is_scalar($error) ? (string) $error : 'WhatsApp API request failed';
+            $errorCode = isset($errorData['code']) && is_scalar($errorData['code']) ? (string) $errorData['code'] : null;
 
             Log::warning('WhatsApp API returned an error', [
                 'endpoint' => $endpoint,
@@ -165,10 +198,12 @@ class WhatsAppService
         ?string $errorCode,
     ): void {
         try {
+            $phoneNumberId = config('services.whatsapp.phone_number_id');
+
             WhatsAppMessageModel::create([
                 'wa_message_id' => $waMessageId,
                 'direction' => 'outbound',
-                'from' => config('services.whatsapp.phone_number_id'),
+                'from' => is_scalar($phoneNumberId) ? (string) $phoneNumberId : '',
                 'to' => $to,
                 'type' => $message->getKind(),
                 'body' => $message->getKind() === 'text' ? $message->getTextBody() : null,
@@ -185,5 +220,59 @@ class WhatsAppService
                 'message' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * @return array{base_url: string, api_version: string, phone_number_id: string, access_token: string}
+     */
+    private function config(): array
+    {
+        $config = config('services.whatsapp');
+        $config = is_array($config) ? $config : [];
+
+        return [
+            'base_url' => is_string($config['base_url'] ?? null) ? $config['base_url'] : 'https://graph.facebook.com',
+            'api_version' => is_string($config['api_version'] ?? null) ? $config['api_version'] : 'v20.0',
+            'phone_number_id' => is_string($config['phone_number_id'] ?? null) ? $config['phone_number_id'] : '',
+            'access_token' => is_string($config['access_token'] ?? null) ? $config['access_token'] : '',
+        ];
+    }
+
+    /**
+     * @return array{name: string, language: string}|null
+     */
+    private function invitationTemplate(): ?array
+    {
+        $config = config('services.whatsapp.templates.invitation');
+        $config = is_array($config) ? $config : [];
+
+        $name = is_string($config['name'] ?? null) ? trim($config['name']) : '';
+
+        if ($name === '') {
+            return null;
+        }
+
+        $language = is_string($config['language'] ?? null) ? trim($config['language']) : '';
+
+        return [
+            'name' => $name,
+            'language' => $language !== '' ? $language : 'en',
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function stringKeyedArray(mixed $value): array
+    {
+        $items = [];
+
+        foreach (is_array($value) ? $value : [] as $key => $item) {
+            if (is_string($key)) {
+                $items[$key] = $item;
+            }
+        }
+
+        return $items;
     }
 }

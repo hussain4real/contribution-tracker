@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Actions\Fortify;
 
 use App\Enums\Role;
@@ -49,9 +51,12 @@ class CreateNewUser implements CreatesNewUsers
         });
     }
 
+    /**
+     * @param  array<string, string>  $input
+     */
     private function createWithNewFamily(array $input): User
     {
-        $familyName = $input['family_name'];
+        $familyName = $input['family_name'] ?? 'Family';
 
         $family = Family::create([
             'name' => $familyName,
@@ -84,6 +89,9 @@ class CreateNewUser implements CreatesNewUsers
         return $user;
     }
 
+    /**
+     * @param  array<string, string>  $input
+     */
     private function createViaInvitation(array $input): User
     {
         $invitation = FamilyInvitation::query()
@@ -98,6 +106,7 @@ class CreateNewUser implements CreatesNewUsers
             'password' => $input['password'],
             'role' => $invitation->role,
             'family_id' => $invitation->family_id,
+            'whatsapp_phone' => $invitation->whatsapp_phone,
         ]);
 
         $invitation->update(['accepted_at' => now()]);

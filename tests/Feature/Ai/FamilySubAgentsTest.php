@@ -1,9 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Ai\Agents\ContributionAnalysisAgent;
 use App\Ai\Agents\ContributionGenerationAgent;
 use App\Ai\Agents\ExpenseAnalysisAgent;
 use App\Ai\Agents\ExpenseRecordingAgent;
+use App\Ai\Agents\FamilySubAgent;
 use App\Ai\Agents\FundAdjustmentRecordingAgent;
 use App\Ai\Agents\FundBalanceAgent;
 use App\Ai\Agents\InvitationAgent;
@@ -26,13 +29,19 @@ use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Tools\AgentTool;
 use Laravel\Ai\Tools\Request as ToolRequest;
 
+/**
+ * @param  class-string<FamilySubAgent>  $agentClass
+ */
 it('uses shared configuration for every family sub-agent', function (string $agentClass) {
     config([
         'ai.agent.provider' => 'ollama',
         'ai.agent.model' => 'llama3.2',
     ]);
 
-    $agent = new $agentClass(User::factory()->admin()->create());
+    $agent = makeFamilySubAgent(
+        classStringOf($agentClass, FamilySubAgent::class),
+        User::factory()->admin()->create(),
+    );
 
     expect($agent->provider())->toBe('ollama')
         ->and($agent->model())->toBe('llama3.2')
@@ -60,15 +69,20 @@ it('defines tool metadata, instructions, and underlying tools', function (
         'name' => 'Smith Family',
         'currency' => 'NGN',
     ]);
-    $agent = new $agentClass(User::factory()->admin()->create([
-        'name' => 'Ada',
-        'family_id' => $family->id,
-    ]));
+    $agent = makeFamilySubAgent(
+        classStringOf($agentClass, FamilySubAgent::class),
+        User::factory()->admin()->create([
+            'name' => 'Ada',
+            'family_id' => $family->id,
+        ]),
+    );
 
     $instructions = $agent->instructions();
-    $tools = collect($agent->tools())
-        ->map(fn (object $tool): string => $tool::class)
-        ->all();
+    $tools = [];
+
+    foreach ($agent->tools() as $tool) {
+        $tools[] = $tool::class;
+    }
 
     expect($agent->name())->toBe($name)
         ->and($agent->description())->toContain($descriptionFragment)

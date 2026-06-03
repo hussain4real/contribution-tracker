@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\Expense;
 use App\Models\Family;
 use App\Models\User;
@@ -16,8 +18,8 @@ it('casts and formats expense values and exposes relationships', function () {
     expect($expense->amount)->toBe(12345)
         ->and($expense->spent_at)->toBeInstanceOf(Carbon::class)
         ->and($expense->formatted_amount)->toBe("\u{20A6}12,345.00")
-        ->and($expense->family->is($family))->toBeTrue()
-        ->and($expense->recorder->is($recorder))->toBeTrue();
+        ->and($expense->family()->firstOrFail()->is($family))->toBeTrue()
+        ->and($expense->recorder()->firstOrFail()->is($recorder))->toBeTrue();
 });
 
 it('filters and orders expenses with local scopes', function () {
