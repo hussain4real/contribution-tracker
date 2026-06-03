@@ -124,7 +124,7 @@ class PlatformPlanController extends Controller
             'price' => is_numeric($validated['price'] ?? null) ? (int) $validated['price'] : 0,
             'max_members' => is_numeric($validated['max_members'] ?? null) ? (int) $validated['max_members'] : null,
             'features' => $features,
-            'is_active' => ($validated['is_active'] ?? true) === true,
+            'is_active' => filter_var($validated['is_active'] ?? true, FILTER_VALIDATE_BOOLEAN),
             'sort_order' => is_numeric($validated['sort_order'] ?? null) ? (int) $validated['sort_order'] : 0,
         ];
     }

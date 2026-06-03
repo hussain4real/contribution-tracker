@@ -121,6 +121,51 @@ it('updates an existing plan', function () {
         ->and($plan->features)->toBe(['basic_contributions', 'reports']);
 });
 
+it('preserves truthy active values accepted by validation', function (bool|int|string $activeValue) {
+    $admin = createSuperAdmin();
+    $slug = match (true) {
+        $activeValue === true => 'active-plan-true',
+        $activeValue === 1 => 'active-plan-integer-one',
+        default => 'active-plan-string-one',
+    };
+
+    $this->actingAs($admin)
+        ->post(route('platform.plans.store'), [
+            'name' => 'Active Plan',
+            'slug' => $slug,
+            'price' => 1000,
+            'max_members' => 10,
+            'features' => [],
+            'is_active' => $activeValue,
+            'sort_order' => 2,
+        ])
+        ->assertRedirect();
+
+    $plan = PlatformPlan::where('name', 'Active Plan')->firstOrFail();
+
+    expect($plan->is_active)->toBeTrue();
+
+    $plan->update(['is_active' => false]);
+
+    $this->actingAs($admin)
+        ->put(route('platform.plans.update', $plan), [
+            'name' => 'Still Active Plan',
+            'slug' => $plan->slug,
+            'price' => 2000,
+            'max_members' => 15,
+            'features' => ['reports'],
+            'is_active' => $activeValue,
+            'sort_order' => 3,
+        ])
+        ->assertRedirect();
+
+    expect($plan->refresh()->is_active)->toBeTrue();
+})->with([
+    'boolean true' => true,
+    'integer one' => 1,
+    'string one' => '1',
+]);
+
 it('toggles plan active status', function () {
     $admin = createSuperAdmin();
 
