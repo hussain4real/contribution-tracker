@@ -1,7 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\User;
 use App\Services\GitHubReleaseService;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
@@ -79,7 +82,7 @@ it('adds an authorization token and can omit release bodies', function () {
 
     expect($releases[0]['body'])->toBe('');
 
-    Http::assertSent(fn ($request): bool => $request->hasHeader('Authorization', 'Bearer ghp_token'));
+    Http::assertSent(fn (Request $request): bool => $request->hasHeader('Authorization', 'Bearer ghp_token'));
 });
 
 it('returns no releases on github failures and connection errors', function () {
@@ -95,6 +98,42 @@ it('returns no releases on github failures and connection errors', function () {
     ]);
 
     expect(app(GitHubReleaseService::class)->releases())->toBe([]);
+});
+
+it('returns no releases when github returns malformed payloads', function () {
+    Http::fake([
+        'api.github.com/repos/laravel/framework/releases*' => Http::response(null),
+    ]);
+
+    expect(app(GitHubReleaseService::class)->releases())->toBe([]);
+});
+
+it('skips malformed github release entries', function () {
+    Http::fake([
+        'api.github.com/repos/laravel/framework/releases*' => Http::response([
+            'not-an-object',
+            [
+                'id' => null,
+                'tag_name' => 'v0.0.0',
+                'html_url' => 'https://github.com/laravel/framework/releases/tag/v0.0.0',
+                'published_at' => '2026-05-10T00:00:00Z',
+            ],
+            [
+                'id' => 30,
+                'name' => 'Release',
+                'tag_name' => 'v3.0.0',
+                'body' => '',
+                'html_url' => 'https://github.com/laravel/framework/releases/tag/v3.0.0',
+                'published_at' => '2026-05-15T00:00:00Z',
+                'prerelease' => false,
+            ],
+        ]),
+    ]);
+
+    $releases = app(GitHubReleaseService::class)->releases();
+
+    expect($releases)->toHaveCount(1)
+        ->and($releases[0]['tag_name'])->toBe('v3.0.0');
 });
 
 it('marks the latest release as seen when one exists', function () {

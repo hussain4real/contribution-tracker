@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Enums\PaymentStatus;
 use App\Models\Contribution;
 use App\Models\Payment;
@@ -20,8 +22,10 @@ describe('Contribution Status Calculation', function () {
             ->forContribution($contribution)
             ->create(['amount' => $contribution->expected_amount]);
 
-        expect($contribution->fresh()->status)->toBe(PaymentStatus::Paid);
-        expect($contribution->fresh()->isPaid())->toBeTrue();
+        $contribution->refresh();
+
+        expect($contribution->status)->toBe(PaymentStatus::Paid);
+        expect($contribution->isPaid())->toBeTrue();
     });
 
     it('returns Paid status when contribution is overpaid', function () {
@@ -34,7 +38,9 @@ describe('Contribution Status Calculation', function () {
             ->forContribution($contribution)
             ->create(['amount' => $contribution->expected_amount + 1000]);
 
-        expect($contribution->fresh()->status)->toBe(PaymentStatus::Paid);
+        $contribution->refresh();
+
+        expect($contribution->status)->toBe(PaymentStatus::Paid);
     });
 
     it('returns Partial status when contribution has partial payment before due date', function () {
@@ -50,8 +56,10 @@ describe('Contribution Status Calculation', function () {
             ->forContribution($contribution)
             ->create(['amount' => (int) ($contribution->expected_amount / 2)]);
 
-        expect($contribution->fresh()->status)->toBe(PaymentStatus::Partial);
-        expect($contribution->fresh()->isPartiallyPaid())->toBeTrue();
+        $contribution->refresh();
+
+        expect($contribution->status)->toBe(PaymentStatus::Partial);
+        expect($contribution->isPartiallyPaid())->toBeTrue();
     });
 
     it('returns Unpaid status when no payments made before due date', function () {
@@ -91,7 +99,9 @@ describe('Contribution Status Calculation', function () {
             ->forContribution($contribution)
             ->create(['amount' => (int) ($contribution->expected_amount / 2)]);
 
-        expect($contribution->fresh()->status)->toBe(PaymentStatus::Overdue);
+        $contribution->refresh();
+
+        expect($contribution->status)->toBe(PaymentStatus::Overdue);
     });
 
     it('calculates total_paid correctly with multiple payments', function () {
@@ -108,7 +118,9 @@ describe('Contribution Status Calculation', function () {
             ->forContribution($contribution)
             ->create(['amount' => 1500]); // ₦1,500
 
-        expect($contribution->fresh()->total_paid)->toBe(2500); // ₦2,500
+        $contribution->refresh();
+
+        expect($contribution->total_paid)->toBe(2500); // ₦2,500
     });
 
     it('calculates balance correctly', function () {
@@ -122,8 +134,10 @@ describe('Contribution Status Calculation', function () {
             ->forContribution($contribution)
             ->create(['amount' => 1000]); // ₦1,000 of ₦4,000
 
+        $contribution->refresh();
+
         // Expected: ₦4,000 - ₦1,000 = ₦3,000
-        expect($contribution->fresh()->balance)->toBe(3000);
+        expect($contribution->balance)->toBe(3000);
     });
 
     it('returns zero balance when fully paid', function () {
@@ -136,7 +150,9 @@ describe('Contribution Status Calculation', function () {
             ->forContribution($contribution)
             ->create(['amount' => $contribution->expected_amount]);
 
-        expect($contribution->fresh()->balance)->toBe(0);
+        $contribution->refresh();
+
+        expect($contribution->balance)->toBe(0);
     });
 
     it('uses correct amounts for each member category', function () {

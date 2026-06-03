@@ -1,13 +1,42 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use Database\Factories\FamilyFactory;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property int $id
+ * @property string $name
+ * @property string $slug
+ * @property string $currency
+ * @property int $due_day
+ * @property Carbon|null $created_at
+ * @property string|null $bank_name
+ * @property string|null $account_name
+ * @property string|null $account_number
+ * @property string|null $bank_code
+ * @property Carbon|null $suspended_at
+ * @property string|null $paystack_subaccount_code
+ * @property string|null $paystack_customer_code
+ * @property string|null $paystack_subscription_code
+ * @property string|null $paystack_subscription_email_token
+ * @property string|null $subscription_status
+ * @property Carbon|null $current_period_end
+ * @property int|null $platform_plan_id
+ * @property PlatformPlan|null $platformPlan
+ * @property User|null $owner
+ * @property Collection<int, User> $members
+ * @property Collection<int, FamilyCategory> $categories
+ * @property int $members_count
+ */
 class Family extends Model
 {
     /** @use HasFactory<FamilyFactory> */
@@ -98,6 +127,8 @@ class Family extends Model
 
     /**
      * The user who created this family.
+     *
+     * @return BelongsTo<User, $this>
      */
     public function owner(): BelongsTo
     {
@@ -106,6 +137,8 @@ class Family extends Model
 
     /**
      * The platform plan this family is subscribed to.
+     *
+     * @return BelongsTo<PlatformPlan, $this>
      */
     public function platformPlan(): BelongsTo
     {
@@ -114,6 +147,8 @@ class Family extends Model
 
     /**
      * Members belonging to this family.
+     *
+     * @return HasMany<User, $this>
      */
     public function members(): HasMany
     {
@@ -122,6 +157,8 @@ class Family extends Model
 
     /**
      * Categories defined for this family.
+     *
+     * @return HasMany<FamilyCategory, $this>
      */
     public function categories(): HasMany
     {
@@ -130,6 +167,8 @@ class Family extends Model
 
     /**
      * Contributions belonging to this family.
+     *
+     * @return HasMany<Contribution, $this>
      */
     public function contributions(): HasMany
     {
@@ -138,6 +177,8 @@ class Family extends Model
 
     /**
      * Expenses belonging to this family.
+     *
+     * @return HasMany<Expense, $this>
      */
     public function expenses(): HasMany
     {
@@ -146,6 +187,8 @@ class Family extends Model
 
     /**
      * Fund adjustments belonging to this family.
+     *
+     * @return HasMany<FundAdjustment, $this>
      */
     public function fundAdjustments(): HasMany
     {
@@ -154,6 +197,8 @@ class Family extends Model
 
     /**
      * Invitations for this family.
+     *
+     * @return HasMany<FamilyInvitation, $this>
      */
     public function invitations(): HasMany
     {

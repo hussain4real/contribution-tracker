@@ -1,7 +1,28 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Enums\Role;
 use App\Models\User;
+
+/**
+ * @return array{name: string, email: string, category: string, role: string}
+ */
+function assignRolePayload(User $member, string $role): array
+{
+    $category = $member->category;
+
+    if ($category === null) {
+        throw new RuntimeException('Expected member to have a category.');
+    }
+
+    return [
+        'name' => $member->name,
+        'email' => $member->email,
+        'category' => $category->value,
+        'role' => $role,
+    ];
+}
 
 /**
  * T069 [US4] Feature test for assigning Financial Secretary role
@@ -17,12 +38,7 @@ describe('Assign Role', function () {
         expect($member->role)->toBe(Role::Member);
 
         $this->actingAs($this->admin)
-            ->put("/members/{$member->id}", [
-                'name' => $member->name,
-                'email' => $member->email,
-                'category' => $member->category->value,
-                'role' => 'financial_secretary',
-            ])
+            ->put("/members/{$member->id}", assignRolePayload($member, 'financial_secretary'))
             ->assertRedirect();
 
         $member->refresh();
@@ -33,12 +49,7 @@ describe('Assign Role', function () {
         $member = User::factory()->member()->create();
 
         $this->actingAs($this->admin)
-            ->put("/members/{$member->id}", [
-                'name' => $member->name,
-                'email' => $member->email,
-                'category' => $member->category->value,
-                'role' => 'admin',
-            ])
+            ->put("/members/{$member->id}", assignRolePayload($member, 'admin'))
             ->assertRedirect();
 
         $member->refresh();
@@ -50,12 +61,7 @@ describe('Assign Role', function () {
         $member = User::factory()->member()->create();
 
         $this->actingAs($financialSecretary)
-            ->put("/members/{$member->id}", [
-                'name' => $member->name,
-                'email' => $member->email,
-                'category' => $member->category->value,
-                'role' => 'financial_secretary',
-            ])
+            ->put("/members/{$member->id}", assignRolePayload($member, 'financial_secretary'))
             ->assertForbidden();
 
         $member->refresh();
@@ -67,12 +73,7 @@ describe('Assign Role', function () {
         $targetMember = User::factory()->member()->create();
 
         $this->actingAs($regularMember)
-            ->put("/members/{$targetMember->id}", [
-                'name' => $targetMember->name,
-                'email' => $targetMember->email,
-                'category' => $targetMember->category->value,
-                'role' => 'financial_secretary',
-            ])
+            ->put("/members/{$targetMember->id}", assignRolePayload($targetMember, 'financial_secretary'))
             ->assertForbidden();
     });
 
@@ -81,12 +82,7 @@ describe('Assign Role', function () {
 
         // Assign FS role
         $this->actingAs($this->admin)
-            ->put("/members/{$member->id}", [
-                'name' => $member->name,
-                'email' => $member->email,
-                'category' => $member->category->value,
-                'role' => 'financial_secretary',
-            ]);
+            ->put("/members/{$member->id}", assignRolePayload($member, 'financial_secretary'));
 
         $member->refresh();
 
@@ -98,12 +94,7 @@ describe('Assign Role', function () {
         $member = User::factory()->member()->create();
 
         $response = $this->actingAs($this->admin)
-            ->put("/members/{$member->id}", [
-                'name' => $member->name,
-                'email' => $member->email,
-                'category' => $member->category->value,
-                'role' => 'financial_secretary',
-            ]);
+            ->put("/members/{$member->id}", assignRolePayload($member, 'financial_secretary'));
 
         $response->assertSessionHas('success');
     });

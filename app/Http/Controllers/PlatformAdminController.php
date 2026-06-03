@@ -11,7 +11,6 @@ use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Password;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -43,7 +42,7 @@ class PlatformAdminController extends Controller
                 'slug' => $family->slug,
                 'currency' => $family->currency,
                 'members_count' => $family->members_count,
-                'created_at' => $family->created_at->toDateString(),
+                'created_at' => $family->created_at?->toDateString(),
             ]);
 
         $recentPayments = Payment::query()
@@ -56,7 +55,7 @@ class PlatformAdminController extends Controller
                 'amount' => $payment->amount,
                 'member_name' => $payment->contribution?->user?->name,
                 'recorded_by' => $payment->recorder?->name,
-                'created_at' => $payment->created_at->toDateString(),
+                'created_at' => $payment->created_at?->toDateString(),
             ]);
 
         return Inertia::render('Platform/Dashboard', [
@@ -91,7 +90,7 @@ class PlatformAdminController extends Controller
                 'members_count' => $family->members_count,
                 'owner_name' => $family->owner?->name,
                 'is_suspended' => $family->isSuspended(),
-                'created_at' => $family->created_at->toDateString(),
+                'created_at' => $family->created_at?->toDateString(),
             ]);
 
         return Inertia::render('Platform/Families', [
@@ -114,7 +113,7 @@ class PlatformAdminController extends Controller
                 'family_name' => $user->family?->name,
                 'family_id' => $user->family_id,
                 'is_active' => $user->archived_at === null,
-                'created_at' => $user->created_at->toDateString(),
+                'created_at' => $user->created_at?->toDateString(),
             ]);
 
         return Inertia::render('Platform/Users', [
@@ -124,22 +123,26 @@ class PlatformAdminController extends Controller
 
     public function showFamily(Family $family): Response
     {
-        $family->load(['owner', 'categories', 'members' => fn ($q) => $q->orderBy('name')]);
+        $family->load(['owner', 'categories', 'members']);
+        $members = $family->members->sortBy('name')->values();
 
         $totalContributions = Contribution::query()
-            ->whereIn('user_id', $family->members->pluck('id'))
+            ->whereIn('user_id', $members->pluck('id'))
             ->count();
 
         $totalCollected = (int) Payment::query()
-            ->whereHas('contribution', fn ($q) => $q->whereIn('user_id', $family->members->pluck('id')))
+            ->whereIn(
+                'contribution_id',
+                Contribution::query()->whereIn('user_id', $members->pluck('id'))->select('id'),
+            )
             ->sum('amount');
 
         $totalExpected = (int) Contribution::query()
-            ->whereIn('user_id', $family->members->pluck('id'))
+            ->whereIn('user_id', $members->pluck('id'))
             ->sum('expected_amount');
 
-        $activeMembers = $family->members->filter(fn ($m) => $m->archived_at === null)->count();
-        $archivedMembers = $family->members->filter(fn ($m) => $m->archived_at !== null)->count();
+        $activeMembers = $members->filter(fn (User $member): bool => $member->archived_at === null)->count();
+        $archivedMembers = $members->filter(fn (User $member): bool => $member->archived_at !== null)->count();
 
         return Inertia::render('Platform/FamilyDetail', [
             'family' => [
@@ -158,12 +161,12 @@ class PlatformAdminController extends Controller
                     'name' => $c->name,
                     'monthly_amount' => $c->monthly_amount,
                 ]),
-                'members' => $family->members->map(fn ($m) => [
-                    'id' => $m->id,
-                    'name' => $m->name,
-                    'email' => $m->email,
-                    'role' => $m->role->label(),
-                    'is_active' => $m->archived_at === null,
+                'members' => $members->map(fn (User $member): array => [
+                    'id' => $member->id,
+                    'name' => $member->name,
+                    'email' => $member->email,
+                    'role' => $member->role->label(),
+                    'is_active' => $member->archived_at === null,
                 ]),
                 'financial_summary' => [
                     'total_contributions' => $totalContributions,
@@ -175,7 +178,7 @@ class PlatformAdminController extends Controller
                     'active_members' => $activeMembers,
                     'archived_members' => $archivedMembers,
                 ],
-                'created_at' => $family->created_at->toDateString(),
+                'created_at' => $family->created_at?->toDateString(),
                 'suspended_at' => $family->suspended_at?->toDateString(),
             ],
         ]);
@@ -195,6 +198,12 @@ class PlatformAdminController extends Controller
 
         return response()->streamDownload(function () use ($families): void {
             $handle = fopen('php://output', 'w');
+            // @codeCoverageIgnoreStart
+            if ($handle === false) {
+                return;
+            }
+            // @codeCoverageIgnoreEnd
+
             fputcsv($handle, ['ID', 'Name', 'Slug', 'Currency', 'Due Day', 'Owner', 'Members', 'Suspended', 'Created']);
 
             foreach ($families as $family) {
@@ -204,10 +213,10 @@ class PlatformAdminController extends Controller
                     $family->slug,
                     $family->currency,
                     $family->due_day,
-                    $family->owner?->name ?? '',
+                    $family->owner instanceof User ? $family->owner->name : '',
                     $family->members_count,
                     $family->suspended_at ? 'Yes' : 'No',
-                    $family->created_at->toDateString(),
+                    $family->created_at?->toDateString(),
                 ]);
             }
 
@@ -226,6 +235,12 @@ class PlatformAdminController extends Controller
 
         return response()->streamDownload(function () use ($users): void {
             $handle = fopen('php://output', 'w');
+            // @codeCoverageIgnoreStart
+            if ($handle === false) {
+                return;
+            }
+            // @codeCoverageIgnoreEnd
+
             fputcsv($handle, ['ID', 'Name', 'Email', 'Family', 'Role', 'Category', 'Status', 'Joined']);
 
             foreach ($users as $user) {
@@ -233,11 +248,11 @@ class PlatformAdminController extends Controller
                     $user->id,
                     $user->name,
                     $user->email,
-                    $user->family?->name ?? '',
+                    $user->family instanceof Family ? $user->family->name : '',
                     $user->role->label(),
                     $user->category?->label() ?? '',
                     $user->archived_at === null ? 'Active' : 'Archived',
-                    $user->created_at->toDateString(),
+                    $user->created_at?->toDateString(),
                 ]);
             }
 
@@ -275,9 +290,9 @@ class PlatformAdminController extends Controller
             return back()->with('error', 'Cannot impersonate another super admin.');
         }
 
-        $request->session()->put('impersonating_from', $request->user()->id);
+        $request->session()->put('impersonating_from', $this->user($request)->id);
 
-        Auth::login($user);
+        auth()->login($user);
 
         return redirect()->route('dashboard')->with('success', "Now impersonating {$user->name}.");
     }
@@ -290,9 +305,11 @@ class PlatformAdminController extends Controller
             return redirect()->route('dashboard');
         }
 
-        $originalUser = User::findOrFail($originalUserId);
+        $originalUser = User::query()
+            ->whereKey($originalUserId)
+            ->firstOrFail();
 
-        Auth::login($originalUser);
+        auth()->login($originalUser);
 
         return redirect()->route('platform.dashboard')->with('success', 'Stopped impersonating.');
     }

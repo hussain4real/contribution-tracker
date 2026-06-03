@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Providers;
 
 use App\Models\User;
@@ -24,12 +26,15 @@ class AppServiceProvider extends ServiceProvider
         });
 
         RateLimiter::for('whatsapp-notifications', function (object $job): Limit {
-            return Limit::perMinute(max(1, (int) config('services.whatsapp.rate_limit_per_minute', 60)))
+            $rateLimit = config('services.whatsapp.rate_limit_per_minute', 60);
+            $rateLimit = is_numeric($rateLimit) ? (int) $rateLimit : 60;
+
+            return Limit::perMinute(max(1, $rateLimit))
                 ->by('whatsapp-notifications');
         });
 
         Passport::authorizationView(function (array $parameters) {
-            return view('mcp.authorize', $parameters);
+            return response()->view('mcp.authorize', $parameters);
         });
 
         Inertia::handleExceptionsUsing(function (ExceptionResponse $response) {

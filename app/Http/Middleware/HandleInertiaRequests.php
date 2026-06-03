@@ -1,8 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Middleware;
 
 use App\Features\AiAssistant;
+use App\Models\Family;
 use App\Models\User;
 use App\Services\GitHubReleaseService;
 use Illuminate\Foundation\Inspiring;
@@ -30,7 +33,9 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
-        [$message, $author] = str(Inspiring::quotes()->random())->explode('-');
+        $quote = Inspiring::quotes()->random();
+        $quote = is_string($quote) ? $quote : '';
+        [$message, $author] = array_pad(explode('-', $quote, 2), 2, '');
 
         $user = $request->user();
 
@@ -88,7 +93,7 @@ class HandleInertiaRequests extends Middleware
                     'type' => $n->type,
                     'data' => $n->data,
                     'read_at' => $n->read_at,
-                    'created_at' => $n->created_at->diffForHumans(),
+                    'created_at' => $n->created_at?->diffForHumans(),
                 ]),
             ] : null,
         ];
@@ -102,18 +107,31 @@ class HandleInertiaRequests extends Middleware
     private function subscriptionData(User $user): array
     {
         $family = $user->family;
+
+        if (! $family instanceof Family) {
+            return [
+                'plan_name' => null,
+                'member_count' => 0,
+                'max_members' => null,
+                'can_add_members' => false,
+                'features' => [],
+            ];
+        }
+
         $family->loadCount('members');
         $family->loadMissing('platformPlan');
 
         $plan = $family->platformPlan;
         $memberCount = $family->members_count;
 
+        $features = $plan ? $plan->features : [];
+
         return [
             'plan_name' => $plan?->name,
             'member_count' => $memberCount,
             'max_members' => $plan && ! $plan->hasUnlimitedMembers() ? $plan->max_members : null,
             'can_add_members' => ! $plan || $plan->hasUnlimitedMembers() || $memberCount < $plan->max_members,
-            'features' => $plan?->features ?? [],
+            'features' => $features,
         ];
     }
 
@@ -126,7 +144,7 @@ class HandleInertiaRequests extends Middleware
     {
         $publicKey = config('webpush.vapid.public_key');
 
-        if (blank($publicKey)) {
+        if (! is_string($publicKey) || blank($publicKey)) {
             return [
                 'enabled' => false,
                 'publicKey' => null,

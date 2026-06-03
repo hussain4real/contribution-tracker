@@ -1,7 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\Family;
 use App\Models\User;
+use Inertia\Testing\AssertableInertia as Assert;
 
 describe('Platform Impersonate Users', function () {
     it('allows super admin to impersonate a user', function () {
@@ -85,7 +88,7 @@ describe('Platform Impersonate Users', function () {
         // Check that the shared prop is set
         $this->get('/dashboard')
             ->assertOk()
-            ->assertInertia(fn ($page) => $page
+            ->assertInertia(fn (Assert $page) => $page
                 ->where('impersonating', true)
             );
     });

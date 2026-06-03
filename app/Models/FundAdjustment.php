@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use Database\Factories\FundAdjustmentFactory;
@@ -7,7 +9,18 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property int $id
+ * @property int $family_id
+ * @property int $amount
+ * @property Carbon|null $created_at
+ * @property string $description
+ * @property Carbon $recorded_at
+ * @property User|null $recorder
+ * @property-read string $formatted_amount
+ */
 class FundAdjustment extends Model
 {
     /** @use HasFactory<FundAdjustmentFactory> */
@@ -45,6 +58,8 @@ class FundAdjustment extends Model
 
     /**
      * The family this adjustment belongs to.
+     *
+     * @return BelongsTo<Family, $this>
      */
     public function family(): BelongsTo
     {
@@ -53,6 +68,8 @@ class FundAdjustment extends Model
 
     /**
      * The user who recorded this adjustment.
+     *
+     * @return BelongsTo<User, $this>
      */
     public function recorder(): BelongsTo
     {
@@ -65,6 +82,9 @@ class FundAdjustment extends Model
 
     /**
      * Scope to order by most recent first.
+     *
+     * @param  Builder<FundAdjustment>  $query
+     * @return Builder<FundAdjustment>
      */
     public function scopeLatestFirst(Builder $query): Builder
     {

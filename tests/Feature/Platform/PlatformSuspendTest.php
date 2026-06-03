@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\Family;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -46,13 +48,18 @@ describe('Platform Suspend/Unsuspend Families', function () {
     it('shows suspended_at in family detail', function () {
         $family = Family::factory()->suspended()->create();
         $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
+        $suspendedAt = $family->suspended_at;
+
+        if ($suspendedAt === null) {
+            throw new RuntimeException('Expected suspended family to have a suspended_at timestamp.');
+        }
 
         $this->actingAs($superAdmin)
             ->get("/platform/families/{$family->id}")
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Platform/FamilyDetail')
-                ->where('family.suspended_at', $family->suspended_at->toDateString())
+                ->where('family.suspended_at', $suspendedAt->toDateString())
             );
     });
 

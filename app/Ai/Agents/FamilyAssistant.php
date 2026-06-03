@@ -1,8 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Ai\Agents;
 
 use App\Ai\Middleware\LogPrompts;
+use App\Models\Family;
 use App\Models\User;
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Attributes\Temperature;
@@ -31,7 +34,9 @@ class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasProvid
      */
     public function provider(): string
     {
-        return config('ai.agent.provider', 'ollama');
+        $provider = config('ai.agent.provider', 'ollama');
+
+        return is_string($provider) ? $provider : 'ollama';
     }
 
     /**
@@ -39,7 +44,9 @@ class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasProvid
      */
     public function model(): string
     {
-        return config('ai.agent.model', 'llama3.2');
+        $model = config('ai.agent.model', 'llama3.2');
+
+        return is_string($model) ? $model : 'llama3.2';
     }
 
     /**
@@ -47,9 +54,10 @@ class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasProvid
      */
     public function instructions(): Stringable|string
     {
-        $familyName = $this->user->family?->name ?? 'your family';
+        $family = $this->user->family;
+        $familyName = $family instanceof Family ? $family->name : 'the family';
         $userName = $this->user->name;
-        $currency = $this->user->family?->currency ?? '₦';
+        $currency = $family instanceof Family ? $family->currency : '₦';
         $currentDate = now()->format('F j, Y');
         $currentYear = now()->year;
         $currentMonth = now()->month;

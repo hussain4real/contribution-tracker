@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use App\Ai\Agents\FamilyAssistant;
@@ -11,7 +13,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -41,7 +42,17 @@ class AiChatController extends Controller
             return [];
         }
 
-        return array_values($decoded);
+        $activities = [];
+
+        foreach ($decoded as $activity) {
+            $activity = $this->stringKeyedArray($activity);
+
+            if ($activity !== null) {
+                $activities[] = $activity;
+            }
+        }
+
+        return $activities;
     }
 
     /**
@@ -49,8 +60,7 @@ class AiChatController extends Controller
      */
     public function index(Request $request): Response
     {
-        /** @var User $user */
-        $user = Auth::user();
+        $user = $this->user($request);
 
         $conversations = DB::table('agent_conversations')
             ->where('user_id', $user->id)
@@ -77,8 +87,8 @@ class AiChatController extends Controller
                         'role' => $message->role,
                         'content' => $message->content,
                         'created_at' => $message->created_at,
-                        'tool_calls' => $this->normalizeActivityPayload($message->tool_calls),
-                        'tool_results' => $this->normalizeActivityPayload($message->tool_results),
+                        'tool_calls' => $this->normalizeActivityPayload($this->nullableString($message->tool_calls ?? null)),
+                        'tool_results' => $this->normalizeActivityPayload($this->nullableString($message->tool_results ?? null)),
                     ])
                     ->toArray();
             } else {
@@ -177,7 +187,8 @@ class AiChatController extends Controller
             fn (Lab $provider): bool => ! empty(config("ai.providers.{$provider->value}.key"))
         );
 
-        $defaultProvider = Lab::tryFrom((string) config('ai.default_for_transcription'));
+        $defaultProviderValue = config('ai.default_for_transcription');
+        $defaultProvider = is_string($defaultProviderValue) ? Lab::tryFrom($defaultProviderValue) : null;
 
         if ($defaultProvider instanceof Lab && array_key_exists($defaultProvider->value, $configuredProviders)) {
             $configuredProviders = [
@@ -261,10 +272,10 @@ class AiChatController extends Controller
 
         $validated = $request->validated();
 
-        /** @var User $user */
-        $user = Auth::user();
+        $user = $this->authUser();
         $agent = new FamilyAssistant($user);
-        $conversationId = $validated['conversation_id'] ?? null;
+        $message = $this->stringValue($validated['message'] ?? null);
+        $conversationId = $this->nullableString($validated['conversation_id'] ?? null);
 
         if ($conversationId) {
             $ownsConversation = DB::table('agent_conversations')
@@ -275,17 +286,17 @@ class AiChatController extends Controller
             if (! $ownsConversation) {
                 return $agent
                     ->forUser($user)
-                    ->stream($validated['message']);
+                    ->stream($message);
             }
 
             return $agent
                 ->continue($conversationId, as: $user)
-                ->stream($validated['message']);
+                ->stream($message);
         }
 
         return $agent
             ->forUser($user)
-            ->stream($validated['message']);
+            ->stream($message);
     }
 
     /**
@@ -293,8 +304,7 @@ class AiChatController extends Controller
      */
     public function rename(RenameAiConversationRequest $request, string $conversation): RedirectResponse
     {
-        /** @var User $user */
-        $user = Auth::user();
+        $user = $this->authUser();
 
         $updated = DB::table('agent_conversations')
             ->where('id', $conversation)
@@ -313,8 +323,7 @@ class AiChatController extends Controller
      */
     public function destroy(string $conversation): RedirectResponse
     {
-        /** @var User $user */
-        $user = Auth::user();
+        $user = $this->authUser();
 
         DB::transaction(function () use ($conversation, $user) {
             $deleted = DB::table('agent_conversations')
@@ -332,5 +341,35 @@ class AiChatController extends Controller
         });
 
         return back();
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function stringKeyedArray(mixed $value): ?array
+    {
+        if (! is_array($value)) {
+            return null;
+        }
+
+        $items = [];
+
+        foreach ($value as $key => $item) {
+            if (is_string($key)) {
+                $items[$key] = $item;
+            }
+        }
+
+        return $items;
+    }
+
+    private function nullableString(mixed $value): ?string
+    {
+        return is_string($value) ? $value : null;
+    }
+
+    private function stringValue(mixed $value): string
+    {
+        return is_scalar($value) ? (string) $value : '';
     }
 }

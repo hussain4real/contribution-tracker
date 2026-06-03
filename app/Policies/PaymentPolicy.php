@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Policies;
 
 use App\Models\Payment;
@@ -37,6 +39,10 @@ class PaymentPolicy
 
     public function delete(User $user, Payment $payment): bool
     {
+        if ($payment->created_at === null) {
+            return false;
+        }
+
         return $user->isAdmin()
             && $user->family_id === $payment->contribution?->family_id
             && $payment->created_at->diffInHours(now()) <= 24;

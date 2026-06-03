@@ -1,8 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Channels\WhatsAppChannel;
 use App\Models\Contribution;
 use App\Models\Family;
+use App\Models\Payment;
 use App\Models\User;
 use App\Notifications\ContributionReminderNotification;
 use Illuminate\Support\Facades\Notification;
@@ -155,12 +158,10 @@ describe('Manual WhatsApp contribution reminder', function () {
             ->create(['expected_amount' => 1000]);
 
         // Fully pay it.
-        $contribution->payments()->create([
-            'user_id' => $member->id,
-            'amount' => 1000,
-            'paid_at' => now(),
-            'recorded_by' => $admin->id,
-        ]);
+        Payment::factory()
+            ->forContribution($contribution)
+            ->recordedBy($admin)
+            ->create(['amount' => 1000]);
 
         $this->actingAs($admin)
             ->from('/members/'.$member->id)

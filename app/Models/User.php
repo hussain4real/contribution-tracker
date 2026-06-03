@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use App\Enums\MemberCategory;
@@ -7,12 +9,14 @@ use App\Enums\Role;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Laravel\Fortify\Contracts\PasskeyUser;
 use Laravel\Fortify\PasskeyAuthenticatable;
@@ -21,6 +25,23 @@ use Laravel\Passport\Contracts\OAuthenticatable;
 use Laravel\Passport\HasApiTokens;
 use NotificationChannels\WebPush\HasPushSubscriptions;
 
+/**
+ * @property int $id
+ * @property string $name
+ * @property string $email
+ * @property Carbon|null $created_at
+ * @property Carbon|null $archived_at
+ * @property Carbon|null $email_verified_at
+ * @property int|null $family_id
+ * @property bool $is_super_admin
+ * @property MemberCategory|null $category
+ * @property FamilyCategory|null $familyCategory
+ * @property Family|null $family
+ * @property Role $role
+ * @property string|null $whatsapp_phone
+ * @property Carbon|null $whatsapp_verified_at
+ * @property Collection<int, Contribution> $contributions
+ */
 class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable, PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
@@ -85,6 +106,8 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable,
 
     /**
      * The family this user belongs to.
+     *
+     * @return BelongsTo<Family, $this>
      */
     public function family(): BelongsTo
     {
@@ -93,6 +116,8 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable,
 
     /**
      * The family category (contribution tier) for this user.
+     *
+     * @return BelongsTo<FamilyCategory, $this>
      */
     public function familyCategory(): BelongsTo
     {
@@ -101,6 +126,8 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable,
 
     /**
      * User has many contributions.
+     *
+     * @return HasMany<Contribution, $this>
      */
     public function contributions(): HasMany
     {
@@ -109,6 +136,8 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable,
 
     /**
      * User has many payments they recorded.
+     *
+     * @return HasMany<Payment, $this>
      */
     public function recordedPayments(): HasMany
     {
@@ -117,6 +146,8 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable,
 
     /**
      * User's own payments (through contributions).
+     *
+     * @return HasManyThrough<Payment, Contribution, $this>
      */
     public function payments(): HasManyThrough
     {
@@ -148,6 +179,9 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable,
 
     /**
      * Scope to only active (non-archived) users.
+     *
+     * @param  Builder<User>  $query
+     * @return Builder<User>
      */
     public function scopeActive(Builder $query): Builder
     {
@@ -156,6 +190,9 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable,
 
     /**
      * Scope to only archived users.
+     *
+     * @param  Builder<User>  $query
+     * @return Builder<User>
      */
     public function scopeArchived(Builder $query): Builder
     {
@@ -164,6 +201,9 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable,
 
     /**
      * Scope to users with Member role.
+     *
+     * @param  Builder<User>  $query
+     * @return Builder<User>
      */
     public function scopeMembers(Builder $query): Builder
     {
@@ -172,6 +212,9 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable,
 
     /**
      * Scope to users who can pay (have a category).
+     *
+     * @param  Builder<User>  $query
+     * @return Builder<User>
      */
     public function scopePayingMembers(Builder $query): Builder
     {
@@ -180,6 +223,9 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable,
 
     /**
      * Scope to users with a specific category.
+     *
+     * @param  Builder<User>  $query
+     * @return Builder<User>
      */
     public function scopeWithCategory(Builder $query, MemberCategory $category): Builder
     {
@@ -188,6 +234,9 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable,
 
     /**
      * Scope to Financial Secretaries only.
+     *
+     * @param  Builder<User>  $query
+     * @return Builder<User>
      */
     public function scopeFinancialSecretaries(Builder $query): Builder
     {
@@ -267,7 +316,11 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable,
      */
     public function getMonthlyAmount(): ?int
     {
-        return $this->familyCategory?->monthly_amount ?? $this->category?->monthlyAmount();
+        if ($this->familyCategory !== null) {
+            return $this->familyCategory->monthly_amount;
+        }
+
+        return $this->category?->monthlyAmount();
     }
 
     /**

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Http\Controllers\WhatsAppWebhookController;
 use App\Jobs\ProcessWhatsAppWebhook;
 use App\Models\User;
@@ -26,7 +28,7 @@ describe('WhatsApp webhook verification (GET)', function () {
         $response = $this->get('/webhooks/whatsapp?hub_mode=subscribe&hub_verify_token=verify-token-abc&hub_challenge=12345');
 
         $response->assertOk();
-        expect($response->getContent())->toBe('12345');
+        expect(responseContent($response->baseResponse))->toBe('12345');
     });
 
     it('rejects an invalid verify token', function () {
@@ -50,7 +52,7 @@ describe('WhatsApp webhook handler (POST)', function () {
             'entry' => [],
         ];
 
-        $body = json_encode($payload);
+        $body = encodeJsonPayload($payload);
         $signature = 'sha256='.hash_hmac('sha256', $body, 'app-secret-xyz');
 
         $response = $this->call(
@@ -75,7 +77,7 @@ describe('WhatsApp webhook handler (POST)', function () {
         Bus::fake();
 
         $payload = ['object' => 'whatsapp_business_account', 'entry' => []];
-        $body = json_encode($payload);
+        $body = encodeJsonPayload($payload);
 
         $response = $this->call(
             'POST',
@@ -99,7 +101,7 @@ describe('WhatsApp webhook handler (POST)', function () {
         Bus::fake();
 
         $payload = ['object' => 'whatsapp_business_account', 'entry' => []];
-        $body = json_encode($payload);
+        $body = encodeJsonPayload($payload);
 
         $this->call(
             'POST',
@@ -121,7 +123,7 @@ describe('WhatsApp webhook handler (POST)', function () {
         Bus::fake();
 
         $payload = ['object' => 'whatsapp_business_account', 'entry' => []];
-        $body = json_encode($payload);
+        $body = encodeJsonPayload($payload);
         $request = Request::create(
             '/webhooks/whatsapp',
             'POST',
@@ -140,7 +142,7 @@ describe('WhatsApp webhook handler (POST)', function () {
         Bus::fake();
 
         $payload = ['object' => 'something_else', 'entry' => []];
-        $body = json_encode($payload);
+        $body = encodeJsonPayload($payload);
         $signature = 'sha256='.hash_hmac('sha256', $body, 'app-secret-xyz');
 
         $this->call(
@@ -158,6 +160,13 @@ describe('WhatsApp webhook handler (POST)', function () {
 
     it('logs a critical warning when app secret is missing outside local environments', function () {
         Bus::fake();
+        $deprecationsLogger = Mockery::mock();
+        $deprecationsLogger->shouldReceive('warning')->zeroOrMoreTimes();
+
+        Log::shouldReceive('channel')
+            ->with('deprecations')
+            ->zeroOrMoreTimes()
+            ->andReturn($deprecationsLogger);
         Log::shouldReceive('critical')->once();
         config()->set('services.whatsapp.app_secret', null);
         app()->detectEnvironment(fn (): string => 'production');
@@ -190,7 +199,9 @@ describe('ProcessWhatsAppWebhook job', function () {
             ],
         ]))->handle();
 
-        expect(WhatsAppMessage::query()->where('wa_message_id', 'wamid.unchanged')->first()->status)->toBe('sent');
+        $message = WhatsAppMessage::query()->where('wa_message_id', 'wamid.unchanged')->firstOrFail();
+
+        expect($message->status)->toBe('sent');
     });
 
     it('ignores unsupported whatsapp change fields', function () {
@@ -230,7 +241,9 @@ describe('ProcessWhatsAppWebhook job', function () {
 
         (new ProcessWhatsAppWebhook($payload))->handle();
 
-        expect($message->fresh()->status)->toBe('delivered');
+        $message->refresh();
+
+        expect($message->status)->toBe('delivered');
     });
 
     it('updates outbound status errors when meta sends delivery errors', function () {
@@ -258,9 +271,11 @@ describe('ProcessWhatsAppWebhook job', function () {
             ]],
         ]))->handle();
 
-        expect($message->fresh()->status)->toBe('failed')
-            ->and($message->fresh()->error_code)->toBe('131000')
-            ->and($message->fresh()->error_message)->toBe('Message failed');
+        $message->refresh();
+
+        expect($message->status)->toBe('failed')
+            ->and($message->error_code)->toBe('131000')
+            ->and($message->error_message)->toBe('Message failed');
     });
 
     it('logs outbound status update failures', function () {
@@ -270,9 +285,17 @@ describe('ProcessWhatsAppWebhook job', function () {
             'status' => 'sent',
         ]);
 
-        $throwOnUpdate = true;
-        WhatsAppMessage::updating(function () use (&$throwOnUpdate): void {
-            if ($throwOnUpdate) {
+        $shouldThrowOnUpdate = new class(true)
+        {
+            public function __construct(public bool $enabled) {}
+
+            public function __invoke(): bool
+            {
+                return $this->enabled;
+            }
+        };
+        WhatsAppMessage::updating(function () use (&$shouldThrowOnUpdate): void {
+            if ($shouldThrowOnUpdate()) {
                 throw new RuntimeException('update failed');
             }
         });
@@ -291,9 +314,11 @@ describe('ProcessWhatsAppWebhook job', function () {
             ]],
         ]))->handle();
 
-        $throwOnUpdate = false;
+        $shouldThrowOnUpdate->enabled = false;
 
-        expect($message->fresh()->status)->toBe('sent');
+        $message->refresh();
+
+        expect($message->status)->toBe('sent');
     });
 
     it('ignores outbound status updates missing required fields or records', function () {
@@ -338,10 +363,9 @@ describe('ProcessWhatsAppWebhook job', function () {
 
         (new ProcessWhatsAppWebhook($payload))->handle();
 
-        $stored = WhatsAppMessage::query()->where('wa_message_id', 'wamid.inbound-1')->first();
+        $stored = WhatsAppMessage::query()->where('wa_message_id', 'wamid.inbound-1')->firstOrFail();
 
-        expect($stored)->not->toBeNull()
-            ->and($stored->direction)->toBe('inbound')
+        expect($stored->direction)->toBe('inbound')
             ->and($stored->body)->toBe('Hello')
             ->and($stored->user_id)->toBe($user->id)
             ->and($stored->family_id)->toBe($user->family_id);
@@ -456,9 +480,17 @@ describe('ProcessWhatsAppWebhook job', function () {
     });
 
     it('logs inbound message recording failures', function () {
-        $throwOnCreate = true;
-        WhatsAppMessage::creating(function () use (&$throwOnCreate): void {
-            if ($throwOnCreate) {
+        $shouldThrowOnCreate = new class(true)
+        {
+            public function __construct(public bool $enabled) {}
+
+            public function __invoke(): bool
+            {
+                return $this->enabled;
+            }
+        };
+        WhatsAppMessage::creating(function () use (&$shouldThrowOnCreate): void {
+            if ($shouldThrowOnCreate()) {
                 throw new RuntimeException('create failed');
             }
         });
@@ -479,7 +511,7 @@ describe('ProcessWhatsAppWebhook job', function () {
             ]],
         ]))->handle();
 
-        $throwOnCreate = false;
+        $shouldThrowOnCreate->enabled = false;
 
         expect(WhatsAppMessage::query()->where('wa_message_id', 'wamid.create-fails')->exists())->toBeFalse();
     });

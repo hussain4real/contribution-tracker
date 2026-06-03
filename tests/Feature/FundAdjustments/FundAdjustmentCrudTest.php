@@ -1,7 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\FundAdjustment;
 use App\Models\User;
+use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
     $this->admin = User::factory()->admin()->create();
@@ -17,7 +20,7 @@ it('allows any authenticated user to view fund adjustments', function () {
     $this->actingAs($this->member)
         ->get(route('fund-adjustments.index'))
         ->assertSuccessful()
-        ->assertInertia(fn ($page) => $page->component('FundAdjustments/Index'));
+        ->assertInertia(fn (Assert $page) => $page->component('FundAdjustments/Index'));
 });
 
 it('returns paginated adjustments with correct data', function () {
@@ -26,7 +29,7 @@ it('returns paginated adjustments with correct data', function () {
     $this->actingAs($this->admin)
         ->get(route('fund-adjustments.index'))
         ->assertSuccessful()
-        ->assertInertia(fn ($page) => $page
+        ->assertInertia(fn (Assert $page) => $page
             ->component('FundAdjustments/Index')
             ->has('adjustments.data', 3)
         );
@@ -35,19 +38,19 @@ it('returns paginated adjustments with correct data', function () {
 it('shows can_create as true for super admin', function () {
     $this->actingAs($this->admin)
         ->get(route('fund-adjustments.index'))
-        ->assertInertia(fn ($page) => $page->where('can_create', true));
+        ->assertInertia(fn (Assert $page) => $page->where('can_create', true));
 });
 
 it('shows can_create as true for financial secretary', function () {
     $this->actingAs($this->financialSecretary)
         ->get(route('fund-adjustments.index'))
-        ->assertInertia(fn ($page) => $page->where('can_create', true));
+        ->assertInertia(fn (Assert $page) => $page->where('can_create', true));
 });
 
 it('shows can_create as false for regular member', function () {
     $this->actingAs($this->member)
         ->get(route('fund-adjustments.index'))
-        ->assertInertia(fn ($page) => $page->where('can_create', false));
+        ->assertInertia(fn (Assert $page) => $page->where('can_create', false));
 });
 
 // =========================================================================
@@ -63,8 +66,7 @@ it('allows super admin to store a fund adjustment', function () {
         ])
         ->assertRedirect(route('fund-adjustments.index'));
 
-    $adjustment = FundAdjustment::first();
-    expect($adjustment)->not->toBeNull();
+    $adjustment = FundAdjustment::query()->firstOrFail();
     expect($adjustment->amount)->toBe(200000);
     expect($adjustment->description)->toBe('Opening balance from 2+ years of contributions');
     expect($adjustment->recorded_at->toDateString())->toBe('2026-03-15');
@@ -80,8 +82,7 @@ it('allows financial secretary to store a fund adjustment', function () {
         ])
         ->assertRedirect(route('fund-adjustments.index'));
 
-    $adjustment = FundAdjustment::first();
-    expect($adjustment)->not->toBeNull();
+    $adjustment = FundAdjustment::query()->firstOrFail();
     expect($adjustment->recorded_by)->toBe($this->financialSecretary->id);
 });
 

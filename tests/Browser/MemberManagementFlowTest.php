@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 /**
  * T059 [US3] Browser test for member management flow
  *
@@ -94,7 +96,7 @@ describe('Member Management Flow (Browser)', function () {
 
         $member->refresh();
 
-        expect($member->category->value)->toBe('employed');
+        expect(memberCategoryValue($member))->toBe('employed');
     });
 
     it('can archive a member', function () {

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Features\AiAssistant;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;

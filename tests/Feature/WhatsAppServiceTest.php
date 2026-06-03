@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Channels\WhatsAppMessage;
 use App\Models\WhatsAppMessage as WhatsAppMessageModel;
 use App\Services\WhatsAppService;
@@ -15,6 +17,12 @@ beforeEach(function () {
         'base_url' => 'https://graph.facebook.com',
         'webhook_verify_token' => 'verify-token-abc',
         'app_secret' => 'app-secret-xyz',
+        'templates' => [
+            'invitation' => [
+                'name' => 'family_invitation',
+                'language' => 'en_GB',
+            ],
+        ],
     ]);
 
     Http::preventStrayRequests();
@@ -68,9 +76,72 @@ it('sends and records a successful template message', function () {
         ->and($result['wa_message_id'])->toBe('wamid.template');
 
     $message = WhatsAppMessageModel::query()->where('wa_message_id', 'wamid.template')->firstOrFail();
+    $payload = $message->payload;
+
+    if (! is_array($payload)) {
+        throw new RuntimeException('Expected WhatsApp message payload to be an array.');
+    }
 
     expect($message->template_name)->toBe('contribution_reminder')
-        ->and($message->payload['template']['language']['code'])->toBe('en_GB');
+        ->and(stringValue(resultArray(resultArray($payload, 'template'), 'language'), 'code'))->toBe('en_GB');
+});
+
+it('sends invitations with the configured template', function () {
+    Http::fake([
+        'graph.facebook.com/v25.0/1038448572690931/messages' => Http::response([
+            'messages' => [['id' => 'wamid.invitation']],
+        ]),
+    ]);
+
+    $result = app(WhatsAppService::class)->sendInvitation(
+        to: '+2348012345678',
+        familyName: 'Smith Family',
+        roleLabel: 'Member',
+        acceptUrl: 'https://family.test/invitations/accept/token',
+    );
+
+    expect($result['success'])->toBeTrue()
+        ->and($result['wa_message_id'])->toBe('wamid.invitation');
+
+    $message = WhatsAppMessageModel::query()->where('wa_message_id', 'wamid.invitation')->firstOrFail();
+    $payload = $message->payload;
+
+    if (! is_array($payload)) {
+        throw new RuntimeException('Expected WhatsApp message payload to be an array.');
+    }
+
+    $template = resultArray($payload, 'template');
+    $components = resultArray($template, 'components');
+    $bodyComponent = resultArray($components, 0);
+    $parameters = resultArray($bodyComponent, 'parameters');
+
+    expect($message->template_name)->toBe('family_invitation')
+        ->and($message->to)->toBe('2348012345678')
+        ->and($payload['type'] ?? null)->toBe('template')
+        ->and($template['name'] ?? null)->toBe('family_invitation')
+        ->and(stringValue(resultArray($template, 'language'), 'code'))->toBe('en_GB')
+        ->and(resultArray($parameters, 0)['text'] ?? null)->toBe('Smith Family')
+        ->and(resultArray($parameters, 1)['text'] ?? null)->toBe('Member')
+        ->and(resultArray($parameters, 2)['text'] ?? null)->toBe('https://family.test/invitations/accept/token');
+});
+
+it('fails invitation sends when the invitation template is not configured', function () {
+    config()->set('services.whatsapp.templates.invitation.name', null);
+
+    Http::preventStrayRequests();
+
+    $result = app(WhatsAppService::class)->sendInvitation(
+        to: '+2348012345678',
+        familyName: 'Smith Family',
+        roleLabel: 'Member',
+        acceptUrl: 'https://family.test/invitations/accept/token',
+    );
+
+    expect($result)->toBe([
+        'success' => false,
+        'wa_message_id' => null,
+        'error' => 'WhatsApp invitation template is not configured.',
+    ]);
 });
 
 it('records failed api responses without throwing', function () {

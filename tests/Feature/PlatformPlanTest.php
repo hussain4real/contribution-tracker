@@ -1,8 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\Family;
 use App\Models\PlatformPlan;
 use App\Models\User;
+use Inertia\Testing\AssertableInertia as Assert;
 
 function createSuperAdmin(): User
 {
@@ -26,7 +29,7 @@ it('shows the plans page for super admin', function () {
     $this->actingAs($admin)
         ->get(route('platform.plans'))
         ->assertSuccessful()
-        ->assertInertia(fn ($page) => $page
+        ->assertInertia(fn (Assert $page) => $page
             ->component('Platform/Plans')
             ->has('plans', 1)
             ->has('available_features')
@@ -57,9 +60,8 @@ it('creates a new plan', function () {
         ])
         ->assertRedirect();
 
-    $plan = PlatformPlan::where('slug', 'pro')->first();
-    expect($plan)->not->toBeNull()
-        ->and($plan->name)->toBe('Pro')
+    $plan = PlatformPlan::where('slug', 'pro')->firstOrFail();
+    expect($plan->name)->toBe('Pro')
         ->and($plan->price)->toBe(5000)
         ->and($plan->max_members)->toBe(20)
         ->and($plan->features)->toBe(['basic_contributions', 'reports', 'exports']);

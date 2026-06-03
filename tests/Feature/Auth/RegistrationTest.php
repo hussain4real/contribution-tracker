@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Enums\Role;
 use App\Models\Family;
 use App\Models\FamilyInvitation;
@@ -50,5 +52,35 @@ test('new users can register from a family invitation', function () {
 
     expect($user->family_id)->toBe($family->id)
         ->and($user->role)->toBe(Role::FinancialSecretary)
+        ->and($invitation->refresh()->accepted_at)->not->toBeNull();
+});
+
+test('new users registering from a whatsapp invitation inherit the whatsapp phone', function () {
+    $family = Family::factory()->create();
+    $inviter = User::factory()->admin()->create(['family_id' => $family->id]);
+    $invitation = FamilyInvitation::factory()->viaWhatsApp('+2348012345678')->create([
+        'family_id' => $family->id,
+        'role' => Role::Member,
+        'invited_by' => $inviter->id,
+        'expires_at' => now()->addDays(7),
+    ]);
+
+    $response = $this->post(route('register.store'), [
+        'name' => 'Invited User',
+        'email' => 'invited@example.com',
+        'password' => 'password',
+        'password_confirmation' => 'password',
+        'invitation_token' => $invitation->token,
+    ]);
+
+    $response->assertRedirect(route('dashboard', absolute: false));
+    $this->assertAuthenticated();
+
+    $user = User::query()->where('email', 'invited@example.com')->firstOrFail();
+
+    expect($user->family_id)->toBe($family->id)
+        ->and($user->role)->toBe(Role::Member)
+        ->and($user->whatsapp_phone)->toBe('+2348012345678')
+        ->and($user->whatsapp_verified_at)->toBeNull()
         ->and($invitation->refresh()->accepted_at)->not->toBeNull();
 });

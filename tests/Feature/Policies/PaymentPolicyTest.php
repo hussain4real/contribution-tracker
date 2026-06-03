@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\Payment;
@@ -65,6 +67,10 @@ it('allows same-family admins to delete recent payments only', function () {
         ->and($this->policy->delete($this->admin, $oldPayment))->toBeFalse()
         ->and($this->policy->delete($this->financialSecretary, $this->payment))->toBeFalse()
         ->and($this->policy->delete($this->outsider, $this->payment))->toBeFalse();
+});
+
+it('denies deleting payments without a creation timestamp', function () {
+    expect($this->policy->delete($this->admin, new Payment))->toBeFalse();
 });
 
 it('allows only same-family admins to restore or force delete payments', function () {

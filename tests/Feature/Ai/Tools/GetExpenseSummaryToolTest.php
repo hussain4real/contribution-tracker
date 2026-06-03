@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Ai\Tools\GetExpenseSummary;
 use App\Models\Expense;
 use App\Models\Family;
@@ -25,7 +27,7 @@ it('returns expense summary for current month by default', function () {
     ]);
 
     $tool = new GetExpenseSummary($this->user);
-    $result = json_decode($tool->handle(new Request), true);
+    $result = decodeToolResult($tool->handle(new Request));
 
     expect($result)
         ->toHaveKey('total_amount', 8000)
@@ -47,10 +49,10 @@ it('filters expenses by date range', function () {
     ]);
 
     $tool = new GetExpenseSummary($this->user);
-    $result = json_decode($tool->handle(new Request([
+    $result = decodeToolResult($tool->handle(new Request([
         'start_date' => '2025-06-01',
         'end_date' => '2025-06-30',
-    ])), true);
+    ])));
 
     expect($result)
         ->toHaveKey('total_amount', 5000)
@@ -59,7 +61,7 @@ it('filters expenses by date range', function () {
 
 it('returns zero values when no expenses exist', function () {
     $tool = new GetExpenseSummary($this->user);
-    $result = json_decode($tool->handle(new Request), true);
+    $result = decodeToolResult($tool->handle(new Request));
 
     expect($result)
         ->toHaveKey('total_amount', 0)
@@ -77,7 +79,7 @@ it('does not include expenses from other families', function () {
     ]);
 
     $tool = new GetExpenseSummary($this->user);
-    $result = json_decode($tool->handle(new Request), true);
+    $result = decodeToolResult($tool->handle(new Request));
 
     expect($result['total_amount'])->toBe(0);
 });
@@ -92,7 +94,7 @@ it('computes total from full result set not limited rows', function () {
     }
 
     $tool = new GetExpenseSummary($this->user);
-    $result = json_decode($tool->handle(new Request), true);
+    $result = decodeToolResult($tool->handle(new Request));
 
     expect($result['total_amount'])->toBe(5500)
         ->and($result['expense_count'])->toBe(55)
@@ -110,7 +112,7 @@ it('includes recorder name in expense entries', function () {
     ]);
 
     $tool = new GetExpenseSummary($this->user);
-    $result = json_decode($tool->handle(new Request), true);
+    $result = decodeToolResult($tool->handle(new Request));
 
-    expect($result['expenses'][0]['recorded_by'])->toBe('Jane Admin');
+    expect(firstResultArray($result, 'expenses')['recorded_by'])->toBe('Jane Admin');
 });

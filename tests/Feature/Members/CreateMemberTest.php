@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Enums\MemberCategory;
 use App\Enums\Role;
 use App\Models\User;
@@ -56,7 +58,7 @@ describe('Create Member', function () {
             ])
             ->assertRedirect();
 
-        $member = User::where('email', 'jane@example.com')->first();
+        $member = User::where('email', 'jane@example.com')->firstOrFail();
         expect($member->category)->toBe(MemberCategory::Student);
         expect($member->getMonthlyAmount())->toBe(1000); // ₦1,000
     });

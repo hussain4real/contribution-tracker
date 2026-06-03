@@ -30,7 +30,7 @@ class PlatformPlanController extends Controller
                 'sort_order' => $plan->sort_order,
                 'families_count' => $plan->families_count,
                 'paystack_plan_code' => $plan->paystack_plan_code,
-                'created_at' => $plan->created_at->toDateString(),
+                'created_at' => $plan->created_at?->toDateString(),
             ]);
 
         return Inertia::render('Platform/Plans', [
@@ -59,9 +59,7 @@ class PlatformPlanController extends Controller
             'sort_order' => ['required', 'integer', 'min:0'],
         ]);
 
-        $validated['is_active'] = $validated['is_active'] ?? true;
-
-        PlatformPlan::create($validated);
+        PlatformPlan::create($this->planAttributes($validated));
 
         return redirect()->back()->with('success', 'Plan created successfully.');
     }
@@ -79,7 +77,7 @@ class PlatformPlanController extends Controller
             'sort_order' => ['required', 'integer', 'min:0'],
         ]);
 
-        $plan->update($validated);
+        $plan->update($this->planAttributes($validated));
 
         return redirect()->back()->with('success', 'Plan updated successfully.');
     }
@@ -102,5 +100,32 @@ class PlatformPlanController extends Controller
         $plan->delete();
 
         return redirect()->back()->with('success', 'Plan deleted successfully.');
+    }
+
+    /**
+     * @return array{name: string, slug: string, price: int, max_members: int|null, features: list<string>, is_active: bool, sort_order: int}
+     */
+    private function planAttributes(mixed $validated): array
+    {
+        $validated = is_array($validated) ? $validated : [];
+        $features = [];
+
+        $validatedFeatures = is_array($validated['features'] ?? null) ? $validated['features'] : [];
+
+        foreach ($validatedFeatures as $feature) {
+            if (is_string($feature)) {
+                $features[] = $feature;
+            }
+        }
+
+        return [
+            'name' => is_string($validated['name'] ?? null) ? $validated['name'] : '',
+            'slug' => is_string($validated['slug'] ?? null) ? $validated['slug'] : '',
+            'price' => is_numeric($validated['price'] ?? null) ? (int) $validated['price'] : 0,
+            'max_members' => is_numeric($validated['max_members'] ?? null) ? (int) $validated['max_members'] : null,
+            'features' => $features,
+            'is_active' => ($validated['is_active'] ?? true) === true,
+            'sort_order' => is_numeric($validated['sort_order'] ?? null) ? (int) $validated['sort_order'] : 0,
+        ];
     }
 }

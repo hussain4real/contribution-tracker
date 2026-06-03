@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Enums\MemberCategory;
 use App\Enums\PaymentStatus;
 use App\Models\Contribution;
@@ -92,11 +94,11 @@ describe('Monthly Report', function () {
         User::query()
             ->whereNot('id', $admin->id)
             ->get()
-            ->each(function ($user) {
+            ->each(function (User $user) {
                 Contribution::factory()->create([
                     'user_id' => $user->id,
                     'month' => now()->startOfMonth(),
-                    'expected_amount' => $user->category->monthlyAmount(),
+                    'expected_amount' => $user->getMonthlyAmount(),
                 ]);
             });
 
@@ -106,7 +108,8 @@ describe('Monthly Report', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Reports/Monthly')
                 ->has('by_category')
-                ->where('by_category', fn ($categories) => isset($categories['employed']) && isset($categories['student']))
+                ->where('by_category', fn (mixed $categories): bool => arrayLikeHasKey($categories, 'employed')
+                    && arrayLikeHasKey($categories, 'student'))
             );
     });
 

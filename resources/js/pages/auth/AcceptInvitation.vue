@@ -13,7 +13,9 @@ import { Form, Head } from '@inertiajs/vue3';
 interface Props {
     invitation?: {
         token: string;
-        email: string;
+        email: string | null;
+        delivery_method: 'email' | 'whatsapp';
+        whatsapp_phone: string | null;
         family_name: string;
         role_label: string;
     };
@@ -22,7 +24,9 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
     invitation: () => ({
         token: '',
-        email: '',
+        email: null,
+        delivery_method: 'email',
+        whatsapp_phone: null,
         family_name: '',
         role_label: '',
     }),
@@ -73,7 +77,7 @@ const props = withDefaults(defineProps<Props>(), {
                         :tabindex="2"
                         autocomplete="email"
                         name="email"
-                        :value="props.invitation.email"
+                        :value="props.invitation.email ?? ''"
                         placeholder="email@example.com"
                     />
                     <InputError :message="errors.email" />

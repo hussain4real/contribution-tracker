@@ -10,6 +10,7 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
+use Throwable;
 
 class PaystackService
 {
@@ -19,15 +20,18 @@ class PaystackService
 
     public function __construct()
     {
-        $this->baseUrl = config('services.paystack.base_url') ?? 'https://api.paystack.co';
-        $this->secretKey = config('services.paystack.secret_key') ?? '';
+        $baseUrl = config('services.paystack.base_url', 'https://api.paystack.co');
+        $secretKey = config('services.paystack.secret_key', '');
+
+        $this->baseUrl = is_string($baseUrl) ? $baseUrl : 'https://api.paystack.co';
+        $this->secretKey = is_string($secretKey) ? $secretKey : '';
     }
 
     /**
      * Initialize a transaction.
      *
      * @param  array{email: string, amount: int, reference?: string, callback_url?: string, subaccount?: string, metadata?: array<string, mixed>}  $data
-     * @return array{status: bool, message: string, data: array{authorization_url: string, access_code: string, reference: string}}
+     * @return array<string, mixed>
      */
     public function initializeTransaction(array $data): array
     {
@@ -37,7 +41,7 @@ class PaystackService
     /**
      * Verify a transaction by reference.
      *
-     * @return array{status: bool, message: string, data: array{status: string, amount: int, reference: string, channel: string, currency: string, metadata: array<string, mixed>}}
+     * @return array<string, mixed>
      */
     public function verifyTransaction(string $reference): array
     {
@@ -48,7 +52,7 @@ class PaystackService
      * Create a Paystack subaccount for a family.
      *
      * @param  array{business_name: string, bank_code: string, account_number: string, percentage_charge: float}  $data
-     * @return array{status: bool, message: string, data: array{subaccount_code: string}}
+     * @return array<string, mixed>
      */
     public function createSubaccount(array $data): array
     {
@@ -59,7 +63,7 @@ class PaystackService
      * Update a Paystack subaccount.
      *
      * @param  array{business_name?: string, bank_code?: string, account_number?: string, percentage_charge?: float}  $data
-     * @return array{status: bool, message: string, data: array<string, mixed>}
+     * @return array<string, mixed>
      */
     public function updateSubaccount(string $subaccountCode, array $data): array
     {
@@ -69,7 +73,7 @@ class PaystackService
     /**
      * List available banks.
      *
-     * @return array{status: bool, message: string, data: array<int, array{name: string, code: string, active: bool}>}
+     * @return array<string, mixed>
      */
     public function listBanks(string $currency = 'NGN'): array
     {
@@ -79,7 +83,7 @@ class PaystackService
     /**
      * Resolve a bank account number to get account name.
      *
-     * @return array{status: bool, message: string, data: array{account_number: string, account_name: string}}
+     * @return array<string, mixed>
      */
     public function resolveAccountNumber(string $accountNumber, string $bankCode): array
     {
@@ -93,7 +97,7 @@ class PaystackService
      * Create a subscription plan on Paystack.
      *
      * @param  array{name: string, amount: int, interval: string}  $data
-     * @return array{status: bool, message: string, data: array{plan_code: string}}
+     * @return array<string, mixed>
      */
     public function createPlan(array $data): array
     {
@@ -104,7 +108,7 @@ class PaystackService
      * Create a subscription for a customer.
      *
      * @param  array{customer: string, plan: string}  $data
-     * @return array{status: bool, message: string, data: array{subscription_code: string, email_token: string}}
+     * @return array<string, mixed>
      */
     public function createSubscription(array $data): array
     {
@@ -115,7 +119,7 @@ class PaystackService
      * Disable (cancel) a subscription.
      *
      * @param  array{code: string, token: string}  $data
-     * @return array{status: bool, message: string}
+     * @return array<string, mixed>
      */
     public function disableSubscription(array $data): array
     {
@@ -126,7 +130,7 @@ class PaystackService
      * Create or fetch a Paystack customer.
      *
      * @param  array{email: string, first_name?: string, last_name?: string}  $data
-     * @return array{status: bool, message: string, data: array{customer_code: string}}
+     * @return array<string, mixed>
      */
     public function createCustomer(array $data): array
     {
@@ -140,7 +144,7 @@ class PaystackService
     {
         $webhookSecret = config('services.paystack.webhook_secret');
 
-        if (! $webhookSecret) {
+        if (! is_string($webhookSecret) || $webhookSecret === '') {
             Log::warning('Paystack webhook secret not configured');
 
             return false;
@@ -196,7 +200,7 @@ class PaystackService
             ->acceptJson()
             ->connectTimeout(10)
             ->timeout(30)
-            ->retry(3, 100, fn (\Exception $e) => $e instanceof ConnectionException, throw: false);
+            ->retry(3, 100, fn (Throwable $e): bool => $e instanceof ConnectionException, throw: false);
     }
 
     /**
@@ -208,10 +212,11 @@ class PaystackService
      */
     private function handleResponse(Response $response, string $endpoint): array
     {
-        $body = $response->json();
+        $body = $this->stringKeyedArray($response->json());
 
         if ($response->failed()) {
             $message = $body['message'] ?? 'Unknown Paystack API error';
+            $message = is_scalar($message) ? (string) $message : 'Unknown Paystack API error';
 
             Log::error('Paystack API error', [
                 'endpoint' => $endpoint,
@@ -223,5 +228,21 @@ class PaystackService
         }
 
         return $body;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function stringKeyedArray(mixed $value): array
+    {
+        $items = [];
+
+        foreach (is_array($value) ? $value : [] as $key => $item) {
+            if (is_string($key)) {
+                $items[$key] = $item;
+            }
+        }
+
+        return $items;
     }
 }

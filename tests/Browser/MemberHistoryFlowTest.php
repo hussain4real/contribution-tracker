@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\Contribution;
 use App\Models\Payment;
 
@@ -73,10 +75,10 @@ describe('Member History Flow', function () {
 
         $page = loginBrowserAs($this->member);
 
-        $page->click('My Contributions')
+        $page->navigate('/contributions/my')
             ->assertPathIs('/contributions/my');
 
-        $page->click($contribution->period_label)
+        $page->click("a[href=\"/contributions/{$contribution->id}\"]")
             ->assertPathContains('/contributions/')
             ->assertSee($contribution->period_label);
     });

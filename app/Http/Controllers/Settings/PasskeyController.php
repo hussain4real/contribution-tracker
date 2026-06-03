@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
@@ -28,8 +30,10 @@ class PasskeyController extends Controller implements HasMiddleware
      */
     public function show(Request $request): Response
     {
+        $user = $this->user($request);
+
         return Inertia::render('settings/Passkeys', [
-            'passkeys' => $request->user()->passkeys()
+            'passkeys' => $user->passkeys()
                 ->select('id', 'name', 'credential', 'last_used_at', 'created_at')
                 ->latest()
                 ->get()

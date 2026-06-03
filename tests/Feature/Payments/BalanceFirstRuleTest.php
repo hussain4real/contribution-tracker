@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Enums\PaymentStatus;
 use App\Models\Contribution;
 use App\Models\Payment;
@@ -48,7 +50,9 @@ describe('Balance-First Rule (FR-020)', function () {
             ->recordedBy($this->financialSecretary)
             ->create(['amount' => 2000]);
 
-        expect($first->fresh()->balance)->toBe(2000); // ₦2,000 remaining
+        $first->refresh();
+
+        expect($first->balance)->toBe(2000); // ₦2,000 remaining
 
         // Member pays ₦4,000 targeting third month
         // Balance-first rule: should complete first month first, then apply rest to second
@@ -62,16 +66,20 @@ describe('Balance-First Rule (FR-020)', function () {
             ])
             ->assertRedirect();
 
+        $first->refresh();
+        $second->refresh();
+        $third->refresh();
+
         // First month should now be fully paid (₦2,000 remaining was completed)
-        expect($first->fresh()->status)->toBe(PaymentStatus::Paid);
-        expect($first->fresh()->balance)->toBe(0);
+        expect($first->status)->toBe(PaymentStatus::Paid);
+        expect($first->balance)->toBe(0);
 
         // Second month should have ₦2,000 applied (remainder after completing first)
-        expect($second->fresh()->total_paid)->toBe(2000);
-        expect($second->fresh()->status)->toBe(PaymentStatus::Partial);
+        expect($second->total_paid)->toBe(2000);
+        expect($second->status)->toBe(PaymentStatus::Partial);
 
         // Third month should have nothing yet
-        expect($third->fresh()->total_paid)->toBe(0);
+        expect($third->total_paid)->toBe(0);
     });
 
     it('completes multiple incomplete months in order', function () {
@@ -110,15 +118,19 @@ describe('Balance-First Rule (FR-020)', function () {
             ])
             ->assertRedirect();
 
+        $first->refresh();
+        $second->refresh();
+        $third->refresh();
+
         // First: ₦4,000 - PAID
-        expect($first->fresh()->status)->toBe(PaymentStatus::Paid);
+        expect($first->status)->toBe(PaymentStatus::Paid);
 
         // Second: ₦4,000 - PAID
-        expect($second->fresh()->status)->toBe(PaymentStatus::Paid);
+        expect($second->status)->toBe(PaymentStatus::Paid);
 
         // Third: ₦2,000 of ₦4,000 - PARTIAL
-        expect($third->fresh()->total_paid)->toBe(2000);
-        expect($third->fresh()->status)->toBe(PaymentStatus::Partial);
+        expect($third->total_paid)->toBe(2000);
+        expect($third->status)->toBe(PaymentStatus::Partial);
     });
 
     it('skips already paid months', function () {
@@ -145,7 +157,9 @@ describe('Balance-First Rule (FR-020)', function () {
             ->recordedBy($this->financialSecretary)
             ->create(['amount' => 4000]);
 
-        expect($first->fresh()->isPaid())->toBeTrue();
+        $first->refresh();
+
+        expect($first->isPaid())->toBeTrue();
 
         // Pay ₦4,000 - should go directly to second month
         $this->actingAs($this->financialSecretary)
@@ -158,11 +172,14 @@ describe('Balance-First Rule (FR-020)', function () {
             ])
             ->assertRedirect();
 
+        $first->refresh();
+        $second->refresh();
+
         // First month unchanged
-        expect($first->fresh()->total_paid)->toBe(4000);
+        expect($first->total_paid)->toBe(4000);
 
         // Second month fully paid
-        expect($second->fresh()->status)->toBe(PaymentStatus::Paid);
+        expect($second->status)->toBe(PaymentStatus::Paid);
     });
 
     it('creates contribution for target month if not exists', function () {
@@ -187,9 +204,8 @@ describe('Balance-First Rule (FR-020)', function () {
         // Contribution should be created and paid
         $contribution = Contribution::forUser($this->member->id)
             ->forMonth($nextMonth->year, $nextMonth->month)
-            ->first();
+            ->firstOrFail();
 
-        expect($contribution)->not->toBeNull();
         expect($contribution->status)->toBe(PaymentStatus::Paid);
     });
 });

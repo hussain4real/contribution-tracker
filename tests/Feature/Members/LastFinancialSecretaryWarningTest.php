@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Enums\Role;
 use App\Models\User;
 
@@ -23,7 +25,7 @@ describe('Last Financial Secretary Warning', function () {
             ->put("/members/{$fs1->id}", [
                 'name' => $fs1->name,
                 'email' => $fs1->email,
-                'category' => $fs1->category->value,
+                'category' => memberCategoryValue($fs1),
                 'role' => 'member',
             ])
             ->assertRedirect();
@@ -41,7 +43,7 @@ describe('Last Financial Secretary Warning', function () {
             ->put("/members/{$lastFs->id}", [
                 'name' => $lastFs->name,
                 'email' => $lastFs->email,
-                'category' => $lastFs->category->value,
+                'category' => memberCategoryValue($lastFs),
                 'role' => 'member',
             ]);
 
@@ -62,7 +64,7 @@ describe('Last Financial Secretary Warning', function () {
             ->put("/members/{$lastFs->id}", [
                 'name' => $lastFs->name,
                 'email' => $lastFs->email,
-                'category' => $lastFs->category->value,
+                'category' => memberCategoryValue($lastFs),
                 'role' => 'member',
                 'confirm_last_fs_removal' => true,
             ]);
@@ -81,7 +83,7 @@ describe('Last Financial Secretary Warning', function () {
             ->put("/members/{$lastFs->id}", [
                 'name' => $lastFs->name,
                 'email' => $lastFs->email,
-                'category' => $lastFs->category->value,
+                'category' => memberCategoryValue($lastFs),
                 'role' => 'member',
             ]);
 
@@ -102,7 +104,7 @@ describe('Last Financial Secretary Warning', function () {
             ->put("/members/{$activeFs->id}", [
                 'name' => $activeFs->name,
                 'email' => $activeFs->email,
-                'category' => $activeFs->category->value,
+                'category' => memberCategoryValue($activeFs),
                 'role' => 'member',
             ]);
 

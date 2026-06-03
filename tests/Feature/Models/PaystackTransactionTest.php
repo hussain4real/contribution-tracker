@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Enums\TransactionStatus;
 use App\Enums\TransactionType;
 use App\Models\Family;
@@ -26,8 +28,8 @@ it('casts transaction fields and exposes relationships', function () {
         ->and($transaction->amount)->toBe(5000)
         ->and($transaction->paystack_response)->toBe(['status' => true])
         ->and($transaction->metadata)->toBe(['plan' => 'family'])
-        ->and($transaction->user->is($user))->toBeTrue()
-        ->and($transaction->family->is($family))->toBeTrue();
+        ->and($transaction->user()->firstOrFail()->is($user))->toBeTrue()
+        ->and($transaction->family()->firstOrFail()->is($family))->toBeTrue();
 });
 
 it('reports the current transaction status', function (TransactionStatus $status, bool $pending, bool $successful, bool $failed) {

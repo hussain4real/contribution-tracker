@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\Family;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -66,12 +68,14 @@ describe('Platform Users', function () {
             ->has('users.data', 2)
         );
 
-        $usersData = $response->original->getData()['page']['props']['users']['data'];
-        $memberData = collect($usersData)->firstWhere('email', 'test@example.com');
+        $page = inertiaPage($response);
+        $props = resultArray($page, 'props');
+        $users = resultArray(resultArray($props, 'users'), 'data');
+        $memberData = firstArrayWhere($users, 'email', 'test@example.com');
 
-        expect($memberData['name'])->toBe('Test Member')
-            ->and($memberData['family_name'])->toBe($family->name)
-            ->and($memberData['is_active'])->toBeTrue();
+        expect($memberData['name'] ?? null)->toBe('Test Member')
+            ->and($memberData['family_name'] ?? null)->toBe($family->name)
+            ->and($memberData['is_active'] ?? null)->toBeTrue();
     });
 
     it('shows archived users with correct status', function () {

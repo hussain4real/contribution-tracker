@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Mcp\Resources\FamilyFundReviewApp;
 use App\Mcp\Servers\FamilyFundServer;
 use App\Mcp\Tools\GetFamilyFundReviewData;
@@ -20,6 +22,9 @@ use Laravel\Passport\Passport;
 use Laravel\Passport\Scope;
 use League\OAuth2\Server\ResourceServer;
 
+/**
+ * @return array<string, mixed>
+ */
 function familyFundInitializePayload(): array
 {
     return [
@@ -37,17 +42,33 @@ function familyFundInitializePayload(): array
     ];
 }
 
+/**
+ * @return array<string, mixed>
+ */
 function familyFundMcpJson(TestResponse $response): array
 {
     $reflection = new ReflectionClass($response);
     $method = $reflection->getMethod('content');
     $method->setAccessible(true);
 
-    return json_decode($method->invoke($response)[0] ?? '{}', true, flags: JSON_THROW_ON_ERROR);
+    $content = $method->invoke($response);
+
+    if (! is_array($content)) {
+        throw new RuntimeException('Expected MCP test response content to be an array.');
+    }
+
+    $json = $content[0] ?? '{}';
+
+    if (! is_string($json)) {
+        throw new RuntimeException('Expected MCP test response content to be JSON.');
+    }
+
+    return decodeJsonObject($json);
 }
 
 function familyFundConfigurePassportKeys(): void
 {
+    /** @var array{private: string, public: string}|null $keys */
     static $keys;
 
     if ($keys === null) {
@@ -57,9 +78,19 @@ function familyFundConfigurePassportKeys(): void
             'private_key_type' => OPENSSL_KEYTYPE_RSA,
         ]);
 
-        openssl_pkey_export($resource, $privateKey);
+        if (! $resource instanceof OpenSSLAsymmetricKey) {
+            throw new RuntimeException('Unable to generate Passport test key.');
+        }
+
+        if (! openssl_pkey_export($resource, $privateKey)) {
+            throw new RuntimeException('Unable to export Passport test key.');
+        }
 
         $details = openssl_pkey_get_details($resource);
+
+        if (! is_array($details) || ! is_string($details['key'] ?? null)) {
+            throw new RuntimeException('Unable to read Passport public test key.');
+        }
 
         $keys = [
             'private' => $privateKey,
@@ -107,7 +138,7 @@ it('requires oauth authentication for the web mcp route', function () {
         ->assertHeader('Content-Type', 'application/json')
         ->assertDontSee('<!DOCTYPE html');
 
-    expect($response->headers->get('WWW-Authenticate'))
+    expect($response->baseResponse->headers->get('WWW-Authenticate'))
         ->toContain('Bearer realm="mcp"')
         ->toContain('resource_metadata=')
         ->toContain('/.well-known/oauth-protected-resource/mcp/family-fund');
@@ -150,12 +181,13 @@ it('opens the review app with ui metadata', function () {
         ->assertSee('Family fund review loaded.');
 
     $tool = new OpenFamilyFundReview;
-    $metadata = $tool->toArray()['_meta']['ui'] ?? [];
+    $toolMetadata = resultArray($tool->toArray(), '_meta');
+    $uiMetadata = resultArray($toolMetadata, 'ui');
 
     expect($tool->name())->toBe('open-family-fund-review')
-        ->and($metadata['resourceUri'] ?? null)->toBe((new FamilyFundReviewApp)->uri())
-        ->and($metadata['visibility'] ?? [])->toContain('model', 'app')
-        ->and($tool->toArray()['_meta']['openai/outputTemplate'] ?? null)->toBe((new FamilyFundReviewApp)->uri());
+        ->and($uiMetadata['resourceUri'] ?? null)->toBe((new FamilyFundReviewApp)->uri())
+        ->and(resultArray($uiMetadata, 'visibility'))->toContain('model', 'app')
+        ->and($toolMetadata['openai/outputTemplate'] ?? null)->toBe((new FamilyFundReviewApp)->uri());
 });
 
 it('returns the app resource html', function () {
@@ -166,14 +198,12 @@ it('returns the app resource html', function () {
 });
 
 it('preserves oauth state in the authorization form', function () {
-    $this->withoutVite();
-
     $client = new Client([
         'name' => 'MCP Client',
     ]);
     $client->id = 'client-id';
 
-    $html = (string) $this->view('mcp.authorize', [
+    $html = $this->renderTestViewWithoutVite('mcp.authorize', [
         'client' => $client,
         'user' => $this->admin,
         'scopes' => [new Scope('mcp:use', 'Use available MCP functionality.')],
@@ -209,13 +239,16 @@ it('returns contribution review data for the authenticated family only', functio
     $data = familyFundMcpJson(
         FamilyFundServer::actingAs($this->admin)->tool(GetFamilyFundReviewData::class)
     );
+    $summary = resultArray($data, 'summary');
+    $members = resultArray($data, 'members');
+    $firstMember = firstResultArray($data, 'members');
 
-    expect($data['summary'])
+    expect($summary)
         ->toHaveKey('total_expected', 5000)
         ->toHaveKey('total_collected', 2000)
         ->toHaveKey('total_outstanding', 3000)
-        ->and($data['members'])->toHaveCount(1)
-        ->and($data['members'][0]['name'])->toBe($member->name);
+        ->and($members)->toHaveCount(1)
+        ->and($firstMember['name'] ?? null)->toBe($member->name);
 });
 
 it('excludes archived members from review data', function () {
@@ -232,9 +265,10 @@ it('excludes archived members from review data', function () {
     $data = familyFundMcpJson(
         FamilyFundServer::actingAs($this->admin)->tool(GetFamilyFundReviewData::class)
     );
+    $summary = resultArray($data, 'summary');
 
-    expect($data['members'])->toBeEmpty()
-        ->and($data['summary']['member_count'])->toBe(0);
+    expect(resultArray($data, 'members'))->toBeEmpty()
+        ->and($summary['member_count'] ?? null)->toBe(0);
 });
 
 it('marks fully paid contributions as not eligible for reminders', function () {
@@ -251,8 +285,9 @@ it('marks fully paid contributions as not eligible for reminders', function () {
     $data = familyFundMcpJson(
         FamilyFundServer::actingAs($this->admin)->tool(GetFamilyFundReviewData::class)
     );
+    $memberData = firstResultArray($data, 'members');
 
-    expect($data['members'][0])
+    expect($memberData)
         ->toHaveKey('status', 'paid')
         ->toHaveKey('reminder_eligible', false)
         ->toHaveKey('reminder_ineligible_reason', 'This contribution is fully paid.');
@@ -264,11 +299,12 @@ it('reports missing contributions in review data', function () {
     $data = familyFundMcpJson(
         FamilyFundServer::actingAs($this->admin)->tool(GetFamilyFundReviewData::class)
     );
+    $memberData = firstResultArray($data, 'members');
 
-    expect($data['members'][0])
+    expect($memberData)
         ->toHaveKey('contribution_id', null)
         ->toHaveKey('reminder_ineligible_reason', 'No contribution record exists for this period.')
-        ->and($data['members'][0]['reminder_channels'])->toBe([]);
+        ->and(resultArray($memberData, 'reminder_channels'))->toBe([]);
 });
 
 it('reports members without any eligible reminder channel', function () {
@@ -286,8 +322,9 @@ it('reports members without any eligible reminder channel', function () {
     $data = familyFundMcpJson(
         FamilyFundServer::actingAs($this->admin)->tool(GetFamilyFundReviewData::class)
     );
+    $memberData = firstResultArray($data, 'members');
 
-    expect($data['members'][0])
+    expect($memberData)
         ->toHaveKey('reminder_eligible', false)
         ->toHaveKey('reminder_ineligible_reason', 'No eligible reminder channel is available.');
 });
@@ -316,8 +353,9 @@ it('includes whatsapp and webpush in valid reminder selections when available', 
             'confirmed' => false,
         ])
     );
+    $validReminder = firstResultArray($preview, 'valid');
 
-    expect($preview['valid'][0]['channels'])->toBe(['mail', 'whatsapp', 'webpush']);
+    expect(resultArray($validReminder, 'channels'))->toBe(['mail', 'whatsapp', 'webpush']);
 });
 
 it('includes whatsapp and webpush channels in review data when available', function () {
@@ -340,8 +378,9 @@ it('includes whatsapp and webpush channels in review data when available', funct
     $data = familyFundMcpJson(
         FamilyFundServer::actingAs($this->admin)->tool(GetFamilyFundReviewData::class)
     );
+    $memberData = firstResultArray($data, 'members');
 
-    expect($data['members'][0]['reminder_channels'])->toBe(['mail', 'whatsapp', 'webpush']);
+    expect(resultArray($memberData, 'reminder_channels'))->toBe(['mail', 'whatsapp', 'webpush']);
 });
 
 it('requires authorization to send family fund review reminders', function () {
@@ -363,7 +402,7 @@ it('reports missing reminder selections for this family', function () {
     expect($preview)
         ->toHaveKey('valid_count', 0)
         ->toHaveKey('invalid_count', 1)
-        ->and($preview['invalid'][0]['reason'])->toBe('Contribution was not found for this family.');
+        ->and(firstResultArray($preview, 'invalid')['reason'] ?? null)->toBe('Contribution was not found for this family.');
 });
 
 it('forbids regular members from opening and reading review data', function () {
@@ -420,9 +459,11 @@ it('filters contribution review data by status', function () {
             'status' => 'paid',
         ])
     );
+    $members = resultArray($data, 'members');
+    $firstMember = firstResultArray($data, 'members');
 
-    expect($data['members'])->toHaveCount(1)
-        ->and($data['members'][0]['name'])->toBe($paidMember->name);
+    expect($members)->toHaveCount(1)
+        ->and($firstMember['name'] ?? null)->toBe($paidMember->name);
 });
 
 it('previews valid and invalid reminder selections without sending', function () {
@@ -451,13 +492,15 @@ it('previews valid and invalid reminder selections without sending', function ()
             'confirmed' => false,
         ])
     );
+    $validReminder = firstResultArray($preview, 'valid');
+    $invalidReminder = firstResultArray($preview, 'invalid');
 
     expect($preview)
         ->toHaveKey('status', 'confirmation_required')
         ->toHaveKey('valid_count', 1)
         ->toHaveKey('invalid_count', 1)
-        ->and($preview['valid'][0]['contribution_id'])->toBe($validContribution->id)
-        ->and($preview['invalid'][0]['contribution_id'])->toBe($paidContribution->id);
+        ->and($validReminder['contribution_id'] ?? null)->toBe($validContribution->id)
+        ->and($invalidReminder['contribution_id'] ?? null)->toBe($paidContribution->id);
 
     Notification::assertNothingSent();
 });
@@ -476,13 +519,14 @@ it('reports unavailable selected reminder channels', function () {
             'confirmed' => false,
         ])
     );
+    $invalidReminder = firstResultArray($preview, 'invalid');
 
     expect($preview)
         ->toHaveKey('status', 'confirmation_required')
         ->toHaveKey('valid_count', 0)
         ->toHaveKey('invalid_count', 1)
-        ->and($preview['invalid'][0]['reason'])->toBe('No selected reminder channel is available for this member.')
-        ->and($preview['invalid'][0]['eligible_channels'])->toBe(['mail']);
+        ->and($invalidReminder['reason'] ?? null)->toBe('No selected reminder channel is available for this member.')
+        ->and(resultArray($invalidReminder, 'eligible_channels'))->toBe(['mail']);
 });
 
 it('returns no valid reminders when all confirmed selections are invalid', function () {
@@ -510,7 +554,7 @@ it('returns no valid reminders when all confirmed selections are invalid', funct
         ->toHaveKey('status', 'no_valid_reminders')
         ->toHaveKey('sent_count', 0)
         ->toHaveKey('channel_delivery_count', 0)
-        ->and($result['channel_counts'])->toBe(['mail' => 0, 'whatsapp' => 0, 'webpush' => 0]);
+        ->and(resultArray($result, 'channel_counts'))->toBe(['mail' => 0, 'whatsapp' => 0, 'webpush' => 0]);
 
     Notification::assertNothingSent();
 });

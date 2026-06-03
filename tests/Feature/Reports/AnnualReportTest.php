@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Enums\MemberCategory;
 use App\Models\Contribution;
 use App\Models\Payment;
@@ -128,12 +130,12 @@ describe('Annual Report', function () {
             $contribution = Contribution::factory()->create([
                 'user_id' => $member->id,
                 'month' => now()->startOfMonth(),
-                'expected_amount' => $member->category->monthlyAmount(),
+                'expected_amount' => $member->getMonthlyAmount(),
             ]);
 
             Payment::factory()->create([
                 'contribution_id' => $contribution->id,
-                'amount' => $member->category->monthlyAmount(),
+                'amount' => $member->getMonthlyAmount(),
                 'recorded_by' => $admin->id,
             ]);
         }
@@ -179,8 +181,15 @@ describe('Annual Report', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Reports/Annual')
                 ->has('monthly_breakdown')
-                ->where('monthly_breakdown', fn ($breakdown) => collect($breakdown)->every(fn ($month) => isset($month['collection_rate'])
-                ))
+                ->where('monthly_breakdown', function (mixed $breakdown): bool {
+                    foreach (arrayLikeItems($breakdown) as $month) {
+                        if (! is_array($month) || ! array_key_exists('collection_rate', $month)) {
+                            return false;
+                        }
+                    }
+
+                    return true;
+                })
             );
     });
 
@@ -197,11 +206,11 @@ describe('Annual Report', function () {
                 $contribution = Contribution::factory()
                     ->forUser($member)
                     ->forMonth($year, $month)
-                    ->create(['expected_amount' => $member->category->monthlyAmount()]);
+                    ->create(['expected_amount' => $member->getMonthlyAmount()]);
 
                 Payment::factory()->create([
                     'contribution_id' => $contribution->id,
-                    'amount' => $member->category->monthlyAmount(),
+                    'amount' => $member->getMonthlyAmount(),
                     'recorded_by' => $admin->id,
                 ]);
             }

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Requests;
 
 use App\Models\User;
@@ -14,7 +16,9 @@ class StorePaymentRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return $this->user()->canRecordPayments();
+        $user = $this->user();
+
+        return $user instanceof User && $user->canRecordPayments();
     }
 
     /**
@@ -40,15 +44,20 @@ class StorePaymentRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator) {
-            if ($this->member_id) {
-                $member = User::find($this->member_id);
+            $memberId = $this->integerInput('member_id');
+
+            if ($memberId !== null) {
+                $member = User::query()->find($memberId);
                 if ($member && ! $member->category) {
                     $validator->errors()->add('member_id', 'This member does not have a contribution category assigned.');
                 }
             }
 
-            if ($this->target_year && $this->target_month) {
-                $targetDate = now()->setYear((int) $this->target_year)->setMonth((int) $this->target_month)->startOfMonth();
+            $targetYear = $this->integerInput('target_year');
+            $targetMonth = $this->integerInput('target_month');
+
+            if ($targetYear !== null && $targetMonth !== null) {
+                $targetDate = now()->setYear($targetYear)->setMonth($targetMonth)->startOfMonth();
                 $maxAdvanceDate = now()->addMonths(6)->startOfMonth();
 
                 if ($targetDate->gt($maxAdvanceDate)) {
@@ -56,6 +65,13 @@ class StorePaymentRequest extends FormRequest
                 }
             }
         });
+    }
+
+    private function integerInput(string $key): ?int
+    {
+        $value = $this->input($key);
+
+        return is_numeric($value) ? (int) $value : null;
     }
 
     /**

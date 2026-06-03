@@ -10,7 +10,6 @@ use App\Http\Requests\SubscribePlanRequest;
 use App\Models\Family;
 use App\Models\PaystackTransaction;
 use App\Models\PlatformPlan;
-use App\Models\User;
 use App\Services\PaystackService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -30,8 +29,7 @@ class SubscriptionController extends Controller
      */
     public function index(): Response
     {
-        /** @var User $user */
-        $user = auth()->user();
+        $user = $this->authUser();
         $family = $user->family;
 
         $plans = PlatformPlan::where('is_active', true)
@@ -51,11 +49,11 @@ class SubscriptionController extends Controller
         return Inertia::render('Subscription/Index', [
             'plans' => $plans,
             'current_plan' => $family?->platformPlan?->only(['id', 'name', 'slug', 'price']),
-            'subscription_status' => $family?->subscription_status ?? 'free',
+            'subscription_status' => $family instanceof Family ? ($family->subscription_status ?? 'free') : 'free',
             'current_period_end' => $family?->current_period_end?->toDateString(),
             'member_count' => $family?->members()->count() ?? 0,
             'is_admin' => $user->isAdmin(),
-            'paystack_public_key' => config('services.paystack.public_key'),
+            'paystack_public_key' => $this->stringConfig('services.paystack.public_key'),
         ]);
     }
 
@@ -66,8 +64,7 @@ class SubscriptionController extends Controller
     {
         $validated = $request->validated();
 
-        /** @var User $user */
-        $user = auth()->user();
+        $user = $this->authUser();
         $family = $user->family;
 
         if (! $family) {
@@ -76,7 +73,9 @@ class SubscriptionController extends Controller
             ], 422);
         }
 
-        $plan = PlatformPlan::findOrFail($validated['plan_id']);
+        $plan = PlatformPlan::query()
+            ->whereKey($request->integer('plan_id'))
+            ->firstOrFail();
 
         if ($plan->isFree()) {
             return response()->json([
@@ -104,7 +103,7 @@ class SubscriptionController extends Controller
     {
         $reference = $request->query('reference');
 
-        if (! $reference) {
+        if (! is_string($reference) || $reference === '') {
             return redirect()->route('subscription.index')
                 ->with('error', 'No payment reference received.');
         }
@@ -119,13 +118,15 @@ class SubscriptionController extends Controller
         try {
             $verification = $this->paystack->verifyTransaction($reference);
 
-            if ($verification['data']['status'] === 'success') {
+            $verificationData = $this->stringKeyedArray($verification['data'] ?? null);
+
+            if (($verificationData['status'] ?? null) === 'success') {
                 // Atomic conditional update to prevent race condition with webhook
                 $updated = PaystackTransaction::where('reference', $reference)
                     ->where('status', TransactionStatus::Pending)
                     ->update([
                         'status' => TransactionStatus::Success,
-                        'paystack_response' => json_encode($verification['data']),
+                        'paystack_response' => json_encode($verificationData),
                     ]);
 
                 if ($updated === 0) {
@@ -136,15 +137,16 @@ class SubscriptionController extends Controller
 
                 // Update family subscription
                 $family = Family::find($transaction->family_id);
-                $planId = $transaction->metadata['plan_id'] ?? null;
+                $metadata = $transaction->metadata ?? [];
+                $planId = $metadata['plan_id'] ?? null;
 
-                if ($family && $planId) {
-                    $paidAt = $verification['data']['paid_at'] ?? null;
+                if ($family && is_numeric($planId)) {
+                    $paidAt = $verificationData['paid_at'] ?? null;
 
                     $family->update([
-                        'platform_plan_id' => $planId,
+                        'platform_plan_id' => (int) $planId,
                         'subscription_status' => 'active',
-                        'current_period_end' => $paidAt ? now()->parse($paidAt)->addMonth() : null,
+                        'current_period_end' => is_scalar($paidAt) ? now()->parse((string) $paidAt)->addMonth() : null,
                     ]);
                 }
 
@@ -167,8 +169,7 @@ class SubscriptionController extends Controller
      */
     public function cancel(): RedirectResponse
     {
-        /** @var User $user */
-        $user = auth()->user();
+        $user = $this->authUser();
 
         if (! $user->isAdmin()) {
             abort(403, 'Only family admins can manage subscriptions.');
@@ -176,7 +177,7 @@ class SubscriptionController extends Controller
 
         $family = $user->family;
 
-        if (! $family?->paystack_subscription_code) {
+        if (! $family || ! $family->paystack_subscription_code || ! $family->paystack_subscription_email_token) {
             return redirect()->route('subscription.index')
                 ->with('error', 'No active subscription to cancel.');
         }
@@ -199,5 +200,28 @@ class SubscriptionController extends Controller
             return redirect()->route('subscription.index')
                 ->with('error', 'Failed to cancel subscription. Please try again.');
         }
+    }
+
+    private function stringConfig(string $key): string
+    {
+        $value = config($key);
+
+        return is_string($value) ? $value : '';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function stringKeyedArray(mixed $value): array
+    {
+        $items = [];
+
+        foreach (is_array($value) ? $value : [] as $key => $item) {
+            if (is_string($key)) {
+                $items[$key] = $item;
+            }
+        }
+
+        return $items;
     }
 }

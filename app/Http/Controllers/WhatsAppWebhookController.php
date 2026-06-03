@@ -35,7 +35,9 @@ class WhatsAppWebhookController extends Controller
         $expectedToken = config('services.whatsapp.webhook_verify_token');
 
         if ($mode === 'subscribe' && is_string($token) && is_string($expectedToken) && hash_equals($expectedToken, $token)) {
-            return response((string) $challenge, HttpResponse::HTTP_OK)
+            $challengeText = is_scalar($challenge) ? (string) $challenge : '';
+
+            return response($challengeText, HttpResponse::HTTP_OK)
                 ->header('Content-Type', 'text/plain');
         }
 
@@ -60,13 +62,13 @@ class WhatsAppWebhookController extends Controller
             if (! app()->environment('local', 'testing')) {
                 Log::critical('WhatsApp app_secret is not configured — webhook signature verification is disabled in a non-local environment.');
             }
-        } elseif (! is_string($rawBody) || ! is_string($signatureHeader) || ! $this->verifySignature($rawBody, $signatureHeader, (string) $appSecret)) {
+        } elseif (! is_string($appSecret) || ! is_string($signatureHeader) || ! $this->verifySignature($rawBody, $signatureHeader, $appSecret)) {
             Log::warning('WhatsApp webhook: invalid signature');
 
             return response()->json(['message' => 'Invalid signature'], HttpResponse::HTTP_FORBIDDEN);
         }
 
-        $payload = $request->all();
+        $payload = $this->stringKeyedArray($request->all());
 
         if (($payload['object'] ?? null) !== 'whatsapp_business_account') {
             return response()->json(['message' => 'Ignored']);
@@ -90,5 +92,25 @@ class WhatsAppWebhookController extends Controller
         $expectedSignature = hash_hmac('sha256', $rawBody, $appSecret);
 
         return hash_equals($expectedSignature, $providedSignature);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    /**
+     * @param  array<int|string, mixed>  $value
+     * @return array<string, mixed>
+     */
+    private function stringKeyedArray(array $value): array
+    {
+        $items = [];
+
+        foreach ($value as $key => $item) {
+            if (is_string($key)) {
+                $items[$key] = $item;
+            }
+        }
+
+        return $items;
     }
 }

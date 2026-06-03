@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\Family;
 use App\Models\FundAdjustment;
 use App\Models\User;
@@ -16,8 +18,8 @@ it('casts and formats fund adjustment values and exposes relationships', functio
     expect($adjustment->amount)->toBe(250000)
         ->and($adjustment->recorded_at)->toBeInstanceOf(Carbon::class)
         ->and($adjustment->formatted_amount)->toBe("\u{20A6}250,000.00")
-        ->and($adjustment->family->is($family))->toBeTrue()
-        ->and($adjustment->recorder->is($recorder))->toBeTrue();
+        ->and($adjustment->family()->firstOrFail()->is($family))->toBeTrue()
+        ->and($adjustment->recorder()->firstOrFail()->is($recorder))->toBeTrue();
 });
 
 it('orders fund adjustments by latest first', function () {

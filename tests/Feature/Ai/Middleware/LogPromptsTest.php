@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Ai\Agents\FamilyAssistant;
 use App\Ai\Middleware\LogPrompts;
 use App\Models\User;
@@ -12,7 +14,7 @@ use Laravel\Ai\Responses\Data\Usage;
 
 it('logs prompts and response metadata', function () {
     $agent = new FamilyAssistant(User::factory()->create());
-    $provider = Mockery::mock(TextProvider::class);
+    $provider = typedMock(TextProvider::class);
     $prompt = new AgentPrompt(
         agent: $agent,
         prompt: 'Summarize this month',
@@ -51,4 +53,32 @@ it('logs prompts and response metadata', function () {
     );
 
     expect($result)->toBe($response);
+});
+
+it('returns non-agent responses without attaching response logging', function () {
+    $agent = new FamilyAssistant(User::factory()->create());
+    $provider = typedMock(TextProvider::class);
+    $prompt = new AgentPrompt(
+        agent: $agent,
+        prompt: 'Return raw',
+        attachments: [],
+        provider: $provider,
+        model: 'llama3.2',
+    );
+
+    Log::shouldReceive('info')
+        ->once()
+        ->with('AI Agent prompted', [
+            'agent' => FamilyAssistant::class,
+            'prompt' => 'Return raw',
+        ]);
+
+    $result = (new LogPrompts)->handle(
+        $prompt,
+        fn (AgentPrompt $receivedPrompt): string => tap('raw-response', function () use ($receivedPrompt, $prompt) {
+            expect($receivedPrompt)->toBe($prompt);
+        }),
+    );
+
+    expect($result)->toBe('raw-response');
 });

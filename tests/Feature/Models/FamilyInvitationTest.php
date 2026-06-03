@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Enums\Role;
 use App\Models\Family;
 use App\Models\FamilyInvitation;
@@ -24,8 +26,8 @@ it('casts role and timestamp fields and exposes relationships', function () {
     expect($invitation->role)->toBe(Role::FinancialSecretary)
         ->and($invitation->accepted_at)->toBeInstanceOf(Carbon::class)
         ->and($invitation->expires_at)->toBeInstanceOf(Carbon::class)
-        ->and($invitation->family->is($family))->toBeTrue()
-        ->and($invitation->inviter->is($inviter))->toBeTrue();
+        ->and($invitation->family()->firstOrFail()->is($family))->toBeTrue()
+        ->and($invitation->inviter()->firstOrFail()->is($inviter))->toBeTrue();
 });
 
 it('identifies pending, accepted, and expired invitations', function () {

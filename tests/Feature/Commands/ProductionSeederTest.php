@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Enums\Role;
 use App\Models\Contribution;
 use App\Models\Family;
@@ -20,7 +22,7 @@ it('creates a super admin account with environment variables', function () {
     $this->artisan('db:seed', ['--class' => 'ProductionSeeder'])
         ->assertSuccessful();
 
-    $admin = User::query()->where('email', 'admin@production.test')->first();
+    $admin = User::query()->where('email', 'admin@production.test')->firstOrFail();
 
     expect($admin)->not->toBeNull();
     expect($admin->name)->toBe('Family Admin');
@@ -29,8 +31,7 @@ it('creates a super admin account with environment variables', function () {
     expect($admin->category)->toBeNull();
     expect($admin->email_verified_at)->not->toBeNull();
 
-    $family = Family::query()->first();
-    expect($family)->not->toBeNull();
+    $family = Family::query()->firstOrFail();
     expect($family->platform_plan_id)->not->toBeNull();
 });
 
@@ -41,7 +42,7 @@ it('uses default name when ADMIN_NAME is not set', function () {
     $this->artisan('db:seed', ['--class' => 'ProductionSeeder'])
         ->assertSuccessful();
 
-    $admin = User::query()->where('email', 'admin@production.test')->first();
+    $admin = User::query()->where('email', 'admin@production.test')->firstOrFail();
 
     expect($admin->name)->toBe('Super Admin');
 });

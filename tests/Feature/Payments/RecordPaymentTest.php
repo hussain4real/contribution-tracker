@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Enums\PaymentStatus;
 use App\Models\Contribution;
 use App\Models\Family;
@@ -77,7 +79,7 @@ describe('Record Full Payment', function () {
             'recorded_by' => $this->financialSecretary->id,
         ]);
 
-        expect($contribution->fresh()->status)->toBe(PaymentStatus::Paid);
+        expect($contribution->refresh()->status)->toBe(PaymentStatus::Paid);
     });
 
     it('super admin can record a full payment', function () {
@@ -97,7 +99,7 @@ describe('Record Full Payment', function () {
             ])
             ->assertRedirect();
 
-        expect($contribution->fresh()->status)->toBe(PaymentStatus::Paid);
+        expect($contribution->refresh()->status)->toBe(PaymentStatus::Paid);
     });
 
     it('contribution status changes to Paid after full payment', function () {
@@ -116,8 +118,9 @@ describe('Record Full Payment', function () {
                 'paid_at' => now()->toDateString(),
             ]);
 
-        expect($contribution->fresh()->status)->toBe(PaymentStatus::Paid);
-        expect($contribution->fresh()->balance)->toBe(0);
+        $contribution->refresh();
+        expect($contribution->status)->toBe(PaymentStatus::Paid);
+        expect($contribution->balance)->toBe(0);
     });
 
     it('validates required fields', function () {
@@ -207,6 +210,6 @@ describe('Record Full Payment', function () {
         );
 
         expect($payments)->toHaveCount(1)
-            ->and($payments->first()->contribution_id)->not->toBe($contribution->id);
+            ->and($payments->sole()->contribution_id)->not->toBe($contribution->id);
     });
 });

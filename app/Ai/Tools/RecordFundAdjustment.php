@@ -1,13 +1,15 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Ai\Tools;
 
+use App\Models\Family;
 use App\Models\FundAdjustment;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
-use Stringable;
 
 class RecordFundAdjustment implements Tool
 {
@@ -16,7 +18,7 @@ class RecordFundAdjustment implements Tool
     /**
      * Get the description of the tool's purpose.
      */
-    public function description(): Stringable|string
+    public function description(): string
     {
         return 'Records a fund adjustment for the family (e.g., interest earned, donations received, corrections). Requires amount (whole number in Naira), description, and date. Always call without confirmed=true first to preview.';
     }
@@ -24,16 +26,16 @@ class RecordFundAdjustment implements Tool
     /**
      * Execute the tool.
      */
-    public function handle(Request $request): Stringable|string
+    public function handle(Request $request): string
     {
         if (! $this->user->canRecordPayments()) {
             return json_encode(['error' => 'You do not have permission to record fund adjustments. Only admins and financial secretaries can do this.'], JSON_THROW_ON_ERROR);
         }
 
-        $amount = $request['amount'] ?? null;
-        $description = $request['description'] ?? null;
-        $recordedAt = $request['recorded_at'] ?? now()->toDateString();
-        $confirmed = $request['confirmed'] ?? false;
+        $amount = $this->nullableIntegerFromRequest($request['amount'] ?? null);
+        $description = $this->nullableStringFromRequest($request['description'] ?? null);
+        $recordedAt = $this->stringFromRequest($request['recorded_at'] ?? null, now()->toDateString());
+        $confirmed = ($request['confirmed'] ?? false) === true;
 
         if (! $amount || $amount < 1) {
             return json_encode(['error' => 'Amount is required and must be at least ₦1.'], JSON_THROW_ON_ERROR);
@@ -43,7 +45,8 @@ class RecordFundAdjustment implements Tool
             return json_encode(['error' => 'A description is required for the fund adjustment.'], JSON_THROW_ON_ERROR);
         }
 
-        $currency = $this->user->family?->currency ?? '₦';
+        $family = $this->user->family;
+        $currency = $family instanceof Family ? $family->currency : '₦';
         $formattedAmount = $currency.number_format($amount, 2);
 
         if (! $confirmed) {
@@ -84,5 +87,20 @@ class RecordFundAdjustment implements Tool
             'recorded_at' => $schema->string(),
             'confirmed' => $schema->boolean(),
         ];
+    }
+
+    private function nullableIntegerFromRequest(mixed $value): ?int
+    {
+        return is_numeric($value) ? (int) $value : null;
+    }
+
+    private function nullableStringFromRequest(mixed $value): ?string
+    {
+        return is_scalar($value) && (string) $value !== '' ? (string) $value : null;
+    }
+
+    private function stringFromRequest(mixed $value, string $default): string
+    {
+        return is_scalar($value) ? (string) $value : $default;
     }
 }

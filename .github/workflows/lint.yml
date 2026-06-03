@@ -29,6 +29,9 @@ jobs:
       - name: Check PHP Code Style
         run: vendor/bin/pint --test
 
+      - name: Analyse PHP
+        run: composer analyse
+
       - name: Check Frontend Formatting
         run: npm run format:check
 

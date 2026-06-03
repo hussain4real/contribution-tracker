@@ -1,10 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreExpenseRequest;
 use App\Models\Expense;
-use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -18,8 +19,7 @@ class ExpenseController extends Controller
     {
         $this->authorize('viewAny', Expense::class);
 
-        /** @var User $user */
-        $user = request()->user();
+        $user = $this->authUser();
 
         $expenses = Expense::query()
             ->where('family_id', $user->family_id)
@@ -33,12 +33,12 @@ class ExpenseController extends Controller
                 'description' => $expense->description,
                 'spent_at' => $expense->spent_at->toDateString(),
                 'recorded_by' => $expense->recorder?->name,
-                'created_at' => $expense->created_at->toDateString(),
+                'created_at' => $expense->created_at?->toDateString(),
             ]);
 
         return Inertia::render('Expenses/Index', [
             'expenses' => $expenses,
-            'can_create' => request()->user()->canRecordPayments(),
+            'can_create' => $user->canRecordPayments(),
         ]);
     }
 
@@ -57,12 +57,14 @@ class ExpenseController extends Controller
      */
     public function store(StoreExpenseRequest $request): RedirectResponse
     {
+        $user = $this->user($request);
+
         Expense::create([
-            'family_id' => $request->user()->family_id,
-            'amount' => $request->amount,
-            'description' => $request->description,
-            'spent_at' => $request->spent_at,
-            'recorded_by' => $request->user()->id,
+            'family_id' => $user->family_id,
+            'amount' => $request->integer('amount'),
+            'description' => $request->string('description')->toString(),
+            'spent_at' => $request->string('spent_at')->toString(),
+            'recorded_by' => $user->id,
         ]);
 
         return redirect()->route('expenses.index')

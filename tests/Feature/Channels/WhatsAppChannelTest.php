@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Channels\WhatsAppChannel;
 use App\Channels\WhatsAppMessage;
 use App\Services\WhatsAppService;
@@ -27,7 +29,7 @@ it('sends valid whatsapp notification messages to the normalised recipient', fun
         }
     };
 
-    $whatsapp = Mockery::mock(WhatsAppService::class);
+    $whatsapp = typedMock(WhatsAppService::class);
     $whatsapp->shouldReceive('normalisePhone')
         ->once()
         ->with('+234 801 234 5678')
@@ -36,6 +38,17 @@ it('sends valid whatsapp notification messages to the normalised recipient', fun
         ->once()
         ->with('2348012345678', $message)
         ->andReturn(['success' => true, 'wa_message_id' => 'wamid.123', 'error' => null]);
+
+    (new WhatsAppChannel($whatsapp))->send($notifiable, $notification);
+});
+
+it('skips delivery when the notifiable has no notification route method', function () {
+    $notification = new class extends Notification {};
+    $notifiable = new class {};
+
+    $whatsapp = typedMock(WhatsAppService::class);
+    $whatsapp->shouldNotReceive('normalisePhone');
+    $whatsapp->shouldNotReceive('send');
 
     (new WhatsAppChannel($whatsapp))->send($notifiable, $notification);
 });
@@ -50,13 +63,13 @@ it('skips delivery when the notifiable has no whatsapp route', function () {
     };
     $notifiable = new class
     {
-        public function routeNotificationFor(string $driver, Notification $notification): ?string
+        public function routeNotificationFor(string $driver, Notification $notification): null
         {
             return null;
         }
     };
 
-    $whatsapp = Mockery::mock(WhatsAppService::class);
+    $whatsapp = typedMock(WhatsAppService::class);
     $whatsapp->shouldNotReceive('normalisePhone');
     $whatsapp->shouldNotReceive('send');
 
@@ -73,7 +86,7 @@ it('skips delivery when the notification does not provide a whatsapp message', f
         }
     };
 
-    $whatsapp = Mockery::mock(WhatsAppService::class);
+    $whatsapp = typedMock(WhatsAppService::class);
     $whatsapp->shouldNotReceive('normalisePhone');
     $whatsapp->shouldNotReceive('send');
 
@@ -102,7 +115,7 @@ it('logs and skips delivery when the whatsapp message cannot be built', function
         }
     };
 
-    $whatsapp = Mockery::mock(WhatsAppService::class);
+    $whatsapp = typedMock(WhatsAppService::class);
     $whatsapp->shouldNotReceive('normalisePhone');
     $whatsapp->shouldNotReceive('send');
 
@@ -113,7 +126,7 @@ it('logs and skips delivery when toWhatsapp returns an invalid message', functio
     Log::shouldReceive('warning')
         ->once()
         ->with('toWhatsApp() must return a WhatsAppMessage instance', Mockery::on(
-            fn (array $context): bool => str_contains($context['notification'], 'Notification'),
+            fn (array $context): bool => str_contains(stringValue($context, 'notification'), 'Notification'),
         ));
 
     $notification = new class extends Notification
@@ -131,7 +144,7 @@ it('logs and skips delivery when toWhatsapp returns an invalid message', functio
         }
     };
 
-    $whatsapp = Mockery::mock(WhatsAppService::class);
+    $whatsapp = typedMock(WhatsAppService::class);
     $whatsapp->shouldNotReceive('normalisePhone');
     $whatsapp->shouldNotReceive('send');
 

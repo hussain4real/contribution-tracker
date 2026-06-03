@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\Family;
 use App\Models\FamilyCategory;
 use App\Models\User;
@@ -25,7 +27,7 @@ it('exposes family and assigned user relationships', function () {
         'family_category_id' => $category->id,
     ]);
 
-    expect($category->family->is($family))->toBeTrue()
+    expect($category->family()->firstOrFail()->is($family))->toBeTrue()
         ->and($category->users)->toHaveCount(1)
-        ->and($category->users->first()->is($user))->toBeTrue();
+        ->and($category->users()->firstOrFail()->is($user))->toBeTrue();
 });

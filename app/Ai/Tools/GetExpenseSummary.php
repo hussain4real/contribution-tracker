@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Ai\Tools;
 
 use App\Models\Expense;
@@ -7,7 +9,6 @@ use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
-use Stringable;
 
 class GetExpenseSummary implements Tool
 {
@@ -16,7 +17,7 @@ class GetExpenseSummary implements Tool
     /**
      * Get the description of the tool's purpose.
      */
-    public function description(): Stringable|string
+    public function description(): string
     {
         return 'Retrieves expense summary data for the family. Can filter by date range (start_date and end_date in Y-m-d format). Returns total expenses, expense count, and individual expense entries.';
     }
@@ -24,10 +25,10 @@ class GetExpenseSummary implements Tool
     /**
      * Execute the tool.
      */
-    public function handle(Request $request): Stringable|string
+    public function handle(Request $request): string
     {
-        $startDate = $request['start_date'] ?? now()->startOfMonth()->toDateString();
-        $endDate = $request['end_date'] ?? now()->endOfMonth()->toDateString();
+        $startDate = $this->stringFromRequest($request['start_date'] ?? null, now()->startOfMonth()->toDateString());
+        $endDate = $this->stringFromRequest($request['end_date'] ?? null, now()->endOfMonth()->toDateString());
 
         $baseQuery = Expense::query()
             ->where('family_id', $this->user->family_id)
@@ -46,7 +47,7 @@ class GetExpenseSummary implements Tool
             'description' => $expense->description,
             'amount' => $expense->amount,
             'spent_at' => $expense->spent_at->format('Y-m-d'),
-            'recorded_by' => $expense->recorder?->name ?? 'Unknown',
+            'recorded_by' => $expense->recorder->name ?? 'Unknown',
         ])->toArray();
 
         return json_encode([
@@ -66,5 +67,10 @@ class GetExpenseSummary implements Tool
             'start_date' => $schema->string(),
             'end_date' => $schema->string(),
         ];
+    }
+
+    private function stringFromRequest(mixed $value, string $default): string
+    {
+        return is_scalar($value) ? (string) $value : $default;
     }
 }

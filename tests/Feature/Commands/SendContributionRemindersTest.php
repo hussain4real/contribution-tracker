@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\Payment;
@@ -19,11 +21,13 @@ describe('Send Contribution Reminders Command', function () {
         $this->artisan('contributions:remind', ['--day' => 25])
             ->assertSuccessful();
 
-        Notification::assertSentTo($member, ContributionReminderNotification::class, function ($notification) {
+        Notification::assertSentTo($member, ContributionReminderNotification::class, function (ContributionReminderNotification $notification): bool {
             return $notification->type === 'reminder';
         });
 
-        expect($contribution->fresh()->reminder_sent_at)->not->toBeNull();
+        $contribution->refresh();
+
+        expect($contribution->reminder_sent_at)->not->toBeNull();
     });
 
     it('sends follow_up notifications when day is 28', function () {
@@ -36,11 +40,13 @@ describe('Send Contribution Reminders Command', function () {
         $this->artisan('contributions:remind', ['--day' => 28])
             ->assertSuccessful();
 
-        Notification::assertSentTo($member, ContributionReminderNotification::class, function ($notification) {
+        Notification::assertSentTo($member, ContributionReminderNotification::class, function (ContributionReminderNotification $notification): bool {
             return $notification->type === 'follow_up';
         });
 
-        expect($contribution->fresh()->follow_up_sent_at)->not->toBeNull();
+        $contribution->refresh();
+
+        expect($contribution->follow_up_sent_at)->not->toBeNull();
     });
 
     it('does not send duplicate reminders when rerun', function () {
@@ -58,7 +64,9 @@ describe('Send Contribution Reminders Command', function () {
             ->assertSuccessful();
 
         Notification::assertSentToTimes($member, ContributionReminderNotification::class, 1);
-        expect($contribution->fresh()->reminder_sent_at)->not->toBeNull();
+        $contribution->refresh();
+
+        expect($contribution->reminder_sent_at)->not->toBeNull();
     });
 
     it('does not mark reminders as sent when notification dispatch fails', function () {
@@ -66,13 +74,16 @@ describe('Send Contribution Reminders Command', function () {
         $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
         $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
 
-        $this->app->instance(NotificationDispatcher::class, new class implements NotificationDispatcher
+        app()->instance(NotificationDispatcher::class, new class implements NotificationDispatcher
         {
             public function send($notifiables, $notification)
             {
                 throw new RuntimeException('Notification dispatch failed.');
             }
 
+            /**
+             * @param  array<int, string>|null  $channels
+             */
             public function sendNow($notifiables, $notification, ?array $channels = null)
             {
                 throw new RuntimeException('Notification dispatch failed.');
@@ -82,7 +93,9 @@ describe('Send Contribution Reminders Command', function () {
         expect(fn () => $this->artisan('contributions:remind', ['--day' => 25])->run())
             ->toThrow(RuntimeException::class, 'Notification dispatch failed.');
 
-        expect($contribution->fresh()->reminder_sent_at)->toBeNull();
+        $contribution->refresh();
+
+        expect($contribution->reminder_sent_at)->toBeNull();
     });
 
     it('does not send reminders when another run claims the contribution after selection', function () {
@@ -110,7 +123,9 @@ describe('Send Contribution Reminders Command', function () {
             ->assertSuccessful();
 
         Notification::assertNothingSent();
-        expect($contribution->fresh()->reminder_sent_at)->not->toBeNull();
+        $contribution->refresh();
+
+        expect($contribution->reminder_sent_at)->not->toBeNull();
     });
 
     it('tracks follow-up reminders independently from early reminders', function () {
@@ -125,11 +140,13 @@ describe('Send Contribution Reminders Command', function () {
         $this->artisan('contributions:remind', ['--day' => 28])
             ->assertSuccessful();
 
-        Notification::assertSentTo($member, ContributionReminderNotification::class, function ($notification) {
+        Notification::assertSentTo($member, ContributionReminderNotification::class, function (ContributionReminderNotification $notification): bool {
             return $notification->type === 'follow_up';
         });
 
-        expect($contribution->fresh()->follow_up_sent_at)->not->toBeNull();
+        $contribution->refresh();
+
+        expect($contribution->follow_up_sent_at)->not->toBeNull();
     });
 
     it('rejects invalid day options without sending notifications', function (int|string $day) {
@@ -145,10 +162,10 @@ describe('Send Contribution Reminders Command', function () {
 
         Notification::assertNothingSent();
 
-        $freshContribution = $contribution->fresh();
+        $contribution->refresh();
 
-        expect($freshContribution->reminder_sent_at)->toBeNull()
-            ->and($freshContribution->follow_up_sent_at)->toBeNull();
+        expect($contribution->reminder_sent_at)->toBeNull()
+            ->and($contribution->follow_up_sent_at)->toBeNull();
     })->with([
         'out of range day' => 99,
         'non-numeric day' => 'abc',

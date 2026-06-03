@@ -1,11 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\Contribution;
 use App\Models\Expense;
 use App\Models\Family;
 use App\Models\FundAdjustment;
 use App\Models\Payment;
 use App\Models\User;
+use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
     $this->family = Family::factory()->create();
@@ -17,7 +20,7 @@ it('returns fund_balance as a prop for admin dashboard', function () {
     $this->actingAs($this->admin)
         ->get(route('dashboard'))
         ->assertSuccessful()
-        ->assertInertia(fn ($page) => $page
+        ->assertInertia(fn (Assert $page) => $page
             ->component('Dashboard/Index')
             ->has('fund_balance')
         );
@@ -27,7 +30,7 @@ it('returns fund_balance as a prop for member dashboard', function () {
     $this->actingAs($this->member)
         ->get(route('dashboard'))
         ->assertSuccessful()
-        ->assertInertia(fn ($page) => $page
+        ->assertInertia(fn (Assert $page) => $page
             ->component('Dashboard/Index')
             ->has('fund_balance')
         );
@@ -36,7 +39,7 @@ it('returns fund_balance as a prop for member dashboard', function () {
 it('calculates fund_balance as zero when no data exists', function () {
     $this->actingAs($this->admin)
         ->get(route('dashboard'))
-        ->assertInertia(fn ($page) => $page
+        ->assertInertia(fn (Assert $page) => $page
             ->where('fund_balance', 0)
         );
 });
@@ -63,7 +66,7 @@ it('calculates fund_balance = payments + adjustments - expenses', function () {
     // fund_balance = 4000 + 200000 - 5000 = 199000
     $this->actingAs($this->admin)
         ->get(route('dashboard'))
-        ->assertInertia(fn ($page) => $page
+        ->assertInertia(fn (Assert $page) => $page
             ->where('fund_balance', 199000)
         );
 });
@@ -76,7 +79,7 @@ it('shows negative fund_balance when expenses exceed income', function () {
     // fund_balance = 0 + 0 - 10000 = -10000
     $this->actingAs($this->admin)
         ->get(route('dashboard'))
-        ->assertInertia(fn ($page) => $page
+        ->assertInertia(fn (Assert $page) => $page
             ->where('fund_balance', -10000)
         );
 });

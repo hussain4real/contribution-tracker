@@ -7,6 +7,8 @@ namespace App\Http\Controllers;
 use App\Enums\TransactionStatus;
 use App\Enums\TransactionType;
 use App\Http\Requests\InitiatePaymentRequest;
+use App\Models\Contribution;
+use App\Models\Family;
 use App\Models\PaystackTransaction;
 use App\Models\User;
 use App\Services\PaymentAllocationService;
@@ -17,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use RuntimeException;
 
 class MemberPaymentController extends Controller
 {
@@ -30,14 +33,13 @@ class MemberPaymentController extends Controller
      */
     public function show(): Response
     {
-        /** @var User $user */
-        $user = auth()->user();
+        $user = $this->authUser();
 
         $pendingContributions = $user->contributions()
             ->incomplete()
             ->oldestFirst()
             ->get()
-            ->map(fn ($contribution) => [
+            ->map(fn (Contribution $contribution): array => [
                 'id' => $contribution->id,
                 'year' => $contribution->year,
                 'month' => $contribution->month,
@@ -49,13 +51,14 @@ class MemberPaymentController extends Controller
             ]);
 
         $family = $user->family;
+        $paystackPublicKey = $this->stringConfig('services.paystack.public_key');
 
         return Inertia::render('Pay/Index', [
             'pending_contributions' => $pendingContributions,
             'category_amount' => $user->getMonthlyAmount() ?? 0,
             'formatted_amount' => $user->category?->formattedAmount() ?? '₦0',
-            'has_paystack' => $family?->hasBankDetails() && config('services.paystack.public_key'),
-            'paystack_public_key' => config('services.paystack.public_key'),
+            'has_paystack' => $family instanceof Family && $family->hasBankDetails() && $paystackPublicKey !== '',
+            'paystack_public_key' => $paystackPublicKey,
         ]);
     }
 
@@ -66,19 +69,20 @@ class MemberPaymentController extends Controller
     {
         $validated = $request->validated();
 
-        /** @var User $user */
-        $user = auth()->user();
+        $user = $this->authUser();
         $family = $user->family;
 
-        if (! $family?->hasBankDetails()) {
+        if (! $family instanceof Family || ! $family->hasBankDetails()) {
             return response()->json([
                 'message' => 'Online payments are not set up for your family. Ask your admin to configure bank details.',
             ], 422);
         }
 
+        $contributionIds = $this->integerList($validated['contribution_ids'] ?? []);
+
         // Calculate total from selected contributions
         $contributions = $user->contributions()
-            ->whereIn('id', $validated['contribution_ids'])
+            ->whereIn('id', $contributionIds)
             ->incomplete()
             ->get();
 
@@ -88,7 +92,7 @@ class MemberPaymentController extends Controller
             ], 422);
         }
 
-        $totalAmount = $contributions->sum('balance');
+        $totalAmount = (int) $contributions->sum(fn (Contribution $contribution): int => $contribution->balance);
 
         if ($totalAmount <= 0) {
             return response()->json([
@@ -102,7 +106,7 @@ class MemberPaymentController extends Controller
         $reference = 'TXN_'.Str::upper(Str::random(16));
 
         // Determine target month (oldest selected contribution)
-        $oldest = $contributions->sortBy([['year', 'asc'], ['month', 'asc']])->first();
+        $oldest = $contributions->sortBy([['year', 'asc'], ['month', 'asc']])->firstOrFail();
 
         // Store transaction locally
         $transaction = PaystackTransaction::create([
@@ -149,13 +153,14 @@ class MemberPaymentController extends Controller
             }
 
             $response = $this->paystack->initializeTransaction($transactionData);
+            $data = $this->responseData($response);
 
             return response()->json([
-                'access_code' => $response['data']['access_code'],
-                'authorization_url' => $response['data']['authorization_url'],
+                'access_code' => $this->requiredString($data, 'access_code'),
+                'authorization_url' => $this->requiredString($data, 'authorization_url'),
                 'reference' => $reference,
             ]);
-        } catch (\RuntimeException $e) {
+        } catch (RuntimeException $e) {
             $transaction->update(['status' => TransactionStatus::Failed]);
 
             return response()->json([
@@ -171,7 +176,7 @@ class MemberPaymentController extends Controller
     {
         $reference = $request->query('reference');
 
-        if (! $reference) {
+        if (! is_string($reference) || $reference === '') {
             return redirect()->route('pay.index')->with('error', 'Invalid payment reference.');
         }
 
@@ -184,7 +189,8 @@ class MemberPaymentController extends Controller
         // Verify with Paystack
         try {
             $response = $this->paystack->verifyTransaction($reference);
-            $status = $response['data']['status'] ?? 'failed';
+            $data = $this->responseData($response);
+            $status = $this->stringValue($data['status'] ?? 'failed');
 
             if ($status === 'success') {
                 // Atomic update to prevent race condition with webhook
@@ -192,24 +198,25 @@ class MemberPaymentController extends Controller
                     ->where('status', TransactionStatus::Pending)
                     ->update([
                         'status' => TransactionStatus::Success,
-                        'paystack_response' => json_encode($response['data']),
+                        'paystack_response' => json_encode($data),
                     ]);
 
                 if ($updated > 0) {
                     $transaction->refresh();
 
                     // Use the transaction's user_id (not session user) to handle shared devices
-                    $member = User::find($transaction->user_id);
+                    $member = User::query()->whereKey($transaction->user_id)->first();
 
                     if ($member) {
                         $metadata = $transaction->metadata ?? [];
-                        $targetYear = $metadata['target_year'] ?? null;
-                        $targetMonth = $metadata['target_month'] ?? null;
+                        $targetYear = $this->nullableInt($metadata['target_year'] ?? null);
+                        $targetMonth = $this->nullableInt($metadata['target_month'] ?? null);
+                        $paidAt = $this->stringValue($data['paid_at'] ?? now()->toDateString());
 
                         $this->allocationService->allocate(
                             member: $member,
                             amount: $transaction->amount,
-                            paidAt: $response['data']['paid_at'] ?? now()->toDateString(),
+                            paidAt: $paidAt !== '' ? $paidAt : now()->toDateString(),
                             recordedBy: $member,
                             notes: "Online payment via Paystack (Ref: {$transaction->reference})",
                             targetYear: $targetYear,
@@ -226,8 +233,78 @@ class MemberPaymentController extends Controller
             }
 
             return redirect()->route('pay.index')->with('error', 'Payment was not successful. Please try again.');
-        } catch (\RuntimeException) {
+        } catch (RuntimeException) {
             return redirect()->route('pay.index')->with('error', 'Could not verify payment. Your payment will be confirmed shortly.');
         }
+    }
+
+    private function stringConfig(string $key): string
+    {
+        $value = config($key);
+
+        return is_string($value) ? $value : '';
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function integerList(mixed $value): array
+    {
+        $items = [];
+
+        foreach (is_array($value) ? $value : [] as $item) {
+            if (is_numeric($item)) {
+                $items[] = (int) $item;
+            }
+        }
+
+        return $items;
+    }
+
+    /**
+     * @param  array<string, mixed>  $response
+     * @return array<string, mixed>
+     */
+    private function responseData(array $response): array
+    {
+        $data = $response['data'] ?? null;
+
+        if (! is_array($data)) {
+            throw new RuntimeException('Paystack response did not include a data payload.');
+        }
+
+        $items = [];
+
+        foreach ($data as $key => $value) {
+            if (is_string($key)) {
+                $items[$key] = $value;
+            }
+        }
+
+        return $items;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function requiredString(array $data, string $key): string
+    {
+        $value = $data[$key] ?? null;
+
+        if (! is_string($value) || $value === '') {
+            throw new RuntimeException("Paystack response did not include {$key}.");
+        }
+
+        return $value;
+    }
+
+    private function stringValue(mixed $value): string
+    {
+        return is_scalar($value) ? (string) $value : '';
+    }
+
+    private function nullableInt(mixed $value): ?int
+    {
+        return is_numeric($value) ? (int) $value : null;
     }
 }

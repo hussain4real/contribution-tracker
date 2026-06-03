@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Enums\MemberCategory;
 use App\Enums\Role;
 use App\Models\Contribution;
@@ -14,8 +16,8 @@ it('exposes payment relationships and query scopes', function () {
     $contribution = Contribution::factory()->forUser($member)->create();
     $payment = Payment::factory()->forContribution($contribution)->recordedBy($recorder)->create();
 
-    expect($recorder->recordedPayments->first()->is($payment))->toBeTrue()
-        ->and($member->payments->first()->is($payment))->toBeTrue()
+    expect($recorder->recordedPayments()->firstOrFail()->is($payment))->toBeTrue()
+        ->and($member->payments()->firstOrFail()->is($payment))->toBeTrue()
         ->and(User::members()->pluck('id')->all())->toContain($member->id)
         ->and(User::payingMembers()->pluck('id')->all())->toContain($member->id)
         ->and(User::withCategory(MemberCategory::Employed)->pluck('id')->all())->toContain($member->id)

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Http\Controllers\NotificationController;
 use App\Models\Family;
 use App\Models\User;
@@ -230,7 +232,7 @@ describe('NotificationController', function () {
         $response = $this->actingAs($user)->patch(route('notifications.read', $notification));
 
         $response->assertRedirect();
-        expect($notification->fresh()->read_at)->not->toBeNull();
+        expect($notification->refresh()->read_at)->not->toBeNull();
     });
 
     it('marks all notifications as read', function () {
@@ -317,7 +319,7 @@ describe('NotificationController', function () {
         $query->shouldReceive('whereRaw')
             ->once()
             ->with(Mockery::on(fn (string $sql): bool => str_contains($sql, $sqlFragment)), ['reminder'])
-            ->andReturnSelf();
+            ->andReturn($query);
 
         $controller = app(NotificationController::class);
         $method = (new ReflectionClass($controller))->getMethod('whereNotificationDataType');

@@ -1,9 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\Family;
 use App\Models\User;
 use App\Models\WhatsAppMessage;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
     config()->set('services.whatsapp', [
@@ -59,7 +63,7 @@ describe('WhatsApp inbox listing', function () {
 
         $response->assertOk();
         $response->assertInertia(
-            fn ($page) => $page->component('Inbox/Index')
+            fn (Assert $page) => $page->component('Inbox/Index')
                 ->has('threads', 1)
                 ->where('threads.0.phone', '2348012345678')
         );
@@ -82,7 +86,7 @@ describe('WhatsApp inbox listing', function () {
         $this->actingAs($admin)
             ->get('/inbox/whatsapp')
             ->assertOk()
-            ->assertInertia(fn ($page) => $page
+            ->assertInertia(fn (Assert $page) => $page
                 ->component('Inbox/Index')
                 ->where('threads.0.member_id', $member->id)
                 ->where('threads.0.member_name', 'Matched Member')
@@ -101,7 +105,7 @@ describe('WhatsApp inbox listing', function () {
         $response = $this->actingAs($admin)->get('/inbox/whatsapp');
 
         $response->assertInertia(
-            fn ($page) => $page->has('threads', 1)
+            fn (Assert $page) => $page->has('threads', 1)
                 ->where('threads.0.message_count', 3)
         );
     });
@@ -128,7 +132,7 @@ describe('WhatsApp inbox thread', function () {
 
         $response->assertOk();
         $response->assertInertia(
-            fn ($page) => $page->component('Inbox/Thread')
+            fn (Assert $page) => $page->component('Inbox/Thread')
                 ->where('phone', '2348012345678')
                 ->has('messages', 2)
                 ->where('canReply', true)
@@ -147,7 +151,7 @@ describe('WhatsApp inbox thread', function () {
 
         $response = $this->actingAs($admin)->get('/inbox/whatsapp/2348012345678');
 
-        $response->assertInertia(fn ($page) => $page->where('canReply', false));
+        $response->assertInertia(fn (Assert $page) => $page->where('canReply', false));
     });
 });
 
@@ -175,9 +179,9 @@ describe('WhatsApp inbox reply', function () {
         $response->assertRedirect();
         $response->assertSessionHas('success');
 
-        Http::assertSent(fn ($request) => str_contains($request->url(), '/messages')
+        Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/messages')
             && $request->data()['type'] === 'text'
-            && $request->data()['text']['body'] === 'Thanks for your message.'
+            && stringValue(resultArray($request->data(), 'text'), 'body') === 'Thanks for your message.'
         );
     });
 

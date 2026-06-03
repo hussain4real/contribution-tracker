@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Enums\MemberCategory;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
@@ -33,7 +35,7 @@ describe('Update Member', function () {
             ->put("/members/{$this->member->id}", [
                 'name' => 'Updated Name',
                 'email' => $this->member->email,
-                'category' => $this->member->category->value,
+                'category' => memberCategoryValue($this->member),
                 'role' => $this->member->role->value,
             ])
             ->assertRedirect();
@@ -89,7 +91,7 @@ describe('Update Member', function () {
             ->put("/members/{$this->member->id}", [
                 'name' => $this->member->name,
                 'email' => 'other@example.com',
-                'category' => $this->member->category->value,
+                'category' => memberCategoryValue($this->member),
                 'role' => $this->member->role->value,
             ])
             ->assertSessionHasErrors(['email']);
@@ -100,7 +102,7 @@ describe('Update Member', function () {
             ->put("/members/{$this->member->id}", [
                 'name' => 'New Name',
                 'email' => $this->member->email, // Same email
-                'category' => $this->member->category->value,
+                'category' => memberCategoryValue($this->member),
                 'role' => $this->member->role->value,
             ])
             ->assertRedirect()
@@ -112,13 +114,13 @@ describe('Update Member', function () {
             ->put("/members/{$this->member->id}", [
                 'name' => $this->member->name,
                 'email' => $this->member->email,
-                'category' => $this->member->category->value,
+                'category' => memberCategoryValue($this->member),
                 'role' => $this->member->role->value,
                 'password' => 'new-password',
                 'password_confirmation' => 'new-password',
             ])
             ->assertRedirect();
 
-        expect(Hash::check('new-password', $this->member->fresh()->password))->toBeTrue();
+        expect(Hash::check('new-password', $this->member->refresh()->password))->toBeTrue();
     });
 });

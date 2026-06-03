@@ -9,6 +9,17 @@ use App\Enums\TransactionType;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property int $id
+ * @property int $amount
+ * @property int $family_id
+ * @property array<string, mixed>|null $metadata
+ * @property array<string, mixed>|null $paystack_response
+ * @property string $reference
+ * @property TransactionStatus $status
+ * @property TransactionType $type
+ * @property int $user_id
+ */
 class PaystackTransaction extends Model
 {
     /**
@@ -43,11 +54,17 @@ class PaystackTransaction extends Model
     // Relationships
     // =========================================================================
 
+    /**
+     * @return BelongsTo<User, $this>
+     */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    /**
+     * @return BelongsTo<Family, $this>
+     */
     public function family(): BelongsTo
     {
         return $this->belongsTo(Family::class);

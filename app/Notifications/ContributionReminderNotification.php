@@ -1,10 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Notifications;
 
 use App\Channels\WhatsAppChannel;
 use App\Channels\WhatsAppMessage;
 use App\Models\Contribution;
+use App\Models\Family;
+use App\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -114,8 +118,8 @@ class ContributionReminderNotification extends Notification implements ShouldQue
             ->markdown('mail.contribution-reminder', [
                 'contribution' => $this->contribution,
                 'type' => $this->type,
-                'userName' => $notifiable->name,
-                'familyName' => $this->contribution->family->name,
+                'userName' => $this->notifiableName($notifiable),
+                'familyName' => $this->familyName(),
             ]);
     }
 
@@ -128,7 +132,7 @@ class ContributionReminderNotification extends Notification implements ShouldQue
     {
         return [
             'contribution_id' => $this->contribution->id,
-            'family_name' => $this->contribution->family->name,
+            'family_name' => $this->familyName(),
             'period_label' => $this->contribution->period_label,
             'amount_owed' => $this->contribution->balance,
             'due_date' => $this->contribution->due_date->toDateString(),
@@ -149,10 +153,10 @@ class ContributionReminderNotification extends Notification implements ShouldQue
         return (new WhatsAppMessage)
             ->template('contribution_reminder', 'en')
             ->body([
-                $notifiable->name,
+                $this->notifiableName($notifiable),
                 $reminderType,
                 $this->contribution->period_label,
-                $this->contribution->family->name,
+                $this->familyName(),
                 $this->contribution->formattedBalance(),
             ]);
     }
@@ -164,7 +168,7 @@ class ContributionReminderNotification extends Notification implements ShouldQue
     {
         $isFollowUp = $this->type === 'follow_up';
         $title = $isFollowUp ? 'Contribution due today' : 'Contribution due soon';
-        $body = "Your {$this->contribution->period_label} contribution for {$this->contribution->family->name} has {$this->contribution->formattedBalance()} remaining.";
+        $body = "Your {$this->contribution->period_label} contribution for {$this->familyName()} has {$this->contribution->formattedBalance()} remaining.";
 
         return (new WebPushMessage)
             ->title($title)
@@ -179,5 +183,17 @@ class ContributionReminderNotification extends Notification implements ShouldQue
                 'type' => $this->type,
             ])
             ->options(['TTL' => 60 * 60 * 24]);
+    }
+
+    private function notifiableName(object $notifiable): string
+    {
+        return $notifiable instanceof User ? $notifiable->name : 'there';
+    }
+
+    private function familyName(): string
+    {
+        $family = $this->contribution->family;
+
+        return $family instanceof Family ? $family->name : 'your family';
     }
 }

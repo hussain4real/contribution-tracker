@@ -1,14 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use App\Models\Contribution;
+use App\Models\Payment;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -30,15 +32,16 @@ class ContributionController extends Controller
      */
     public function my(): Response
     {
-        /** @var User $user */
-        $user = Auth::user();
+        $user = $this->authUser();
 
-        $contributions = Contribution::query()
+        $contributionModels = Contribution::query()
             ->where('user_id', $user->id)
             ->with(['payments.recorder'])
             ->orderByDesc('year')
             ->orderByDesc('month')
-            ->get()
+            ->get();
+
+        $contributions = $contributionModels
             ->map(fn (Contribution $contribution) => [
                 'id' => $contribution->id,
                 'year' => $contribution->year,
@@ -49,17 +52,7 @@ class ContributionController extends Controller
                 'status' => $contribution->status->value,
                 'period_label' => $contribution->period_label,
                 'due_date' => $contribution->due_date->toDateString(),
-                'payments' => $contribution->payments->map(fn ($payment) => [
-                    'id' => $payment->id,
-                    'amount' => $payment->amount,
-                    'paid_at' => $payment->paid_at->toDateString(),
-                    'notes' => $payment->notes,
-                    'recorder' => [
-                        'id' => $payment->recorder->id,
-                        'name' => $payment->recorder->name,
-                    ],
-                    'created_at' => $payment->created_at->toIso8601String(),
-                ]),
+                'payments' => $contribution->payments->map(fn (Payment $payment): array => $this->paymentPayload($payment)),
             ]);
 
         $currentYear = now()->year;
@@ -71,15 +64,15 @@ class ContributionController extends Controller
             ->where('month', $currentMonth)
             ->get();
 
-        $totalExpected = $allContributions->sum('expected_amount');
-        $totalCollected = $allContributions->sum('total_paid');
+        $totalExpected = (int) $allContributions->sum(fn (Contribution $contribution): int => $contribution->expected_amount);
+        $totalCollected = (int) $allContributions->sum(fn (Contribution $contribution): int => $contribution->total_paid);
         $totalOutstanding = $totalExpected - $totalCollected;
         $collectionRate = $totalExpected > 0
             ? round(($totalCollected / $totalExpected) * 100, 1)
             : 0;
 
-        $personalTotalExpected = $contributions->sum('expected_amount');
-        $personalTotalPaid = $contributions->sum('total_paid');
+        $personalTotalExpected = (int) $contributionModels->sum(fn (Contribution $contribution): int => $contribution->expected_amount);
+        $personalTotalPaid = (int) $contributionModels->sum(fn (Contribution $contribution): int => $contribution->total_paid);
         $personalTotalOutstanding = $personalTotalExpected - $personalTotalPaid;
         $personalPaymentRate = $personalTotalExpected > 0
             ? round(($personalTotalPaid / $personalTotalExpected) * 100, 1)
@@ -112,6 +105,7 @@ class ContributionController extends Controller
         $this->authorize('view', $contribution);
 
         $contribution->load(['user', 'payments.recorder']);
+        $contributionUser = $contribution->user;
 
         return Inertia::render('Contributions/Show', [
             'contribution' => [
@@ -124,25 +118,15 @@ class ContributionController extends Controller
                 'status' => $contribution->status->value,
                 'period_label' => $contribution->period_label,
                 'due_date' => $contribution->due_date->toDateString(),
-                'payments' => $contribution->payments->map(fn ($payment) => [
-                    'id' => $payment->id,
-                    'amount' => $payment->amount,
-                    'paid_at' => $payment->paid_at->toDateString(),
-                    'notes' => $payment->notes,
-                    'recorder' => [
-                        'id' => $payment->recorder->id,
-                        'name' => $payment->recorder->name,
-                    ],
-                    'created_at' => $payment->created_at->toIso8601String(),
-                ]),
+                'payments' => $contribution->payments->map(fn (Payment $payment): array => $this->paymentPayload($payment)),
                 'user' => [
-                    'id' => $contribution->user->id,
-                    'name' => $contribution->user->name,
-                    'email' => $contribution->user->email,
-                    'category' => $contribution->user->category?->label(),
+                    'id' => $contributionUser?->id,
+                    'name' => $contributionUser?->name,
+                    'email' => $contributionUser?->email,
+                    'category' => $contributionUser?->category?->label(),
                 ],
             ],
-            'can_record_payment' => $request->user()->canRecordPayments(),
+            'can_record_payment' => $this->user($request)->canRecordPayments(),
         ]);
     }
 
@@ -151,13 +135,12 @@ class ContributionController extends Controller
      */
     public function generate(Request $request): RedirectResponse
     {
-        /** @var User $user */
-        $user = $request->user();
+        $user = $this->user($request);
 
         $this->authorize('create', Contribution::class);
 
-        $year = (int) ($request->input('year', now()->year));
-        $month = (int) ($request->input('month', now()->month));
+        $year = $this->integerInput($request->input('year'), now()->year);
+        $month = $this->integerInput($request->input('month'), now()->month);
 
         Artisan::call('contributions:generate', [
             '--year' => $year,
@@ -168,5 +151,30 @@ class ContributionController extends Controller
         $periodLabel = Carbon::createFromDate($year, $month, 1)->format('F Y');
 
         return back()->with('success', "Contributions generated for {$periodLabel}.");
+    }
+
+    /**
+     * @return array{id: int, amount: int, paid_at: string, notes: string|null, recorder: array{id: int|null, name: string|null}, created_at: string|null}
+     */
+    private function paymentPayload(Payment $payment): array
+    {
+        $recorder = $payment->recorder;
+
+        return [
+            'id' => $payment->id,
+            'amount' => $payment->amount,
+            'paid_at' => $payment->paid_at->toDateString(),
+            'notes' => $payment->notes,
+            'recorder' => [
+                'id' => $recorder?->id,
+                'name' => $recorder?->name,
+            ],
+            'created_at' => $payment->created_at?->toIso8601String(),
+        ];
+    }
+
+    private function integerInput(mixed $value, int $default): int
+    {
+        return is_numeric($value) ? (int) $value : $default;
     }
 }

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Jobs\SyncPaystackSubaccount;
 use App\Models\Family;
 use App\Services\PaystackService;
@@ -12,7 +14,7 @@ it('creates a paystack subaccount when the family does not have one', function (
         'account_number' => '0123456789',
         'paystack_subaccount_code' => null,
     ]);
-    $paystack = Mockery::mock(PaystackService::class);
+    $paystack = typedMock(PaystackService::class);
     $paystack->shouldReceive('createSubaccount')
         ->once()
         ->with([
@@ -35,7 +37,7 @@ it('updates an existing paystack subaccount', function () {
         'account_number' => '0123456789',
         'paystack_subaccount_code' => 'ACCT_existing',
     ]);
-    $paystack = Mockery::mock(PaystackService::class);
+    $paystack = typedMock(PaystackService::class);
     $paystack->shouldReceive('updateSubaccount')
         ->once()
         ->with('ACCT_existing', [
@@ -51,14 +53,48 @@ it('updates an existing paystack subaccount', function () {
 });
 
 it('throws when paystack does not return a subaccount code', function () {
-    $family = Family::factory()->create();
-    $paystack = Mockery::mock(PaystackService::class);
+    $family = Family::factory()->create([
+        'bank_code' => '058',
+        'account_number' => '0123456789',
+    ]);
+    $paystack = typedMock(PaystackService::class);
     $paystack->shouldReceive('createSubaccount')
         ->once()
         ->andReturn(['data' => []]);
 
     (new SyncPaystackSubaccount($family))->handle($paystack);
-})->throws(RuntimeException::class, 'returned no subaccount_code');
+})->throws(RuntimeException::class, 'did not include subaccount_code');
+
+it('skips syncing when bank details are incomplete', function () {
+    $family = Family::factory()->create([
+        'bank_code' => null,
+        'account_number' => '0123456789',
+    ]);
+    $paystack = typedMock(PaystackService::class);
+    $paystack->shouldNotReceive('createSubaccount');
+    $paystack->shouldNotReceive('updateSubaccount');
+
+    Log::shouldReceive('warning')
+        ->once()
+        ->with('Skipping Paystack subaccount sync because bank details are incomplete', [
+            'family_id' => $family->id,
+        ]);
+
+    (new SyncPaystackSubaccount($family))->handle($paystack);
+});
+
+it('throws when paystack does not return a data payload', function () {
+    $family = Family::factory()->create([
+        'bank_code' => '058',
+        'account_number' => '0123456789',
+    ]);
+    $paystack = typedMock(PaystackService::class);
+    $paystack->shouldReceive('createSubaccount')
+        ->once()
+        ->andReturn(['data' => null]);
+
+    (new SyncPaystackSubaccount($family))->handle($paystack);
+})->throws(RuntimeException::class, 'data payload');
 
 it('logs failed job details', function () {
     $family = Family::factory()->create();

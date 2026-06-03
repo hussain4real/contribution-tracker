@@ -1,11 +1,15 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services;
 
 use App\Models\Contribution;
+use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
 use Carbon\Carbon;
+use DateTimeInterface;
 use Illuminate\Support\Collection;
 
 class PaymentAllocationService
@@ -18,23 +22,23 @@ class PaymentAllocationService
      *
      * @param  User  $member  The member making the payment
      * @param  int  $amount  Amount in kobo
-     * @param  \DateTimeInterface|string  $paidAt  When the payment was made
+     * @param  DateTimeInterface|string  $paidAt  When the payment was made
      * @param  User  $recordedBy  Who recorded the payment
      * @param  string|null  $notes  Optional notes
      * @param  int|null  $targetYear  Target year (optional)
      * @param  int|null  $targetMonth  Target month (optional)
-     * @return Collection<Payment> Created payments
+     * @return Collection<int, Payment> Created payments
      */
     public function allocate(
         User $member,
         int $amount,
-        $paidAt,
+        DateTimeInterface|string $paidAt,
         User $recordedBy,
         ?string $notes = null,
         ?int $targetYear = null,
         ?int $targetMonth = null
     ): Collection {
-        $payments = collect();
+        $payments = $this->newPaymentCollection();
         $remainingAmount = $amount;
 
         // Get or create contributions up to target month
@@ -104,7 +108,7 @@ class PaymentAllocationService
      *
      * Following FR-020: Balance-first rule - allocate to oldest incomplete first.
      *
-     * @return Collection<Contribution>
+     * @return Collection<int, Contribution>
      */
     private function getContributionsToAllocate(User $member, ?int $targetYear, ?int $targetMonth): Collection
     {
@@ -163,7 +167,7 @@ class PaymentAllocationService
     private function createContribution(User $member, int $year, int $month): Contribution
     {
         $family = $member->family;
-        $dueDay = $family?->due_day ?? Contribution::DUE_DAY;
+        $dueDay = $family instanceof Family ? $family->due_day : Contribution::DUE_DAY;
 
         return Contribution::create([
             'family_id' => $member->family_id,
@@ -178,18 +182,18 @@ class PaymentAllocationService
     /**
      * Allocate remaining amount to future months.
      *
-     * @return Collection<Payment>
+     * @return Collection<int, Payment>
      */
     private function allocateToFutureMonths(
         User $member,
         int $remainingAmount,
-        $paidAt,
+        DateTimeInterface|string $paidAt,
         User $recordedBy,
         ?string $notes,
         int $targetYear,
         int $targetMonth
     ): Collection {
-        $payments = collect();
+        $payments = $this->newPaymentCollection();
         $targetDate = now()->setYear($targetYear)->setMonth($targetMonth)->startOfMonth();
 
         // Start from target month and work forward if needed
@@ -227,5 +231,13 @@ class PaymentAllocationService
         }
 
         return $payments;
+    }
+
+    /**
+     * @return Collection<int, Payment>
+     */
+    private function newPaymentCollection(): Collection
+    {
+        return (new Payment)->newCollection();
     }
 }

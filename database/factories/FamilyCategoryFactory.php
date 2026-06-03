@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Factories;
 
 use App\Models\Family;
@@ -15,11 +17,12 @@ class FamilyCategoryFactory extends Factory
     /**
      * Define the model's default state.
      *
-     * @return array<string, mixed>
+     * @return array<model-property<FamilyCategory>, mixed>
      */
     public function definition(): array
     {
-        $name = fake()->randomElement(['Employed', 'Unemployed', 'Student', 'Senior', 'Youth']);
+        $names = ['Employed', 'Unemployed', 'Student', 'Senior', 'Youth'];
+        $name = $names[array_rand($names)];
 
         return [
             'family_id' => Family::factory(),

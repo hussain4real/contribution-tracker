@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Http\Middleware\EnsureFamilyIsNotSuspended;
 use App\Http\Middleware\EnsureFamilySubscription;
 use App\Http\Middleware\EnsureUserIsNotArchived;
