@@ -118,13 +118,16 @@ const messageInput = ref('');
 const chatMessages = ref<Message[]>([...props.messages]);
 const currentConversationId = ref<string | null>(props.activeConversationId);
 const messagesContainer = ref<HTMLElement | null>(null);
+const messageTextarea = ref<HTMLTextAreaElement | null>(null);
 const showMobileSidebar = ref(false);
+const MESSAGE_INPUT_MAX_HEIGHT = 192;
 
 // Skip Teleport during SSR to prevent hydration mismatch
 const isMounted = ref(false);
 onMounted(() => {
     isMounted.value = true;
     initSpeechRecognition();
+    resizeMessageTextarea();
 });
 
 // Parsed streaming text (extracted from SSE text_delta events)
@@ -599,6 +602,26 @@ function correctTranscript(text: string): string {
     return correctTranscriptMemberNameCasing(text, props.memberNames);
 }
 
+function resizeMessageTextarea(): void {
+    nextTick(() => {
+        const textarea = messageTextarea.value;
+
+        if (!textarea) {
+            return;
+        }
+
+        textarea.style.height = 'auto';
+        textarea.style.height = `${Math.min(
+            textarea.scrollHeight,
+            MESSAGE_INPUT_MAX_HEIGHT,
+        )}px`;
+        textarea.style.overflowY =
+            textarea.scrollHeight > MESSAGE_INPUT_MAX_HEIGHT
+                ? 'auto'
+                : 'hidden';
+    });
+}
+
 // Voice input state
 const isListening = ref(false);
 const isTranscribing = ref(false);
@@ -1043,6 +1066,8 @@ watch(
         deep: true,
     },
 );
+
+watch(messageInput, () => resizeMessageTextarea());
 
 // Send message
 function sendMessage(): void {
@@ -1663,10 +1688,13 @@ function confirmDelete(): void {
                             />
                         </span>
                     </div>
-                    <div class="flex gap-2">
-                        <Input
+                    <div class="flex items-end gap-2">
+                        <textarea
+                            ref="messageTextarea"
                             v-model="messageInput"
-                            type="text"
+                            rows="1"
+                            aria-label="Ask AI assistant"
+                            data-testid="ai-chat-input"
                             :placeholder="
                                 isTranscribing
                                     ? 'Transcribing...'
@@ -1674,7 +1702,7 @@ function confirmDelete(): void {
                                       ? 'Listening...'
                                       : 'Ask about contributions, expenses, or reports...'
                             "
-                            class="flex-1"
+                            class="max-h-48 min-h-9 flex-1 resize-none rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
                             :class="{
                                 'border-red-400 ring-1 ring-red-400':
                                     isListening,
