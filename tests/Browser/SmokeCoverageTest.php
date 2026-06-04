@@ -195,6 +195,108 @@ it('smokes authenticated family pages', function () {
     navigateAndAssertBrowserSmoke($page, route('passkeys.show'), 'Passkeys');
 });
 
+it('grows the AI chat composer before scrolling', function () {
+    $family = createBrowserFamily();
+    $admin = createBrowserAdmin($family, [
+        'email' => 'ai-composer-browser@example.com',
+    ]);
+
+    Feature::for($admin)->activate(AiAssistant::class);
+    Feature::flushCache();
+
+    $page = loginBrowserAs($admin)
+        ->navigate(route('ai.index'))
+        ->assertSee('Conversations')
+        ->assertNoJavaScriptErrors();
+
+    $result = $page->script(<<<'JS'
+        async () => {
+            const textarea = document.querySelector('[data-testid="ai-chat-input"]');
+
+            if (!(textarea instanceof HTMLTextAreaElement)) {
+                return { found: false };
+            }
+
+            const waitForFrame = () => new Promise((resolve) => {
+                window.requestAnimationFrame(() => resolve(undefined));
+            });
+
+            const measureAfterInput = async (value) => {
+                textarea.value = value;
+                textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                await Promise.resolve();
+                await waitForFrame();
+
+                return {
+                    height: textarea.getBoundingClientRect().height,
+                    overflowY: window.getComputedStyle(textarea).overflowY,
+                };
+            };
+
+            const initial = {
+                height: textarea.getBoundingClientRect().height,
+            };
+            const expanded = await measureAfterInput([
+                'Line one',
+                'Line two',
+                'Line three',
+                'Line four',
+            ].join('\n'));
+            const capped = await measureAfterInput(
+                Array.from(
+                    { length: 40 },
+                    (_, index) => `Line ${index + 1}`,
+                ).join('\n'),
+            );
+
+            return {
+                found: true,
+                tagName: textarea.tagName.toLowerCase(),
+                initialHeight: initial.height,
+                expandedHeight: expanded.height,
+                cappedHeight: capped.height,
+                maxHeight: Number.parseFloat(
+                    window.getComputedStyle(textarea).maxHeight,
+                ),
+                cappedOverflowY: capped.overflowY,
+            };
+        }
+    JS);
+
+    if (! is_array($result)) {
+        throw new RuntimeException('Expected browser script to return composer measurements.');
+    }
+
+    $initialHeight = $result['initialHeight'] ?? null;
+    $expandedHeight = $result['expandedHeight'] ?? null;
+    $cappedHeight = $result['cappedHeight'] ?? null;
+    $maxHeight = $result['maxHeight'] ?? null;
+
+    if (! is_int($initialHeight) && ! is_float($initialHeight)) {
+        throw new RuntimeException('Expected initial composer height to be numeric.');
+    }
+
+    if (! is_int($expandedHeight) && ! is_float($expandedHeight)) {
+        throw new RuntimeException('Expected expanded composer height to be numeric.');
+    }
+
+    if (! is_int($cappedHeight) && ! is_float($cappedHeight)) {
+        throw new RuntimeException('Expected capped composer height to be numeric.');
+    }
+
+    if (! is_int($maxHeight) && ! is_float($maxHeight)) {
+        throw new RuntimeException('Expected composer max height to be numeric.');
+    }
+
+    expect($result['found'] ?? false)->toBeTrue()
+        ->and($result['tagName'] ?? null)->toBe('textarea')
+        ->and((float) $expandedHeight)
+        ->toBeGreaterThan((float) $initialHeight)
+        ->and((float) $cappedHeight)
+        ->toBeLessThanOrEqual((float) $maxHeight + 2.0)
+        ->and($result['cappedOverflowY'] ?? null)->toBe('auto');
+});
+
 it('smokes platform administration pages', function () {
     $family = createBrowserFamily(['name' => 'Platform Smoke Family']);
     $superAdmin = createBrowserSuperAdmin($family, [

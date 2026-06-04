@@ -2,10 +2,14 @@
 
 declare(strict_types=1);
 
+use App\Services\PasskeyAllowedOrigins;
 use Laravel\Fortify\Features;
 
 $configuredAppUrl = config('app.url');
 $appUrl = is_string($configuredAppUrl) ? $configuredAppUrl : 'http://localhost';
+$configuredPasskeyRelyingPartyId = parse_url($appUrl, PHP_URL_HOST);
+$passkeyRelyingPartyId = is_string($configuredPasskeyRelyingPartyId) ? $configuredPasskeyRelyingPartyId : 'localhost';
+$passkeyAllowedOrigins = PasskeyAllowedOrigins::fromAppUrl($appUrl, env('PASSKEYS_ALLOWED_ORIGINS'));
 
 return [
 
@@ -137,8 +141,8 @@ return [
     */
 
     'passkeys' => [
-        'relying_party_id' => parse_url($appUrl, PHP_URL_HOST),
-        'allowed_origins' => [$appUrl],
+        'relying_party_id' => $passkeyRelyingPartyId,
+        'allowed_origins' => $passkeyAllowedOrigins,
         'user_handle_secret' => config('app.key'),
         'timeout' => 60000,
     ],
