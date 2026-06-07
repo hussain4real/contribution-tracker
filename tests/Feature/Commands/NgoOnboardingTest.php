@@ -46,7 +46,7 @@ it('onboards an ngo with qar monthly dues and privileged users', function () {
             'error' => null,
         ]);
 
-    $this->app->instance(WhatsAppService::class, $whatsapp);
+    app()->instance(WhatsAppService::class, $whatsapp);
 
     $this->artisan('ngo:onboard', [
         '--name' => 'Qatar Helping Hands',
@@ -99,17 +99,6 @@ it('onboards an ngo with qar monthly dues and privileged users', function () {
 it('defaults the ngo contribution due day to the twenty eighth', function () {
     Mail::fake();
 
-    $whatsapp = typedMock(WhatsAppService::class);
-    $whatsapp->shouldReceive('sendOnboardingNotice')
-        ->twice()
-        ->andReturn([
-            'success' => true,
-            'wa_message_id' => 'wamid.default',
-            'error' => null,
-        ]);
-
-    $this->app->instance(WhatsAppService::class, $whatsapp);
-
     $this->artisan('ngo:onboard', [
         '--name' => 'Qatar Monthly Circle',
         '--admin-name' => 'Admin User',
@@ -118,7 +107,33 @@ it('defaults the ngo contribution due day to the twenty eighth', function () {
         '--financial-secretary-name' => 'Secretary User',
         '--financial-secretary-email' => 'secretary-default@ngo.test',
         '--financial-secretary-whatsapp' => '+97455550012',
+        '--skip-whatsapp' => true,
     ])->assertSuccessful();
 
     expect(Family::query()->where('name', 'Qatar Monthly Circle')->firstOrFail()->due_day)->toBe(28);
+});
+
+it('does not fail after records are created when whatsapp onboarding delivery fails', function () {
+    Mail::fake();
+
+    config()->set('services.whatsapp.templates.onboarding.name', null);
+
+    $this->artisan('ngo:onboard', [
+        '--name' => 'Qatar Resilience Fund',
+        '--admin-name' => 'Admin Contact',
+        '--admin-email' => 'admin-resilience@ngo.test',
+        '--admin-whatsapp' => '+97455550101',
+        '--financial-secretary-name' => 'Finance Contact',
+        '--financial-secretary-email' => 'finance-resilience@ngo.test',
+        '--financial-secretary-whatsapp' => '+97455550102',
+    ])
+        ->expectsOutputToContain('WhatsApp delivery [admin]: failed')
+        ->expectsOutputToContain('WhatsApp delivery [financial_secretary]: failed')
+        ->assertSuccessful();
+
+    expect(Family::query()->where('name', 'Qatar Resilience Fund')->exists())->toBeTrue()
+        ->and(User::query()->where('email', 'admin-resilience@ngo.test')->exists())->toBeTrue()
+        ->and(User::query()->where('email', 'finance-resilience@ngo.test')->exists())->toBeTrue();
+
+    Mail::assertSent(NgoOnboardingCredentialsMail::class, 2);
 });

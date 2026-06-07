@@ -178,10 +178,15 @@ it('sends onboarding notices without temporary passwords', function () {
     $components = resultArray($template, 'components');
     $bodyComponent = resultArray($components, 0);
     $parameters = resultArray($bodyComponent, 'parameters');
-    $texts = array_map(
-        fn (array $parameter): mixed => $parameter['text'] ?? null,
-        $parameters,
-    );
+    $texts = [];
+
+    foreach ($parameters as $parameter) {
+        if (! is_array($parameter)) {
+            throw new RuntimeException('Expected WhatsApp template parameter to be an array.');
+        }
+
+        $texts[] = stringValue($parameter, 'text');
+    }
 
     expect($message->template_name)->toBe('ngo_onboarding_ready')
         ->and($message->to)->toBe('97455550001')

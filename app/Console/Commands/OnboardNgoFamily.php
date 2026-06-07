@@ -29,8 +29,6 @@ class OnboardNgoFamily extends Command
      */
     public function handle(OnboardNgoFamilyAction $onboard): int
     {
-        $sendWhatsapp = ! (bool) $this->option('skip-whatsapp');
-
         try {
             $result = $onboard->execute([
                 'name' => $this->stringOption('name'),
@@ -42,14 +40,17 @@ class OnboardNgoFamily extends Command
                 'financial_secretary_email' => $this->stringOption('financial-secretary-email'),
                 'financial_secretary_whatsapp' => $this->stringOption('financial-secretary-whatsapp'),
                 'send_email' => ! (bool) $this->option('skip-email'),
-                'send_whatsapp' => $sendWhatsapp,
+                'send_whatsapp' => ! (bool) $this->option('skip-whatsapp'),
             ]);
         } catch (ValidationException $exception) {
             $this->components->error('Could not onboard the NGO. Please fix the validation errors below.');
 
-            foreach ($exception->errors() as $messages) {
+            /** @var array<string, array<int, string>> $errors */
+            $errors = $exception->errors();
+
+            foreach ($errors as $messages) {
                 foreach ($messages as $message) {
-                    $this->line(" - {$message}");
+                    $this->line(sprintf(' - %s', $message));
                 }
             }
 
@@ -76,10 +77,6 @@ class OnboardNgoFamily extends Command
             $this->line("WhatsApp delivery [{$role}]: {$status}{$error}");
         }
 
-        if ($sendWhatsapp && $this->hasFailedWhatsappDelivery($deliveries['whatsapp'])) {
-            return self::FAILURE;
-        }
-
         return self::SUCCESS;
     }
 
@@ -95,19 +92,5 @@ class OnboardNgoFamily extends Command
         $value = $this->option($key);
 
         return is_numeric($value) ? (int) $value : $default;
-    }
-
-    /**
-     * @param  array<string, array{success: bool, wa_message_id: string|null, error: string|null}>  $deliveries
-     */
-    private function hasFailedWhatsappDelivery(array $deliveries): bool
-    {
-        foreach ($deliveries as $delivery) {
-            if (! $delivery['success']) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

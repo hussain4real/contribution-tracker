@@ -17,7 +17,30 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Validation\Validator as LaravelValidator;
 
+/**
+ * @phpstan-type ValidatedNgoInput array{
+ *     name: string,
+ *     due_day: int,
+ *     admin_name: string,
+ *     admin_email: string,
+ *     admin_whatsapp: string,
+ *     financial_secretary_name: string,
+ *     financial_secretary_email: string,
+ *     financial_secretary_whatsapp: string,
+ *     send_email: bool,
+ *     send_whatsapp: bool
+ * }
+ * @phpstan-type WhatsappDelivery array{success: bool, wa_message_id: string|null, error: string|null}
+ * @phpstan-type OnboardingResult array{
+ *     family: Family,
+ *     category: FamilyCategory,
+ *     users: array{admin: User, financial_secretary: User},
+ *     credentials: array{admin: array{email: string, password: string}, financial_secretary: array{email: string, password: string}},
+ *     deliveries: array{email: array<string, bool>, whatsapp: array<string, WhatsappDelivery>}
+ * }
+ */
 class OnboardNgoFamily
 {
     public function __construct(
@@ -26,13 +49,7 @@ class OnboardNgoFamily
 
     /**
      * @param  array<string, mixed>  $input
-     * @return array{
-     *     family: Family,
-     *     category: FamilyCategory,
-     *     users: array{admin: User, financial_secretary: User},
-     *     credentials: array{admin: array{email: string, password: string}, financial_secretary: array{email: string, password: string}},
-     *     deliveries: array{email: array<string, bool>, whatsapp: array<string, array{success: bool, wa_message_id: string|null, error: string|null}>}
-     * }
+     * @return OnboardingResult
      *
      * @throws ValidationException
      */
@@ -48,9 +65,10 @@ class OnboardNgoFamily
         $created = DB::transaction(fn (): array => $this->createTenant($validated, $passwords));
 
         $loginUrl = route('login');
-        $sendEmail = $this->booleanValue($validated['send_email'] ?? true);
-        $sendWhatsapp = $this->booleanValue($validated['send_whatsapp'] ?? true);
+        $sendEmail = $validated['send_email'];
+        $sendWhatsapp = $validated['send_whatsapp'];
 
+        /** @var array{email: array<string, bool>, whatsapp: array<string, WhatsappDelivery>} $deliveries */
         $deliveries = [
             'email' => [],
             'whatsapp' => [],
@@ -121,6 +139,8 @@ class OnboardNgoFamily
      *     send_whatsapp: bool
      * }
      *
+     * @phpstan-return ValidatedNgoInput
+     *
      * @throws ValidationException
      */
     private function validate(array $input): array
@@ -141,7 +161,7 @@ class OnboardNgoFamily
             'financial_secretary_whatsapp.regex' => 'Enter the financial secretary WhatsApp number in international format, e.g. +97412345678.',
         ]);
 
-        $validator->after(function ($validator) use ($input): void {
+        $validator->after(function (LaravelValidator $validator) use ($input): void {
             if (($input['admin_email'] ?? null) === ($input['financial_secretary_email'] ?? null)) {
                 $validator->errors()->add('financial_secretary_email', 'The financial secretary must use a different email address.');
             }
@@ -169,7 +189,7 @@ class OnboardNgoFamily
     }
 
     /**
-     * @param  array<string, mixed>  $input
+     * @param  ValidatedNgoInput  $input
      * @param  array{admin: string, financial_secretary: string}  $passwords
      * @return array{family: Family, category: FamilyCategory, users: array{admin: User, financial_secretary: User}}
      */
@@ -177,7 +197,7 @@ class OnboardNgoFamily
     {
         $family = Family::create([
             'name' => $input['name'],
-            'slug' => Str::slug((string) $input['name']).'-'.Str::lower(Str::random(5)),
+            'slug' => Str::slug($input['name']).'-'.Str::lower(Str::random(5)),
             'currency' => 'QAR',
             'due_day' => $input['due_day'],
         ]);
@@ -193,9 +213,9 @@ class OnboardNgoFamily
         $admin = $this->createUser(
             family: $family,
             role: Role::Admin,
-            name: (string) $input['admin_name'],
-            email: (string) $input['admin_email'],
-            whatsapp: (string) $input['admin_whatsapp'],
+            name: $input['admin_name'],
+            email: $input['admin_email'],
+            whatsapp: $input['admin_whatsapp'],
             password: $passwords['admin'],
             categoryId: null,
         );
@@ -205,9 +225,9 @@ class OnboardNgoFamily
         $financialSecretary = $this->createUser(
             family: $family,
             role: Role::FinancialSecretary,
-            name: (string) $input['financial_secretary_name'],
-            email: (string) $input['financial_secretary_email'],
-            whatsapp: (string) $input['financial_secretary_whatsapp'],
+            name: $input['financial_secretary_name'],
+            email: $input['financial_secretary_email'],
+            whatsapp: $input['financial_secretary_whatsapp'],
             password: $passwords['financial_secretary'],
             categoryId: $category->id,
         );
