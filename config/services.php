@@ -75,6 +75,10 @@ return [
                 'name' => env('WHATSAPP_INVITATION_TEMPLATE_NAME'),
                 'language' => env('WHATSAPP_INVITATION_TEMPLATE_LANGUAGE', 'en'),
             ],
+            'onboarding' => [
+                'name' => env('WHATSAPP_ONBOARDING_TEMPLATE_NAME'),
+                'language' => env('WHATSAPP_ONBOARDING_TEMPLATE_LANGUAGE', 'en'),
+            ],
         ],
     ],
 

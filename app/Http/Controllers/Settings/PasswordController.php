@@ -34,6 +34,7 @@ class PasswordController extends Controller
 
         $user->update([
             'password' => $request->string('password')->toString(),
+            'must_change_password_at' => null,
         ]);
 
         return back();

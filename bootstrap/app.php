@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Http\Middleware\EnsureFamilyIsNotSuspended;
 use App\Http\Middleware\EnsureFamilySubscription;
+use App\Http\Middleware\EnsurePasswordIsNotTemporary;
 use App\Http\Middleware\EnsureUserIsNotArchived;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -39,6 +40,7 @@ return Application::configure(basePath: dirname(__DIR__))
             EnsureUserIsNotArchived::class,
             EnsureFamilyIsNotSuspended::class,
             SetFamilyContext::class,
+            EnsurePasswordIsNotTemporary::class,
         ]);
 
         $middleware->alias([
