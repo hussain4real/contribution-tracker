@@ -87,6 +87,22 @@ it('updates family settings with bank code', function () {
         ->and($family->account_number)->toBe('0045502216');
 });
 
+it('allows family settings due day at the end of the month', function () {
+    $family = Family::factory()->create();
+    $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+
+    $this->actingAs($admin)
+        ->put(route('family.settings.update'), [
+            'name' => $family->name,
+            'currency' => $family->currency,
+            'due_day' => 30,
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success', 'Family settings updated.');
+
+    expect($family->refresh()->due_day)->toBe(30);
+});
+
 it('dispatches paystack subaccount sync only when complete bank details change', function () {
     Queue::fake();
 

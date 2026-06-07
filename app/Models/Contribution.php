@@ -43,6 +43,16 @@ class Contribution extends Model
     public const DUE_DAY = 28;
 
     /**
+     * Resolve the configured due day within the target month.
+     */
+    public static function dueDateForMonth(int $year, int $month, int $dueDay): Carbon
+    {
+        $date = Carbon::createFromDate($year, $month, 1);
+
+        return $date->setDay(max(1, min($dueDay, $date->daysInMonth)));
+    }
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var list<string>
@@ -241,7 +251,7 @@ class Contribution extends Model
             return Carbon::parse($dueDate);
         }
 
-        return Carbon::createFromDate($this->year, $this->month, self::DUE_DAY);
+        return self::dueDateForMonth($this->year, $this->month, self::DUE_DAY);
     }
 
     /**

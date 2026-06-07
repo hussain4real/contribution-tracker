@@ -38,6 +38,12 @@ describe('Contribution Due Date', function () {
         expect($contribution->due_date->month)->toBe(2);
     });
 
+    it('clamps custom due dates to the last day of the target month', function () {
+        expect(Contribution::dueDateForMonth(2027, 2, 30)->toDateString())->toBe('2027-02-28')
+            ->and(Contribution::dueDateForMonth(2028, 2, 30)->toDateString())->toBe('2028-02-29')
+            ->and(Contribution::dueDateForMonth(2027, 4, 31)->toDateString())->toBe('2027-04-30');
+    });
+
     it('due_date works for different months', function () {
         $months = [
             ['month' => 3, 'name' => 'March'],

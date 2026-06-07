@@ -12,7 +12,7 @@ use Illuminate\Validation\ValidationException;
 
 #[Signature('ngo:onboard
     {--name= : NGO / organization name}
-    {--due-day=28 : Monthly contribution due day (1-28)}
+    {--due-day=28 : Monthly contribution due day (1-31, clamped to the last day of shorter months)}
     {--admin-name= : Admin full name}
     {--admin-email= : Admin email address}
     {--admin-whatsapp= : Admin WhatsApp number in international format, e.g. +97412345678}

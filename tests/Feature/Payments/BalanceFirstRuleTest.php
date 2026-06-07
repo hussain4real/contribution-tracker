@@ -4,8 +4,14 @@ declare(strict_types=1);
 
 use App\Enums\PaymentStatus;
 use App\Models\Contribution;
+use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
+use Carbon\Carbon;
+
+afterEach(function () {
+    Carbon::setTestNow();
+});
 
 /**
  * FR-020: Balance-First Rule
@@ -207,5 +213,29 @@ describe('Balance-First Rule (FR-020)', function () {
             ->firstOrFail();
 
         expect($contribution->status)->toBe(PaymentStatus::Paid);
+    });
+
+    it('clamps created target month contribution due date for February', function () {
+        Carbon::setTestNow(Carbon::create(2027, 1, 15, 12));
+
+        $family = Family::factory()->create(['due_day' => 30]);
+        $this->financialSecretary->update(['family_id' => $family->id]);
+        $this->member->update(['family_id' => $family->id]);
+
+        $this->actingAs($this->financialSecretary)
+            ->post(route('payments.store'), [
+                'member_id' => $this->member->id,
+                'amount' => 4000,
+                'paid_at' => now()->toDateString(),
+                'target_year' => 2027,
+                'target_month' => 2,
+            ])
+            ->assertRedirect();
+
+        $contribution = Contribution::forUser($this->member->id)
+            ->forMonth(2027, 2)
+            ->firstOrFail();
+
+        expect($contribution->due_date->toDateString())->toBe('2027-02-28');
     });
 });

@@ -7,7 +7,6 @@ namespace App\Console\Commands;
 use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\User;
-use Carbon\Carbon;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -34,7 +33,7 @@ class GenerateMonthlyContributions extends Command
         $month = (int) $monthOption;
         $familyId = $this->option('family');
 
-        $date = Carbon::createFromDate($year, $month, 1);
+        $date = Contribution::dueDateForMonth($year, $month, 1);
         $periodLabel = $date->format('F Y');
 
         $this->info("Generating contributions for {$periodLabel}...");
@@ -70,7 +69,7 @@ class GenerateMonthlyContributions extends Command
                 ], [
                     'family_id' => $family->id,
                     'expected_amount' => $member->getMonthlyAmount() ?? 0,
-                    'due_date' => Carbon::createFromDate($year, $month, min($dueDay, $date->daysInMonth)),
+                    'due_date' => Contribution::dueDateForMonth($year, $month, $dueDay),
                 ]);
 
                 if ($contribution->wasRecentlyCreated) {
