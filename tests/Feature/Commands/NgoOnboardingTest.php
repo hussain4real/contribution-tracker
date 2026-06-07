@@ -50,7 +50,7 @@ it('onboards an ngo with qar monthly dues and privileged users', function () {
 
     $this->artisan('ngo:onboard', [
         '--name' => 'Qatar Helping Hands',
-        '--due-day' => '25',
+        '--due-day' => '30',
         '--admin-name' => 'Ngo Admin',
         '--admin-email' => 'admin@ngo.test',
         '--admin-whatsapp' => '+97455550001',
@@ -65,7 +65,7 @@ it('onboards an ngo with qar monthly dues and privileged users', function () {
     $financialSecretary = User::query()->where('email', 'finance@ngo.test')->firstOrFail();
 
     expect($family->currency)->toBe('QAR')
-        ->and($family->due_day)->toBe(25)
+        ->and($family->due_day)->toBe(30)
         ->and($family->created_by)->toBe($admin->id)
         ->and($category->name)->toBe('Monthly Dues')
         ->and($category->monthly_amount)->toBe(100)

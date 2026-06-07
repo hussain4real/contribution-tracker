@@ -8,7 +8,6 @@ use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
-use Carbon\Carbon;
 use DateTimeInterface;
 use Illuminate\Support\Collection;
 
@@ -175,7 +174,7 @@ class PaymentAllocationService
             'year' => $year,
             'month' => $month,
             'expected_amount' => $member->getMonthlyAmount() ?? 0,
-            'due_date' => Carbon::createFromDate($year, $month, $dueDay),
+            'due_date' => Contribution::dueDateForMonth($year, $month, $dueDay),
         ]);
     }
 

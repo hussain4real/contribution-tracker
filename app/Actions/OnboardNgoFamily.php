@@ -147,7 +147,7 @@ class OnboardNgoFamily
     {
         $validator = Validator::make($input, [
             'name' => ['required', 'string', 'max:255'],
-            'due_day' => ['nullable', 'integer', 'min:1', 'max:28'],
+            'due_day' => ['nullable', 'integer', 'min:1', 'max:31'],
             'admin_name' => ['required', 'string', 'max:255'],
             'admin_email' => ['required', 'string', 'email', 'max:255', Rule::unique(User::class, 'email')],
             'admin_whatsapp' => ['required', 'string', 'regex:/^\+[1-9]\d{6,14}$/'],

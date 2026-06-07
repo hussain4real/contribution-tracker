@@ -171,6 +171,21 @@ describe('Generate Monthly Contributions Command', function () {
         expect($contribution->due_date->day)->toBe(15);
     });
 
+    it('clamps family due day to the last day of shorter months', function () {
+        $family = Family::factory()->create(['due_day' => 30]);
+        User::factory()->member()->employed()->create(['family_id' => $family->id]);
+
+        $this->artisan('contributions:generate', [
+            '--family' => $family->id,
+            '--year' => 2027,
+            '--month' => 2,
+        ])->assertSuccessful();
+
+        $contribution = Contribution::where('family_id', $family->id)->firstOrFail();
+
+        expect($contribution->due_date->toDateString())->toBe('2027-02-28');
+    });
+
     it('generates for all families when no family specified', function () {
         $family1 = Family::factory()->create();
         $family2 = Family::factory()->create();

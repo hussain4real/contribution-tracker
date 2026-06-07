@@ -60,7 +60,7 @@ class FamilySettingsController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'currency' => ['required', 'string', 'max:10'],
-            'due_day' => ['required', 'integer', 'min:1', 'max:28'],
+            'due_day' => ['required', 'integer', 'min:1', 'max:31'],
             'bank_name' => ['nullable', 'string', 'max:255'],
             'account_name' => ['nullable', 'string', 'max:255'],
             'account_number' => ['nullable', 'string', 'max:50'],

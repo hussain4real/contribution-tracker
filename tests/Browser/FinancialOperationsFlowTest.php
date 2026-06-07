@@ -123,7 +123,7 @@ describe('Financial and family administration flows (Browser)', function () {
             ->assertSee('Family Settings')
             ->fill('name', 'Browser Updated Family')
             ->fill('currency', '₦')
-            ->fill('due_day', '15')
+            ->fill('due_day', '30')
             ->fill('account_name', 'Browser Account')
             ->fill('account_number', '1234567890')
             ->click('Save Changes')
@@ -138,7 +138,7 @@ describe('Financial and family administration flows (Browser)', function () {
         $this->family->refresh();
 
         expect($this->family->name)->toBe('Browser Updated Family')
-            ->and($this->family->due_day)->toBe(15)
+            ->and($this->family->due_day)->toBe(30)
             ->and(FamilyCategory::where('family_id', $this->family->id)
                 ->where('name', 'Browser Senior')
                 ->where('monthly_amount', 7500)
