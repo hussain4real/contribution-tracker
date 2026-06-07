@@ -186,7 +186,7 @@ function cancelEdit(): void {
                                 type="number"
                                 :default-value="String(family.due_day)"
                                 min="1"
-                                max="28"
+                                max="31"
                                 required
                             />
                             <InputError :message="errors.due_day" />
