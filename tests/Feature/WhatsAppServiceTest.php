@@ -22,6 +22,10 @@ beforeEach(function () {
                 'name' => 'family_invitation',
                 'language' => 'en_GB',
             ],
+            'onboarding' => [
+                'name' => 'ngo_onboarding_ready',
+                'language' => 'en',
+            ],
         ],
     ]);
 
@@ -142,6 +146,54 @@ it('fails invitation sends when the invitation template is not configured', func
         'wa_message_id' => null,
         'error' => 'WhatsApp invitation template is not configured.',
     ]);
+});
+
+it('sends onboarding notices without temporary passwords', function () {
+    Http::fake([
+        'graph.facebook.com/v25.0/1038448572690931/messages' => Http::response([
+            'messages' => [['id' => 'wamid.onboarding']],
+        ]),
+    ]);
+
+    $result = app(WhatsAppService::class)->sendOnboardingNotice(
+        to: '+97455550001',
+        name: 'Ngo Admin',
+        familyName: 'Qatar Helping Hands',
+        roleLabel: 'Admin',
+        email: 'admin@ngo.test',
+        loginUrl: 'https://familyfunds.app/login',
+    );
+
+    expect($result['success'])->toBeTrue()
+        ->and($result['wa_message_id'])->toBe('wamid.onboarding');
+
+    $message = WhatsAppMessageModel::query()->where('wa_message_id', 'wamid.onboarding')->firstOrFail();
+    $payload = $message->payload;
+
+    if (! is_array($payload)) {
+        throw new RuntimeException('Expected WhatsApp message payload to be an array.');
+    }
+
+    $template = resultArray($payload, 'template');
+    $components = resultArray($template, 'components');
+    $bodyComponent = resultArray($components, 0);
+    $parameters = resultArray($bodyComponent, 'parameters');
+    $texts = array_map(
+        fn (array $parameter): mixed => $parameter['text'] ?? null,
+        $parameters,
+    );
+
+    expect($message->template_name)->toBe('ngo_onboarding_ready')
+        ->and($message->to)->toBe('97455550001')
+        ->and($template['name'] ?? null)->toBe('ngo_onboarding_ready')
+        ->and($texts)->toBe([
+            'Ngo Admin',
+            'Qatar Helping Hands',
+            'Admin',
+            'admin@ngo.test',
+            'https://familyfunds.app/login',
+        ])
+        ->and($texts)->not->toContain('Temp9Example');
 });
 
 it('records failed api responses without throwing', function () {

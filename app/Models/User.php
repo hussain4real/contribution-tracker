@@ -32,6 +32,7 @@ use NotificationChannels\WebPush\HasPushSubscriptions;
  * @property Carbon|null $created_at
  * @property Carbon|null $archived_at
  * @property Carbon|null $email_verified_at
+ * @property Carbon|null $must_change_password_at
  * @property int|null $family_id
  * @property bool $is_super_admin
  * @property MemberCategory|null $category
@@ -56,6 +57,7 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable,
         'name',
         'email',
         'password',
+        'must_change_password_at',
         'role',
         'category',
         'family_id',
@@ -89,6 +91,7 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable,
     {
         return [
             'email_verified_at' => 'datetime',
+            'must_change_password_at' => 'datetime',
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
             'role' => Role::class,
@@ -253,6 +256,14 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable,
     public function isArchived(): bool
     {
         return $this->archived_at !== null;
+    }
+
+    /**
+     * Check if the user must replace a temporary onboarding password.
+     */
+    public function mustChangePassword(): bool
+    {
+        return $this->must_change_password_at !== null;
     }
 
     /**

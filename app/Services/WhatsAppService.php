@@ -95,6 +95,39 @@ class WhatsAppService
     }
 
     /**
+     * Send an NGO onboarding notice using a pre-approved WhatsApp template.
+     *
+     * @return array{success: bool, wa_message_id: ?string, error: ?string}
+     */
+    public function sendOnboardingNotice(
+        string $to,
+        string $name,
+        string $familyName,
+        string $roleLabel,
+        string $email,
+        string $loginUrl,
+    ): array {
+        $template = $this->onboardingTemplate();
+
+        if ($template === null) {
+            Log::warning('WhatsApp onboarding notice template is not configured');
+
+            return [
+                'success' => false,
+                'wa_message_id' => null,
+                'error' => 'WhatsApp onboarding notice template is not configured.',
+            ];
+        }
+
+        return $this->sendTemplate(
+            to: $this->normalisePhone($to),
+            templateName: $template['name'],
+            bodyParameters: [$name, $familyName, $roleLabel, $email, $loginUrl],
+            languageCode: $template['language'],
+        );
+    }
+
+    /**
      * Send a plain text message. Only valid inside the 24h customer service window.
      *
      * @return array{success: bool, wa_message_id: ?string, error: ?string}
@@ -244,6 +277,25 @@ class WhatsAppService
     private function invitationTemplate(): ?array
     {
         $config = config('services.whatsapp.templates.invitation');
+
+        return $this->templateConfig($config);
+    }
+
+    /**
+     * @return array{name: string, language: string}|null
+     */
+    private function onboardingTemplate(): ?array
+    {
+        $config = config('services.whatsapp.templates.onboarding');
+
+        return $this->templateConfig($config);
+    }
+
+    /**
+     * @return array{name: string, language: string}|null
+     */
+    private function templateConfig(mixed $config): ?array
+    {
         $config = is_array($config) ? $config : [];
 
         $name = is_string($config['name'] ?? null) ? trim($config['name']) : '';
