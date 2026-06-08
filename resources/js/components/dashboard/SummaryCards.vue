@@ -7,6 +7,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { useCurrencyFormatter } from '@/lib/currency';
 import type { MonthlyBreakdown } from '@/types/dashboard';
 import { Link } from '@inertiajs/vue3';
 import { ref } from 'vue';
@@ -29,13 +30,7 @@ const emit = defineEmits<{
 
 const showBreakdownModal = ref(false);
 
-// Format currency in Naira
-function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-NG', {
-        style: 'currency',
-        currency: 'NGN',
-    }).format(amount);
-}
+const { formatCurrency } = useCurrencyFormatter();
 
 function formatMonth(month: number, year: number): string {
     return new Date(year, month - 1).toLocaleDateString('en-NG', {

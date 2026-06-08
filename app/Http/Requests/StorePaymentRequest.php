@@ -48,7 +48,7 @@ class StorePaymentRequest extends FormRequest
 
             if ($memberId !== null) {
                 $member = User::query()->find($memberId);
-                if ($member && ! $member->category) {
+                if ($member && $member->getMonthlyAmount() === null) {
                     $validator->errors()->add('member_id', 'This member does not have a contribution category assigned.');
                 }
             }
@@ -85,8 +85,8 @@ class StorePaymentRequest extends FormRequest
             'member_id.required' => 'Please select a family member.',
             'member_id.exists' => 'The selected member does not exist.',
             'amount.required' => 'Please enter the payment amount.',
-            'amount.integer' => 'The amount must be a whole number in Naira.',
-            'amount.min' => 'The amount must be at least ₦5.',
+            'amount.integer' => 'The amount must be a whole number.',
+            'amount.min' => 'The amount must be at least 1.',
             'paid_at.required' => 'Please enter the payment date.',
             'paid_at.date' => 'Please enter a valid date.',
         ];

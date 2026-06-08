@@ -8,6 +8,7 @@ import HeadingSmall from '@/components/HeadingSmall.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useCurrencyFormatter } from '@/lib/currency';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
@@ -36,7 +37,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
     pending_contributions: () => [],
     category_amount: 0,
-    formatted_amount: '₦0',
+    formatted_amount: '',
     has_paystack: false,
     paystack_public_key: '',
 });
@@ -48,10 +49,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const selectedIds = ref<number[]>([]);
 const processing = ref(false);
-
-const formatAmount = (amount: number): string => {
-    return `₦${amount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
-};
+const { formatCurrency: formatAmount } = useCurrencyFormatter();
 
 const totalSelected = computed(() => {
     return props.pending_contributions

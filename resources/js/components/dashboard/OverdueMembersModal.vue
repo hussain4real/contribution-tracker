@@ -8,12 +8,14 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { useCurrencyFormatter } from '@/lib/currency';
 import { Link } from '@inertiajs/vue3';
 
 export interface OverdueMember {
     id: number;
     name: string;
-    category: string;
+    category: string | null;
+    category_label: string | null;
     month: number;
     year: number;
     expected_amount: number;
@@ -28,12 +30,7 @@ defineProps<{
 
 const isOpen = defineModel<boolean>('isOpen');
 
-function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-NG', {
-        style: 'currency',
-        currency: 'NGN',
-    }).format(amount);
-}
+const { formatCurrency } = useCurrencyFormatter();
 
 function formatMonth(month: number, year: number): string {
     return new Date(year, month - 1).toLocaleDateString('en-NG', {
@@ -42,7 +39,11 @@ function formatMonth(month: number, year: number): string {
     });
 }
 
-function formatCategory(category: string): string {
+function formatCategory(category: string | null): string {
+    if (!category) {
+        return 'Contribution';
+    }
+
     return category.charAt(0).toUpperCase() + category.slice(1);
 }
 
@@ -111,14 +112,21 @@ const categoryColors: Record<string, string> = {
                                     {{ member.name }}
                                 </span>
                                 <span
-                                    v-if="member.category"
+                                    v-if="
+                                        member.category_label || member.category
+                                    "
                                     class="rounded-full px-2 py-0.5 text-xs font-medium"
                                     :class="
-                                        categoryColors[member.category] ??
+                                        (member.category
+                                            ? categoryColors[member.category]
+                                            : null) ??
                                         'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300'
                                     "
                                 >
-                                    {{ formatCategory(member.category) }}
+                                    {{
+                                        member.category_label ??
+                                        formatCategory(member.category)
+                                    }}
                                 </span>
                             </div>
                             <div

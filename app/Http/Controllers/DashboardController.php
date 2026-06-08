@@ -35,7 +35,7 @@ class DashboardController extends Controller
         // Eager-load payments (used for sum calculations) and user (for member filtering)
         $allContributions = Contribution::query()
             ->where('family_id', $user->family_id)
-            ->with(['user', 'payments.recorder'])
+            ->with(['user.familyCategory:id,name,monthly_amount', 'payments.recorder'])
             ->whereHas('user', fn ($q) => $q->whereNull('archived_at'))
             ->get();
 
@@ -47,7 +47,7 @@ class DashboardController extends Controller
         $membersNeedingContributions = User::query()
             ->where('family_id', $user->family_id)
             ->active()
-            ->whereNotNull('category')
+            ->payingMembers()
             ->whereNotIn('id', $membersWithContributions)
             ->exists();
 
@@ -141,6 +141,7 @@ class DashboardController extends Controller
                 'id' => $member?->id,
                 'name' => $member?->name,
                 'category' => $member?->category?->value,
+                'category_label' => $member?->familyCategory->name ?? $member?->category?->label(),
                 'expected_amount' => $contribution->expected_amount,
                 'total_paid' => $totalPaid,
                 'current_month_status' => $contribution->status->value,
@@ -171,7 +172,7 @@ class DashboardController extends Controller
                     'amount' => $payment->amount,
                     'paid_at' => $payment->paid_at->toDateString(),
                     'member_name' => $contribution->user instanceof User ? $contribution->user->name : 'Unknown',
-                    'category' => $contribution->user?->category,
+                    'category' => $contribution->user?->familyCategory->name ?? $contribution->user?->category?->label(),
                     'recorded_by' => $payment->recorder?->name,
                     'month' => $contribution->month,
                     'year' => $contribution->year,
@@ -261,6 +262,7 @@ class DashboardController extends Controller
                 'id' => $contribution->user?->id,
                 'name' => $contribution->user instanceof User ? $contribution->user->name : 'Unknown',
                 'category' => $contribution->user?->category?->value,
+                'category_label' => $contribution->user?->familyCategory->name ?? $contribution->user?->category?->label(),
                 'month' => $contribution->month,
                 'year' => $contribution->year,
                 'expected_amount' => $contribution->expected_amount,

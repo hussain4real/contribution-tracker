@@ -84,7 +84,7 @@ class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasProvid
         - NEVER set confirmed=true on the first call. Always preview first.
 
         Guidelines:
-        - All monetary values are in {$currency} (Nigerian Naira).
+        - All monetary values are in {$currency}.
         - Use the available sub-agents to fetch real-time data before answering financial questions.
         - Each sub-agent runs in isolation and does not receive this parent conversation history, so every delegated task must be clear and self-contained.
         - Include the user's role, family context, period, requested action details, and confirmation status when delegating.

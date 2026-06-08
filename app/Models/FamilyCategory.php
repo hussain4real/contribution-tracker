@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\CurrencyFormatter;
 use Database\Factories\FamilyCategoryFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -84,7 +85,7 @@ class FamilyCategory extends Model
      */
     public function getFormattedAmountAttribute(): string
     {
-        return '₦'.number_format($this->monthly_amount, 0);
+        return CurrencyFormatter::format($this->monthly_amount, $this->family?->currency, 0);
     }
 
     /**

@@ -9,6 +9,7 @@ use App\Http\Requests\StorePaymentRequest;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\PaymentAllocationService;
+use App\Support\CurrencyFormatter;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -31,7 +32,8 @@ class PaymentController extends Controller
         $members = User::query()
             ->where('family_id', $currentUser->family_id)
             ->whereNull('archived_at')
-            ->whereNotNull('category')
+            ->payingMembers()
+            ->with('familyCategory:id,name,monthly_amount')
             ->orderBy('name')
             ->get()
             ->map(fn (User $member): array => [
@@ -39,7 +41,7 @@ class PaymentController extends Controller
                 'name' => $member->name,
                 'email' => $member->email,
                 'category' => $member->category?->value,
-                'category_label' => $member->category?->label(),
+                'category_label' => $member->familyCategory->name ?? $member->category?->label(),
                 'monthly_amount' => $member->getMonthlyAmount() ?? 0,
             ]);
 
@@ -54,6 +56,7 @@ class PaymentController extends Controller
     public function create(User $member): Response
     {
         $this->authorize('create', Payment::class);
+        $currency = $member->family->currency ?? $this->authUser()->family->currency ?? '₦';
 
         // Get member's pending (incomplete) contributions
         $pendingContributions = $member->contributions()
@@ -72,13 +75,19 @@ class PaymentController extends Controller
             ]);
 
         return Inertia::render('Payments/Create', [
-            'member' => $member->only(['id', 'name', 'email', 'category']),
+            'member' => [
+                'id' => $member->id,
+                'name' => $member->name,
+                'email' => $member->email,
+                'category' => $member->category?->value,
+                'category_label' => $member->familyCategory->name ?? $member->category?->label(),
+            ],
             'pending_contributions' => $pendingContributions,
-            'category_amount' => $member->category?->monthlyAmount(),
-            'formatted_amount' => $member->category?->formattedAmount(),
+            'category_amount' => $member->getMonthlyAmount() ?? 0,
+            'formatted_amount' => CurrencyFormatter::format($member->getMonthlyAmount() ?? 0, $currency),
             'categories' => collect(MemberCategory::cases())->map(fn ($cat) => [
                 'value' => $cat->value,
-                'label' => $cat->labelWithAmount(),
+                'label' => "{$cat->label()} (".CurrencyFormatter::format($cat->monthlyAmount(), $currency, 0).'/month)',
             ]),
         ]);
     }
@@ -104,7 +113,8 @@ class PaymentController extends Controller
         );
 
         $totalAllocated = (int) $payments->sum(fn (Payment $payment): int => $payment->amount);
-        $formattedAmount = '₦'.number_format($totalAllocated, 2);
+        $currency = $recordedBy->family->currency ?? $member->family->currency ?? '₦';
+        $formattedAmount = CurrencyFormatter::format($totalAllocated, $currency);
 
         return redirect()->route('dashboard')
             ->with('success', "Payment of {$formattedAmount} recorded for {$member->name}.");

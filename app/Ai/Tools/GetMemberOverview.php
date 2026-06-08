@@ -31,7 +31,7 @@ class GetMemberOverview implements Tool
         $members = User::query()
             ->where('family_id', $this->user->family_id)
             ->active()
-            ->with('familyCategory:id,name')
+            ->with('familyCategory:id,name,monthly_amount')
             ->orderBy('name')
             ->get();
 

@@ -214,14 +214,17 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable,
     }
 
     /**
-     * Scope to users who can pay (have a category).
+     * Scope to users who can pay (have a contribution category).
      *
      * @param  Builder<User>  $query
      * @return Builder<User>
      */
     public function scopePayingMembers(Builder $query): Builder
     {
-        return $query->whereNotNull('category');
+        return $query->where(function (Builder $query): void {
+            $query->whereNotNull('category')
+                ->orWhereNotNull('family_category_id');
+        });
     }
 
     /**
@@ -339,7 +342,7 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable,
     }
 
     /**
-     * Get the monthly contribution amount in Naira for this user.
+     * Get the monthly contribution amount for this user.
      */
     public function getMonthlyAmount(): ?int
     {

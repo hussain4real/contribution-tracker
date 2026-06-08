@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Enums\PaymentStatus;
 use App\Models\Contribution;
+use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
 use Carbon\Carbon;
@@ -57,4 +58,20 @@ it('uses eager loaded payments for total paid and explicit due dates when presen
         ->and($loaded->isPaid())->toBeTrue()
         ->and($loaded->canAcceptPayment())->toBeFalse()
         ->and($loaded->due_date->toDateString())->toBe('2026-05-20');
+});
+
+it('formats contribution amounts with the family currency', function () {
+    $family = Family::factory()->create(['currency' => 'QAR']);
+    $member = User::factory()->member()->employed()->create([
+        'family_id' => $family->id,
+    ]);
+    $contribution = Contribution::factory()->forUser($member)->create([
+        'family_id' => $family->id,
+        'expected_amount' => 4000,
+    ]);
+    Payment::factory()->forContribution($contribution)->create(['amount' => 1000]);
+
+    expect($contribution->formattedExpectedAmount())->toBe('QAR 4,000.00')
+        ->and($contribution->formattedTotalPaid())->toBe('QAR 1,000.00')
+        ->and($contribution->formattedBalance())->toBe('QAR 3,000.00');
 });

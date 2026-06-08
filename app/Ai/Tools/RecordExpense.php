@@ -7,6 +7,7 @@ namespace App\Ai\Tools;
 use App\Models\Expense;
 use App\Models\Family;
 use App\Models\User;
+use App\Support\CurrencyFormatter;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
@@ -20,7 +21,7 @@ class RecordExpense implements Tool
      */
     public function description(): string
     {
-        return 'Records a new expense for the family. Requires amount (whole number in Naira), description, and date. Always call without confirmed=true first to preview the action.';
+        return 'Records a new expense for the family. Requires amount (whole number), description, and date. Always call without confirmed=true first to preview the action.';
     }
 
     /**
@@ -38,7 +39,7 @@ class RecordExpense implements Tool
         $confirmed = ($request['confirmed'] ?? false) === true;
 
         if (! $amount || $amount < 1) {
-            return json_encode(['error' => 'Amount is required and must be at least ₦1.'], JSON_THROW_ON_ERROR);
+            return json_encode(['error' => 'Amount is required and must be at least 1.'], JSON_THROW_ON_ERROR);
         }
 
         if (! $description) {
@@ -47,7 +48,7 @@ class RecordExpense implements Tool
 
         $family = $this->user->family;
         $currency = $family instanceof Family ? $family->currency : '₦';
-        $formattedAmount = $currency.number_format($amount, 2);
+        $formattedAmount = CurrencyFormatter::format($amount, $currency);
 
         if (! $confirmed) {
             return json_encode([

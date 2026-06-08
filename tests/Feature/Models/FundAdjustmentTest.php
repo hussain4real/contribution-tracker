@@ -22,6 +22,16 @@ it('casts and formats fund adjustment values and exposes relationships', functio
         ->and($adjustment->recorder()->firstOrFail()->is($recorder))->toBeTrue();
 });
 
+it('formats fund adjustments with the family currency', function () {
+    $family = Family::factory()->create(['currency' => 'QAR']);
+    $recorder = User::factory()->admin()->create(['family_id' => $family->id]);
+    $adjustment = FundAdjustment::factory()->recordedBy($recorder)->create([
+        'amount' => 450,
+    ]);
+
+    expect($adjustment->formatted_amount)->toBe('QAR 450.00');
+});
+
 it('orders fund adjustments by latest first', function () {
     $older = FundAdjustment::factory()->create(['recorded_at' => '2026-05-01 09:00:00']);
     $newer = FundAdjustment::factory()->create(['recorded_at' => '2026-05-11 09:00:00']);

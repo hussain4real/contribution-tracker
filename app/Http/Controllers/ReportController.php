@@ -52,8 +52,8 @@ class ReportController extends Controller
         $members = User::query()
             ->where('family_id', $familyId)
             ->whereNull('archived_at')
-            ->whereNotNull('category')
-            ->with('contributions.payments')
+            ->payingMembers()
+            ->with(['contributions.payments', 'familyCategory:id,name,monthly_amount'])
             ->paginate(15)
             ->through(function (User $member) use ($year, $month): array {
                 $contribution = $member->contributions->first(

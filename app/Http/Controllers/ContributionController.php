@@ -104,7 +104,7 @@ class ContributionController extends Controller
     {
         $this->authorize('view', $contribution);
 
-        $contribution->load(['user', 'payments.recorder']);
+        $contribution->load(['user.familyCategory:id,name,monthly_amount', 'payments.recorder']);
         $contributionUser = $contribution->user;
 
         return Inertia::render('Contributions/Show', [
@@ -123,7 +123,7 @@ class ContributionController extends Controller
                     'id' => $contributionUser?->id,
                     'name' => $contributionUser?->name,
                     'email' => $contributionUser?->email,
-                    'category' => $contributionUser?->category?->label(),
+                    'category' => $contributionUser?->familyCategory->name ?? $contributionUser?->category?->label(),
                 ],
             ],
             'can_record_payment' => $this->user($request)->canRecordPayments(),

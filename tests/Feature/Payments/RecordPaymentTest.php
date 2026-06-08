@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Enums\PaymentStatus;
 use App\Models\Contribution;
 use App\Models\Family;
+use App\Models\FamilyCategory;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\PaymentAllocationService;
@@ -57,6 +58,65 @@ describe('Record Full Payment', function () {
             );
     });
 
+    it('financial secretary can view custom category members for recording payments', function () {
+        $family = Family::factory()->create(['currency' => 'QAR']);
+        $monthlyDues = FamilyCategory::factory()->create([
+            'family_id' => $family->id,
+            'name' => 'Monthly Dues',
+            'monthly_amount' => 100,
+        ]);
+        $financialSecretary = User::factory()->financialSecretary()->create([
+            'family_id' => $family->id,
+            'category' => null,
+        ]);
+        $member = User::factory()->member()->create([
+            'family_id' => $family->id,
+            'category' => null,
+            'family_category_id' => $monthlyDues->id,
+            'name' => 'Jamila Ladi Hussain',
+        ]);
+
+        $this->actingAs($financialSecretary)
+            ->get(route('payments.index'))
+            ->assertSuccessful()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Payments/Index')
+                ->has('members', 1)
+                ->where('members.0.id', $member->id)
+                ->where('members.0.category_label', 'Monthly Dues')
+                ->where('members.0.monthly_amount', 100)
+            );
+    });
+
+    it('uses the family currency and actual monthly amount on payment forms', function () {
+        $family = Family::factory()->create(['currency' => 'QAR']);
+        $monthlyDues = FamilyCategory::factory()->create([
+            'family_id' => $family->id,
+            'name' => 'Monthly Dues',
+            'monthly_amount' => 100,
+        ]);
+        $financialSecretary = User::factory()->financialSecretary()->create([
+            'family_id' => $family->id,
+            'category' => null,
+        ]);
+        $member = User::factory()->member()->create([
+            'family_id' => $family->id,
+            'category' => null,
+            'family_category_id' => $monthlyDues->id,
+        ]);
+
+        $this->actingAs($financialSecretary)
+            ->get(route('payments.create', $member))
+            ->assertSuccessful()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Payments/Create')
+                ->where('member.category_label', 'Monthly Dues')
+                ->where('category_amount', 100)
+                ->where('formatted_amount', 'QAR 100.00')
+                ->where('categories.0.label', 'Employed (QAR 4,000/month)')
+            );
+    });
+
     it('financial secretary can record a full payment', function () {
         $contribution = Contribution::factory()
             ->forUser($this->member)
@@ -80,6 +140,40 @@ describe('Record Full Payment', function () {
         ]);
 
         expect($contribution->refresh()->status)->toBe(PaymentStatus::Paid);
+    });
+
+    it('uses the family currency in the payment recorded flash message', function () {
+        $family = Family::factory()->create(['currency' => 'QAR']);
+        $monthlyDues = FamilyCategory::factory()->create([
+            'family_id' => $family->id,
+            'name' => 'Monthly Dues',
+            'monthly_amount' => 100,
+        ]);
+        $financialSecretary = User::factory()->financialSecretary()->create([
+            'family_id' => $family->id,
+        ]);
+        $member = User::factory()->member()->create([
+            'family_id' => $family->id,
+            'category' => null,
+            'family_category_id' => $monthlyDues->id,
+        ]);
+
+        Contribution::factory()
+            ->forUser($member)
+            ->currentMonth()
+            ->create([
+                'family_id' => $family->id,
+                'expected_amount' => 100,
+            ]);
+
+        $this->actingAs($financialSecretary)
+            ->post(route('payments.store'), [
+                'member_id' => $member->id,
+                'amount' => 100,
+                'paid_at' => now()->toDateString(),
+            ])
+            ->assertRedirect(route('dashboard'))
+            ->assertSessionHas('success', "Payment of QAR 100.00 recorded for {$member->name}.");
     });
 
     it('super admin can record a full payment', function () {

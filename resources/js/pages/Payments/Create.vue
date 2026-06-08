@@ -14,6 +14,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useCurrencyFormatter } from '@/lib/currency';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
 import { Form, Head } from '@inertiajs/vue3';
@@ -23,7 +24,8 @@ interface Member {
     id: number;
     name: string;
     email: string;
-    category: string;
+    category: string | null;
+    category_label: string | null;
 }
 
 interface PendingContribution {
@@ -68,13 +70,8 @@ const amount = ref<string>('');
 const selectedMonth = ref<string>('');
 const paidAt = ref<string>(new Date().toISOString().split('T')[0]);
 const notes = ref<string>('');
+const { currency, formatCurrency: formatAmount } = useCurrencyFormatter();
 
-// Helper to format amount in Naira
-const formatAmount = (amount: number): string => {
-    return `₦${amount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
-};
-
-// Quick amount buttons (values in Naira)
 const quickAmounts = computed(() => [
     { label: '1 Month', value: props.category_amount },
     { label: '2 Months', value: props.category_amount * 2 },
@@ -107,7 +104,7 @@ const targetMonth = computed(() => {
         <div class="mx-auto max-w-2xl space-y-6 p-4">
             <HeadingSmall
                 :title="`Record Payment for ${member.name}`"
-                :description="`${member.category} category - ${formatted_amount}/month`"
+                :description="`${member.category_label ?? member.category ?? 'Contribution'} - ${formatted_amount}/month`"
             />
 
             <!-- Pending Contributions Summary -->
@@ -174,13 +171,13 @@ const targetMonth = computed(() => {
 
                 <!-- Amount Field -->
                 <div class="grid gap-2">
-                    <Label for="amount">Amount (₦)</Label>
+                    <Label for="amount">Amount ({{ currency }})</Label>
                     <Input
                         id="amount"
                         type="number"
                         name="amount"
                         v-model="amount"
-                        placeholder="Enter amount in Naira"
+                        :placeholder="`Enter amount in ${currency}`"
                         required
                         min="1"
                         step="1"
@@ -206,11 +203,7 @@ const targetMonth = computed(() => {
                                 amount === quick.value.toString(),
                         }"
                     >
-                        {{ quick.label }} (₦{{
-                            quick.value.toLocaleString('en-NG', {
-                                minimumFractionDigits: 2,
-                            })
-                        }})
+                        {{ quick.label }} ({{ formatAmount(quick.value) }})
                     </Button>
                 </div>
 

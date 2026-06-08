@@ -101,7 +101,7 @@ class PlatformAdminController extends Controller
     public function users(): Response
     {
         $users = User::query()
-            ->with('family')
+            ->with(['family', 'familyCategory:id,name,monthly_amount'])
             ->latest()
             ->paginate(20)
             ->through(fn (User $user) => [
@@ -109,7 +109,7 @@ class PlatformAdminController extends Controller
                 'name' => $user->name,
                 'email' => $user->email,
                 'role' => $user->role->label(),
-                'category' => $user->category?->label(),
+                'category' => $user->familyCategory->name ?? $user->category?->label(),
                 'family_name' => $user->family?->name,
                 'family_id' => $user->family_id,
                 'is_active' => $user->archived_at === null,
@@ -229,7 +229,7 @@ class PlatformAdminController extends Controller
     public function exportUsers(): StreamedResponse
     {
         $users = User::query()
-            ->with('family')
+            ->with(['family', 'familyCategory:id,name,monthly_amount'])
             ->latest()
             ->get();
 
@@ -250,7 +250,7 @@ class PlatformAdminController extends Controller
                     $user->email,
                     $user->family instanceof Family ? $user->family->name : '',
                     $user->role->label(),
-                    $user->category?->label() ?? '',
+                    $user->familyCategory->name ?? $user->category?->label() ?? '',
                     $user->archived_at === null ? 'Active' : 'Archived',
                     $user->created_at?->toDateString(),
                 ]);

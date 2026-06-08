@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\PaymentStatus;
+use App\Support\CurrencyFormatter;
 use Carbon\Carbon;
 use Database\Factories\ContributionFactory;
 use DateTimeInterface;
@@ -305,7 +306,7 @@ class Contribution extends Model
      */
     public function formattedExpectedAmount(): string
     {
-        return '₦'.number_format($this->expected_amount, 2);
+        return CurrencyFormatter::format($this->expected_amount, $this->family?->currency);
     }
 
     /**
@@ -313,7 +314,7 @@ class Contribution extends Model
      */
     public function formattedTotalPaid(): string
     {
-        return '₦'.number_format($this->total_paid, 2);
+        return CurrencyFormatter::format($this->total_paid, $this->family?->currency);
     }
 
     /**
@@ -321,6 +322,6 @@ class Contribution extends Model
      */
     public function formattedBalance(): string
     {
-        return '₦'.number_format($this->balance, 2);
+        return CurrencyFormatter::format($this->balance, $this->family?->currency);
     }
 }

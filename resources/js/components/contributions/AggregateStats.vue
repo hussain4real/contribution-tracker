@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useCurrencyFormatter } from '@/lib/currency';
 defineProps<{
     totalExpected: number;
     totalCollected: number;
@@ -7,13 +8,7 @@ defineProps<{
     periodLabel?: string;
 }>();
 
-// Format currency in Naira
-function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-NG', {
-        style: 'currency',
-        currency: 'NGN',
-    }).format(amount);
-}
+const { formatCurrency } = useCurrencyFormatter();
 </script>
 
 <template>

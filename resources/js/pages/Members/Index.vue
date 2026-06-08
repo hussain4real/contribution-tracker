@@ -7,6 +7,7 @@ import {
 import MemberListItem from '@/components/contributions/MemberListItem.vue';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useCurrencyFormatter } from '@/lib/currency';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import {
@@ -62,12 +63,7 @@ const page = usePage();
 const subscription = computed(() => page.props.subscription);
 const canAddMore = computed(() => subscription.value?.can_add_members ?? true);
 
-function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-NG', {
-        style: 'currency',
-        currency: 'NGN',
-    }).format(amount);
-}
+const { formatCurrency } = useCurrencyFormatter();
 </script>
 
 <template>

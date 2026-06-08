@@ -6,11 +6,13 @@ use App\Enums\TransactionStatus;
 use App\Enums\TransactionType;
 use App\Models\Contribution;
 use App\Models\Family;
+use App\Models\FamilyCategory;
 use App\Models\Payment;
 use App\Models\PaystackTransaction;
 use App\Models\PlatformPlan;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
+use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
     config([
@@ -42,6 +44,29 @@ it('shows the pay page for authenticated member', function () {
     $this->actingAs($member)
         ->get(route('pay.index'))
         ->assertSuccessful();
+});
+
+it('shows the member monthly amount with the family currency', function () {
+    $family = Family::factory()->create(['currency' => 'QAR']);
+    $monthlyDues = FamilyCategory::factory()->create([
+        'family_id' => $family->id,
+        'name' => 'Monthly Dues',
+        'monthly_amount' => 100,
+    ]);
+    $member = User::factory()->member()->create([
+        'family_id' => $family->id,
+        'category' => null,
+        'family_category_id' => $monthlyDues->id,
+    ]);
+
+    $this->actingAs($member)
+        ->get(route('pay.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Pay/Index')
+            ->where('category_amount', 100)
+            ->where('formatted_amount', 'QAR 100.00')
+        );
 });
 
 it('redirects guests from pay page', function () {

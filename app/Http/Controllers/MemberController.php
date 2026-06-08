@@ -29,6 +29,7 @@ class MemberController extends Controller
         $members = User::query()
             ->where('family_id', $currentUser->family_id)
             ->active()
+            ->with('familyCategory:id,name,monthly_amount')
             ->orderBy('name')
             ->get()
             ->map(fn (User $user) => [
@@ -38,7 +39,7 @@ class MemberController extends Controller
                 'role' => $user->role->value,
                 'role_label' => $user->role->label(),
                 'category' => $user->category?->value,
-                'category_label' => $user->category?->label(),
+                'category_label' => $user->familyCategory->name ?? $user->category?->label(),
                 'monthly_amount' => $user->getMonthlyAmount(),
                 'is_archived' => $user->isArchived(),
             ]);
@@ -46,6 +47,7 @@ class MemberController extends Controller
         $archivedMembers = User::query()
             ->where('family_id', $currentUser->family_id)
             ->archived()
+            ->with('familyCategory:id,name,monthly_amount')
             ->orderBy('name')
             ->get()
             ->map(fn (User $user) => [
@@ -55,7 +57,7 @@ class MemberController extends Controller
                 'role' => $user->role->value,
                 'role_label' => $user->role->label(),
                 'category' => $user->category?->value,
-                'category_label' => $user->category?->label(),
+                'category_label' => $user->familyCategory->name ?? $user->category?->label(),
                 'monthly_amount' => $user->getMonthlyAmount(),
                 'archived_at' => $user->archived_at?->toDateString(),
                 'is_archived' => true,
@@ -120,6 +122,7 @@ class MemberController extends Controller
     public function show(User $member): Response
     {
         $currentUser = $this->authUser();
+        $member->loadMissing('familyCategory:id,name,monthly_amount');
 
         // Determine if user can view contribution history
         // (own profile OR has elevated permissions)
@@ -174,7 +177,7 @@ class MemberController extends Controller
                 'role' => $member->role->value,
                 'role_label' => $member->role->label(),
                 'category' => $member->category?->value,
-                'category_label' => $member->category?->label(),
+                'category_label' => $member->familyCategory->name ?? $member->category?->label(),
                 'monthly_amount' => $member->getMonthlyAmount(),
                 'is_archived' => $member->isArchived(),
                 'archived_at' => $member->archived_at?->toDateString(),

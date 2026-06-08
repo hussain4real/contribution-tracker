@@ -39,6 +39,10 @@ class HandleInertiaRequests extends Middleware
 
         $user = $request->user();
 
+        if ($user instanceof User) {
+            $user->loadMissing('familyCategory:id,name,monthly_amount');
+        }
+
         return [
             ...parent::share($request),
             'name' => config('app.name'),
@@ -52,7 +56,7 @@ class HandleInertiaRequests extends Middleware
                     'role' => $user->role->value,
                     'role_label' => $user->role->label(),
                     'category' => $user->category?->value,
-                    'category_label' => $user->category?->label(),
+                    'category_label' => $user->familyCategory->name ?? $user->category?->label(),
                     'family_id' => $user->family_id,
                     'is_super_admin' => $user->is_super_admin,
                     'whatsapp_phone' => $user->whatsapp_phone,

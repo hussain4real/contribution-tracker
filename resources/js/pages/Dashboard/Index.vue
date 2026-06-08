@@ -13,6 +13,7 @@ import OverdueMembersModal from '@/components/dashboard/OverdueMembersModal.vue'
 import RecentPayments from '@/components/dashboard/RecentPayments.vue';
 import SummaryCards from '@/components/dashboard/SummaryCards.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useCurrencyFormatter } from '@/lib/currency';
 import { dashboard } from '@/routes';
 import { type BreadcrumbItem } from '@/types';
 import type { MonthlyBreakdown } from '@/types/dashboard';
@@ -37,7 +38,8 @@ interface Summary {
 interface MemberStatus {
     id: number;
     name: string;
-    category: string;
+    category: string | null;
+    category_label: string | null;
     expected_amount: number;
     total_paid: number;
     current_month_status: string;
@@ -123,15 +125,13 @@ function generateContributions() {
     );
 }
 
-// Format currency in Naira
-function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-NG', {
-        style: 'currency',
-        currency: 'NGN',
-    }).format(amount);
-}
+const { formatCurrency } = useCurrencyFormatter();
 
-function formatCategory(category: string): string {
+function formatCategory(category: string | null): string {
+    if (!category) {
+        return 'Contribution';
+    }
+
     return category.charAt(0).toUpperCase() + category.slice(1);
 }
 </script>
@@ -246,6 +246,7 @@ function formatCategory(category: string): string {
                                             class="mt-1 text-xs text-muted-foreground"
                                         >
                                             {{
+                                                member.category_label ??
                                                 formatCategory(member.category)
                                             }}
                                         </p>

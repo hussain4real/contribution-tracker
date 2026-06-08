@@ -19,6 +19,18 @@ it('casts and formats family category amounts', function () {
         ->and($category->label_with_amount)->toBe("Adults (\u{20A6}4,500/month)");
 });
 
+it('formats family category amounts with the family currency', function () {
+    $family = Family::factory()->create(['currency' => 'QAR']);
+    $category = FamilyCategory::factory()->create([
+        'family_id' => $family->id,
+        'name' => 'Monthly Dues',
+        'monthly_amount' => 100,
+    ]);
+
+    expect($category->formatted_amount)->toBe('QAR 100')
+        ->and($category->label_with_amount)->toBe('Monthly Dues (QAR 100/month)');
+});
+
 it('exposes family and assigned user relationships', function () {
     $family = Family::factory()->create();
     $category = FamilyCategory::factory()->create(['family_id' => $family->id]);
