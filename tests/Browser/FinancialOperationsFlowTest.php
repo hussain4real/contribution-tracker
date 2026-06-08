@@ -99,13 +99,13 @@ describe('Financial and family administration flows (Browser)', function () {
     it('sends a family invitation through the UI', function () {
         Mail::fake();
 
-        $page = loginBrowserAs($this->admin);
+        $page = loginBrowserAs($this->financialSecretary);
 
         $page->navigate(route('family.invitations'))
             ->assertSee('Invitations')
             ->click('Invite Member')
             ->fill('email', 'browser-invite@example.com')
-            ->select('role', 'financial_secretary')
+            ->select('role', 'member')
             ->click('Send Invitation')
             ->assertSee('browser-invite@example.com')
             ->assertSee('Pending')
@@ -113,6 +113,7 @@ describe('Financial and family administration flows (Browser)', function () {
 
         expect(FamilyInvitation::where('family_id', $this->family->id)
             ->where('email', 'browser-invite@example.com')
+            ->where('invited_by', $this->financialSecretary->id)
             ->exists())->toBeTrue();
     });
 

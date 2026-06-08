@@ -185,33 +185,41 @@ export function useAppNavigation() {
     });
 
     const adminItems = computed<NavItem[]>(() => {
-        if (page.props.auth?.user?.role !== 'admin') {
-            return [];
-        }
+        const isAdmin = page.props.auth?.user?.role === 'admin';
+        const canAddMembers = page.props.auth?.can?.add_members === true;
+        const items: NavItem[] = [];
 
-        return [
-            {
+        if (isAdmin) {
+            items.push({
                 title: 'Family Settings',
                 href: familySettings(),
                 icon: Settings,
                 component: 'Family/Settings',
                 section: 'Family Admin',
-            },
-            {
+            });
+        }
+
+        if (canAddMembers) {
+            items.push({
                 title: 'Invitations',
                 href: invitationsIndex(),
                 icon: Mail,
                 component: 'Family/Invitations',
                 section: 'Family Admin',
-            },
-            {
+            });
+        }
+
+        if (isAdmin) {
+            items.push({
                 title: 'Subscription',
                 href: subscriptionIndex(),
                 icon: Sparkles,
                 component: 'Subscription/Index',
                 section: 'Family Admin',
-            },
-        ];
+            });
+        }
+
+        return items;
     });
 
     const platformItems = computed<NavItem[]>(() => {

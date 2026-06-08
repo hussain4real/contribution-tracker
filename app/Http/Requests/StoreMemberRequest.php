@@ -6,10 +6,12 @@ namespace App\Http\Requests;
 
 use App\Enums\MemberCategory;
 use App\Enums\Role;
+use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rules\Enum;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\Validator;
 
 class StoreMemberRequest extends FormRequest
 {
@@ -18,7 +20,9 @@ class StoreMemberRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return $this->user()?->canManageMembers() ?? false;
+        $user = $this->user();
+
+        return $user instanceof User && $user->canAddMembers();
     }
 
     /**
@@ -35,6 +39,24 @@ class StoreMemberRequest extends FormRequest
             'category' => ['required', new Enum(MemberCategory::class)],
             'role' => ['required', new Enum(Role::class)],
         ];
+    }
+
+    /**
+     * Configure the validator instance.
+     */
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            $user = $this->user();
+
+            if (! $user instanceof User || $user->canManageRoles()) {
+                return;
+            }
+
+            if ($this->input('role') !== Role::Member->value) {
+                $validator->errors()->add('role', 'Only family admins can assign admin or financial secretary roles.');
+            }
+        });
     }
 
     /**

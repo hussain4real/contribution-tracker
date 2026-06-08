@@ -7,6 +7,7 @@ export interface Auth {
 }
 
 export interface Permissions {
+    add_members: boolean;
     manage_members: boolean;
     record_payments: boolean;
     generate_reports: boolean;

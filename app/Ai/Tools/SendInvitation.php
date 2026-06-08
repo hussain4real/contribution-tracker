@@ -29,7 +29,7 @@ class SendInvitation implements Tool
      */
     public function description(): string
     {
-        return 'Sends an invitation to join the family group via email or WhatsApp. Requires delivery_method=email with email, or delivery_method=whatsapp with whatsapp_phone, plus role (admin, financial_secretary, or member). Only admins can send invitations. Always call without confirmed=true first to preview.';
+        return 'Sends an invitation to join the family group via email or WhatsApp. Requires delivery_method=email with email, or delivery_method=whatsapp with whatsapp_phone, plus role (admin, financial_secretary, or member). Admins can invite any role; financial secretaries can invite members. Always call without confirmed=true first to preview.';
     }
 
     /**
@@ -37,8 +37,8 @@ class SendInvitation implements Tool
      */
     public function handle(Request $request): string
     {
-        if (! $this->user->isAdmin()) {
-            return json_encode(['error' => 'Only family admins can send invitations.'], JSON_THROW_ON_ERROR);
+        if (! $this->user->canAddMembers()) {
+            return json_encode(['error' => 'Only family admins and financial secretaries can send invitations.'], JSON_THROW_ON_ERROR);
         }
 
         $deliveryMethodValue = $this->stringFromRequest($request['delivery_method'] ?? null, InvitationDeliveryMethod::Email->value);
@@ -78,6 +78,10 @@ class SendInvitation implements Tool
 
         if (! $role) {
             return json_encode(['error' => "Invalid role \"{$roleValue}\". Choose from: admin, financial_secretary, or member."], JSON_THROW_ON_ERROR);
+        }
+
+        if (! $this->user->canManageRoles() && $role !== Role::Member) {
+            return json_encode(['error' => 'Only family admins can invite admin or financial secretary roles.'], JSON_THROW_ON_ERROR);
         }
 
         $existingMemberQuery = User::query()->where('family_id', $this->user->family_id);

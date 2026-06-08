@@ -318,6 +318,22 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable,
     }
 
     /**
+     * Check if user can add or invite ordinary members.
+     */
+    public function canAddMembers(): bool
+    {
+        return $this->role->canAddMembers();
+    }
+
+    /**
+     * Check if user can assign privileged roles.
+     */
+    public function canManageRoles(): bool
+    {
+        return $this->role->canManageRoles();
+    }
+
+    /**
      * Check if user can view all members' details.
      */
     public function canViewAllMembers(): bool

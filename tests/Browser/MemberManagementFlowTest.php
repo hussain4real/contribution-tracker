@@ -177,7 +177,7 @@ describe('Member Management Flow (Browser)', function () {
             ->assertSee('403');
     });
 
-    it('financial secretary cannot access create member page', function () {
+    it('financial secretary can access create member page', function () {
         $fs = createBrowserFinancialSecretary($this->family, [
             'email' => 'fs@test.com',
         ]);
@@ -185,6 +185,7 @@ describe('Member Management Flow (Browser)', function () {
         $page = loginBrowserAs($fs);
 
         $page->navigate('/members/create')
-            ->assertSee('403');
+            ->assertSee('Add New Member')
+            ->assertNoJavaScriptErrors();
     });
 });
