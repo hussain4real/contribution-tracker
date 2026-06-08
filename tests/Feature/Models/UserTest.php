@@ -56,8 +56,13 @@ it('reports role helpers and monthly amounts', function () {
 
     expect($admin->isSuperAdmin())->toBeTrue()
         ->and($admin->isAdmin())->toBeTrue()
+        ->and($admin->canAddMembers())->toBeTrue()
         ->and($admin->canManageMembers())->toBeTrue()
+        ->and($admin->canManageRoles())->toBeTrue()
         ->and($financialSecretary->isFinancialSecretary())->toBeTrue()
+        ->and($financialSecretary->canAddMembers())->toBeTrue()
+        ->and($financialSecretary->canManageMembers())->toBeFalse()
+        ->and($financialSecretary->canManageRoles())->toBeFalse()
         ->and($financialSecretary->canViewAllMembers())->toBeTrue()
         ->and($member->isMember())->toBeTrue()
         ->and($member->getMonthlyAmount())->toBe(7500)

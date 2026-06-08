@@ -103,6 +103,43 @@ describe('Invitation Store', function () {
         expect(FamilyInvitation::where('email', 'new@example.com')->count())->toBe(1);
     });
 
+    it('allows financial secretaries to invite ordinary members', function () {
+        $family = Family::factory()->create();
+        $financialSecretary = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+
+        $this->actingAs($financialSecretary)
+            ->post('/family/invitations', [
+                'email' => 'new@example.com',
+                'role' => Role::Member->value,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('family_invitations', [
+            'family_id' => $family->id,
+            'email' => 'new@example.com',
+            'role' => Role::Member->value,
+            'invited_by' => $financialSecretary->id,
+        ]);
+    });
+
+    it('prevents financial secretaries from inviting privileged roles', function () {
+        $family = Family::factory()->create();
+        $financialSecretary = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+
+        $this->actingAs($financialSecretary)
+            ->post('/family/invitations', [
+                'email' => 'new-admin@example.com',
+                'role' => Role::Admin->value,
+            ])
+            ->assertRedirect()
+            ->assertSessionHasErrors('role');
+
+        $this->assertDatabaseMissing('family_invitations', [
+            'email' => 'new-admin@example.com',
+        ]);
+    });
+
     it('allows inviting a new whatsapp number', function () {
         config()->set('services.whatsapp', [
             'access_token' => 'test-token',
@@ -234,7 +271,7 @@ describe('Invitation Store', function () {
         expect(FamilyInvitation::where('whatsapp_phone', '+2348012345678')->exists())->toBeFalse();
     });
 
-    it('prevents non-admin from sending invitations', function () {
+    it('prevents members from sending invitations', function () {
         $family = Family::factory()->create();
         $member = User::factory()->member()->create(['family_id' => $family->id]);
 
@@ -282,10 +319,50 @@ describe('Invitation Index', function () {
                 ->where('invitations.0.role_label', 'Financial Secretary')
                 ->where('invitations.0.invited_by', 'Ada Admin')
                 ->where('invitations.0.is_pending', true)
+                ->where('invitations.0.can_cancel', true)
+                ->has('roles', 3)
+                ->where('roles.0.value', Role::Admin->value)
+                ->where('roles.1.value', Role::FinancialSecretary->value)
+                ->where('roles.2.value', Role::Member->value)
             );
     });
 
-    it('prevents non-admins from listing invitations', function () {
+    it('lists family invitations for financial secretaries', function () {
+        $family = Family::factory()->create(['name' => 'Smith Family']);
+        $financialSecretary = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+
+        FamilyInvitation::factory()->create([
+            'family_id' => $family->id,
+            'email' => 'first@example.com',
+            'role' => Role::Member,
+            'expires_at' => now()->addDays(7),
+            'created_at' => now(),
+        ]);
+        FamilyInvitation::factory()->create([
+            'family_id' => $family->id,
+            'email' => 'admin@example.com',
+            'role' => Role::Admin,
+            'expires_at' => now()->addDays(7),
+            'created_at' => now()->subMinute(),
+        ]);
+
+        $this->actingAs($financialSecretary)
+            ->get(route('family.invitations'))
+            ->assertSuccessful()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Family/Invitations')
+                ->where('family_name', 'Smith Family')
+                ->has('invitations', 2)
+                ->where('invitations.0.email', 'first@example.com')
+                ->where('invitations.0.can_cancel', true)
+                ->where('invitations.1.email', 'admin@example.com')
+                ->where('invitations.1.can_cancel', false)
+                ->has('roles', 1)
+                ->where('roles.0.value', Role::Member->value)
+            );
+    });
+
+    it('prevents members from listing invitations', function () {
         $member = User::factory()->member()->create();
 
         $this->actingAs($member)
@@ -298,7 +375,10 @@ describe('Invitation Destroy', function () {
     it('allows admins to cancel invitations in their family', function () {
         $family = Family::factory()->create();
         $admin = User::factory()->admin()->create(['family_id' => $family->id]);
-        $invitation = FamilyInvitation::factory()->create(['family_id' => $family->id]);
+        $invitation = FamilyInvitation::factory()->create([
+            'family_id' => $family->id,
+            'role' => Role::Admin,
+        ]);
 
         $this->actingAs($admin)
             ->delete(route('family.invitations.destroy', $invitation))
@@ -306,6 +386,37 @@ describe('Invitation Destroy', function () {
             ->assertSessionHas('success', 'Invitation cancelled.');
 
         expect(FamilyInvitation::whereKey($invitation->id)->exists())->toBeFalse();
+    });
+
+    it('allows financial secretaries to cancel member invitations in their family', function () {
+        $family = Family::factory()->create();
+        $financialSecretary = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+        $invitation = FamilyInvitation::factory()->create([
+            'family_id' => $family->id,
+            'role' => Role::Member,
+        ]);
+
+        $this->actingAs($financialSecretary)
+            ->delete(route('family.invitations.destroy', $invitation))
+            ->assertRedirect()
+            ->assertSessionHas('success', 'Invitation cancelled.');
+
+        expect(FamilyInvitation::whereKey($invitation->id)->exists())->toBeFalse();
+    });
+
+    it('prevents financial secretaries from cancelling privileged invitations', function () {
+        $family = Family::factory()->create();
+        $financialSecretary = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+        $invitation = FamilyInvitation::factory()->create([
+            'family_id' => $family->id,
+            'role' => Role::Admin,
+        ]);
+
+        $this->actingAs($financialSecretary)
+            ->delete(route('family.invitations.destroy', $invitation))
+            ->assertForbidden();
+
+        expect(FamilyInvitation::whereKey($invitation->id)->exists())->toBeTrue();
     });
 
     it('prevents admins from cancelling invitations in another family', function () {
@@ -317,7 +428,7 @@ describe('Invitation Destroy', function () {
             ->assertForbidden();
     });
 
-    it('prevents non-admins from cancelling invitations', function () {
+    it('prevents members from cancelling invitations', function () {
         $family = Family::factory()->create();
         $member = User::factory()->member()->create(['family_id' => $family->id]);
         $invitation = FamilyInvitation::factory()->create(['family_id' => $family->id]);

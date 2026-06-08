@@ -46,6 +46,30 @@ test('flash returns null when session is not available', function () {
     expect($warning())->toBeNull();
 });
 
+test('share exposes add member permission for financial secretaries', function () {
+    $financialSecretary = User::factory()->financialSecretary()->create();
+
+    $this->actingAs($financialSecretary)
+        ->get(route('members.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('auth.can.add_members', true)
+            ->where('auth.can.manage_members', false)
+        );
+});
+
+test('share hides add member permission from ordinary members', function () {
+    $member = User::factory()->member()->create();
+
+    $this->actingAs($member)
+        ->get(route('members.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('auth.can.add_members', false)
+            ->where('auth.can.manage_members', false)
+        );
+});
+
 test('subscription data falls back when a user has no family', function () {
     $middleware = new HandleInertiaRequests;
     $method = (new ReflectionClass($middleware))->getMethod('subscriptionData');

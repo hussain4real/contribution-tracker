@@ -94,17 +94,22 @@ describe('Member Authorization', function () {
             );
     });
 
-    // Create - Only Admin
+    // Create - Admin and Financial Secretary can add ordinary members
     it('super admin can access create form', function () {
         $this->actingAs($this->admin)
             ->get('/members/create')
             ->assertOk();
     });
 
-    it('financial secretary cannot access create form', function () {
+    it('financial secretary can access create form with only member role available', function () {
         $this->actingAs($this->financialSecretary)
             ->get('/members/create')
-            ->assertForbidden();
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Members/Create')
+                ->has('roles', 1)
+                ->where('roles.0.value', 'member')
+            );
     });
 
     it('member cannot access create form', function () {
@@ -113,7 +118,7 @@ describe('Member Authorization', function () {
             ->assertForbidden();
     });
 
-    // Store - Only Admin
+    // Store - Admin and Financial Secretary can add ordinary members
     it('super admin can create member', function () {
         $this->actingAs($this->admin)
             ->post('/members', [
@@ -129,7 +134,7 @@ describe('Member Authorization', function () {
         $this->assertDatabaseHas('users', ['email' => 'new@example.com']);
     });
 
-    it('financial secretary cannot create member', function () {
+    it('financial secretary can create ordinary member', function () {
         $this->actingAs($this->financialSecretary)
             ->post('/members', [
                 'name' => 'New Member',
@@ -139,9 +144,27 @@ describe('Member Authorization', function () {
                 'category' => 'employed',
                 'role' => 'member',
             ])
-            ->assertForbidden();
+            ->assertRedirect();
 
-        $this->assertDatabaseMissing('users', ['email' => 'new@example.com']);
+        $this->assertDatabaseHas('users', [
+            'email' => 'new@example.com',
+            'role' => 'member',
+        ]);
+    });
+
+    it('financial secretary cannot create privileged member', function () {
+        $this->actingAs($this->financialSecretary)
+            ->post('/members', [
+                'name' => 'New Admin',
+                'email' => 'new-admin@example.com',
+                'password' => 'password123',
+                'password_confirmation' => 'password123',
+                'category' => 'employed',
+                'role' => 'admin',
+            ])
+            ->assertSessionHasErrors('role');
+
+        $this->assertDatabaseMissing('users', ['email' => 'new-admin@example.com']);
     });
 
     it('member cannot create member', function () {

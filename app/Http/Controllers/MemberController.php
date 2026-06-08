@@ -64,31 +64,32 @@ class MemberController extends Controller
         return Inertia::render('Members/Index', [
             'members' => $members,
             'archivedMembers' => $archivedMembers,
+            'canAddMembers' => $currentUser->canAddMembers(),
             'canManageMembers' => $currentUser->canManageMembers(),
         ]);
     }
 
     /**
      * Show the form for creating a new family member.
-     * Only Admin can access.
+     * Admin and Financial Secretary can access.
      */
     public function create(): Response
     {
         $user = $this->authUser();
 
-        if (! $user->canManageMembers()) {
+        if (! $user->canAddMembers()) {
             abort(403);
         }
 
         return Inertia::render('Members/Create', [
             'categories' => $this->getCategoryOptions(),
-            'roles' => $this->getRoleOptions(),
+            'roles' => $this->getRoleOptions($user),
         ]);
     }
 
     /**
      * Store a newly created family member.
-     * Only Admin can create members.
+     * Admin and Financial Secretary can create ordinary members.
      */
     public function store(StoreMemberRequest $request): RedirectResponse
     {
@@ -350,14 +351,18 @@ class MemberController extends Controller
      *
      * @return array<int, array{value: string, label: string}>
      */
-    private function getRoleOptions(): array
+    private function getRoleOptions(?User $user = null): array
     {
+        $roles = $user instanceof User && ! $user->canManageRoles()
+            ? [Role::Member]
+            : Role::cases();
+
         return array_map(
             fn (Role $role): array => [
                 'value' => $role->value,
                 'label' => $role->label(),
             ],
-            Role::cases(),
+            $roles,
         );
     }
 
