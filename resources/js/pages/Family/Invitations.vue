@@ -42,6 +42,7 @@ interface Invitation {
     is_accepted: boolean;
     is_expired: boolean;
     is_pending: boolean;
+    can_cancel: boolean;
     expires_at: string;
     created_at: string;
 }
@@ -305,7 +306,9 @@ function statusBadge(invitation: Invitation): { text: string; class: string } {
                             {{ statusBadge(invitation).text }}
                         </span>
                         <Button
-                            v-if="invitation.is_pending"
+                            v-if="
+                                invitation.is_pending && invitation.can_cancel
+                            "
                             variant="ghost"
                             size="icon"
                             class="text-destructive hover:text-destructive"

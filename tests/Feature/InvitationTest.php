@@ -319,6 +319,7 @@ describe('Invitation Index', function () {
                 ->where('invitations.0.role_label', 'Financial Secretary')
                 ->where('invitations.0.invited_by', 'Ada Admin')
                 ->where('invitations.0.is_pending', true)
+                ->where('invitations.0.can_cancel', true)
                 ->has('roles', 3)
                 ->where('roles.0.value', Role::Admin->value)
                 ->where('roles.1.value', Role::FinancialSecretary->value)
@@ -335,6 +336,14 @@ describe('Invitation Index', function () {
             'email' => 'first@example.com',
             'role' => Role::Member,
             'expires_at' => now()->addDays(7),
+            'created_at' => now(),
+        ]);
+        FamilyInvitation::factory()->create([
+            'family_id' => $family->id,
+            'email' => 'admin@example.com',
+            'role' => Role::Admin,
+            'expires_at' => now()->addDays(7),
+            'created_at' => now()->subMinute(),
         ]);
 
         $this->actingAs($financialSecretary)
@@ -343,8 +352,11 @@ describe('Invitation Index', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Family/Invitations')
                 ->where('family_name', 'Smith Family')
-                ->has('invitations', 1)
+                ->has('invitations', 2)
                 ->where('invitations.0.email', 'first@example.com')
+                ->where('invitations.0.can_cancel', true)
+                ->where('invitations.1.email', 'admin@example.com')
+                ->where('invitations.1.can_cancel', false)
                 ->has('roles', 1)
                 ->where('roles.0.value', Role::Member->value)
             );
@@ -363,7 +375,10 @@ describe('Invitation Destroy', function () {
     it('allows admins to cancel invitations in their family', function () {
         $family = Family::factory()->create();
         $admin = User::factory()->admin()->create(['family_id' => $family->id]);
-        $invitation = FamilyInvitation::factory()->create(['family_id' => $family->id]);
+        $invitation = FamilyInvitation::factory()->create([
+            'family_id' => $family->id,
+            'role' => Role::Admin,
+        ]);
 
         $this->actingAs($admin)
             ->delete(route('family.invitations.destroy', $invitation))
@@ -373,10 +388,13 @@ describe('Invitation Destroy', function () {
         expect(FamilyInvitation::whereKey($invitation->id)->exists())->toBeFalse();
     });
 
-    it('allows financial secretaries to cancel invitations in their family', function () {
+    it('allows financial secretaries to cancel member invitations in their family', function () {
         $family = Family::factory()->create();
         $financialSecretary = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
-        $invitation = FamilyInvitation::factory()->create(['family_id' => $family->id]);
+        $invitation = FamilyInvitation::factory()->create([
+            'family_id' => $family->id,
+            'role' => Role::Member,
+        ]);
 
         $this->actingAs($financialSecretary)
             ->delete(route('family.invitations.destroy', $invitation))
@@ -384,6 +402,21 @@ describe('Invitation Destroy', function () {
             ->assertSessionHas('success', 'Invitation cancelled.');
 
         expect(FamilyInvitation::whereKey($invitation->id)->exists())->toBeFalse();
+    });
+
+    it('prevents financial secretaries from cancelling privileged invitations', function () {
+        $family = Family::factory()->create();
+        $financialSecretary = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+        $invitation = FamilyInvitation::factory()->create([
+            'family_id' => $family->id,
+            'role' => Role::Admin,
+        ]);
+
+        $this->actingAs($financialSecretary)
+            ->delete(route('family.invitations.destroy', $invitation))
+            ->assertForbidden();
+
+        expect(FamilyInvitation::whereKey($invitation->id)->exists())->toBeTrue();
     });
 
     it('prevents admins from cancelling invitations in another family', function () {

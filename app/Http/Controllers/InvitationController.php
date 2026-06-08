@@ -53,6 +53,7 @@ class InvitationController extends Controller
                 'is_accepted' => $invitation->isAccepted(),
                 'is_expired' => $invitation->isExpired(),
                 'is_pending' => $invitation->isPending(),
+                'can_cancel' => $this->canCancelInvitation($user, $invitation),
                 'expires_at' => $invitation->expires_at->toDateString(),
                 'created_at' => $invitation->created_at?->toDateString(),
             ]);
@@ -170,7 +171,11 @@ class InvitationController extends Controller
     {
         $user = $this->authUser();
 
-        if (! $user->canAddMembers() || $invitation->family_id !== $user->family_id) {
+        if (
+            ! $user->canAddMembers()
+            || $invitation->family_id !== $user->family_id
+            || ! $this->canCancelInvitation($user, $invitation)
+        ) {
             abort(403);
         }
 
@@ -232,6 +237,11 @@ class InvitationController extends Controller
     private function nullableString(mixed $value): ?string
     {
         return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    private function canCancelInvitation(User $user, FamilyInvitation $invitation): bool
+    {
+        return $user->canManageRoles() || $invitation->role === Role::Member;
     }
 
     /**
