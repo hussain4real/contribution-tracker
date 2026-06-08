@@ -5,6 +5,7 @@ import {
 } from '@/actions/App/Http/Controllers/ExpenseController';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useCurrencyFormatter } from '@/lib/currency';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { Plus, Receipt, Trash2 } from 'lucide-vue-next';
@@ -39,12 +40,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-NG', {
-        style: 'currency',
-        currency: 'NGN',
-    }).format(amount);
-}
+const { formatCurrency } = useCurrencyFormatter();
 
 function formatDate(date: string): string {
     return new Date(date).toLocaleDateString('en-NG', {

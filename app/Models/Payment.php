@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\CurrencyFormatter;
 use Database\Factories\PaymentFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -152,7 +153,7 @@ class Payment extends Model
      */
     public function getFormattedAmountAttribute(): string
     {
-        return '₦'.number_format($this->amount, 2);
+        return CurrencyFormatter::format($this->amount, $this->contribution?->family?->currency);
     }
 
     // =========================================================================

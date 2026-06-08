@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Models\Family;
 use App\Models\FundAdjustment;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -84,6 +85,22 @@ it('allows financial secretary to store a fund adjustment', function () {
 
     $adjustment = FundAdjustment::query()->firstOrFail();
     expect($adjustment->recorded_by)->toBe($this->financialSecretary->id);
+});
+
+it('uses the family currency in the fund adjustment recorded flash message', function () {
+    $family = Family::factory()->create(['currency' => 'QAR']);
+    $financialSecretary = User::factory()->financialSecretary()->create([
+        'family_id' => $family->id,
+    ]);
+
+    $this->actingAs($financialSecretary)
+        ->post(route('fund-adjustments.store'), [
+            'amount' => 450,
+            'description' => 'Opening balance',
+            'recorded_at' => '2026-06-08',
+        ])
+        ->assertRedirect(route('fund-adjustments.index'))
+        ->assertSessionHas('success', 'Fund adjustment of QAR 450.00 recorded successfully.');
 });
 
 it('denies regular member from storing a fund adjustment', function () {

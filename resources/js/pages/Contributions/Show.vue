@@ -19,6 +19,7 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useCurrencyFormatter } from '@/lib/currency';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/vue3';
@@ -76,10 +77,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-// Helper to format amount in Naira
-const formatAmount = (amount: number): string => {
-    return `₦${amount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
-};
+const { formatCurrency: formatAmount } = useCurrencyFormatter();
 
 // Helper to format date
 const formatDate = (dateStr: string): string => {

@@ -5,6 +5,7 @@ import {
 } from '@/actions/App/Http/Controllers/ReportController';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useCurrencyFormatter } from '@/lib/currency';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
 import {
@@ -107,13 +108,7 @@ const monthNames = [
     'December',
 ];
 
-// Format currency in Naira
-function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-NG', {
-        style: 'currency',
-        currency: 'NGN',
-    }).format(amount);
-}
+const { formatCurrency } = useCurrencyFormatter();
 
 // Navigate to a different month
 function navigateToMonth(year: number, month: number) {

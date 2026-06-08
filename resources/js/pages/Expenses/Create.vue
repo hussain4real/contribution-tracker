@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useCurrencyFormatter } from '@/lib/currency';
 import type { BreadcrumbItem } from '@/types';
 import { Form, Head } from '@inertiajs/vue3';
 import { ref } from 'vue';
@@ -24,6 +25,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 const amount = ref<string>('');
 const description = ref<string>('');
 const spentAt = ref<string>(new Date().toISOString().split('T')[0]);
+const { currency } = useCurrencyFormatter();
 </script>
 
 <template>
@@ -43,13 +45,13 @@ const spentAt = ref<string>(new Date().toISOString().split('T')[0]);
             >
                 <!-- Amount Field -->
                 <div class="grid gap-2">
-                    <Label for="amount">Amount (₦)</Label>
+                    <Label for="amount">Amount ({{ currency }})</Label>
                     <Input
                         id="amount"
                         type="number"
                         name="amount"
                         v-model="amount"
-                        placeholder="Enter amount in Naira"
+                        :placeholder="`Enter amount in ${currency}`"
                         required
                         min="1"
                         step="1"

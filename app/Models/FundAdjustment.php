@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\CurrencyFormatter;
 use Database\Factories\FundAdjustmentFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -100,6 +101,6 @@ class FundAdjustment extends Model
      */
     public function getFormattedAmountAttribute(): string
     {
-        return '₦'.number_format($this->amount, 2);
+        return CurrencyFormatter::format($this->amount, $this->family?->currency);
     }
 }

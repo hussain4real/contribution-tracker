@@ -6,6 +6,7 @@ import {
 } from '@/actions/App/Http/Controllers/MemberController';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { useCurrencyFormatter } from '@/lib/currency';
 import { Link, router } from '@inertiajs/vue3';
 import { Archive, Eye, Pencil, RotateCcw } from 'lucide-vue-next';
 
@@ -34,12 +35,7 @@ const emit = defineEmits<{
     restored: [member: Member];
 }>();
 
-function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-NG', {
-        style: 'currency',
-        currency: 'NGN',
-    }).format(amount);
-}
+const { formatCurrency } = useCurrencyFormatter();
 
 function getRoleBadgeVariant(role: string) {
     switch (role) {

@@ -7,9 +7,10 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useCurrencyFormatter } from '@/lib/currency';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
-import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import {
     AlertTriangle,
     Bell,
@@ -73,7 +74,10 @@ interface Props {
 }
 
 const props = defineProps<Props>();
-const page = usePage();
+const { formatCurrency } = useCurrencyFormatter({
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+});
 
 const emptyFeed: PaginatedNotifications = {
     data: [],
@@ -106,7 +110,6 @@ const summary = computed(() => props.notificationSummary ?? defaultSummary);
 const filters = computed(() => props.notificationFilters ?? defaultFilters);
 const hasNotifications = computed(() => feed.value.data.length > 0);
 const hasUnread = computed(() => summary.value.unread > 0);
-const currencySymbol = computed(() => page.props.family?.currency ?? '₦');
 
 const statusFilters = computed(() => [
     { label: 'All', value: 'all' as const, count: summary.value.total },
@@ -220,9 +223,7 @@ function notificationIconTone(notification: NotificationItem): string {
 }
 
 function formatMoney(amount?: number | string): string {
-    const value = Number(amount ?? 0);
-
-    return `${currencySymbol.value}${value.toLocaleString()}`;
+    return formatCurrency(Number(amount ?? 0));
 }
 
 function formatDate(dateString?: string | null): string {

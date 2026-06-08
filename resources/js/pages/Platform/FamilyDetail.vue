@@ -15,6 +15,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { formatCurrencyAmount } from '@/lib/currency';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
 import { Ban, CheckCircle } from 'lucide-vue-next';
@@ -82,7 +83,10 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 ]);
 
 function formatCurrency(amount: number): string {
-    return `${props.family.currency}${amount.toLocaleString()}`;
+    return formatCurrencyAmount(amount, props.family.currency, {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+    });
 }
 
 const showSuspendDialog = ref(false);

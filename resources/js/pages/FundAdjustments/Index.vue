@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useCurrencyFormatter } from '@/lib/currency';
 import { type BreadcrumbItem } from '@/types';
 import { Form, Head, Link, router } from '@inertiajs/vue3';
 import { Landmark, Plus, Trash2 } from 'lucide-vue-next';
@@ -48,13 +49,7 @@ const showForm = ref(false);
 const amount = ref<string>('');
 const description = ref<string>('');
 const recordedAt = ref<string>(new Date().toISOString().split('T')[0]);
-
-function formatCurrency(value: number): string {
-    return new Intl.NumberFormat('en-NG', {
-        style: 'currency',
-        currency: 'NGN',
-    }).format(value);
-}
+const { currency, formatCurrency } = useCurrencyFormatter();
 
 function formatDate(date: string): string {
     return new Date(date).toLocaleDateString('en-NG', {
@@ -133,13 +128,13 @@ function resetForm(): void {
                 >
                     <div class="grid gap-4 sm:grid-cols-2">
                         <div class="grid gap-2">
-                            <Label for="amount">Amount (₦)</Label>
+                            <Label for="amount">Amount ({{ currency }})</Label>
                             <Input
                                 id="amount"
                                 type="number"
                                 name="amount"
                                 v-model="amount"
-                                placeholder="Enter amount in Naira"
+                                :placeholder="`Enter amount in ${currency}`"
                                 required
                                 min="1"
                                 step="1"

@@ -8,6 +8,7 @@ use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\PaymentAllocationService;
+use App\Support\CurrencyFormatter;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
@@ -21,7 +22,7 @@ class RecordPayment implements Tool
      */
     public function description(): string
     {
-        return 'Records a payment for a family member. Accepts the member name (or part of it), amount in Naira, payment date, optional notes, and optional target year/month. The payment is automatically allocated to the oldest unpaid contribution first. Always call without confirmed=true first to preview.';
+        return 'Records a payment for a family member. Accepts the member name (or part of it), amount, payment date, optional notes, and optional target year/month. The payment is automatically allocated to the oldest unpaid contribution first. Always call without confirmed=true first to preview.';
     }
 
     /**
@@ -46,15 +47,16 @@ class RecordPayment implements Tool
         }
 
         if (! $amount || $amount < 1) {
-            return json_encode(['error' => 'Amount is required and must be at least ₦1.'], JSON_THROW_ON_ERROR);
+            return json_encode(['error' => 'Amount is required and must be at least 1.'], JSON_THROW_ON_ERROR);
         }
 
         // Find member by name within the family
         $members = User::query()
             ->where('family_id', $this->user->family_id)
             ->active()
+            ->with('familyCategory:id,name,monthly_amount')
             ->where('name', 'like', "%{$memberName}%")
-            ->get(['id', 'name', 'category']);
+            ->get(['id', 'name', 'category', 'family_category_id']);
 
         if ($members->isEmpty()) {
             return json_encode(['error' => "No active family member found matching \"{$memberName}\"."], JSON_THROW_ON_ERROR);
@@ -71,7 +73,7 @@ class RecordPayment implements Tool
 
         $member = $members->first();
 
-        if (! $member->category) {
+        if ($member->getMonthlyAmount() === null) {
             return json_encode(['error' => "{$member->name} does not have a contribution category assigned. Please assign one first."], JSON_THROW_ON_ERROR);
         }
 
@@ -87,7 +89,7 @@ class RecordPayment implements Tool
 
         $family = $this->user->family;
         $currency = $family instanceof Family ? $family->currency : '₦';
-        $formattedAmount = $currency.number_format($amount, 2);
+        $formattedAmount = CurrencyFormatter::format($amount, $currency);
         $targetInfo = ($targetYear !== null && $targetMonth !== null)
             ? ' for '.now()->setYear($targetYear)->setMonth($targetMonth)->format('F Y')
             : '';

@@ -5,6 +5,7 @@ import {
     index,
 } from '@/actions/App/Http/Controllers/PaymentController';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useCurrencyFormatter } from '@/lib/currency';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/vue3';
 import { ChevronRight, CreditCard, Users } from 'lucide-vue-next';
@@ -46,12 +47,7 @@ const filteredMembers = computed(() => {
     );
 });
 
-function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-NG', {
-        style: 'currency',
-        currency: 'NGN',
-    }).format(amount);
-}
+const { formatCurrency } = useCurrencyFormatter();
 </script>
 
 <template>

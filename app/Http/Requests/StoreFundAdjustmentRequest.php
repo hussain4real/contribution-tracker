@@ -43,8 +43,8 @@ class StoreFundAdjustmentRequest extends FormRequest
     {
         return [
             'amount.required' => 'Please enter the adjustment amount.',
-            'amount.integer' => 'The amount must be a whole number in Naira.',
-            'amount.min' => 'The amount must be at least ₦1.',
+            'amount.integer' => 'The amount must be a whole number.',
+            'amount.min' => 'The amount must be at least 1.',
             'description.required' => 'Please enter a description for the adjustment.',
             'description.max' => 'The description must not exceed 1000 characters.',
             'recorded_at.required' => 'Please enter the date.',

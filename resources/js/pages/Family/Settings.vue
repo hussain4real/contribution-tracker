@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { formatCurrencyAmount } from '@/lib/currency';
 import { type BreadcrumbItem } from '@/types';
 import { Form, Head, router } from '@inertiajs/vue3';
 import { Check, ChevronsUpDown, Pencil, Plus, Trash2 } from 'lucide-vue-next';
@@ -112,7 +113,10 @@ const editingCategory = ref<Category | null>(null);
 const showNewCategoryForm = ref(false);
 
 function formatCurrency(amount: number): string {
-    return `${props.family.currency}${amount.toLocaleString()}`;
+    return formatCurrencyAmount(amount, props.family.currency, {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+    });
 }
 
 function deleteCategory(id: number): void {

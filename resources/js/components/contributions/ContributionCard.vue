@@ -2,6 +2,7 @@
 import { show as showContribution } from '@/actions/App/Http/Controllers/ContributionController';
 import PaymentHistory from '@/components/contributions/PaymentHistory.vue';
 import StatusBadge from '@/components/contributions/StatusBadge.vue';
+import { useCurrencyFormatter } from '@/lib/currency';
 import { Link } from '@inertiajs/vue3';
 import { ChevronDown, ChevronUp } from 'lucide-vue-next';
 import { ref } from 'vue';
@@ -39,12 +40,7 @@ defineProps<Props>();
 
 const showPayments = ref(false);
 
-function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-NG', {
-        style: 'currency',
-        currency: 'NGN',
-    }).format(amount);
-}
+const { formatCurrency } = useCurrencyFormatter();
 
 function togglePayments() {
     showPayments.value = !showPayments.value;

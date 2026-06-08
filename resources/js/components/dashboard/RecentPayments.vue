@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useCurrencyFormatter } from '@/lib/currency';
 interface Payment {
     id: number;
     amount: number;
@@ -14,13 +15,7 @@ defineProps<{
     payments: Payment[];
 }>();
 
-// Format currency in Naira
-function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-NG', {
-        style: 'currency',
-        currency: 'NGN',
-    }).format(amount);
-}
+const { formatCurrency } = useCurrencyFormatter();
 
 // Format date
 function formatDate(dateString: string): string {

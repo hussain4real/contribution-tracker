@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useCurrencyFormatter } from '@/lib/currency';
 import { type BreadcrumbItem } from '@/types';
 import { Form, Head, Link, usePage } from '@inertiajs/vue3';
 import { ArrowUpCircle } from 'lucide-vue-next';
@@ -56,12 +57,7 @@ const canAddMore = computed(
 );
 const subscription = computed(() => page.props.subscription);
 
-function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-NG', {
-        style: 'currency',
-        currency: 'NGN',
-    }).format(amount);
-}
+const { formatCurrency } = useCurrencyFormatter();
 </script>
 
 <template>

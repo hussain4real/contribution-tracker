@@ -2,12 +2,14 @@
 import { show as showContribution } from '@/actions/App/Http/Controllers/ContributionController';
 import { create as createPayment } from '@/actions/App/Http/Controllers/PaymentController';
 import StatusBadge from '@/components/contributions/StatusBadge.vue';
+import { useCurrencyFormatter } from '@/lib/currency';
 import { Link } from '@inertiajs/vue3';
 
 interface Member {
     id: number;
     name: string;
-    category: string;
+    category: string | null;
+    category_label: string | null;
     expected_amount: number;
     total_paid: number;
     current_month_status: string;
@@ -21,16 +23,14 @@ defineProps<{
     canRecordPayments: boolean;
 }>();
 
-// Format currency in Naira
-function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-NG', {
-        style: 'currency',
-        currency: 'NGN',
-    }).format(amount);
-}
+const { formatCurrency } = useCurrencyFormatter();
 
 // Format category label
-function formatCategory(category: string): string {
+function formatCategory(category: string | null): string {
+    if (!category) {
+        return 'Contribution';
+    }
+
     return category.charAt(0).toUpperCase() + category.slice(1);
 }
 </script>
@@ -59,7 +59,7 @@ function formatCategory(category: string): string {
                         member.category === 'student',
                 }"
             >
-                {{ formatCategory(member.category) }}
+                {{ member.category_label ?? formatCategory(member.category) }}
             </span>
         </td>
         <td class="px-3 py-3 sm:px-4">

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\Contribution;
+use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
 use Carbon\Carbon;
@@ -46,6 +47,21 @@ it('returns empty helper values when no contribution is loaded', function () {
 
     expect($payment->getMember())->toBeNull()
         ->and($payment->getPeriodLabel())->toBe('');
+});
+
+it('formats payments with the contribution family currency', function () {
+    $family = Family::factory()->create(['currency' => 'QAR']);
+    $member = User::factory()->member()->employed()->create([
+        'family_id' => $family->id,
+    ]);
+    $contribution = Contribution::factory()
+        ->forUser($member)
+        ->create(['family_id' => $family->id]);
+    $payment = Payment::factory()
+        ->forContribution($contribution)
+        ->create(['amount' => 123456]);
+
+    expect($payment->formatted_amount)->toBe('QAR 123,456.00');
 });
 
 it('filters payments with local query scopes', function () {

@@ -13,6 +13,7 @@ use App\Models\PaystackTransaction;
 use App\Models\User;
 use App\Services\PaymentAllocationService;
 use App\Services\PaystackService;
+use App\Support\CurrencyFormatter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -56,7 +57,7 @@ class MemberPaymentController extends Controller
         return Inertia::render('Pay/Index', [
             'pending_contributions' => $pendingContributions,
             'category_amount' => $user->getMonthlyAmount() ?? 0,
-            'formatted_amount' => $user->category?->formattedAmount() ?? '₦0',
+            'formatted_amount' => CurrencyFormatter::format($user->getMonthlyAmount() ?? 0, $family instanceof Family ? $family->currency : null),
             'has_paystack' => $family instanceof Family && $family->hasBankDetails() && $paystackPublicKey !== '',
             'paystack_public_key' => $paystackPublicKey,
         ]);

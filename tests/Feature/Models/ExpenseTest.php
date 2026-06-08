@@ -22,6 +22,16 @@ it('casts and formats expense values and exposes relationships', function () {
         ->and($expense->recorder()->firstOrFail()->is($recorder))->toBeTrue();
 });
 
+it('formats expenses with the family currency', function () {
+    $family = Family::factory()->create(['currency' => 'QAR']);
+    $recorder = User::factory()->admin()->create(['family_id' => $family->id]);
+    $expense = Expense::factory()->recordedBy($recorder)->create([
+        'amount' => 12345,
+    ]);
+
+    expect($expense->formatted_amount)->toBe('QAR 12,345.00');
+});
+
 it('filters and orders expenses with local scopes', function () {
     $older = Expense::factory()->spentOn('2026-05-01 09:00:00')->create();
     $insideRange = Expense::factory()->spentOn('2026-05-10 09:00:00')->create();

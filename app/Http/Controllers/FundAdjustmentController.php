@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreFundAdjustmentRequest;
 use App\Models\FundAdjustment;
+use App\Support\CurrencyFormatter;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -58,7 +59,7 @@ class FundAdjustmentController extends Controller
             'recorded_by' => $user->id,
         ]);
 
-        $formattedAmount = '₦'.number_format($amount, 2);
+        $formattedAmount = CurrencyFormatter::format($amount, $user->family?->currency);
 
         return redirect()->route('fund-adjustments.index')
             ->with('success', "Fund adjustment of {$formattedAmount} recorded successfully.");
