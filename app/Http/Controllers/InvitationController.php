@@ -29,7 +29,7 @@ class InvitationController extends Controller
     {
         $user = $this->authUser();
 
-        if (! $user->isAdmin()) {
+        if (! $user->canAddMembers()) {
             abort(403);
         }
 
@@ -60,6 +60,7 @@ class InvitationController extends Controller
         return Inertia::render('Family/Invitations', [
             'invitations' => $invitations,
             'family_name' => $family instanceof Family ? $family->name : 'the family',
+            'roles' => $this->getRoleOptions($user),
         ]);
     }
 
@@ -67,7 +68,7 @@ class InvitationController extends Controller
     {
         $user = $this->authUser();
 
-        if (! $user->isAdmin()) {
+        if (! $user->canAddMembers()) {
             abort(403);
         }
 
@@ -86,6 +87,12 @@ class InvitationController extends Controller
             'whatsapp_phone.regex' => 'Enter a valid WhatsApp number in international format (e.g. +2348012345678).',
         ]);
         $attributes = $this->invitationAttributes($validated);
+
+        if (! $user->canManageRoles() && $attributes['role'] !== Role::Member) {
+            return redirect()->back()->withErrors([
+                'role' => 'Only family admins can invite admin or financial secretary roles.',
+            ])->withInput();
+        }
 
         $deliveryMethod = $attributes['delivery_method'];
         $email = $attributes['email'];
@@ -163,7 +170,7 @@ class InvitationController extends Controller
     {
         $user = $this->authUser();
 
-        if (! $user->isAdmin() || $invitation->family_id !== $user->family_id) {
+        if (! $user->canAddMembers() || $invitation->family_id !== $user->family_id) {
             abort(403);
         }
 
@@ -225,6 +232,26 @@ class InvitationController extends Controller
     private function nullableString(mixed $value): ?string
     {
         return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    /**
+     * Get role options for invitation forms.
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
+    private function getRoleOptions(User $user): array
+    {
+        $roles = $user->canManageRoles()
+            ? Role::cases()
+            : [Role::Member];
+
+        return array_map(
+            fn (Role $role): array => [
+                'value' => $role->value,
+                'label' => $role->label(),
+            ],
+            $roles,
+        );
     }
 
     /**

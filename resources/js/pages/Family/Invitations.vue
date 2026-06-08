@@ -49,11 +49,13 @@ interface Invitation {
 interface Props {
     invitations?: Invitation[];
     family_name?: string;
+    roles?: Array<{ value: string; label: string }>;
 }
 
 const props = withDefaults(defineProps<Props>(), {
     invitations: () => [],
     family_name: '',
+    roles: () => [],
 });
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -237,11 +239,13 @@ function statusBadge(invitation: Invitation): { text: string; class: string } {
                             class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
                             required
                         >
-                            <option value="member">Member</option>
-                            <option value="financial_secretary">
-                                Financial Secretary
+                            <option
+                                v-for="role in props.roles"
+                                :key="role.value"
+                                :value="role.value"
+                            >
+                                {{ role.label }}
                             </option>
-                            <option value="admin">Admin</option>
                         </select>
                         <InputError :message="errors.role" />
                     </div>

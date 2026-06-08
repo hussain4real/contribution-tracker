@@ -39,6 +39,14 @@ enum Role: string
     }
 
     /**
+     * Check if this role can add or invite ordinary members.
+     */
+    public function canAddMembers(): bool
+    {
+        return $this !== self::Member;
+    }
+
+    /**
      * Check if this role can manage roles.
      */
     public function canManageRoles(): bool

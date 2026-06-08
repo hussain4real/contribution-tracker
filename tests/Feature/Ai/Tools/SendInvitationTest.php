@@ -93,15 +93,39 @@ test('admin can execute invitation sending over whatsapp', function () {
     ]);
 });
 
-test('financial secretary cannot send invitations', function () {
+test('financial secretary can execute member invitation sending', function () {
+    Mail::fake();
+
     $tool = new SendInvitation($this->financialSecretary);
 
     $result = decodeToolResult($tool->handle(new Request([
         'email' => 'newmember@example.com',
         'role' => 'member',
+        'confirmed' => true,
     ])));
 
-    expect($result['error'])->toContain('Only family admins');
+    expect($result['status'])->toBe('success')
+        ->and($result['message'])->toContain('newmember@example.com');
+
+    $this->assertDatabaseHas('family_invitations', [
+        'family_id' => $this->family->id,
+        'email' => 'newmember@example.com',
+        'invited_by' => $this->financialSecretary->id,
+    ]);
+
+    Mail::assertQueued(FamilyInvitationMail::class);
+});
+
+test('financial secretary cannot invite privileged roles', function () {
+    $tool = new SendInvitation($this->financialSecretary);
+
+    $result = decodeToolResult($tool->handle(new Request([
+        'email' => 'newadmin@example.com',
+        'role' => 'admin',
+        'confirmed' => true,
+    ])));
+
+    expect($result['error'])->toContain('Only family admins can invite admin or financial secretary roles');
 });
 
 test('member cannot send invitations', function () {
@@ -112,7 +136,7 @@ test('member cannot send invitations', function () {
         'role' => 'member',
     ])));
 
-    expect($result['error'])->toContain('Only family admins');
+    expect($result['error'])->toContain('Only family admins and financial secretaries');
 });
 
 test('invitation rejects invalid email', function () {

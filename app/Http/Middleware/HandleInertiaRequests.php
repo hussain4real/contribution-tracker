@@ -59,6 +59,7 @@ class HandleInertiaRequests extends Middleware
                     'whatsapp_verified_at' => $user->whatsapp_verified_at,
                 ] : null,
                 'can' => $user ? [
+                    'add_members' => $user->role->canAddMembers(),
                     'manage_members' => $user->role->canManageMembers(),
                     'record_payments' => $user->role->canRecordPayments(),
                     'generate_reports' => $user->role->canGenerateReports(),

@@ -34,12 +34,14 @@ interface Member {
 interface Props {
     members?: Member[];
     archivedMembers?: Member[];
+    canAddMembers?: boolean;
     canManageMembers?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
     members: () => [],
     archivedMembers: () => [],
+    canAddMembers: false,
     canManageMembers: false,
 });
 
@@ -100,7 +102,7 @@ function formatCurrency(amount: number): string {
                         }}</span>
                     </Button>
                     <Link
-                        v-if="canManageMembers && canAddMore"
+                        v-if="canAddMembers && canAddMore"
                         :href="create().url"
                     >
                         <Button size="sm">
@@ -113,7 +115,7 @@ function formatCurrency(amount: number): string {
 
             <!-- Member limit banner -->
             <div
-                v-if="canManageMembers && !canAddMore"
+                v-if="canAddMembers && !canAddMore"
                 class="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950"
             >
                 <p class="text-sm text-amber-800 dark:text-amber-200">
