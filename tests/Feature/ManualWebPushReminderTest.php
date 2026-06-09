@@ -5,12 +5,50 @@ declare(strict_types=1);
 use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\Payment;
+use App\Models\PlatformPlan;
 use App\Models\User;
 use App\Notifications\ContributionReminderNotification;
+use App\Support\PlatformPlanCatalog;
 use Illuminate\Support\Facades\Notification;
 use NotificationChannels\WebPush\WebPushChannel;
 
 describe('Manual web push contribution reminder', function () {
+    it('requires browser push reminders in the family plan', function () {
+        Notification::fake();
+
+        $freePlan = PlatformPlan::create([
+            'name' => 'Free',
+            'slug' => PlatformPlanCatalog::Free,
+            'price' => 0,
+            'max_members' => 5,
+            'features' => [PlatformPlanCatalog::BasicContributions, PlatformPlanCatalog::ManualPayments],
+            'is_active' => true,
+            'sort_order' => 0,
+        ]);
+        $family = Family::factory()->create(['platform_plan_id' => $freePlan->id]);
+        $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+        $member = User::factory()
+            ->member()
+            ->employed()
+            ->create(['family_id' => $family->id]);
+        $member->updatePushSubscription(
+            'https://updates.push.services.mozilla.com/wpush/v2/test-endpoint',
+            'test-public-key',
+            'test-auth-token',
+            'aes128gcm',
+        );
+        $contribution = Contribution::factory()
+            ->forUser($member)
+            ->currentMonth()
+            ->create(['expected_amount' => 5000]);
+
+        $this->actingAs($admin)
+            ->post("/contributions/{$contribution->id}/web-push-reminder")
+            ->assertRedirect(route('subscription.index'));
+
+        Notification::assertNothingSent();
+    });
+
     it('sends a web push-only reminder when admin triggers it', function () {
         Notification::fake();
 

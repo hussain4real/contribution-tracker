@@ -3,13 +3,32 @@
 declare(strict_types=1);
 
 use App\Features\AiAssistant;
+use App\Models\PlatformPlan;
+use App\Support\PlatformPlanCatalog;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Laravel\Pennant\Feature;
 
 describe('Mobile app shell', function () {
     beforeEach(function () {
-        $this->family = createBrowserFamily();
+        $aiPlan = PlatformPlan::create([
+            'name' => 'Growth',
+            'slug' => PlatformPlanCatalog::Growth,
+            'price' => 7500,
+            'max_members' => 75,
+            'features' => [
+                PlatformPlanCatalog::BasicContributions,
+                PlatformPlanCatalog::ManualPayments,
+                PlatformPlanCatalog::AiAssistant,
+            ],
+            'is_active' => true,
+            'sort_order' => 2,
+        ]);
+
+        $this->family = createBrowserFamily([
+            'platform_plan_id' => $aiPlan->id,
+            'subscription_status' => 'active',
+        ]);
         $this->admin = createBrowserAdmin($this->family, [
             'name' => 'Admin User',
             'email' => 'admin@test.com',

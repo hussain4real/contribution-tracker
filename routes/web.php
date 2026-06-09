@@ -130,13 +130,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('contributions/generate', [ContributionController::class, 'generate'])->name('contributions.generate');
     Route::get('contributions/{contribution}', [ContributionController::class, 'show'])->name('contributions.show');
     Route::post('contributions/{contribution}/email-reminder', [ContributionEmailReminderController::class, 'send'])
-        ->middleware('throttle:10,1')
+        ->middleware(['subscription:'.PlatformPlanCatalog::EmailReminders, 'throttle:10,1'])
         ->name('contributions.email-reminder');
     Route::post('contributions/{contribution}/whatsapp-reminder', [ContributionWhatsAppReminderController::class, 'send'])
         ->middleware(['subscription:'.PlatformPlanCatalog::WhatsappReminders, 'throttle:10,1'])
         ->name('contributions.whatsapp-reminder');
     Route::post('contributions/{contribution}/web-push-reminder', [ContributionWebPushReminderController::class, 'send'])
-        ->middleware('throttle:10,1')
+        ->middleware(['subscription:'.PlatformPlanCatalog::WebPushReminders, 'throttle:10,1'])
         ->name('contributions.web-push-reminder');
 
     // Payments

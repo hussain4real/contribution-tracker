@@ -243,6 +243,28 @@ it('prevents subscribing to free plan', function () {
         ->assertUnprocessable();
 });
 
+it('prevents subscribing to inactive retired plans', function () {
+    $retiredPlan = PlatformPlan::create([
+        'name' => 'Starter',
+        'slug' => 'starter',
+        'price' => 2000,
+        'max_members' => 20,
+        'features' => [PlatformPlanCatalog::BasicContributions],
+        'is_active' => false,
+        'sort_order' => 9,
+    ]);
+
+    $family = Family::factory()->create();
+    $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+
+    $this->actingAs($admin)
+        ->postJson(route('subscription.subscribe'), [
+            'plan_id' => $retiredPlan->id,
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('plan_id');
+});
+
 it('rejects subscription when an admin does not belong to a family', function () {
     $plan = PlatformPlan::create([
         'name' => 'Starter',
