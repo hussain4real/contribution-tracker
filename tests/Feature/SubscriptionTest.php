@@ -8,7 +8,11 @@ use App\Models\Family;
 use App\Models\PaystackTransaction;
 use App\Models\PlatformPlan;
 use App\Models\User;
+use App\Support\PlatformPlanCatalog;
+use Database\Seeders\PlatformPlanSeeder;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
     config([
@@ -36,12 +40,62 @@ it('shows subscription page for authenticated user', function () {
         ->assertSuccessful();
 });
 
+it('shows the active freemium plans with subscription card metadata', function () {
+    $this->seed(PlatformPlanSeeder::class);
+
+    $familyPlan = PlatformPlan::where('slug', PlatformPlanCatalog::Family)->firstOrFail();
+    $family = Family::factory()->create([
+        'platform_plan_id' => $familyPlan->id,
+        'subscription_status' => 'active',
+    ]);
+    $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+
+    $this->actingAs($admin)
+        ->get(route('subscription.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Subscription/Index')
+            ->has('plans', 4)
+            ->where('plans.0.slug', PlatformPlanCatalog::Free)
+            ->where('plans.0.price', 0)
+            ->where('plans.0.max_members', 5)
+            ->where('plans.1.slug', PlatformPlanCatalog::Family)
+            ->where('plans.1.price', 3000)
+            ->where('plans.1.max_members', 25)
+            ->where('plans.1.is_recommended', true)
+            ->where('plans.1.is_current', true)
+            ->where('plans.2.slug', PlatformPlanCatalog::Growth)
+            ->where('plans.2.price', 7500)
+            ->where('plans.2.max_members', 75)
+            ->where('plans.3.slug', PlatformPlanCatalog::Organization)
+            ->where('plans.3.price', 20000)
+            ->where('plans.3.max_members', 250)
+            ->where('current_plan.name', 'Family')
+            ->where('is_admin', true)
+            ->where('available_features.'.PlatformPlanCatalog::WhatsappMessaging, 'WhatsApp Reminders & Inbox')
+        );
+});
+
+it('reports non admin subscription page actions through props', function () {
+    $this->seed(PlatformPlanSeeder::class);
+
+    $member = User::factory()->member()->create();
+
+    $this->actingAs($member)
+        ->get(route('subscription.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Subscription/Index')
+            ->where('is_admin', false)
+        );
+});
+
 it('redirects guests from subscription page', function () {
     $this->get(route('subscription.index'))
         ->assertRedirect();
 });
 
-it('allows admin to subscribe to a paid plan', function () {
+it('allows admin to subscribe to a paid monthly family plan', function () {
     Http::fake([
         'api.paystack.co/plan' => Http::response([
             'status' => true,
@@ -62,11 +116,16 @@ it('allows admin to subscribe to a paid plan', function () {
     ]);
 
     $plan = PlatformPlan::create([
-        'name' => 'Starter',
-        'slug' => 'starter',
-        'price' => 2000,
-        'max_members' => 20,
-        'features' => ['basic_contributions', 'online_payments'],
+        'name' => 'Family',
+        'slug' => PlatformPlanCatalog::Family,
+        'price' => 3000,
+        'max_members' => 25,
+        'features' => [
+            PlatformPlanCatalog::BasicContributions,
+            PlatformPlanCatalog::ManualPayments,
+            PlatformPlanCatalog::OnlinePayments,
+            PlatformPlanCatalog::Reports,
+        ],
         'is_active' => true,
         'sort_order' => 1,
     ]);
@@ -80,6 +139,23 @@ it('allows admin to subscribe to a paid plan', function () {
         ])
         ->assertSuccessful()
         ->assertJsonStructure(['access_code', 'authorization_url', 'reference']);
+
+    Http::assertSent(function (Request $request): bool {
+        $data = $request->data();
+
+        return str_ends_with($request->url(), '/plan')
+            && stringValue($data, 'name') === 'Family - FamilyFund'
+            && intValue($data, 'amount') === 300000
+            && stringValue($data, 'interval') === 'monthly';
+    });
+
+    Http::assertSent(function (Request $request): bool {
+        $data = $request->data();
+
+        return str_ends_with($request->url(), '/transaction/initialize')
+            && intValue($data, 'amount') === 300000
+            && stringValue($data, 'plan') === 'PLN_test123';
+    });
 });
 
 it('reuses existing paystack plan and customer records when subscribing', function () {

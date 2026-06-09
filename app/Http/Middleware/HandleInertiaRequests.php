@@ -6,8 +6,10 @@ namespace App\Http\Middleware;
 
 use App\Features\AiAssistant;
 use App\Models\Family;
+use App\Models\PlatformPlan;
 use App\Models\User;
 use App\Services\GitHubReleaseService;
+use App\Support\PlatformPlanCatalog;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -126,7 +128,7 @@ class HandleInertiaRequests extends Middleware
         $family->loadCount('members');
         $family->loadMissing('platformPlan');
 
-        $plan = $family->platformPlan;
+        $plan = $family->platformPlan ?? $this->defaultFreePlan();
         $memberCount = $family->members_count;
 
         $features = $plan ? $plan->features : [];
@@ -138,6 +140,14 @@ class HandleInertiaRequests extends Middleware
             'can_add_members' => ! $plan || $plan->hasUnlimitedMembers() || $memberCount < $plan->max_members,
             'features' => $features,
         ];
+    }
+
+    private function defaultFreePlan(): ?PlatformPlan
+    {
+        return PlatformPlan::query()
+            ->where('slug', PlatformPlanCatalog::Free)
+            ->where('is_active', true)
+            ->first();
     }
 
     /**

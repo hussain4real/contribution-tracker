@@ -11,6 +11,7 @@ use App\Models\Family;
 use App\Models\PaystackTransaction;
 use App\Models\PlatformPlan;
 use App\Services\PaystackService;
+use App\Support\PlatformPlanCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -31,29 +32,47 @@ class SubscriptionController extends Controller
     {
         $user = $this->authUser();
         $family = $user->family;
+        $currentPlan = $family?->platformPlan;
+
+        if (! $currentPlan && $family instanceof Family) {
+            $currentPlan = PlatformPlan::query()
+                ->where('slug', PlatformPlanCatalog::Free)
+                ->where('is_active', true)
+                ->first();
+        }
 
         $plans = PlatformPlan::where('is_active', true)
             ->orderBy('sort_order')
             ->get()
-            ->map(fn (PlatformPlan $plan) => [
-                'id' => $plan->id,
-                'name' => $plan->name,
-                'slug' => $plan->slug,
-                'price' => $plan->price,
-                'formatted_price' => $plan->formattedPrice(),
-                'max_members' => $plan->max_members,
-                'features' => $plan->features ?? [],
-                'is_current' => $family?->platform_plan_id === $plan->id,
-            ]);
+            ->map(function (PlatformPlan $plan) use ($currentPlan): array {
+                $metadata = PlatformPlanCatalog::subscriptionCardMetadata()[$plan->slug] ?? [
+                    'audience' => 'FamilyFunds workspace',
+                    'summary' => 'A custom package configured by the platform team.',
+                    'is_recommended' => false,
+                ];
+
+                return [
+                    'id' => $plan->id,
+                    'name' => $plan->name,
+                    'slug' => $plan->slug,
+                    'price' => $plan->price,
+                    'formatted_price' => $plan->formattedPrice(),
+                    'max_members' => $plan->max_members,
+                    'features' => $plan->features ?? [],
+                    'is_current' => $currentPlan?->id === $plan->id,
+                    ...$metadata,
+                ];
+            });
 
         return Inertia::render('Subscription/Index', [
             'plans' => $plans,
-            'current_plan' => $family?->platformPlan?->only(['id', 'name', 'slug', 'price']),
+            'current_plan' => $currentPlan?->only(['id', 'name', 'slug', 'price']),
             'subscription_status' => $family instanceof Family ? ($family->subscription_status ?? 'free') : 'free',
             'current_period_end' => $family?->current_period_end?->toDateString(),
             'member_count' => $family?->members()->count() ?? 0,
             'is_admin' => $user->isAdmin(),
             'paystack_public_key' => $this->stringConfig('services.paystack.public_key'),
+            'available_features' => PlatformPlanCatalog::featureLabels(),
         ]);
     }
 

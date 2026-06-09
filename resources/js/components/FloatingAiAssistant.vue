@@ -34,7 +34,9 @@ const dragTarget = ref<HTMLElement | null>(null);
 
 const showAssistant = computed(
     () =>
-        !!page.props.featureFlags?.ai_assistant && !page.url.startsWith('/ai'),
+        !!page.props.featureFlags?.ai_assistant &&
+        !!page.props.subscription?.features.includes('ai_assistant') &&
+        !page.url.startsWith('/ai'),
 );
 
 const buttonStyle = computed<CSSProperties>(() => ({

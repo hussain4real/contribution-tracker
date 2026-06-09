@@ -5,6 +5,9 @@ declare(strict_types=1);
 use App\Models\Family;
 use App\Models\PlatformPlan;
 use App\Models\User;
+use App\Support\PlatformPlanCatalog;
+use Database\Seeders\PlatformPlanSeeder;
+use Illuminate\Support\Collection;
 use Inertia\Testing\AssertableInertia as Assert;
 
 function createSuperAdmin(): User
@@ -16,6 +19,89 @@ function createSuperAdmin(): User
         'is_super_admin' => true,
     ]);
 }
+
+/**
+ * @param  Collection<string, PlatformPlan>  $plans
+ */
+function seededPlatformPlan(Collection $plans, string $slug): PlatformPlan
+{
+    $plan = $plans->get($slug);
+
+    if (! $plan instanceof PlatformPlan) {
+        throw new RuntimeException("Expected seeded platform plan [{$slug}].");
+    }
+
+    return $plan;
+}
+
+it('seeds the freemium self serve pricing ladder and retires legacy plans', function () {
+    foreach (['starter', 'pro', 'enterprise'] as $legacySlug) {
+        PlatformPlan::create([
+            'name' => ucfirst($legacySlug),
+            'slug' => $legacySlug,
+            'price' => 9999,
+            'max_members' => 99,
+            'features' => ['basic_contributions'],
+            'is_active' => true,
+            'sort_order' => 9,
+            'paystack_plan_code' => 'PLN_'.$legacySlug,
+        ]);
+    }
+
+    $this->seed(PlatformPlanSeeder::class);
+
+    $activePlans = PlatformPlan::query()
+        ->where('is_active', true)
+        ->orderBy('sort_order')
+        ->get()
+        ->keyBy('slug');
+    $freePlan = seededPlatformPlan($activePlans, PlatformPlanCatalog::Free);
+    $familyPlan = seededPlatformPlan($activePlans, PlatformPlanCatalog::Family);
+    $growthPlan = seededPlatformPlan($activePlans, PlatformPlanCatalog::Growth);
+    $organizationPlan = seededPlatformPlan($activePlans, PlatformPlanCatalog::Organization);
+
+    expect($activePlans->keys()->all())->toBe([
+        PlatformPlanCatalog::Free,
+        PlatformPlanCatalog::Family,
+        PlatformPlanCatalog::Growth,
+        PlatformPlanCatalog::Organization,
+    ])
+        ->and($freePlan->price)->toBe(0)
+        ->and($freePlan->max_members)->toBe(5)
+        ->and($freePlan->features)->toBe([
+            PlatformPlanCatalog::BasicContributions,
+            PlatformPlanCatalog::ManualPayments,
+        ])
+        ->and($familyPlan->price)->toBe(3000)
+        ->and($familyPlan->max_members)->toBe(25)
+        ->and($familyPlan->features)->toContain(
+            PlatformPlanCatalog::OnlinePayments,
+            PlatformPlanCatalog::Reports,
+        )
+        ->and($growthPlan->price)->toBe(7500)
+        ->and($growthPlan->max_members)->toBe(75)
+        ->and($growthPlan->features)->toContain(PlatformPlanCatalog::AiAssistant)
+        ->and($organizationPlan->price)->toBe(20000)
+        ->and($organizationPlan->max_members)->toBe(250)
+        ->and($organizationPlan->features)->toContain(
+            PlatformPlanCatalog::WhatsappMessaging,
+            PlatformPlanCatalog::PrioritySupport,
+        );
+
+    $legacyActiveStates = PlatformPlan::query()
+        ->whereIn('slug', ['starter', 'pro', 'enterprise'])
+        ->get()
+        ->mapWithKeys(fn (PlatformPlan $plan): array => [$plan->slug => $plan->is_active])
+        ->sortKeys()
+        ->all();
+
+    expect($legacyActiveStates)
+        ->toBe([
+            'enterprise' => false,
+            'pro' => false,
+            'starter' => false,
+        ]);
+});
 
 it('shows the plans page for super admin', function () {
     $admin = createSuperAdmin();

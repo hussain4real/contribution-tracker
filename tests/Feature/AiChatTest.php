@@ -5,7 +5,9 @@ declare(strict_types=1);
 use App\Ai\Agents\FamilyAssistant;
 use App\Features\AiAssistant;
 use App\Models\Family;
+use App\Models\PlatformPlan;
 use App\Models\User;
+use App\Support\PlatformPlanCatalog;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -46,6 +48,56 @@ test('authenticated users can visit the AI chat page', function () {
             ->component('Ai/Chat')
             ->has('conversations')
             ->has('messages')
+        );
+});
+
+test('free plan users are redirected away from the AI chat page', function () {
+    $freePlan = PlatformPlan::create([
+        'name' => 'Free',
+        'slug' => PlatformPlanCatalog::Free,
+        'price' => 0,
+        'max_members' => 5,
+        'features' => [PlatformPlanCatalog::BasicContributions, PlatformPlanCatalog::ManualPayments],
+        'is_active' => true,
+        'sort_order' => 0,
+    ]);
+    $family = Family::factory()->create(['platform_plan_id' => $freePlan->id]);
+    $user = User::factory()->create(['family_id' => $family->id]);
+
+    $this->actingAs($user)
+        ->get(route('ai.index'))
+        ->assertRedirect(route('subscription.index'))
+        ->assertSessionHas('error', 'This feature is not available on your current plan. Please upgrade.');
+});
+
+test('growth plan users can visit the AI chat page when the feature flag is active', function () {
+    $growthPlan = PlatformPlan::create([
+        'name' => 'Growth',
+        'slug' => PlatformPlanCatalog::Growth,
+        'price' => 7500,
+        'max_members' => 75,
+        'features' => [
+            PlatformPlanCatalog::BasicContributions,
+            PlatformPlanCatalog::ManualPayments,
+            PlatformPlanCatalog::OnlinePayments,
+            PlatformPlanCatalog::Reports,
+            PlatformPlanCatalog::Exports,
+            PlatformPlanCatalog::AiAssistant,
+        ],
+        'is_active' => true,
+        'sort_order' => 2,
+    ]);
+    $family = Family::factory()->create([
+        'platform_plan_id' => $growthPlan->id,
+        'subscription_status' => 'active',
+    ]);
+    $user = User::factory()->create(['family_id' => $family->id]);
+
+    $this->actingAs($user)
+        ->get(route('ai.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Ai/Chat')
         );
 });
 
