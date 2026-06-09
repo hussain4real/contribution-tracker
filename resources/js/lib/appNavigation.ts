@@ -75,6 +75,11 @@ export function navItemIsActive(
 
 export function useAppNavigation() {
     const page = usePage();
+    const subscriptionFeatures = computed(
+        () => page.props.subscription?.features ?? [],
+    );
+    const hasSubscriptionFeature = (feature: string) =>
+        subscriptionFeatures.value.includes(feature);
 
     const paymentItem = computed<NavItem>(() => {
         if (page.props.auth?.can?.record_payments) {
@@ -144,7 +149,10 @@ export function useAppNavigation() {
             },
         ];
 
-        if (page.props.featureFlags?.ai_assistant) {
+        if (
+            page.props.featureFlags?.ai_assistant &&
+            hasSubscriptionFeature('ai_assistant')
+        ) {
             items.push({
                 title: 'AI Assistant',
                 href: aiIndex(),
@@ -154,23 +162,30 @@ export function useAppNavigation() {
             });
         }
 
-        if (page.props.auth?.can?.generate_reports) {
-            items.push(
-                {
-                    title: 'Reports',
-                    href: reportsIndex(),
-                    icon: FileBarChart2,
-                    component: 'Reports/Index',
-                    section: 'main',
-                },
-                {
-                    title: 'WhatsApp Inbox',
-                    href: whatsappInboxIndex(),
-                    icon: MessageCircle,
-                    component: 'Inbox/Index',
-                    section: 'main',
-                },
-            );
+        if (
+            page.props.auth?.can?.generate_reports &&
+            hasSubscriptionFeature('reports')
+        ) {
+            items.push({
+                title: 'Reports',
+                href: reportsIndex(),
+                icon: FileBarChart2,
+                component: 'Reports/Index',
+                section: 'main',
+            });
+        }
+
+        if (
+            page.props.auth?.can?.generate_reports &&
+            hasSubscriptionFeature('whatsapp_messaging')
+        ) {
+            items.push({
+                title: 'WhatsApp Inbox',
+                href: whatsappInboxIndex(),
+                icon: MessageCircle,
+                component: 'Inbox/Index',
+                section: 'main',
+            });
         }
 
         items.push({

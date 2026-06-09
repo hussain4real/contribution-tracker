@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Models\PlatformPlan;
+use App\Support\PlatformPlanCatalog;
 use Illuminate\Database\Seeder;
 
 class PlatformPlanSeeder extends Seeder
@@ -17,34 +18,71 @@ class PlatformPlanSeeder extends Seeder
         $plans = [
             [
                 'name' => 'Free',
-                'slug' => 'free',
+                'slug' => PlatformPlanCatalog::Free,
                 'price' => 0,
                 'max_members' => 5,
-                'features' => ['basic_contributions', 'manual_payments', 'online_payments'],
+                'features' => [
+                    PlatformPlanCatalog::BasicContributions,
+                    PlatformPlanCatalog::ManualPayments,
+                ],
+                'is_active' => true,
                 'sort_order' => 0,
             ],
             [
-                'name' => 'Starter',
-                'slug' => 'starter',
-                'price' => 2000,
-                'max_members' => 20,
-                'features' => ['basic_contributions', 'manual_payments', 'online_payments', 'reports'],
+                'name' => 'Family',
+                'slug' => PlatformPlanCatalog::Family,
+                'price' => 3000,
+                'max_members' => 25,
+                'features' => [
+                    PlatformPlanCatalog::BasicContributions,
+                    PlatformPlanCatalog::ManualPayments,
+                    PlatformPlanCatalog::OnlinePayments,
+                    PlatformPlanCatalog::EmailReminders,
+                    PlatformPlanCatalog::WebPushReminders,
+                    PlatformPlanCatalog::WhatsappReminders,
+                    PlatformPlanCatalog::Reports,
+                ],
+                'is_active' => true,
                 'sort_order' => 1,
             ],
             [
-                'name' => 'Pro',
-                'slug' => 'pro',
-                'price' => 5000,
-                'max_members' => 50,
-                'features' => ['basic_contributions', 'manual_payments', 'online_payments', 'reports', 'exports'],
+                'name' => 'Growth',
+                'slug' => PlatformPlanCatalog::Growth,
+                'price' => 7500,
+                'max_members' => 75,
+                'features' => [
+                    PlatformPlanCatalog::BasicContributions,
+                    PlatformPlanCatalog::ManualPayments,
+                    PlatformPlanCatalog::OnlinePayments,
+                    PlatformPlanCatalog::EmailReminders,
+                    PlatformPlanCatalog::WebPushReminders,
+                    PlatformPlanCatalog::WhatsappReminders,
+                    PlatformPlanCatalog::Reports,
+                    PlatformPlanCatalog::Exports,
+                    PlatformPlanCatalog::AiAssistant,
+                ],
+                'is_active' => true,
                 'sort_order' => 2,
             ],
             [
-                'name' => 'Enterprise',
-                'slug' => 'enterprise',
-                'price' => 10000,
-                'max_members' => null,
-                'features' => ['basic_contributions', 'manual_payments', 'online_payments', 'reports', 'exports', 'priority_support'],
+                'name' => 'Organization',
+                'slug' => PlatformPlanCatalog::Organization,
+                'price' => 20000,
+                'max_members' => 250,
+                'features' => [
+                    PlatformPlanCatalog::BasicContributions,
+                    PlatformPlanCatalog::ManualPayments,
+                    PlatformPlanCatalog::OnlinePayments,
+                    PlatformPlanCatalog::EmailReminders,
+                    PlatformPlanCatalog::WebPushReminders,
+                    PlatformPlanCatalog::WhatsappReminders,
+                    PlatformPlanCatalog::Reports,
+                    PlatformPlanCatalog::Exports,
+                    PlatformPlanCatalog::AiAssistant,
+                    PlatformPlanCatalog::WhatsappMessaging,
+                    PlatformPlanCatalog::PrioritySupport,
+                ],
+                'is_active' => true,
                 'sort_order' => 3,
             ],
         ];
@@ -55,5 +93,9 @@ class PlatformPlanSeeder extends Seeder
                 $plan,
             );
         }
+
+        PlatformPlan::query()
+            ->whereIn('slug', ['starter', 'pro', 'enterprise'])
+            ->update(['is_active' => false]);
     }
 }

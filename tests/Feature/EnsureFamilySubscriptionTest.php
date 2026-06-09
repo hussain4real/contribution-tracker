@@ -6,6 +6,7 @@ use App\Http\Middleware\EnsureFamilySubscription;
 use App\Models\Family;
 use App\Models\PlatformPlan;
 use App\Models\User;
+use App\Support\PlatformPlanCatalog;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -31,6 +32,28 @@ function makeMiddlewareJsonRequest(User $user, string $routeName = 'dashboard', 
     return $middleware->handle($request, fn ($r) => response('OK'), $feature);
 }
 
+/**
+ * @param  array<int|string, mixed>  $features
+ */
+function createMiddlewarePlan(
+    string $name,
+    string $slug,
+    int $price,
+    ?int $maxMembers,
+    array $features,
+    int $sortOrder,
+): PlatformPlan {
+    return PlatformPlan::create([
+        'name' => $name,
+        'slug' => $slug,
+        'price' => $price,
+        'max_members' => $maxMembers,
+        'features' => $features,
+        'is_active' => true,
+        'sort_order' => $sortOrder,
+    ]);
+}
+
 it('allows users without a family', function () {
     $user = User::factory()->create(['family_id' => null]);
 
@@ -46,6 +69,257 @@ it('allows users on free plan (no plan assigned)', function () {
 
     expect(responseContent($response))->toBe('OK');
 });
+
+it('uses the seeded free plan for families without an assigned plan', function () {
+    createMiddlewarePlan(
+        'Free',
+        PlatformPlanCatalog::Free,
+        0,
+        1,
+        [PlatformPlanCatalog::BasicContributions, PlatformPlanCatalog::ManualPayments],
+        0,
+    );
+
+    $family = Family::factory()->create(['platform_plan_id' => null]);
+    $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+
+    $response = makeMiddlewareJsonRequest($admin, 'family.invitations.store');
+
+    expect($response->getStatusCode())->toBe(403)
+        ->and(decodeJsonObject(responseContent($response)))->toBe([
+            'message' => 'Your plan allows up to 1 members. Please upgrade to add more.',
+        ]);
+});
+
+it('blocks paid features for families without an assigned plan when free exists', function () {
+    createMiddlewarePlan(
+        'Free',
+        PlatformPlanCatalog::Free,
+        0,
+        5,
+        [PlatformPlanCatalog::BasicContributions, PlatformPlanCatalog::ManualPayments],
+        0,
+    );
+
+    $family = Family::factory()->create(['platform_plan_id' => null]);
+    $user = User::factory()->create(['family_id' => $family->id]);
+
+    $response = makeMiddlewareJsonRequest($user, 'dashboard', PlatformPlanCatalog::OnlinePayments);
+
+    expect($response->getStatusCode())->toBe(403)
+        ->and(decodeJsonObject(responseContent($response)))->toBe([
+            'message' => 'This feature is not available on your current plan. Please upgrade.',
+        ]);
+});
+
+it('enforces the freemium feature ladder', function (
+    string $planName,
+    string $slug,
+    int $price,
+    int $maxMembers,
+    array $features,
+    string $requestedFeature,
+    bool $allowed,
+) {
+    $plan = createMiddlewarePlan($planName, $slug, $price, $maxMembers, $features, 1);
+
+    $family = Family::factory()->create([
+        'platform_plan_id' => $plan->id,
+        'subscription_status' => $plan->isPaid() ? 'active' : 'free',
+    ]);
+    $user = User::factory()->create(['family_id' => $family->id]);
+
+    $response = makeMiddlewareRequest($user, 'dashboard', $requestedFeature);
+
+    expect($response->getStatusCode())->toBe($allowed ? 200 : 302);
+})->with([
+    'free blocks online payments' => [
+        'Free',
+        PlatformPlanCatalog::Free,
+        0,
+        5,
+        [PlatformPlanCatalog::BasicContributions, PlatformPlanCatalog::ManualPayments],
+        PlatformPlanCatalog::OnlinePayments,
+        false,
+    ],
+    'free blocks reports' => [
+        'Free',
+        PlatformPlanCatalog::Free,
+        0,
+        5,
+        [PlatformPlanCatalog::BasicContributions, PlatformPlanCatalog::ManualPayments],
+        PlatformPlanCatalog::Reports,
+        false,
+    ],
+    'free blocks ai' => [
+        'Free',
+        PlatformPlanCatalog::Free,
+        0,
+        5,
+        [PlatformPlanCatalog::BasicContributions, PlatformPlanCatalog::ManualPayments],
+        PlatformPlanCatalog::AiAssistant,
+        false,
+    ],
+    'free blocks whatsapp reminders' => [
+        'Free',
+        PlatformPlanCatalog::Free,
+        0,
+        5,
+        [PlatformPlanCatalog::BasicContributions, PlatformPlanCatalog::ManualPayments],
+        PlatformPlanCatalog::WhatsappReminders,
+        false,
+    ],
+    'free blocks whatsapp inbox' => [
+        'Free',
+        PlatformPlanCatalog::Free,
+        0,
+        5,
+        [PlatformPlanCatalog::BasicContributions, PlatformPlanCatalog::ManualPayments],
+        PlatformPlanCatalog::WhatsappMessaging,
+        false,
+    ],
+    'family allows online payments' => [
+        'Family',
+        PlatformPlanCatalog::Family,
+        3000,
+        25,
+        [
+            PlatformPlanCatalog::BasicContributions,
+            PlatformPlanCatalog::ManualPayments,
+            PlatformPlanCatalog::OnlinePayments,
+            PlatformPlanCatalog::Reports,
+        ],
+        PlatformPlanCatalog::OnlinePayments,
+        true,
+    ],
+    'family allows reports' => [
+        'Family',
+        PlatformPlanCatalog::Family,
+        3000,
+        25,
+        [
+            PlatformPlanCatalog::BasicContributions,
+            PlatformPlanCatalog::ManualPayments,
+            PlatformPlanCatalog::OnlinePayments,
+            PlatformPlanCatalog::Reports,
+        ],
+        PlatformPlanCatalog::Reports,
+        true,
+    ],
+    'family blocks ai' => [
+        'Family',
+        PlatformPlanCatalog::Family,
+        3000,
+        25,
+        [
+            PlatformPlanCatalog::BasicContributions,
+            PlatformPlanCatalog::ManualPayments,
+            PlatformPlanCatalog::OnlinePayments,
+            PlatformPlanCatalog::Reports,
+        ],
+        PlatformPlanCatalog::AiAssistant,
+        false,
+    ],
+    'family allows whatsapp reminders' => [
+        'Family',
+        PlatformPlanCatalog::Family,
+        3000,
+        25,
+        [
+            PlatformPlanCatalog::BasicContributions,
+            PlatformPlanCatalog::ManualPayments,
+            PlatformPlanCatalog::OnlinePayments,
+            PlatformPlanCatalog::WhatsappReminders,
+            PlatformPlanCatalog::Reports,
+        ],
+        PlatformPlanCatalog::WhatsappReminders,
+        true,
+    ],
+    'family blocks whatsapp inbox' => [
+        'Family',
+        PlatformPlanCatalog::Family,
+        3000,
+        25,
+        [
+            PlatformPlanCatalog::BasicContributions,
+            PlatformPlanCatalog::ManualPayments,
+            PlatformPlanCatalog::OnlinePayments,
+            PlatformPlanCatalog::WhatsappReminders,
+            PlatformPlanCatalog::Reports,
+        ],
+        PlatformPlanCatalog::WhatsappMessaging,
+        false,
+    ],
+    'growth allows ai' => [
+        'Growth',
+        PlatformPlanCatalog::Growth,
+        7500,
+        75,
+        [
+            PlatformPlanCatalog::BasicContributions,
+            PlatformPlanCatalog::ManualPayments,
+            PlatformPlanCatalog::OnlinePayments,
+            PlatformPlanCatalog::Reports,
+            PlatformPlanCatalog::Exports,
+            PlatformPlanCatalog::AiAssistant,
+        ],
+        PlatformPlanCatalog::AiAssistant,
+        true,
+    ],
+    'growth allows whatsapp reminders' => [
+        'Growth',
+        PlatformPlanCatalog::Growth,
+        7500,
+        75,
+        [
+            PlatformPlanCatalog::BasicContributions,
+            PlatformPlanCatalog::ManualPayments,
+            PlatformPlanCatalog::OnlinePayments,
+            PlatformPlanCatalog::Reports,
+            PlatformPlanCatalog::Exports,
+            PlatformPlanCatalog::AiAssistant,
+            PlatformPlanCatalog::WhatsappReminders,
+        ],
+        PlatformPlanCatalog::WhatsappReminders,
+        true,
+    ],
+    'growth blocks whatsapp inbox' => [
+        'Growth',
+        PlatformPlanCatalog::Growth,
+        7500,
+        75,
+        [
+            PlatformPlanCatalog::BasicContributions,
+            PlatformPlanCatalog::ManualPayments,
+            PlatformPlanCatalog::OnlinePayments,
+            PlatformPlanCatalog::Reports,
+            PlatformPlanCatalog::Exports,
+            PlatformPlanCatalog::AiAssistant,
+            PlatformPlanCatalog::WhatsappReminders,
+        ],
+        PlatformPlanCatalog::WhatsappMessaging,
+        false,
+    ],
+    'organization allows whatsapp' => [
+        'Organization',
+        PlatformPlanCatalog::Organization,
+        20000,
+        250,
+        [
+            PlatformPlanCatalog::BasicContributions,
+            PlatformPlanCatalog::ManualPayments,
+            PlatformPlanCatalog::OnlinePayments,
+            PlatformPlanCatalog::Reports,
+            PlatformPlanCatalog::Exports,
+            PlatformPlanCatalog::AiAssistant,
+            PlatformPlanCatalog::WhatsappReminders,
+            PlatformPlanCatalog::WhatsappMessaging,
+            PlatformPlanCatalog::PrioritySupport,
+        ],
+        PlatformPlanCatalog::WhatsappMessaging,
+        true,
+    ],
+]);
 
 it('allows users when plan has unlimited members', function () {
     $plan = PlatformPlan::create([

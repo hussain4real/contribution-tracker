@@ -6,7 +6,6 @@ network_access = true
 [mcp_servers.laravel-boost]
 command = "php"
 args = ["artisan", "boost:mcp"]
-cwd = "/Users/amisha/www/contribution-tracker"
 
 [mcp_servers.nightwatch]
 command = "npx"

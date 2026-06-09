@@ -3,8 +3,10 @@
 declare(strict_types=1);
 
 use App\Models\Family;
+use App\Models\PlatformPlan;
 use App\Models\User;
 use App\Models\WhatsAppMessage;
+use App\Support\PlatformPlanCatalog;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -22,6 +24,90 @@ beforeEach(function () {
 });
 
 describe('WhatsApp inbox authorization', function () {
+    it('redirects admins without whatsapp messaging in their plan', function () {
+        $freePlan = PlatformPlan::create([
+            'name' => 'Free',
+            'slug' => PlatformPlanCatalog::Free,
+            'price' => 0,
+            'max_members' => 5,
+            'features' => [PlatformPlanCatalog::BasicContributions, PlatformPlanCatalog::ManualPayments],
+            'is_active' => true,
+            'sort_order' => 0,
+        ]);
+        $family = Family::factory()->create(['platform_plan_id' => $freePlan->id]);
+        $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+
+        $this->actingAs($admin)
+            ->get('/inbox/whatsapp')
+            ->assertRedirect(route('subscription.index'))
+            ->assertSessionHas('error', 'This feature is not available on your current plan. Please upgrade.');
+    });
+
+    it('keeps whatsapp inbox access organization-only when paid plans only include reminders', function (
+        string $name,
+        string $slug,
+        int $price,
+        int $maxMembers,
+        int $sortOrder,
+    ) {
+        $plan = PlatformPlan::create([
+            'name' => $name,
+            'slug' => $slug,
+            'price' => $price,
+            'max_members' => $maxMembers,
+            'features' => [
+                PlatformPlanCatalog::BasicContributions,
+                PlatformPlanCatalog::ManualPayments,
+                PlatformPlanCatalog::OnlinePayments,
+                PlatformPlanCatalog::WhatsappReminders,
+            ],
+            'is_active' => true,
+            'sort_order' => $sortOrder,
+        ]);
+        $family = Family::factory()->create([
+            'platform_plan_id' => $plan->id,
+            'subscription_status' => 'active',
+        ]);
+        $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+
+        $this->actingAs($admin)
+            ->get('/inbox/whatsapp')
+            ->assertRedirect(route('subscription.index'))
+            ->assertSessionHas('error', 'This feature is not available on your current plan. Please upgrade.');
+    })->with([
+        'family plan' => ['Family', PlatformPlanCatalog::Family, 3000, 25, 1],
+        'growth plan' => ['Growth', PlatformPlanCatalog::Growth, 7500, 75, 2],
+    ]);
+
+    it('allows organization plan admins to access the inbox', function () {
+        $organizationPlan = PlatformPlan::create([
+            'name' => 'Organization',
+            'slug' => PlatformPlanCatalog::Organization,
+            'price' => 20000,
+            'max_members' => 250,
+            'features' => [
+                PlatformPlanCatalog::BasicContributions,
+                PlatformPlanCatalog::ManualPayments,
+                PlatformPlanCatalog::OnlinePayments,
+                PlatformPlanCatalog::Reports,
+                PlatformPlanCatalog::Exports,
+                PlatformPlanCatalog::AiAssistant,
+                PlatformPlanCatalog::WhatsappReminders,
+                PlatformPlanCatalog::WhatsappMessaging,
+                PlatformPlanCatalog::PrioritySupport,
+            ],
+            'is_active' => true,
+            'sort_order' => 3,
+        ]);
+        $family = Family::factory()->create([
+            'platform_plan_id' => $organizationPlan->id,
+            'subscription_status' => 'active',
+        ]);
+        $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+
+        $this->actingAs($admin)->get('/inbox/whatsapp')->assertOk();
+    });
+
     it('forbids member users from accessing the inbox', function () {
         $family = Family::factory()->create();
         $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);

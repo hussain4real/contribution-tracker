@@ -25,7 +25,7 @@ class SubscribePlanRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'plan_id' => ['required', 'integer', 'exists:platform_plans,id'],
+            'plan_id' => ['required', 'integer', 'exists:platform_plans,id,is_active,1'],
         ];
     }
 }

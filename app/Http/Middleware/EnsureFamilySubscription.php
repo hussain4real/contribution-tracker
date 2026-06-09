@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Models\PlatformPlan;
+use App\Support\PlatformPlanCatalog;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -26,9 +28,11 @@ class EnsureFamilySubscription
             return $next($request);
         }
 
-        $plan = $family->platformPlan;
+        $family->loadMissing('platformPlan');
 
-        // No plan assigned = free tier (default behavior)
+        $plan = $family->platformPlan ?? $this->defaultFreePlan();
+
+        // If seed data is unavailable, preserve the original permissive fallback.
         if (! $plan) {
             return $next($request);
         }
@@ -89,5 +93,13 @@ class EnsureFamilySubscription
         }
 
         return $next($request);
+    }
+
+    private function defaultFreePlan(): ?PlatformPlan
+    {
+        return PlatformPlan::query()
+            ->where('slug', PlatformPlanCatalog::Free)
+            ->where('is_active', true)
+            ->first();
     }
 }

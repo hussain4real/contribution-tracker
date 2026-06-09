@@ -24,11 +24,14 @@ use App\Http\Controllers\PaystackWebhookController;
 use App\Http\Controllers\PlatformAdminController;
 use App\Http\Controllers\PlatformFeatureFlagController;
 use App\Http\Controllers\PlatformPlanController;
+use App\Http\Controllers\PricingController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\WhatsAppInboxController;
 use App\Http\Controllers\WhatsAppWebhookController;
 use App\Http\Middleware\EnsurePlatformSuperAdmin;
+use App\Models\PlatformPlan;
+use App\Support\PlatformPlanCatalog;
 use Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -36,11 +39,20 @@ use Laravel\Fortify\Features;
 use Laravel\Pennant\Middleware\EnsureFeaturesAreActive;
 
 Route::get('/', function () {
+    $pricingPreviewPlans = PlatformPlan::query()
+        ->where('is_active', true)
+        ->orderBy('sort_order')
+        ->get()
+        ->map(fn (PlatformPlan $plan): array => PlatformPlanCatalog::subscriptionCard($plan));
+
     return Inertia::render('Welcome', [
         'canRegister' => Features::enabled(Features::registration()),
+        'pricingPreviewPlans' => $pricingPreviewPlans,
+        'availableFeatures' => PlatformPlanCatalog::featureLabels(),
     ]);
 })->name('home');
 
+Route::get('/pricing', PricingController::class)->name('pricing');
 Route::get('/privacy', fn () => Inertia::render('Legal/Privacy'))->name('privacy');
 Route::get('/terms', fn () => Inertia::render('Legal/Terms'))->name('terms');
 Route::get('/data-deletion', fn () => Inertia::render('Legal/DataDeletion'))->name('data-deletion');
@@ -80,18 +92,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
     Route::post('notifications/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('notifications.mark-all-read');
 
-    // WhatsApp inbox (Admin / Financial Secretary only — gate enforced in controller)
-    Route::get('inbox/whatsapp', [WhatsAppInboxController::class, 'index'])->name('inbox.whatsapp.index');
-    Route::get('inbox/whatsapp/{phone}', [WhatsAppInboxController::class, 'show'])
-        ->where('phone', '[0-9]+')
-        ->name('inbox.whatsapp.show');
-    Route::post('inbox/whatsapp/{phone}/reply', [WhatsAppInboxController::class, 'reply'])
-        ->where('phone', '[0-9]+')
-        ->middleware('throttle:30,1')
-        ->name('inbox.whatsapp.reply');
+    // WhatsApp inbox (Admin / Financial Secretary only — role gate enforced in controller)
+    Route::middleware('subscription:'.PlatformPlanCatalog::WhatsappMessaging)->group(function () {
+        Route::get('inbox/whatsapp', [WhatsAppInboxController::class, 'index'])->name('inbox.whatsapp.index');
+        Route::get('inbox/whatsapp/{phone}', [WhatsAppInboxController::class, 'show'])
+            ->where('phone', '[0-9]+')
+            ->name('inbox.whatsapp.show');
+        Route::post('inbox/whatsapp/{phone}/reply', [WhatsAppInboxController::class, 'reply'])
+            ->where('phone', '[0-9]+')
+            ->middleware('throttle:30,1')
+            ->name('inbox.whatsapp.reply');
+    });
 
-    // AI Assistant (gated by Pennant feature flag)
-    Route::middleware(EnsureFeaturesAreActive::using(AiAssistant::class))->group(function () {
+    // AI Assistant (gated by subscription plan and Pennant feature flag)
+    Route::middleware([
+        'subscription:'.PlatformPlanCatalog::AiAssistant,
+        EnsureFeaturesAreActive::using(AiAssistant::class),
+    ])->group(function () {
         Route::get('ai', [AiChatController::class, 'index'])->name('ai.index');
         Route::post('ai/chat', [AiChatController::class, 'stream'])->name('ai.chat')->middleware('throttle:30,1');
         Route::post('ai/transcribe', [AiChatController::class, 'transcribe'])->name('ai.transcribe')->middleware('throttle:20,1');
@@ -113,13 +130,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('contributions/generate', [ContributionController::class, 'generate'])->name('contributions.generate');
     Route::get('contributions/{contribution}', [ContributionController::class, 'show'])->name('contributions.show');
     Route::post('contributions/{contribution}/email-reminder', [ContributionEmailReminderController::class, 'send'])
-        ->middleware('throttle:10,1')
+        ->middleware(['subscription:'.PlatformPlanCatalog::EmailReminders, 'throttle:10,1'])
         ->name('contributions.email-reminder');
     Route::post('contributions/{contribution}/whatsapp-reminder', [ContributionWhatsAppReminderController::class, 'send'])
-        ->middleware('throttle:10,1')
+        ->middleware(['subscription:'.PlatformPlanCatalog::WhatsappReminders, 'throttle:10,1'])
         ->name('contributions.whatsapp-reminder');
     Route::post('contributions/{contribution}/web-push-reminder', [ContributionWebPushReminderController::class, 'send'])
-        ->middleware('throttle:10,1')
+        ->middleware(['subscription:'.PlatformPlanCatalog::WebPushReminders, 'throttle:10,1'])
         ->name('contributions.web-push-reminder');
 
     // Payments
@@ -130,7 +147,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('payments/{payment}', [PaymentController::class, 'destroy'])->name('payments.destroy');
 
     // Member Self-Pay (Paystack)
-    Route::middleware('subscription:online_payments')->group(function () {
+    Route::middleware('subscription:'.PlatformPlanCatalog::OnlinePayments)->group(function () {
         Route::get('pay', [MemberPaymentController::class, 'show'])->name('pay.index');
         Route::post('pay/initiate', [MemberPaymentController::class, 'initiate'])->name('pay.initiate');
         Route::get('pay/callback', [MemberPaymentController::class, 'callback'])->name('pay.callback');
@@ -156,7 +173,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('fund-adjustments/{fund_adjustment}', [FundAdjustmentController::class, 'destroy'])->name('fund-adjustments.destroy');
 
     // Reports (Financial Secretary and Admin only)
-    Route::prefix('reports')->name('reports.')->middleware(['can:generate-reports', 'subscription:reports'])->group(function () {
+    Route::prefix('reports')->name('reports.')->middleware(['can:generate-reports', 'subscription:'.PlatformPlanCatalog::Reports])->group(function () {
         Route::get('/', [ReportController::class, 'index'])->name('index');
         Route::get('monthly', [ReportController::class, 'monthly'])->name('monthly');
         Route::get('annual', [ReportController::class, 'annual'])->name('annual');

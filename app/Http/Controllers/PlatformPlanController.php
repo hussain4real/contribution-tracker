@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\PlatformPlan;
+use App\Support\PlatformPlanCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -35,14 +36,7 @@ class PlatformPlanController extends Controller
 
         return Inertia::render('Platform/Plans', [
             'plans' => $plans,
-            'available_features' => [
-                'basic_contributions' => 'Monthly Contributions',
-                'manual_payments' => 'Manual Payment Recording',
-                'online_payments' => 'Online Payments (Paystack)',
-                'reports' => 'Financial Reports',
-                'exports' => 'CSV Exports',
-                'priority_support' => 'Priority Support',
-            ],
+            'available_features' => PlatformPlanCatalog::featureLabels(),
         ]);
     }
 

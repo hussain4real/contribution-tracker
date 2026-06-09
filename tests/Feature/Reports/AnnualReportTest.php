@@ -227,8 +227,8 @@ describe('Annual Report', function () {
         DB::disableQueryLog();
 
         // The annual report should use a fixed number of queries (auth + contribution query
-        // with eager-loaded payments/users + Pennant feature flag resolution),
+        // with eager-loaded payments/users + Pennant and subscription feature resolution),
         // not scale with the number of months or categories.
-        expect($queryCount)->toBeLessThanOrEqual(8);
+        expect($queryCount)->toBeLessThanOrEqual(10);
     });
 });

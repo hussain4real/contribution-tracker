@@ -1,16 +1,35 @@
 <script setup lang="ts">
 import ThemeToggle from '@/components/ThemeToggle.vue';
 import { Button } from '@/components/ui/button';
-import { dashboard, login, register } from '@/routes';
+import { dashboard, login, pricing, register } from '@/routes';
 import { Head, Link } from '@inertiajs/vue3';
+import { ArrowRight, CheckCircle2 } from 'lucide-vue-next';
 import { onMounted, onUnmounted, ref } from 'vue';
 
-withDefaults(
+interface Plan {
+    id: number;
+    name: string;
+    slug: string;
+    price: number;
+    formatted_price: string;
+    max_members: number | null;
+    features: string[];
+    is_current: boolean;
+    audience: string;
+    summary: string;
+    is_recommended: boolean;
+}
+
+const props = withDefaults(
     defineProps<{
         canRegister: boolean;
+        pricingPreviewPlans?: Plan[];
+        availableFeatures?: Record<string, string>;
     }>(),
     {
         canRegister: true,
+        pricingPreviewPlans: () => [],
+        availableFeatures: () => ({}),
     },
 );
 
@@ -119,6 +138,18 @@ function toggleFaq(index: number): void {
     openFaqIndex.value = openFaqIndex.value === index ? null : index;
 }
 
+function memberLimitLabel(plan: Plan): string {
+    if (plan.max_members) {
+        return `Up to ${plan.max_members} members`;
+    }
+
+    return 'Custom member limit';
+}
+
+function featureLabel(feature: string): string {
+    return props.availableFeatures[feature] || feature;
+}
+
 const visibleSections = ref<Set<string>>(new Set());
 let observer: IntersectionObserver | null = null;
 
@@ -185,6 +216,12 @@ onUnmounted(() => {
                 </div>
 
                 <nav class="flex items-center gap-2 sm:gap-3">
+                    <Link
+                        :href="pricing()"
+                        class="hidden rounded-md px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:text-slate-900 md:inline-flex dark:text-slate-300 dark:hover:text-white"
+                    >
+                        Pricing
+                    </Link>
                     <ThemeToggle />
                     <Link v-if="$page.props.auth.user" :href="dashboard()">
                         <Button variant="default" size="sm"> Dashboard </Button>
@@ -193,7 +230,7 @@ onUnmounted(() => {
                         <Link :href="login()" class="hidden sm:inline-flex">
                             <Button variant="ghost" size="sm"> Log in </Button>
                         </Link>
-                        <Link v-if="canRegister" :href="register()">
+                        <Link v-if="props.canRegister" :href="register()">
                             <Button size="sm"> Get Started </Button>
                         </Link>
                     </template>
@@ -252,7 +289,7 @@ onUnmounted(() => {
                         class="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row"
                     >
                         <Link
-                            v-if="!$page.props.auth.user && canRegister"
+                            v-if="!$page.props.auth.user && props.canRegister"
                             :href="register()"
                         >
                             <Button
@@ -260,19 +297,7 @@ onUnmounted(() => {
                                 class="w-full bg-linear-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-500/25 hover:from-emerald-700 hover:to-teal-700 sm:w-auto"
                             >
                                 Start Tracking Today
-                                <svg
-                                    class="ml-2 size-4"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M13 7l5 5m0 0l-5 5m5-5H6"
-                                    />
-                                </svg>
+                                <ArrowRight class="size-4" />
                             </Button>
                         </Link>
                         <Link
@@ -284,28 +309,16 @@ onUnmounted(() => {
                                 class="w-full bg-linear-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-500/25 hover:from-emerald-700 hover:to-teal-700 sm:w-auto"
                             >
                                 Go to Dashboard
-                                <svg
-                                    class="ml-2 size-4"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M13 7l5 5m0 0l-5 5m5-5H6"
-                                    />
-                                </svg>
+                                <ArrowRight class="size-4" />
                             </Button>
                         </Link>
-                        <Link v-if="!$page.props.auth.user" :href="login()">
+                        <Link v-if="!$page.props.auth.user" :href="pricing()">
                             <Button
                                 variant="outline"
                                 size="lg"
                                 class="w-full border-slate-300 sm:w-auto dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
                             >
-                                Sign In
+                                View Pricing
                             </Button>
                         </Link>
                     </div>
@@ -330,6 +343,112 @@ onUnmounted(() => {
                                 {{ stat.label }}
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Pricing Preview Section -->
+        <section
+            v-if="props.pricingPreviewPlans.length"
+            id="section-pricing"
+            data-animate
+            class="border-y border-slate-200 bg-white py-16 dark:border-slate-800 dark:bg-slate-950"
+            :class="
+                visibleSections.has('section-pricing')
+                    ? 'animate-fade-in-up'
+                    : 'opacity-0'
+            "
+        >
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div
+                    class="flex flex-col justify-between gap-6 md:flex-row md:items-end"
+                >
+                    <div class="max-w-2xl">
+                        <h2
+                            class="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl dark:text-white"
+                        >
+                            Clear monthly pricing
+                        </h2>
+                        <p
+                            class="mt-4 text-lg text-slate-600 dark:text-slate-400"
+                        >
+                            Choose a plan by group size and the workflows your
+                            family or organization needs.
+                        </p>
+                    </div>
+                    <Link :href="pricing()">
+                        <Button variant="outline" class="w-full sm:w-auto">
+                            Compare all plans
+                            <ArrowRight class="size-4" />
+                        </Button>
+                    </Link>
+                </div>
+
+                <div class="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div
+                        v-for="plan in props.pricingPreviewPlans"
+                        :key="plan.id"
+                        :class="[
+                            'flex min-h-72 flex-col rounded-lg border p-5 shadow-sm transition-all',
+                            plan.is_recommended
+                                ? 'border-emerald-500 bg-emerald-50/70 shadow-emerald-900/10 dark:bg-emerald-950/20'
+                                : 'border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900',
+                        ]"
+                    >
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <h3
+                                    class="text-lg font-semibold text-slate-900 dark:text-white"
+                                >
+                                    {{ plan.name }}
+                                </h3>
+                                <p
+                                    class="mt-1 text-sm text-slate-600 dark:text-slate-400"
+                                >
+                                    {{ memberLimitLabel(plan) }}
+                                </p>
+                            </div>
+                            <span
+                                v-if="plan.is_recommended"
+                                class="rounded-full bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white"
+                            >
+                                Recommended
+                            </span>
+                        </div>
+
+                        <div class="mt-5">
+                            <span
+                                class="text-2xl font-bold text-slate-900 dark:text-white"
+                            >
+                                {{ plan.formatted_price }}
+                            </span>
+                            <span
+                                v-if="plan.price > 0"
+                                class="text-sm text-slate-500 dark:text-slate-400"
+                            >
+                                /month
+                            </span>
+                        </div>
+
+                        <p
+                            class="mt-4 flex-1 text-sm leading-6 text-slate-600 dark:text-slate-400"
+                        >
+                            {{ plan.summary }}
+                        </p>
+
+                        <ul class="mt-5 space-y-2">
+                            <li
+                                v-for="feature in plan.features.slice(0, 3)"
+                                :key="feature"
+                                class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"
+                            >
+                                <CheckCircle2
+                                    class="size-4 shrink-0 text-emerald-600 dark:text-emerald-400"
+                                />
+                                {{ featureLabel(feature) }}
+                            </li>
+                        </ul>
                     </div>
                 </div>
             </div>
@@ -662,7 +781,7 @@ onUnmounted(() => {
                     </p>
                     <div class="mt-10">
                         <Link
-                            v-if="!$page.props.auth.user && canRegister"
+                            v-if="!$page.props.auth.user && props.canRegister"
                             :href="register()"
                         >
                             <Button
@@ -670,19 +789,7 @@ onUnmounted(() => {
                                 class="cursor-pointer bg-white text-emerald-700 shadow-xl hover:bg-emerald-500 hover:text-white hover:shadow-emerald-300/50"
                             >
                                 Create Your Account
-                                <svg
-                                    class="ml-2 size-4"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M13 7l5 5m0 0l-5 5m5-5H6"
-                                    />
-                                </svg>
+                                <ArrowRight class="size-4" />
                             </Button>
                         </Link>
                         <Link
@@ -694,19 +801,7 @@ onUnmounted(() => {
                                 class="bg-white text-emerald-700 shadow-xl hover:bg-slate-50"
                             >
                                 Go to Dashboard
-                                <svg
-                                    class="ml-2 size-4"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M13 7l5 5m0 0l-5 5m5-5H6"
-                                    />
-                                </svg>
+                                <ArrowRight class="size-4" />
                             </Button>
                         </Link>
                         <Link v-else :href="login()">
@@ -715,19 +810,7 @@ onUnmounted(() => {
                                 class="bg-white text-emerald-700 shadow-xl hover:bg-slate-50"
                             >
                                 Sign In to Continue
-                                <svg
-                                    class="ml-2 size-4"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M13 7l5 5m0 0l-5 5m5-5H6"
-                                    />
-                                </svg>
+                                <ArrowRight class="size-4" />
                             </Button>
                         </Link>
                     </div>
