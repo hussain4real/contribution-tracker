@@ -24,11 +24,13 @@ use App\Http\Controllers\PaystackWebhookController;
 use App\Http\Controllers\PlatformAdminController;
 use App\Http\Controllers\PlatformFeatureFlagController;
 use App\Http\Controllers\PlatformPlanController;
+use App\Http\Controllers\PricingController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\WhatsAppInboxController;
 use App\Http\Controllers\WhatsAppWebhookController;
 use App\Http\Middleware\EnsurePlatformSuperAdmin;
+use App\Models\PlatformPlan;
 use App\Support\PlatformPlanCatalog;
 use Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests;
 use Illuminate\Support\Facades\Route;
@@ -37,11 +39,20 @@ use Laravel\Fortify\Features;
 use Laravel\Pennant\Middleware\EnsureFeaturesAreActive;
 
 Route::get('/', function () {
+    $pricingPreviewPlans = PlatformPlan::query()
+        ->where('is_active', true)
+        ->orderBy('sort_order')
+        ->get()
+        ->map(fn (PlatformPlan $plan): array => PlatformPlanCatalog::subscriptionCard($plan));
+
     return Inertia::render('Welcome', [
         'canRegister' => Features::enabled(Features::registration()),
+        'pricingPreviewPlans' => $pricingPreviewPlans,
+        'availableFeatures' => PlatformPlanCatalog::featureLabels(),
     ]);
 })->name('home');
 
+Route::get('/pricing', PricingController::class)->name('pricing');
 Route::get('/privacy', fn () => Inertia::render('Legal/Privacy'))->name('privacy');
 Route::get('/terms', fn () => Inertia::render('Legal/Terms'))->name('terms');
 Route::get('/data-deletion', fn () => Inertia::render('Legal/DataDeletion'))->name('data-deletion');

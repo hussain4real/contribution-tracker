@@ -44,25 +44,7 @@ class SubscriptionController extends Controller
         $plans = PlatformPlan::where('is_active', true)
             ->orderBy('sort_order')
             ->get()
-            ->map(function (PlatformPlan $plan) use ($currentPlan): array {
-                $metadata = PlatformPlanCatalog::subscriptionCardMetadata()[$plan->slug] ?? [
-                    'audience' => 'FamilyFunds workspace',
-                    'summary' => 'A custom package configured by the platform team.',
-                    'is_recommended' => false,
-                ];
-
-                return [
-                    'id' => $plan->id,
-                    'name' => $plan->name,
-                    'slug' => $plan->slug,
-                    'price' => $plan->price,
-                    'formatted_price' => $plan->formattedPrice(),
-                    'max_members' => $plan->max_members,
-                    'features' => $plan->features ?? [],
-                    'is_current' => $currentPlan?->id === $plan->id,
-                    ...$metadata,
-                ];
-            });
+            ->map(fn (PlatformPlan $plan): array => PlatformPlanCatalog::subscriptionCard($plan, $currentPlan));
 
         return Inertia::render('Subscription/Index', [
             'plans' => $plans,

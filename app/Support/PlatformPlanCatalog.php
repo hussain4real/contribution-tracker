@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Support;
 
+use App\Models\PlatformPlan;
+
 final class PlatformPlanCatalog
 {
     public const Free = 'free';
@@ -73,6 +75,42 @@ final class PlatformPlanCatalog
                 'summary' => 'Add WhatsApp workflows, priority support, and assisted onboarding.',
                 'is_recommended' => false,
             ],
+        ];
+    }
+
+    /**
+     * @return array{
+     *     id: int,
+     *     name: string,
+     *     slug: string,
+     *     price: int,
+     *     formatted_price: string,
+     *     max_members: int|null,
+     *     features: list<string>,
+     *     is_current: bool,
+     *     audience: string,
+     *     summary: string,
+     *     is_recommended: bool
+     * }
+     */
+    public static function subscriptionCard(PlatformPlan $plan, ?PlatformPlan $currentPlan = null): array
+    {
+        $metadata = self::subscriptionCardMetadata()[$plan->slug] ?? [
+            'audience' => 'FamilyFunds workspace',
+            'summary' => 'A custom package configured by the platform team.',
+            'is_recommended' => false,
+        ];
+
+        return [
+            'id' => $plan->id,
+            'name' => $plan->name,
+            'slug' => $plan->slug,
+            'price' => $plan->price,
+            'formatted_price' => $plan->formattedPrice(),
+            'max_members' => $plan->max_members,
+            'features' => $plan->features ?? [],
+            'is_current' => $currentPlan?->id === $plan->id,
+            ...$metadata,
         ];
     }
 }
