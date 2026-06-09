@@ -76,14 +76,21 @@ it('seeds the freemium self serve pricing ladder and retires legacy plans', func
         ->and($familyPlan->max_members)->toBe(25)
         ->and($familyPlan->features)->toContain(
             PlatformPlanCatalog::OnlinePayments,
+            PlatformPlanCatalog::EmailReminders,
+            PlatformPlanCatalog::WebPushReminders,
+            PlatformPlanCatalog::WhatsappReminders,
             PlatformPlanCatalog::Reports,
         )
         ->and($growthPlan->price)->toBe(7500)
         ->and($growthPlan->max_members)->toBe(75)
-        ->and($growthPlan->features)->toContain(PlatformPlanCatalog::AiAssistant)
+        ->and($growthPlan->features)->toContain(
+            PlatformPlanCatalog::WhatsappReminders,
+            PlatformPlanCatalog::AiAssistant,
+        )
         ->and($organizationPlan->price)->toBe(20000)
         ->and($organizationPlan->max_members)->toBe(250)
         ->and($organizationPlan->features)->toContain(
+            PlatformPlanCatalog::WhatsappReminders,
             PlatformPlanCatalog::WhatsappMessaging,
             PlatformPlanCatalog::PrioritySupport,
         );

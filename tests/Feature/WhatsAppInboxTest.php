@@ -43,6 +43,42 @@ describe('WhatsApp inbox authorization', function () {
             ->assertSessionHas('error', 'This feature is not available on your current plan. Please upgrade.');
     });
 
+    it('keeps whatsapp inbox access organization-only when paid plans only include reminders', function (
+        string $name,
+        string $slug,
+        int $price,
+        int $maxMembers,
+        int $sortOrder,
+    ) {
+        $plan = PlatformPlan::create([
+            'name' => $name,
+            'slug' => $slug,
+            'price' => $price,
+            'max_members' => $maxMembers,
+            'features' => [
+                PlatformPlanCatalog::BasicContributions,
+                PlatformPlanCatalog::ManualPayments,
+                PlatformPlanCatalog::OnlinePayments,
+                PlatformPlanCatalog::WhatsappReminders,
+            ],
+            'is_active' => true,
+            'sort_order' => $sortOrder,
+        ]);
+        $family = Family::factory()->create([
+            'platform_plan_id' => $plan->id,
+            'subscription_status' => 'active',
+        ]);
+        $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+
+        $this->actingAs($admin)
+            ->get('/inbox/whatsapp')
+            ->assertRedirect(route('subscription.index'))
+            ->assertSessionHas('error', 'This feature is not available on your current plan. Please upgrade.');
+    })->with([
+        'family plan' => ['Family', PlatformPlanCatalog::Family, 3000, 25, 1],
+        'growth plan' => ['Growth', PlatformPlanCatalog::Growth, 7500, 75, 2],
+    ]);
+
     it('allows organization plan admins to access the inbox', function () {
         $organizationPlan = PlatformPlan::create([
             'name' => 'Organization',
@@ -56,6 +92,7 @@ describe('WhatsApp inbox authorization', function () {
                 PlatformPlanCatalog::Reports,
                 PlatformPlanCatalog::Exports,
                 PlatformPlanCatalog::AiAssistant,
+                PlatformPlanCatalog::WhatsappReminders,
                 PlatformPlanCatalog::WhatsappMessaging,
                 PlatformPlanCatalog::PrioritySupport,
             ],

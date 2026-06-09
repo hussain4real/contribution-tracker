@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { dashboard, home, login, register } from '@/routes';
 import { Head, Link } from '@inertiajs/vue3';
-import { ArrowRight, Check, Users } from 'lucide-vue-next';
+import { ArrowRight, Check, Minus, Users } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 interface Plan {
@@ -28,6 +28,14 @@ interface Props {
     canRegister?: boolean;
 }
 
+interface ComparisonRow {
+    label: string;
+    description: string;
+    feature?: string;
+    value?: 'member_limit';
+    includedSlugs?: string[];
+}
+
 const props = withDefaults(defineProps<Props>(), {
     plans: () => [],
     available_features: () => ({}),
@@ -35,6 +43,74 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const featureLabels = computed(() => props.available_features);
+
+const comparisonRows: ComparisonRow[] = [
+    {
+        label: 'Member cap',
+        description: 'Maximum members covered by the self-serve plan.',
+        value: 'member_limit',
+    },
+    {
+        label: 'Contribution categories and obligations',
+        description: 'Set categories and generate member obligations.',
+        feature: 'basic_contributions',
+    },
+    {
+        label: 'Manual payment recording',
+        description: 'Record cash, transfer, and other offline payments.',
+        feature: 'manual_payments',
+    },
+    {
+        label: 'Paystack member self-pay',
+        description: 'Let members pay their own obligations online.',
+        feature: 'online_payments',
+    },
+    {
+        label: 'Notification center',
+        description: 'In-app notification feed for reminders and updates.',
+        includedSlugs: ['free', 'family', 'growth', 'organization'],
+    },
+    {
+        label: 'Email reminders',
+        description: 'Send contribution reminders through email.',
+        feature: 'email_reminders',
+    },
+    {
+        label: 'Browser push reminders',
+        description: 'Send reminders to members who enable browser alerts.',
+        feature: 'web_push_reminders',
+    },
+    {
+        label: 'Monthly and annual reports',
+        description: 'Generate structured family fund reports.',
+        feature: 'reports',
+    },
+    {
+        label: 'CSV exports',
+        description: 'Export plan and contribution data for offline review.',
+        feature: 'exports',
+    },
+    {
+        label: 'AI agent and report summaries',
+        description: 'Available when the AI feature flag is active.',
+        feature: 'ai_assistant',
+    },
+    {
+        label: 'WhatsApp reminders',
+        description: 'Send WhatsApp contribution reminders to members.',
+        feature: 'whatsapp_reminders',
+    },
+    {
+        label: 'WhatsApp inbox and replies',
+        description: 'Manage incoming WhatsApp messages and send replies.',
+        feature: 'whatsapp_messaging',
+    },
+    {
+        label: 'Priority support',
+        description: 'Faster support and assisted onboarding help.',
+        feature: 'priority_support',
+    },
+];
 
 function memberLimitLabel(plan: Plan): string {
     if (plan.max_members) {
@@ -46,6 +122,26 @@ function memberLimitLabel(plan: Plan): string {
 
 function featureLabel(feature: string): string {
     return featureLabels.value[feature] || feature;
+}
+
+function comparisonRowIncluded(plan: Plan, row: ComparisonRow): boolean {
+    if (row.value === 'member_limit') {
+        return true;
+    }
+
+    if (row.feature) {
+        return plan.features.includes(row.feature);
+    }
+
+    return row.includedSlugs?.includes(plan.slug) ?? false;
+}
+
+function comparisonCellLabel(plan: Plan, row: ComparisonRow): string {
+    if (row.value === 'member_limit') {
+        return memberLimitLabel(plan);
+    }
+
+    return comparisonRowIncluded(plan, row) ? 'Included' : 'Not included';
 }
 </script>
 
@@ -259,6 +355,109 @@ function featureLabel(feature: string): string {
                         Groups above 250 members are handled through a custom
                         onboarding review after confirming support load, payment
                         volume, and onboarding needs.
+                    </div>
+                </div>
+            </section>
+
+            <section class="border-t bg-muted/20 py-12 sm:py-16">
+                <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                    <div class="max-w-3xl">
+                        <Badge variant="secondary">Plans comparison</Badge>
+                        <h2 class="mt-4 text-3xl font-bold tracking-tight">
+                            Compare every plan feature
+                        </h2>
+                        <p
+                            class="mt-3 text-sm leading-6 text-muted-foreground sm:text-base"
+                        >
+                            Each notification channel is listed separately, so
+                            it is clear which plans include email, browser push,
+                            WhatsApp, and the AI agent.
+                        </p>
+                    </div>
+
+                    <div
+                        class="mt-8 overflow-x-auto rounded-lg border bg-background"
+                    >
+                        <table
+                            class="min-w-[920px] table-fixed divide-y text-sm"
+                        >
+                            <thead class="bg-muted/50">
+                                <tr>
+                                    <th
+                                        scope="col"
+                                        class="w-72 px-4 py-4 text-left font-semibold"
+                                    >
+                                        Feature
+                                    </th>
+                                    <th
+                                        v-for="plan in props.plans"
+                                        :key="plan.id"
+                                        scope="col"
+                                        class="px-4 py-4 text-center font-semibold"
+                                    >
+                                        <span class="block">{{
+                                            plan.name
+                                        }}</span>
+                                        <span
+                                            class="mt-1 block text-xs font-normal text-muted-foreground"
+                                        >
+                                            {{ plan.formatted_price
+                                            }}<template v-if="plan.price > 0"
+                                                >/month</template
+                                            >
+                                        </span>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y">
+                                <tr
+                                    v-for="row in comparisonRows"
+                                    :key="row.label"
+                                    class="align-top"
+                                >
+                                    <th scope="row" class="px-4 py-4 text-left">
+                                        <span
+                                            class="block font-medium text-foreground"
+                                        >
+                                            {{ row.label }}
+                                        </span>
+                                        <span
+                                            class="mt-1 block text-xs leading-5 text-muted-foreground"
+                                        >
+                                            {{ row.description }}
+                                        </span>
+                                    </th>
+                                    <td
+                                        v-for="plan in props.plans"
+                                        :key="`${row.label}-${plan.id}`"
+                                        class="px-4 py-4 text-center"
+                                    >
+                                        <span
+                                            v-if="row.value === 'member_limit'"
+                                            class="font-medium"
+                                        >
+                                            {{ comparisonCellLabel(plan, row) }}
+                                        </span>
+                                        <span
+                                            v-else-if="
+                                                comparisonRowIncluded(plan, row)
+                                            "
+                                            class="inline-flex items-center justify-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-400"
+                                        >
+                                            <Check class="size-4" />
+                                            {{ comparisonCellLabel(plan, row) }}
+                                        </span>
+                                        <span
+                                            v-else
+                                            class="inline-flex items-center justify-center gap-1.5 text-muted-foreground"
+                                        >
+                                            <Minus class="size-4" />
+                                            {{ comparisonCellLabel(plan, row) }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </section>

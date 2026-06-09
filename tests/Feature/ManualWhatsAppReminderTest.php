@@ -25,7 +25,7 @@ beforeEach(function () {
 });
 
 describe('Manual WhatsApp contribution reminder', function () {
-    it('requires whatsapp messaging in the family plan', function () {
+    it('requires whatsapp reminders in the family plan', function () {
         Notification::fake();
 
         $freePlan = PlatformPlan::create([
@@ -56,10 +56,32 @@ describe('Manual WhatsApp contribution reminder', function () {
         Notification::assertNothingSent();
     });
 
-    it('sends a WhatsApp-only reminder when admin triggers it', function () {
+    it('sends a WhatsApp-only reminder for paid plans that include reminders', function (
+        string $name,
+        string $slug,
+        int $price,
+        int $maxMembers,
+        int $sortOrder,
+    ) {
         Notification::fake();
 
-        $family = Family::factory()->create();
+        $plan = PlatformPlan::create([
+            'name' => $name,
+            'slug' => $slug,
+            'price' => $price,
+            'max_members' => $maxMembers,
+            'features' => [
+                PlatformPlanCatalog::BasicContributions,
+                PlatformPlanCatalog::ManualPayments,
+                PlatformPlanCatalog::WhatsappReminders,
+            ],
+            'is_active' => true,
+            'sort_order' => $sortOrder,
+        ]);
+        $family = Family::factory()->create([
+            'platform_plan_id' => $plan->id,
+            'subscription_status' => 'active',
+        ]);
         $admin = User::factory()->admin()->create(['family_id' => $family->id]);
         $member = User::factory()
             ->member()
@@ -82,7 +104,10 @@ describe('Manual WhatsApp contribution reminder', function () {
                 return $notification->via($member) === [WhatsAppChannel::class];
             },
         );
-    });
+    })->with([
+        'family plan' => ['Family', PlatformPlanCatalog::Family, 3000, 25, 1],
+        'growth plan' => ['Growth', PlatformPlanCatalog::Growth, 7500, 75, 2],
+    ]);
 
     it('allows financial secretary to send a reminder', function () {
         Notification::fake();

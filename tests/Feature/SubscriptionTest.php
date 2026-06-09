@@ -72,7 +72,8 @@ it('shows the active freemium plans with subscription card metadata', function (
             ->where('plans.3.max_members', 250)
             ->where('current_plan.name', 'Family')
             ->where('is_admin', true)
-            ->where('available_features.'.PlatformPlanCatalog::WhatsappMessaging, 'WhatsApp Reminders & Inbox')
+            ->where('available_features.'.PlatformPlanCatalog::WhatsappReminders, 'WhatsApp Reminders')
+            ->where('available_features.'.PlatformPlanCatalog::WhatsappMessaging, 'WhatsApp Inbox & Replies')
         );
 });
 

@@ -22,11 +22,17 @@ final class PlatformPlanCatalog
 
     public const OnlinePayments = 'online_payments';
 
+    public const EmailReminders = 'email_reminders';
+
+    public const WebPushReminders = 'web_push_reminders';
+
     public const Reports = 'reports';
 
     public const Exports = 'exports';
 
     public const AiAssistant = 'ai_assistant';
+
+    public const WhatsappReminders = 'whatsapp_reminders';
 
     public const WhatsappMessaging = 'whatsapp_messaging';
 
@@ -41,10 +47,13 @@ final class PlatformPlanCatalog
             self::BasicContributions => 'Monthly Contributions',
             self::ManualPayments => 'Manual Payment Recording',
             self::OnlinePayments => 'Online Payments (Paystack)',
+            self::EmailReminders => 'Email Reminders',
+            self::WebPushReminders => 'Browser Push Reminders',
             self::Reports => 'Financial Reports',
             self::Exports => 'CSV Exports',
-            self::AiAssistant => 'AI Assistant & Report Summaries',
-            self::WhatsappMessaging => 'WhatsApp Reminders & Inbox',
+            self::AiAssistant => 'AI Agent & Report Summaries',
+            self::WhatsappReminders => 'WhatsApp Reminders',
+            self::WhatsappMessaging => 'WhatsApp Inbox & Replies',
             self::PrioritySupport => 'Priority Support',
         ];
     }
@@ -62,17 +71,17 @@ final class PlatformPlanCatalog
             ],
             self::Family => [
                 'audience' => 'Active family funds',
-                'summary' => 'Add online self-pay, reminders, and monthly or annual reports.',
+                'summary' => 'Add online self-pay, reports, and email, push, or WhatsApp reminders.',
                 'is_recommended' => true,
             ],
             self::Growth => [
                 'audience' => 'Large families and small groups',
-                'summary' => 'Unlock exports and AI-assisted answers when the AI feature flag is active.',
+                'summary' => 'Unlock exports, WhatsApp reminders, and AI-assisted answers when the AI feature flag is active.',
                 'is_recommended' => false,
             ],
             self::Organization => [
                 'audience' => 'Associations, NGOs, churches, alumni groups, and workplace funds',
-                'summary' => 'Add WhatsApp workflows, priority support, and assisted onboarding.',
+                'summary' => 'Add WhatsApp inbox workflows, priority support, and assisted onboarding.',
                 'is_recommended' => false,
             ],
         ];

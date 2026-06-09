@@ -133,7 +133,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('throttle:10,1')
         ->name('contributions.email-reminder');
     Route::post('contributions/{contribution}/whatsapp-reminder', [ContributionWhatsAppReminderController::class, 'send'])
-        ->middleware(['subscription:'.PlatformPlanCatalog::WhatsappMessaging, 'throttle:10,1'])
+        ->middleware(['subscription:'.PlatformPlanCatalog::WhatsappReminders, 'throttle:10,1'])
         ->name('contributions.whatsapp-reminder');
     Route::post('contributions/{contribution}/web-push-reminder', [ContributionWebPushReminderController::class, 'send'])
         ->middleware('throttle:10,1')
