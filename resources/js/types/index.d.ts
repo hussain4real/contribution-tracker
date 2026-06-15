@@ -24,6 +24,7 @@ export interface NavItem {
     icon?: LucideIcon;
     isActive?: boolean;
     component?: string;
+    fullPageLoad?: boolean;
     exact?: boolean;
     badge?: 'notifications';
     section?: string;

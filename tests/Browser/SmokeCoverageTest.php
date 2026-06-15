@@ -304,7 +304,7 @@ it('smokes platform administration pages', function () {
     ]);
     createBrowserMember($family, ['name' => 'Platform Smoke Member']);
 
-    PlatformPlan::create([
+    $plan = PlatformPlan::create([
         'name' => 'Browser Premium',
         'slug' => 'browser-premium',
         'price' => 5000,
@@ -315,12 +315,17 @@ it('smokes platform administration pages', function () {
         'sort_order' => 1,
     ]);
 
-    $page = loginBrowserAs($superAdmin);
+    $this->actingAs($superAdmin);
 
-    navigateAndAssertBrowserSmoke($page, route('platform.dashboard'), 'Platform Overview');
-    navigateAndAssertBrowserSmoke($page, route('platform.families'), 'All Families');
-    navigateAndAssertBrowserSmoke($page, route('platform.families.show', $family), 'Platform Smoke Family');
-    navigateAndAssertBrowserSmoke($page, route('platform.users'), 'All Users');
-    navigateAndAssertBrowserSmoke($page, route('platform.plans'), 'Platform Plans');
-    navigateAndAssertBrowserSmoke($page, route('platform.feature-flags'), 'Feature Flags');
+    $page = visit('/platform/plans');
+
+    assertBrowserSmoke($page, 'Browser Premium');
+    navigateAndAssertBrowserSmoke($page, '/platform/plans/create', 'Create');
+    navigateAndAssertBrowserSmoke($page, "/platform/plans/{$plan->id}/edit", 'Edit Platform Plan');
+    navigateAndAssertBrowserSmoke($page, '/platform', 'Platform Overview');
+    navigateAndAssertBrowserSmoke($page, '/platform/families', 'Platform Smoke Family');
+    navigateAndAssertBrowserSmoke($page, "/platform/families/{$family->id}/view", 'Platform Smoke Family');
+    navigateAndAssertBrowserSmoke($page, '/platform/users', 'Platform Smoke Member');
+    navigateAndAssertBrowserSmoke($page, "/platform/users/{$superAdmin->id}/view", 'platform-browser@example.com');
+    navigateAndAssertBrowserSmoke($page, '/platform/feature-flags', 'AI Assistant');
 });

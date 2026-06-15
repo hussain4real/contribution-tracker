@@ -2,9 +2,12 @@
 
 declare(strict_types=1);
 
+use App\Filament\Resources\Users\Pages\ViewUser;
+use App\Filament\Resources\Users\UserResource;
 use App\Models\Family;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
+use Livewire\Livewire;
 
 describe('Platform Impersonate Users', function () {
     it('allows super admin to impersonate a user', function () {
@@ -12,8 +15,10 @@ describe('Platform Impersonate Users', function () {
         $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
         $member = User::factory()->member()->create(['family_id' => $family->id]);
 
-        $this->actingAs($superAdmin)
-            ->post("/platform/users/{$member->id}/impersonate")
+        $this->actingAs($superAdmin);
+
+        Livewire::test(ViewUser::class, ['record' => $member->getRouteKey()])
+            ->callAction('impersonate')
             ->assertRedirect(route('dashboard'));
 
         $this->assertAuthenticatedAs($member);
@@ -24,9 +29,12 @@ describe('Platform Impersonate Users', function () {
         $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
         $member = User::factory()->member()->create(['family_id' => $family->id]);
 
-        $this->actingAs($superAdmin)
-            ->post("/platform/users/{$member->id}/impersonate")
-            ->assertSessionHas('impersonating_from', $superAdmin->id);
+        $this->actingAs($superAdmin);
+
+        Livewire::test(ViewUser::class, ['record' => $member->getRouteKey()])
+            ->callAction('impersonate');
+
+        expect(session('impersonating_from'))->toBe($superAdmin->id);
     });
 
     it('prevents impersonating another super admin', function () {
@@ -34,10 +42,10 @@ describe('Platform Impersonate Users', function () {
         $superAdmin1 = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
         $superAdmin2 = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
 
-        $this->actingAs($superAdmin1)
-            ->post("/platform/users/{$superAdmin2->id}/impersonate")
-            ->assertRedirect()
-            ->assertSessionHas('error', 'Cannot impersonate another super admin.');
+        $this->actingAs($superAdmin1);
+
+        Livewire::test(ViewUser::class, ['record' => $superAdmin2->getRouteKey()])
+            ->assertActionHidden('impersonate');
 
         $this->assertAuthenticatedAs($superAdmin1);
     });
@@ -47,13 +55,13 @@ describe('Platform Impersonate Users', function () {
         $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
         $member = User::factory()->member()->create(['family_id' => $family->id]);
 
-        // Start impersonating
-        $this->actingAs($superAdmin)
-            ->post("/platform/users/{$member->id}/impersonate");
+        $this->actingAs($superAdmin);
 
-        // Stop impersonating
+        Livewire::test(ViewUser::class, ['record' => $member->getRouteKey()])
+            ->callAction('impersonate');
+
         $this->post('/platform/stop-impersonating')
-            ->assertRedirect(route('platform.dashboard'));
+            ->assertRedirect('/platform');
 
         $this->assertAuthenticatedAs($superAdmin);
     });
@@ -66,13 +74,13 @@ describe('Platform Impersonate Users', function () {
             ->assertRedirect(route('dashboard'));
     });
 
-    it('denies non-super-admin from impersonating', function () {
+    it('denies non-super-admin from reaching the impersonation action surface', function () {
         $family = Family::factory()->create();
         $admin = User::factory()->admin()->create(['family_id' => $family->id]);
         $member = User::factory()->member()->create(['family_id' => $family->id]);
 
         $this->actingAs($admin)
-            ->post("/platform/users/{$member->id}/impersonate")
+            ->get(UserResource::getUrl('view', ['record' => $member]))
             ->assertForbidden();
     });
 
@@ -81,11 +89,11 @@ describe('Platform Impersonate Users', function () {
         $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
         $member = User::factory()->member()->create(['family_id' => $family->id]);
 
-        // Start impersonating
-        $this->actingAs($superAdmin)
-            ->post("/platform/users/{$member->id}/impersonate");
+        $this->actingAs($superAdmin);
 
-        // Check that the shared prop is set
+        Livewire::test(ViewUser::class, ['record' => $member->getRouteKey()])
+            ->callAction('impersonate');
+
         $this->get('/dashboard')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
@@ -101,8 +109,11 @@ describe('Platform Impersonate Users', function () {
             'name' => 'John Doe',
         ]);
 
-        $this->actingAs($superAdmin)
-            ->post("/platform/users/{$member->id}/impersonate")
-            ->assertSessionHas('success', 'Now impersonating John Doe.');
+        $this->actingAs($superAdmin);
+
+        Livewire::test(ViewUser::class, ['record' => $member->getRouteKey()])
+            ->callAction('impersonate');
+
+        expect(session('success'))->toBe('Now impersonating John Doe.');
     });
 });

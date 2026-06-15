@@ -2,22 +2,22 @@
 
 declare(strict_types=1);
 
+use App\Filament\Resources\Users\Pages\ListUsers;
+use App\Filament\Resources\Users\Pages\ViewUser;
+use App\Filament\Resources\Users\UserResource;
 use App\Models\Family;
 use App\Models\User;
-use Inertia\Testing\AssertableInertia as Assert;
+use Livewire\Livewire;
 
 describe('Platform Users', function () {
-    it('allows super admin to view users list', function () {
+    it('allows super admin to view the Filament users list', function () {
         $family = Family::factory()->create();
         $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
 
         $this->actingAs($superAdmin)
-            ->get('/platform/users')
+            ->get(UserResource::getUrl())
             ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->component('Platform/Users')
-                ->has('users.data', 1)
-            );
+            ->assertSee('Users');
     });
 
     it('denies non-super-admin access to users list', function () {
@@ -25,7 +25,7 @@ describe('Platform Users', function () {
         $admin = User::factory()->admin()->create(['family_id' => $family->id]);
 
         $this->actingAs($admin)
-            ->get('/platform/users')
+            ->get(UserResource::getUrl())
             ->assertForbidden();
     });
 
@@ -34,51 +34,32 @@ describe('Platform Users', function () {
         $member = User::factory()->member()->create(['family_id' => $family->id]);
 
         $this->actingAs($member)
-            ->get('/platform/users')
+            ->get(UserResource::getUrl())
             ->assertForbidden();
     });
 
-    it('returns paginated users with correct data', function () {
-        $family = Family::factory()->create();
-        $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
-        $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
-
-        $this->actingAs($superAdmin)
-            ->get('/platform/users')
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->has('users.data', 2)
-            );
-    });
-
-    it('returns correct user attributes', function () {
-        $family = Family::factory()->create();
-        $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
+    it('renders users from multiple families in the table', function () {
+        $family1 = Family::factory()->create();
+        $family2 = Family::factory()->create();
+        $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family1->id]);
         $member = User::factory()->member()->employed()->create([
-            'family_id' => $family->id,
+            'family_id' => $family2->id,
             'name' => 'Test Member',
             'email' => 'test@example.com',
         ]);
 
-        $response = $this->actingAs($superAdmin)
-            ->get('/platform/users')
-            ->assertOk();
+        $this->actingAs($superAdmin);
 
-        $response->assertInertia(fn (Assert $page) => $page
-            ->has('users.data', 2)
-        );
+        $component = Livewire::test(ListUsers::class);
 
-        $page = inertiaPage($response);
-        $props = resultArray($page, 'props');
-        $users = resultArray(resultArray($props, 'users'), 'data');
-        $memberData = firstArrayWhere($users, 'email', 'test@example.com');
-
-        expect($memberData['name'] ?? null)->toBe('Test Member')
-            ->and($memberData['family_name'] ?? null)->toBe($family->name)
-            ->and($memberData['is_active'] ?? null)->toBeTrue();
+        $component->assertOk();
+        $component->assertCanSeeTableRecords([$superAdmin, $member]);
+        $component->assertSee('Test Member');
+        $component->assertSee('test@example.com');
+        $component->assertSee($family2->name);
     });
 
-    it('shows archived users with correct status', function () {
+    it('filters archived users by active status', function () {
         $family = Family::factory()->create();
         $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
         $archivedUser = User::factory()->member()->create([
@@ -86,30 +67,42 @@ describe('Platform Users', function () {
             'archived_at' => now(),
         ]);
 
-        $this->actingAs($superAdmin)
-            ->get('/platform/users')
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->has('users.data', 2)
-            );
+        $this->actingAs($superAdmin);
+
+        Livewire::test(ListUsers::class)
+            ->filterTable('active', false)
+            ->assertCanSeeTableRecords([$archivedUser])
+            ->assertCanNotSeeTableRecords([$superAdmin]);
     });
 
-    it('shows users from multiple families', function () {
-        $family1 = Family::factory()->create();
-        $family2 = Family::factory()->create();
-        $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family1->id]);
-        User::factory()->member()->create(['family_id' => $family2->id]);
+    it('allows super admin to view a user detail page', function () {
+        $family = Family::factory()->create();
+        $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
+        $member = User::factory()->member()->create([
+            'family_id' => $family->id,
+            'name' => 'Detail Member',
+        ]);
 
         $this->actingAs($superAdmin)
-            ->get('/platform/users')
+            ->get(UserResource::getUrl('view', ['record' => $member]))
             ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->has('users.data', 2)
-            );
+            ->assertSee('Detail Member')
+            ->assertSee($member->email);
     });
 
-    it('denies unauthenticated access', function () {
-        $this->get('/platform/users')
+    it('hides impersonation when viewing another super admin', function () {
+        $family = Family::factory()->create();
+        $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
+        $otherSuperAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
+
+        $this->actingAs($superAdmin);
+
+        Livewire::test(ViewUser::class, ['record' => $otherSuperAdmin->getRouteKey()])
+            ->assertActionHidden('impersonate');
+    });
+
+    it('redirects unauthenticated visitors away from the users list', function () {
+        $this->get(UserResource::getUrl())
             ->assertRedirect();
     });
 });

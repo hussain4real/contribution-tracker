@@ -8,13 +8,6 @@ import { index as membersIndex } from '@/actions/App/Http/Controllers/MemberCont
 import { show as payContributions } from '@/actions/App/Http/Controllers/MemberPaymentController';
 import { index as notificationsIndex } from '@/actions/App/Http/Controllers/NotificationController';
 import { index as paymentsIndex } from '@/actions/App/Http/Controllers/PaymentController';
-import {
-    index as platformDashboard,
-    families as platformFamilies,
-    users as platformUsers,
-} from '@/actions/App/Http/Controllers/PlatformAdminController';
-import { index as platformFeatureFlags } from '@/actions/App/Http/Controllers/PlatformFeatureFlagController';
-import { index as platformPlans } from '@/actions/App/Http/Controllers/PlatformPlanController';
 import { index as reportsIndex } from '@/actions/App/Http/Controllers/ReportController';
 import { index as subscriptionIndex } from '@/actions/App/Http/Controllers/SubscriptionController';
 import { index as whatsappInboxIndex } from '@/actions/App/Http/Controllers/WhatsAppInboxController';
@@ -25,13 +18,11 @@ import type { NavItem } from '@/types';
 import { usePage } from '@inertiajs/vue3';
 import {
     Bell,
-    Building2,
     CreditCard,
     FileBarChart2,
     FileText,
     Globe,
     Landmark,
-    Layers,
     LayoutGrid,
     Mail,
     MessageCircle,
@@ -41,10 +32,8 @@ import {
     Settings,
     Shield,
     Sparkles,
-    ToggleLeft,
     User,
     Users,
-    UsersRound,
     Wallet,
 } from 'lucide-vue-next';
 import { computed } from 'vue';
@@ -245,38 +234,10 @@ export function useAppNavigation() {
         return [
             {
                 title: 'Platform Admin',
-                href: platformDashboard(),
+                href: '/platform',
                 icon: Globe,
-                component: 'Platform/Dashboard',
+                fullPageLoad: true,
                 exact: true,
-                section: 'Super Admin',
-            },
-            {
-                title: 'All Families',
-                href: platformFamilies(),
-                icon: Building2,
-                component: 'Platform/Families',
-                section: 'Super Admin',
-            },
-            {
-                title: 'All Users',
-                href: platformUsers(),
-                icon: UsersRound,
-                component: 'Platform/Users',
-                section: 'Super Admin',
-            },
-            {
-                title: 'Plans',
-                href: platformPlans(),
-                icon: Layers,
-                component: 'Platform/Plans',
-                section: 'Super Admin',
-            },
-            {
-                title: 'Feature Flags',
-                href: platformFeatureFlags(),
-                icon: ToggleLeft,
-                component: 'Platform/FeatureFlags',
                 section: 'Super Admin',
             },
         ];

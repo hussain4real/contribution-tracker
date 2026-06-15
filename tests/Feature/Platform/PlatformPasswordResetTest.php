@@ -2,10 +2,13 @@
 
 declare(strict_types=1);
 
+use App\Filament\Resources\Users\Pages\ViewUser;
+use App\Filament\Resources\Users\UserResource;
 use App\Models\Family;
 use App\Models\User;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Support\Facades\Notification;
+use Livewire\Livewire;
 
 describe('Platform Password Reset', function () {
     it('allows super admin to send a password reset email', function () {
@@ -18,15 +21,16 @@ describe('Platform Password Reset', function () {
             'email' => 'member@example.com',
         ]);
 
-        $this->actingAs($superAdmin)
-            ->post("/platform/users/{$member->id}/send-reset")
-            ->assertRedirect()
-            ->assertSessionHas('success', 'Password reset email sent to member@example.com.');
+        $this->actingAs($superAdmin);
+
+        Livewire::test(ViewUser::class, ['record' => $member->getRouteKey()])
+            ->callAction('sendPasswordReset')
+            ->assertNotified('Password reset email sent to member@example.com.');
 
         Notification::assertSentTo($member, ResetPassword::class);
     });
 
-    it('denies non-super-admin from sending password reset', function () {
+    it('denies non-super-admin from accessing the user action surface', function () {
         Notification::fake();
 
         $family = Family::factory()->create();
@@ -34,7 +38,7 @@ describe('Platform Password Reset', function () {
         $member = User::factory()->member()->create(['family_id' => $family->id]);
 
         $this->actingAs($admin)
-            ->post("/platform/users/{$member->id}/send-reset")
+            ->get(UserResource::getUrl('view', ['record' => $member]))
             ->assertForbidden();
 
         Notification::assertNothingSent();
@@ -48,9 +52,10 @@ describe('Platform Password Reset', function () {
         $member1 = User::factory()->member()->create(['family_id' => $family->id]);
         $member2 = User::factory()->member()->create(['family_id' => $family->id]);
 
-        $this->actingAs($superAdmin)
-            ->post("/platform/users/{$member1->id}/send-reset")
-            ->assertRedirect();
+        $this->actingAs($superAdmin);
+
+        Livewire::test(ViewUser::class, ['record' => $member1->getRouteKey()])
+            ->callAction('sendPasswordReset');
 
         Notification::assertSentTo($member1, ResetPassword::class);
         Notification::assertNotSentTo($member2, ResetPassword::class);

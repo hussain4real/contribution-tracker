@@ -22,14 +22,11 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PaystackWebhookController;
 use App\Http\Controllers\PlatformAdminController;
-use App\Http\Controllers\PlatformFeatureFlagController;
-use App\Http\Controllers\PlatformPlanController;
 use App\Http\Controllers\PricingController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\WhatsAppInboxController;
 use App\Http\Controllers\WhatsAppWebhookController;
-use App\Http\Middleware\EnsurePlatformSuperAdmin;
 use App\Models\PlatformPlan;
 use App\Support\PlatformPlanCatalog;
 use Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests;
@@ -198,34 +195,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 // Platform Super Admin Routes
 // =========================================================================
 
-Route::middleware(['auth', 'verified', EnsurePlatformSuperAdmin::class])
-    ->prefix('platform')
-    ->name('platform.')
-    ->group(function () {
-        Route::get('/', [PlatformAdminController::class, 'index'])->name('dashboard');
-        Route::get('families', [PlatformAdminController::class, 'families'])->name('families');
-        Route::get('families/export', [PlatformAdminController::class, 'exportFamilies'])->name('families.export');
-        Route::get('families/{family}', [PlatformAdminController::class, 'showFamily'])->name('families.show');
-        Route::post('families/{family}/suspend', [PlatformAdminController::class, 'suspendFamily'])->name('families.suspend');
-        Route::post('families/{family}/unsuspend', [PlatformAdminController::class, 'unsuspendFamily'])->name('families.unsuspend');
-        Route::get('users', [PlatformAdminController::class, 'users'])->name('users');
-        Route::get('users/export', [PlatformAdminController::class, 'exportUsers'])->name('users.export');
-        Route::post('users/{user}/impersonate', [PlatformAdminController::class, 'impersonate'])->name('users.impersonate');
-        Route::post('users/{user}/send-reset', [PlatformAdminController::class, 'sendPasswordReset'])->name('users.send-reset');
-
-        Route::get('plans', [PlatformPlanController::class, 'index'])->name('plans');
-        Route::post('plans', [PlatformPlanController::class, 'store'])->name('plans.store');
-        Route::put('plans/{plan}', [PlatformPlanController::class, 'update'])->name('plans.update');
-        Route::post('plans/{plan}/toggle-active', [PlatformPlanController::class, 'toggleActive'])->name('plans.toggle-active');
-        Route::delete('plans/{plan}', [PlatformPlanController::class, 'destroy'])->name('plans.destroy');
-
-        // Feature Flags
-        Route::get('feature-flags', [PlatformFeatureFlagController::class, 'index'])->name('feature-flags');
-        Route::post('feature-flags/{feature}/activate-all', [PlatformFeatureFlagController::class, 'activateForEveryone'])->name('feature-flags.activate-all');
-        Route::post('feature-flags/{feature}/deactivate-all', [PlatformFeatureFlagController::class, 'deactivateForEveryone'])->name('feature-flags.deactivate-all');
-        Route::post('feature-flags/{feature}/activate', [PlatformFeatureFlagController::class, 'activateForUser'])->name('feature-flags.activate');
-        Route::post('feature-flags/{feature}/deactivate', [PlatformFeatureFlagController::class, 'deactivateForUser'])->name('feature-flags.deactivate');
-    });
+Route::redirect('platform/families/export', 'platform/families')->name('platform.families.export');
+Route::redirect('platform/users/export', 'platform/users')->name('platform.users.export');
 
 // Stop impersonating route — accessible by the impersonated session (not behind super admin middleware)
 Route::middleware(['auth'])

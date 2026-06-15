@@ -226,16 +226,32 @@ describe('Mobile app shell', function () {
                         && invitations?.dataset.active === 'true';
                 }
             JS)
-            ->navigate('/platform/users')
+            ->navigate('/dashboard')
             ->assertScript(<<<'JS'
                 () => {
-                    const platformDashboard = document.querySelector('a[href$="/platform"]');
+                    const platformAdmin = document.querySelector('a[href$="/platform"]');
                     const platformUsers = document.querySelector('a[href$="/platform/users"]');
 
-                    return platformDashboard?.dataset.active !== 'true'
-                        && platformUsers?.dataset.active === 'true';
+                    return platformAdmin?.dataset.active !== 'true'
+                        && platformUsers === null;
                 }
             JS)
+            ->assertNoJavaScriptErrors();
+    });
+
+    it('opens the platform admin link as a full page visit', function () {
+        $superAdmin = createBrowserSuperAdmin($this->family, [
+            'email' => 'platform-link@test.com',
+        ]);
+
+        $this->actingAs($superAdmin);
+
+        $page = visit('/dashboard');
+
+        $page->assertSee('Platform Admin')
+            ->click('Platform Admin')
+            ->assertPathIs('/platform')
+            ->assertSee('Platform Overview')
             ->assertNoJavaScriptErrors();
     });
 });

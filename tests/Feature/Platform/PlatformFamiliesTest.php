@@ -2,24 +2,25 @@
 
 declare(strict_types=1);
 
+use App\Filament\Resources\Families\FamilyResource;
+use App\Filament\Resources\Families\Pages\ListFamilies;
+use App\Filament\Resources\Families\Pages\ViewFamily;
 use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
-use Inertia\Testing\AssertableInertia as Assert;
+use App\Support\PlatformFamilySummary;
+use Livewire\Livewire;
 
 describe('Platform Families', function () {
-    it('allows super admin to view families list', function () {
+    it('allows super admin to view the Filament families list', function () {
         $family = Family::factory()->create();
         $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
 
         $this->actingAs($superAdmin)
-            ->get('/platform/families')
+            ->get(FamilyResource::getUrl())
             ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->component('Platform/Families')
-                ->has('families.data', 1)
-            );
+            ->assertSee('Families');
     });
 
     it('denies non-super-admin access to families list', function () {
@@ -27,28 +28,26 @@ describe('Platform Families', function () {
         $admin = User::factory()->admin()->create(['family_id' => $family->id]);
 
         $this->actingAs($admin)
-            ->get('/platform/families')
+            ->get(FamilyResource::getUrl())
             ->assertForbidden();
     });
 
-    it('returns paginated families with correct data', function () {
+    it('renders families with owner and member count in the table', function () {
         $family = Family::factory()->create();
         $owner = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
         $family->update(['created_by' => $owner->id]);
 
-        User::factory()->member()->create(['family_id' => $family->id]);
-        User::factory()->member()->create(['family_id' => $family->id]);
+        User::factory()->member()->count(2)->create(['family_id' => $family->id]);
 
-        $this->actingAs($owner)
-            ->get('/platform/families')
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->has('families.data', 1)
-                ->where('families.data.0.name', $family->name)
-                ->where('families.data.0.members_count', 3)
-                ->where('families.data.0.owner_name', $owner->name)
-                ->where('families.data.0.currency', $family->currency)
-            );
+        $this->actingAs($owner);
+
+        $component = Livewire::test(ListFamilies::class);
+
+        $component->assertOk();
+        $component->assertCanSeeTableRecords([$family]);
+        $component->assertSee($family->name);
+        $component->assertSee($owner->name);
+        $component->assertSee('3');
     });
 
     it('allows super admin to view family detail', function () {
@@ -56,15 +55,11 @@ describe('Platform Families', function () {
         $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
 
         $this->actingAs($superAdmin)
-            ->get("/platform/families/{$family->id}")
+            ->get(FamilyResource::getUrl('view', ['record' => $family]))
             ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->component('Platform/FamilyDetail')
-                ->has('family')
-                ->where('family.name', $family->name)
-                ->where('family.currency', $family->currency)
-                ->has('family.financial_summary')
-            );
+            ->assertSee($family->name)
+            ->assertSee($family->currency)
+            ->assertSee('Financial summary');
     });
 
     it('denies non-super-admin access to family detail', function () {
@@ -72,7 +67,7 @@ describe('Platform Families', function () {
         $admin = User::factory()->admin()->create(['family_id' => $family->id]);
 
         $this->actingAs($admin)
-            ->get("/platform/families/{$family->id}")
+            ->get(FamilyResource::getUrl('view', ['record' => $family]))
             ->assertForbidden();
     });
 
@@ -92,35 +87,58 @@ describe('Platform Families', function () {
             ->recordedBy($superAdmin)
             ->create(['amount' => 2000]);
 
-        $this->actingAs($superAdmin)
-            ->get("/platform/families/{$family->id}")
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('family.financial_summary.total_contributions', 1)
-                ->where('family.financial_summary.total_collected', 2000)
-                ->where('family.financial_summary.total_expected', 4000)
-                ->where('family.financial_summary.collection_rate', 50)
-                ->where('family.financial_summary.active_members', 2)
-                ->where('family.financial_summary.archived_members', 0)
-            );
+        expect(PlatformFamilySummary::for($family))->toMatchArray([
+            'total_contributions' => 1,
+            'total_collected' => 2000,
+            'total_expected' => 4000,
+            'collection_rate' => 50.0,
+            'active_members' => 2,
+            'archived_members' => 0,
+        ]);
     });
 
-    it('shows member status in family detail', function () {
+    it('summarizes active and archived members', function () {
         $family = Family::factory()->create();
-        $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
-        $activeMember = User::factory()->member()->create(['family_id' => $family->id]);
-        $archivedMember = User::factory()->member()->create([
+        User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
+        User::factory()->member()->create(['family_id' => $family->id]);
+        User::factory()->member()->create([
             'family_id' => $family->id,
             'archived_at' => now(),
         ]);
 
-        $this->actingAs($superAdmin)
-            ->get("/platform/families/{$family->id}")
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->has('family.members', 3)
-                ->where('family.financial_summary.active_members', 2)
-                ->where('family.financial_summary.archived_members', 1)
-            );
+        expect(PlatformFamilySummary::for($family))->toMatchArray([
+            'active_members' => 2,
+            'archived_members' => 1,
+        ]);
+    });
+
+    it('suspends and unsuspends a family from the view page action', function () {
+        $family = Family::factory()->create(['name' => 'Test Family']);
+        $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
+
+        $this->actingAs($superAdmin);
+
+        Livewire::test(ViewFamily::class, ['record' => $family->getRouteKey()])
+            ->callAction('suspend')
+            ->assertNotified('Family "Test Family" has been suspended.');
+
+        expect($family->refresh()->isSuspended())->toBeTrue();
+
+        Livewire::test(ViewFamily::class, ['record' => $family->getRouteKey()])
+            ->callAction('unsuspend')
+            ->assertNotified('Family "Test Family" has been unsuspended.');
+
+        expect($family->refresh()->isSuspended())->toBeFalse();
+    });
+
+    it('shows suspended families in the table', function () {
+        $family = Family::factory()->suspended()->create();
+        $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
+
+        $this->actingAs($superAdmin);
+
+        Livewire::test(ListFamilies::class)
+            ->filterTable('suspended', true)
+            ->assertCanSeeTableRecords([$family]);
     });
 });

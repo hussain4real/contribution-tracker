@@ -3,42 +3,38 @@
 declare(strict_types=1);
 
 use App\Features\AiAssistant;
+use App\Filament\Pages\FeatureFlags;
 use App\Models\Family;
 use App\Models\User;
+use App\Support\PlatformFeatureRegistry;
 use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
 use Laravel\Pennant\Feature;
+use Livewire\Livewire;
 
 describe('Platform Feature Flags', function () {
-    it('allows super admin to view the feature flags page', function () {
+    it('allows super admin to view the Filament feature flags page', function () {
         $family = Family::factory()->create();
         $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
 
         $this->actingAs($superAdmin)
-            ->get('/platform/feature-flags')
+            ->get(FeatureFlags::getUrl())
             ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->component('Platform/FeatureFlags')
-                ->has('features')
-                ->has('users')
-            );
+            ->assertSee('Feature Flags')
+            ->assertSee('AI Assistant');
     });
 
     it('returns activated user ids for each feature', function () {
         $family = Family::factory()->create();
-        $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
+        User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
         $member = User::factory()->member()->create(['family_id' => $family->id]);
 
         Feature::for($member)->activate(AiAssistant::class);
 
-        $this->actingAs($superAdmin)
-            ->get('/platform/feature-flags')
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->component('Platform/FeatureFlags')
-                ->where('features.0.activated_user_ids', [$member->id])
-                ->where('features.0.status', 'partial')
-            );
+        $feature = PlatformFeatureRegistry::all()[0];
+
+        expect($feature['activated_user_ids'])->toBe([$member->id])
+            ->and($feature['status'])->toBe('partial');
     });
 
     it('denies access to non-super-admin users', function () {
@@ -46,7 +42,7 @@ describe('Platform Feature Flags', function () {
         $admin = User::factory()->admin()->create(['family_id' => $family->id]);
 
         $this->actingAs($admin)
-            ->get('/platform/feature-flags')
+            ->get(FeatureFlags::getUrl())
             ->assertForbidden();
     });
 
@@ -55,7 +51,7 @@ describe('Platform Feature Flags', function () {
         $member = User::factory()->member()->create(['family_id' => $family->id]);
 
         $this->actingAs($member)
-            ->get('/platform/feature-flags')
+            ->get(FeatureFlags::getUrl())
             ->assertForbidden();
     });
 
@@ -64,9 +60,12 @@ describe('Platform Feature Flags', function () {
         $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
         $member = User::factory()->member()->create(['family_id' => $family->id]);
 
-        $this->actingAs($superAdmin)
-            ->post('/platform/feature-flags/ai-assistant/activate-all')
-            ->assertRedirect();
+        $this->actingAs($superAdmin);
+
+        Livewire::test(FeatureFlags::class)
+            ->callAction('activateForEveryone', ['feature' => 'ai-assistant'])
+            ->assertHasNoActionErrors()
+            ->assertNotified('"AI Assistant" has been activated for everyone.');
 
         Feature::flushCache();
 
@@ -78,28 +77,24 @@ describe('Platform Feature Flags', function () {
         $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
         $member = User::factory()->member()->create(['family_id' => $family->id]);
 
-        // Simulate a user who was previously deactivated (stored 'false' record)
         Feature::for($member)->deactivate(AiAssistant::class);
         Feature::flushCache();
+
         expect(Feature::for($member)->active(AiAssistant::class))->toBeFalse();
 
-        // Now activate for everyone — should clear the stale 'false' record
-        $this->actingAs($superAdmin)
-            ->post('/platform/feature-flags/ai-assistant/activate-all')
-            ->assertRedirect();
+        $this->actingAs($superAdmin);
+
+        Livewire::test(FeatureFlags::class)
+            ->callAction('activateForEveryone', ['feature' => 'ai-assistant']);
 
         Feature::flushCache();
 
-        expect(Feature::for($member)->active(AiAssistant::class))->toBeTrue();
-
-        // Verify the stale record was actually removed from DB
-        expect(
-            DB::table('features')
+        expect(Feature::for($member)->active(AiAssistant::class))->toBeTrue()
+            ->and(DB::table('features')
                 ->where('name', AiAssistant::class)
                 ->where('scope', '!=', '')
                 ->where('value', 'false')
-                ->exists()
-        )->toBeFalse();
+                ->exists())->toBeFalse();
     });
 
     it('can deactivate a feature for everyone', function () {
@@ -107,37 +102,25 @@ describe('Platform Feature Flags', function () {
         $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
         $member = User::factory()->member()->create(['family_id' => $family->id]);
 
-        // Set up global activation and a per-user record
         DB::table('features')->insert([
             ['name' => AiAssistant::class, 'scope' => '', 'value' => 'true', 'created_at' => now(), 'updated_at' => now()],
             ['name' => AiAssistant::class, 'scope' => 'App\Models\User|'.$member->id, 'value' => 'true', 'created_at' => now(), 'updated_at' => now()],
         ]);
 
-        $this->actingAs($superAdmin)
-            ->post('/platform/feature-flags/ai-assistant/deactivate-all')
-            ->assertRedirect();
+        $this->actingAs($superAdmin);
+
+        Livewire::test(FeatureFlags::class)
+            ->callAction('deactivateForEveryone', ['feature' => 'ai-assistant'])
+            ->assertHasNoActionErrors()
+            ->assertNotified('"AI Assistant" has been deactivated for everyone.');
 
         Feature::flushCache();
 
-        // Both the member and the global flag should be deactivated
-        expect(Feature::for($member)->active(AiAssistant::class))->toBeFalse();
-
-        // Verify the global sentinel was removed
-        expect(
-            DB::table('features')
+        expect(Feature::for($member)->active(AiAssistant::class))->toBeFalse()
+            ->and(DB::table('features')
                 ->where('name', AiAssistant::class)
-                ->where('scope', '')
-                ->exists()
-        )->toBeFalse();
-
-        // Verify the per-user 'true' activation record was removed
-        expect(
-            DB::table('features')
-                ->where('name', AiAssistant::class)
-                ->where('scope', 'App\Models\User|'.$member->id)
                 ->where('value', 'true')
-                ->exists()
-        )->toBeFalse();
+                ->exists())->toBeFalse();
     });
 
     it('can activate a feature for a specific user', function () {
@@ -145,11 +128,14 @@ describe('Platform Feature Flags', function () {
         $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
         $member = User::factory()->member()->create(['family_id' => $family->id]);
 
-        $this->actingAs($superAdmin)
-            ->post('/platform/feature-flags/ai-assistant/activate', [
+        $this->actingAs($superAdmin);
+
+        Livewire::test(FeatureFlags::class)
+            ->callAction('activateForUser', [
+                'feature' => 'ai-assistant',
                 'user_id' => $member->id,
             ])
-            ->assertRedirect();
+            ->assertHasNoActionErrors();
 
         expect(Feature::for($member)->active(AiAssistant::class))->toBeTrue();
     });
@@ -161,35 +147,43 @@ describe('Platform Feature Flags', function () {
 
         Feature::for($member)->activate(AiAssistant::class);
 
-        $this->actingAs($superAdmin)
-            ->post('/platform/feature-flags/ai-assistant/deactivate', [
+        $this->actingAs($superAdmin);
+
+        Livewire::test(FeatureFlags::class)
+            ->callAction('deactivateForUser', [
+                'feature' => 'ai-assistant',
                 'user_id' => $member->id,
             ])
-            ->assertRedirect();
+            ->assertHasNoActionErrors();
 
         Feature::flushCache();
 
         expect(Feature::for($member)->active(AiAssistant::class))->toBeFalse();
     });
 
-    it('returns 404 for unknown feature keys', function () {
+    it('validates unknown feature keys', function () {
         $family = Family::factory()->create();
         $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
 
-        $this->actingAs($superAdmin)
-            ->post('/platform/feature-flags/unknown-feature/activate-all')
-            ->assertNotFound();
+        $this->actingAs($superAdmin);
+
+        Livewire::test(FeatureFlags::class)
+            ->callAction('activateForEveryone', ['feature' => 'unknown-feature'])
+            ->assertHasActionErrors(['feature' => 'in']);
     });
 
     it('validates user_id when activating for a specific user', function () {
         $family = Family::factory()->create();
         $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
 
-        $this->actingAs($superAdmin)
-            ->post('/platform/feature-flags/ai-assistant/activate', [
+        $this->actingAs($superAdmin);
+
+        Livewire::test(FeatureFlags::class)
+            ->callAction('activateForUser', [
+                'feature' => 'ai-assistant',
                 'user_id' => 99999,
             ])
-            ->assertSessionHasErrors('user_id');
+            ->assertHasActionErrors(['user_id']);
     });
 });
 
@@ -219,7 +213,6 @@ describe('AI Assistant Feature Flag Route Gating', function () {
         $family = Family::factory()->create();
         $user = User::factory()->member()->create(['family_id' => $family->id]);
 
-        // Insert global activation record (same approach as the controller)
         DB::table('features')->insert([
             'name' => AiAssistant::class,
             'scope' => '',

@@ -7,6 +7,8 @@ namespace App\Models;
 use App\Enums\MemberCategory;
 use App\Enums\Role;
 use Database\Factories\UserFactory;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -43,7 +45,7 @@ use NotificationChannels\WebPush\HasPushSubscriptions;
  * @property Carbon|null $whatsapp_verified_at
  * @property Collection<int, Contribution> $contributions
  */
-class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable, PasskeyUser
+class User extends Authenticatable implements FilamentUser, MustVerifyEmail, OAuthenticatable, PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, HasPushSubscriptions, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
@@ -174,6 +176,11 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable,
     private function webPushSubscriptionCacheKey(): string
     {
         return "users.{$this->id}.web_push_subscribed";
+    }
+
+    public function canAccessPanel(Panel $panel): bool
+    {
+        return $panel->getId() === 'platform' && $this->isSuperAdmin();
     }
 
     // =========================================================================

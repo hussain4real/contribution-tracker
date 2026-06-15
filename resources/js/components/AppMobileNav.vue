@@ -9,6 +9,7 @@ import {
     SheetTrigger,
 } from '@/components/ui/sheet';
 import { navItemIsActive, useAppNavigation } from '@/lib/appNavigation';
+import { toUrl } from '@/lib/utils';
 import { logout } from '@/routes';
 import type { NavItem } from '@/types';
 import { Link, router, usePage } from '@inertiajs/vue3';
@@ -209,8 +210,43 @@ function handleLogout(): void {
                                 {{ group.label }}
                             </p>
                             <div class="grid gap-1">
+                                <a
+                                    v-for="item in group.items.filter(
+                                        (item) => item.fullPageLoad,
+                                    )"
+                                    :key="`${group.label ?? 'main'}-${item.title}`"
+                                    :href="toUrl(item.href)"
+                                    class="app-tap flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium"
+                                    :class="
+                                        isActive(item)
+                                            ? 'bg-neutral-950 text-white dark:bg-neutral-50 dark:text-neutral-950'
+                                            : 'text-foreground hover:bg-accent/70'
+                                    "
+                                    @click="moreOpen = false"
+                                >
+                                    <component
+                                        v-if="item.icon"
+                                        :is="item.icon"
+                                        class="size-5 text-muted-foreground"
+                                    />
+                                    <span class="min-w-0 flex-1 truncate">
+                                        {{ item.title }}
+                                    </span>
+                                    <span
+                                        v-if="badgeCount(item) > 0"
+                                        class="flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs leading-5 font-bold text-white"
+                                    >
+                                        {{
+                                            badgeCount(item) > 99
+                                                ? '99+'
+                                                : badgeCount(item)
+                                        }}
+                                    </span>
+                                </a>
                                 <Link
-                                    v-for="item in group.items"
+                                    v-for="item in group.items.filter(
+                                        (item) => !item.fullPageLoad,
+                                    )"
                                     :key="`${group.label ?? 'main'}-${item.title}`"
                                     :href="item.href"
                                     prefetch
