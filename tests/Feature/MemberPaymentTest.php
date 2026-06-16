@@ -148,6 +148,37 @@ it('marks online payments as ready when bank details and paystack key are config
         );
 });
 
+it('only shows pending contributions for the current family', function () {
+    $legacyFamily = Family::factory()->create();
+    $currentFamily = Family::factory()->create([
+        'bank_name' => 'Guaranty Trust Bank',
+        'bank_code' => '058',
+        'account_number' => '0045502216',
+    ]);
+    $member = User::factory()->member()->create(['family_id' => $legacyFamily->id]);
+    $member->ensureFamilyMembership($currentFamily);
+
+    Contribution::factory()->create([
+        'family_id' => $legacyFamily->id,
+        'user_id' => $member->id,
+        'expected_amount' => 4000,
+    ]);
+    $currentContribution = Contribution::factory()->create([
+        'family_id' => $currentFamily->id,
+        'user_id' => $member->id,
+        'expected_amount' => 4000,
+    ]);
+
+    $this->actingAs($member)
+        ->get(route('pay.index', ['current_family' => $currentFamily->slug]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Pay/Index')
+            ->has('pending_contributions', 1)
+            ->where('pending_contributions.0.id', $currentContribution->id)
+        );
+});
+
 it('redirects guests from pay page', function () {
     $this->get(route('pay.index'))
         ->assertRedirect();
@@ -334,6 +365,42 @@ it('rejects initiation when no unpaid contributions are selected', function () {
         ])
         ->assertUnprocessable()
         ->assertJson(['message' => 'No unpaid contributions selected.']);
+});
+
+it('rejects initiation with contribution ids from another family', function () {
+    Http::fake([
+        'api.paystack.co/transaction/initialize' => Http::response([
+            'status' => true,
+            'data' => [
+                'authorization_url' => 'https://checkout.paystack.com/test',
+                'access_code' => 'access_test',
+                'reference' => 'TXN_TEST123',
+            ],
+        ]),
+    ]);
+
+    $legacyFamily = Family::factory()->create();
+    $currentFamily = Family::factory()->create([
+        'bank_name' => 'Kuda Bank',
+        'bank_code' => '090267',
+        'account_number' => '1234567890',
+    ]);
+    $member = User::factory()->member()->create(['family_id' => $legacyFamily->id]);
+    $member->ensureFamilyMembership($currentFamily);
+    $legacyContribution = Contribution::factory()->create([
+        'family_id' => $legacyFamily->id,
+        'user_id' => $member->id,
+        'expected_amount' => 4000,
+    ]);
+
+    $this->actingAs($member)
+        ->postJson(route('pay.initiate', ['current_family' => $currentFamily->slug]), [
+            'contribution_ids' => [$legacyContribution->id],
+        ])
+        ->assertUnprocessable()
+        ->assertJson(['message' => 'No unpaid contributions selected.']);
+
+    Http::assertNothingSent();
 });
 
 it('rejects initiation when selected contributions have no balance', function () {

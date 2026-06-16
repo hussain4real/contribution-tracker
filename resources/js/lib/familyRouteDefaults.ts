@@ -33,23 +33,17 @@ function pageSnapshot(): InertiaPageSnapshot | null {
 }
 
 export function currentFamilySlug(): string {
-    const pageFamilySlug = pageSnapshot()?.props?.family?.slug;
-
-    if (pageFamilySlug) {
-        return pageFamilySlug;
-    }
-
     if (typeof window === 'undefined') {
-        return '';
+        return pageSnapshot()?.props?.family?.slug ?? '';
     }
 
     const firstSegment = window.location.pathname.split('/').filter(Boolean)[0];
 
-    if (!firstSegment || reservedGlobalSegments.has(firstSegment)) {
-        return '';
+    if (firstSegment && !reservedGlobalSegments.has(firstSegment)) {
+        return decodeURIComponent(firstSegment);
     }
 
-    return decodeURIComponent(firstSegment);
+    return pageSnapshot()?.props?.family?.slug ?? '';
 }
 
 export function initializeFamilyRouteDefaults(): void {
