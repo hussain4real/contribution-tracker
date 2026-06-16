@@ -66,9 +66,9 @@ describe('Financial and family administration flows (Browser)', function () {
 
         $page = loginBrowserAs($member);
 
-        $page->navigate(route('pay.index'))
+        $page->navigate(route('pay.index', ['current_family' => $this->family->slug], false))
             ->assertSee('Pay Contributions')
-            ->assertSee('Online payments are not yet available')
+            ->assertSee('Bank details are saved, but the Paystack bank code is missing')
             ->assertNoJavaScriptErrors();
     });
 
