@@ -198,6 +198,12 @@ describe('Mobile app shell', function () {
             ->assertSee('Dashboard')
             ->assertSee('Members')
             ->assertSee('Payments')
+            ->assertScript(<<<'JS'
+                () => Array.from(document.querySelectorAll('a')).some((link) => {
+                    return link.textContent?.trim() === 'Pay'
+                        && link.getAttribute('href')?.endsWith('/pay');
+                })
+            JS)
             ->assertSee('Family Admin')
             ->assertSee('Family Settings')
             ->assertNoJavaScriptErrors();
@@ -249,6 +255,12 @@ describe('Mobile app shell', function () {
         $page = visit("/{$this->family->slug}/dashboard");
 
         $page->assertSee('Platform Admin')
+            ->assertScript(<<<'JS'
+                () => Array.from(document.querySelectorAll('a')).some((link) => {
+                    return link.textContent?.trim() === 'Pay'
+                        && link.getAttribute('href')?.endsWith('/pay');
+                })
+            JS)
             ->click('Platform Admin')
             ->assertPathIs('/platform')
             ->assertSee('Platform Overview')

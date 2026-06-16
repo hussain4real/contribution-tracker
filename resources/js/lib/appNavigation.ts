@@ -69,9 +69,20 @@ export function useAppNavigation() {
     );
     const hasSubscriptionFeature = (feature: string) =>
         subscriptionFeatures.value.includes(feature);
+    const canRecordPayments = computed(
+        () => page.props.auth?.can?.record_payments === true,
+    );
+
+    const payItem = computed<NavItem>(() => ({
+        title: 'Pay',
+        href: payContributions(),
+        icon: CreditCard,
+        component: 'Pay/Index',
+        section: 'main',
+    }));
 
     const paymentItem = computed<NavItem>(() => {
-        if (page.props.auth?.can?.record_payments) {
+        if (canRecordPayments.value) {
             return {
                 title: 'Payments',
                 href: paymentsIndex(),
@@ -81,13 +92,7 @@ export function useAppNavigation() {
             };
         }
 
-        return {
-            title: 'Pay',
-            href: payContributions(),
-            icon: CreditCard,
-            component: 'Pay/Index',
-            section: 'main',
-        };
+        return payItem.value;
     });
 
     const primaryItems = computed<NavItem[]>(() => {
@@ -137,6 +142,10 @@ export function useAppNavigation() {
                 section: 'main',
             },
         ];
+
+        if (canRecordPayments.value) {
+            items.push(payItem.value);
+        }
 
         if (
             page.props.featureFlags?.ai_assistant &&
