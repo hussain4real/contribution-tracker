@@ -20,9 +20,9 @@ test('two factor settings page can be rendered', function () {
 
     $this->actingAs($user)
         ->withSession(['auth.password_confirmed_at' => time()])
-        ->get(route('two-factor.show'))
+        ->get(route('security.edit'))
         ->assertInertia(fn (Assert $page) => $page
-            ->component('settings/TwoFactor')
+            ->component('settings/Security')
             ->where('twoFactorEnabled', false)
         );
 });
@@ -40,12 +40,12 @@ test('two factor settings page requires password confirmation when enabled', fun
     ]);
 
     $response = $this->actingAs($user)
-        ->get(route('two-factor.show'));
+        ->get(route('security.edit'));
 
     $response->assertRedirect(route('password.confirm'));
 });
 
-test('two factor settings page does not requires password confirmation when disabled', function () {
+test('security settings page still renders two factor state when feature confirmation is disabled', function () {
     if (! Features::canManageTwoFactorAuthentication()) {
         $this->markTestSkipped('Two-factor authentication is not enabled.');
     }
@@ -58,10 +58,11 @@ test('two factor settings page does not requires password confirmation when disa
     ]);
 
     $this->actingAs($user)
-        ->get(route('two-factor.show'))
+        ->withSession(['auth.password_confirmed_at' => time()])
+        ->get(route('security.edit'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->component('settings/TwoFactor')
+            ->component('settings/Security')
         );
 });
 
@@ -76,6 +77,6 @@ test('two factor settings page returns forbidden response when two factor is dis
 
     $this->actingAs($user)
         ->withSession(['auth.password_confirmed_at' => time()])
-        ->get(route('two-factor.show'))
+        ->get(route('security.edit'))
         ->assertForbidden();
 });

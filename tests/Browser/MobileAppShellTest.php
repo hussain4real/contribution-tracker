@@ -133,7 +133,7 @@ describe('Mobile app shell', function () {
                 }
             JS)
             ->click('button[aria-label="Open AI assistant"]')
-            ->assertPathIs('/ai')
+            ->assertPathIs("/{$this->family->slug}/ai")
             ->assertNoJavaScriptErrors();
     });
 
@@ -181,7 +181,7 @@ describe('Mobile app shell', function () {
         $page->fill('email', 'admin@test.com')
             ->fill('password', 'password')
             ->click('Log in')
-            ->navigate('/notifications')
+            ->navigate("/{$this->family->slug}/notifications")
             ->assertSee('Notification Center')
             ->assertSee('Timeline')
             ->assertSee('May 2026')
@@ -216,7 +216,7 @@ describe('Mobile app shell', function () {
         $page->fill('email', 'super@test.com')
             ->fill('password', 'password')
             ->click('Log in')
-            ->navigate('/family/invitations')
+            ->navigate("/{$this->family->slug}/family/invitations")
             ->assertScript(<<<'JS'
                 () => {
                     const familySettings = document.querySelector('a[href$="/family/settings"]');
@@ -226,7 +226,7 @@ describe('Mobile app shell', function () {
                         && invitations?.dataset.active === 'true';
                 }
             JS)
-            ->navigate('/dashboard')
+            ->navigate("/{$this->family->slug}/dashboard")
             ->assertScript(<<<'JS'
                 () => {
                     const platformAdmin = document.querySelector('a[href$="/platform"]');
@@ -246,7 +246,7 @@ describe('Mobile app shell', function () {
 
         $this->actingAs($superAdmin);
 
-        $page = visit('/dashboard');
+        $page = visit("/{$this->family->slug}/dashboard");
 
         $page->assertSee('Platform Admin')
             ->click('Platform Admin')

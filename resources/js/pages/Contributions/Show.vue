@@ -201,7 +201,13 @@ const progressPercentage = (): number => {
                         v-if="can_record_payment && contribution.balance > 0"
                         class="pt-4"
                     >
-                        <Link :href="createPayment(contribution.user.id).url">
+                        <Link
+                            :href="
+                                createPayment({
+                                    member: contribution.user.id,
+                                }).url
+                            "
+                        >
                             <Button class="w-full"> Record Payment </Button>
                         </Link>
                     </div>

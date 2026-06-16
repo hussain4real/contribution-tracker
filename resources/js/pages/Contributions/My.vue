@@ -7,7 +7,7 @@ import { useCurrencyFormatter } from '@/lib/currency';
 import { dashboard } from '@/routes';
 import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/vue3';
-import { AlertCircle, CheckCircle2, TrendingUp, Wallet } from 'lucide-vue-next';
+import { AlertCircle, CheckCircle2, TrendingUp, Wallet } from '@lucide/vue';
 
 interface Payment {
     id: number;

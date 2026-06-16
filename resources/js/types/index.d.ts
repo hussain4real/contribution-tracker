@@ -1,5 +1,5 @@
 import { InertiaLinkProps } from '@inertiajs/vue3';
-import type { LucideIcon } from 'lucide-vue-next';
+import type { LucideIcon } from '@lucide/vue';
 
 export interface Auth {
     user: User | null;
@@ -33,8 +33,19 @@ export interface NavItem {
 export interface Family {
     id: number;
     name: string;
+    slug: string;
     currency: string;
     due_day: number;
+}
+
+export interface UserFamily {
+    id: number;
+    name: string;
+    slug: string;
+    role: string | null;
+    role_label: string | null;
+    category_label: string | null;
+    is_current: boolean;
 }
 
 export interface AppNotification {
@@ -103,6 +114,7 @@ export type AppPageProps<
     quote: { message: string; author: string };
     auth: Auth;
     family: Family | null;
+    families: UserFamily[];
     sidebarOpen: boolean;
     notifications: Notifications | null;
     flash?: Flash;
@@ -123,6 +135,7 @@ export interface User {
     category: string | null;
     category_label: string | null;
     family_id: number | null;
+    current_family_id: number | null;
     is_super_admin: boolean;
     whatsapp_phone: string | null;
     whatsapp_verified_at: string | null;

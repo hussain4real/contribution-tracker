@@ -34,7 +34,7 @@ function init(): void {
     // Check if already installed (standalone mode)
     if (
         window.matchMedia('(display-mode: standalone)').matches ||
-        (navigator as Record<string, unknown>).standalone
+        navigator.standalone === true
     ) {
         isInstalled.value = true;
         return;

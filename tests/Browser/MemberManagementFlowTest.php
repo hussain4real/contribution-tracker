@@ -88,7 +88,10 @@ describe('Member Management Flow (Browser)', function () {
 
         $page = loginBrowserAs($this->admin);
 
-        $page->navigate("/members/{$member->id}/edit")
+        $page->navigate(route('members.edit', [
+            'current_family' => $this->family->slug,
+            'member' => $member,
+        ]))
             ->assertSee('Edit Member')
             ->select('category', 'employed')
             ->click('Save Changes')
@@ -106,7 +109,10 @@ describe('Member Management Flow (Browser)', function () {
 
         $page = loginBrowserAs($this->admin);
 
-        $page->navigate("/members/{$member->id}")
+        $page->navigate(route('members.show', [
+            'current_family' => $this->family->slug,
+            'member' => $member,
+        ]))
             ->assertSee('Archive Me')
             ->assertNoJavaScriptErrors();
 
@@ -114,7 +120,7 @@ describe('Member Management Flow (Browser)', function () {
 
         $page->click('@archive-member-button')
             ->wait(0.5)
-            ->assertPathIs('/members')
+            ->assertPathIs("/{$this->family->slug}/members")
             ->assertSee('Family Members')
             ->assertNoJavaScriptErrors();
 
@@ -134,14 +140,17 @@ describe('Member Management Flow (Browser)', function () {
         $page->click('Members')
             ->click('Show Archived')
             ->assertSee('Archived User')
-            ->navigate("/members/{$member->id}")
+            ->navigate(route('members.show', [
+                'current_family' => $this->family->slug,
+                'member' => $member,
+            ]))
             ->assertSee('This member is archived');
 
         $page->script('() => { window.confirm = () => true; }');
 
         $page->click('@restore-member-button')
             ->wait(0.5)
-            ->assertPathIs("/members/{$member->id}")
+            ->assertPathIs("/{$this->family->slug}/members/{$member->id}")
             ->assertSee('Archived User')
             ->assertNoJavaScriptErrors();
 
@@ -158,7 +167,10 @@ describe('Member Management Flow (Browser)', function () {
 
         $page = loginBrowserAs($this->admin);
 
-        $page->navigate("/members/{$member->id}")
+        $page->navigate(route('members.show', [
+            'current_family' => $this->family->slug,
+            'member' => $member,
+        ]))
             ->assertSee('Detail View User')
             ->assertSee('detail@test.com')
             ->assertSee('Employed')
@@ -173,7 +185,7 @@ describe('Member Management Flow (Browser)', function () {
 
         $page = loginBrowserAs($member);
 
-        $page->navigate('/members/create')
+        $page->navigate(route('members.create', ['current_family' => $this->family->slug]))
             ->assertSee('403');
     });
 
@@ -184,7 +196,7 @@ describe('Member Management Flow (Browser)', function () {
 
         $page = loginBrowserAs($fs);
 
-        $page->navigate('/members/create')
+        $page->navigate(route('members.create', ['current_family' => $this->family->slug]))
             ->assertSee('Add New Member')
             ->assertNoJavaScriptErrors();
     });

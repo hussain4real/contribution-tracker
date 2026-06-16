@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Filament\Resources\Users\Pages\ListUsers;
 use App\Filament\Resources\Users\Pages\ViewUser;
 use App\Filament\Resources\Users\UserResource;
 use App\Models\Family;
@@ -59,5 +60,24 @@ describe('Platform Password Reset', function () {
 
         Notification::assertSentTo($member1, ResetPassword::class);
         Notification::assertNotSentTo($member2, ResetPassword::class);
+    });
+
+    it('allows super admin to send a password reset from the users table', function () {
+        Notification::fake();
+
+        $family = Family::factory()->create();
+        $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
+        $member = User::factory()->member()->create([
+            'family_id' => $family->id,
+            'email' => 'table-member@example.com',
+        ]);
+
+        $this->actingAs($superAdmin);
+
+        Livewire::test(ListUsers::class)
+            ->callTableAction('sendPasswordReset', $member)
+            ->assertNotified('Password reset email sent to table-member@example.com.');
+
+        Notification::assertSentTo($member, ResetPassword::class);
     });
 });

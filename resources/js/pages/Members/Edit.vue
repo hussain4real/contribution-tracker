@@ -57,7 +57,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
     {
         title: props.member.name,
-        href: show(props.member.id).url,
+        href: show({ member: props.member.id }).url,
     },
     {
         title: 'Edit',
@@ -114,7 +114,7 @@ function submitForm() {
     processing.value = true;
 
     router.put(
-        update(props.member.id).url,
+        update({ member: props.member.id }).url,
         {
             name: formData.name,
             email: formData.email,
@@ -281,7 +281,7 @@ function cancelRoleChange() {
                             <Button type="submit" :disabled="processing">
                                 {{ processing ? 'Saving...' : 'Save Changes' }}
                             </Button>
-                            <Link :href="show(member.id).url">
+                            <Link :href="show({ member: member.id }).url">
                                 <Button variant="outline" type="button">
                                     Cancel
                                 </Button>

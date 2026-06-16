@@ -206,7 +206,10 @@ describe('ContributionReminderNotification', function () {
             ->and($payload['badge'])->toBe('/pwa-192x192.png')
             ->and($payload['tag'])->toBe("contribution-{$contribution->id}-reminder")
             ->and($data['contribution_id'] ?? null)->toBe($contribution->id)
-            ->and($data['url'] ?? null)->toBe(route('contributions.show', $contribution))
+            ->and($data['url'] ?? null)->toBe(route('contributions.show', [
+                'current_family' => $family->slug,
+                'contribution' => $contribution,
+            ]))
             ->and($data['type'] ?? null)->toBe('reminder')
             ->and($message->getOptions())->toBe(['TTL' => 60 * 60 * 24]);
     });

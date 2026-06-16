@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Filament\Resources\Users\Pages\ListUsers;
 use App\Filament\Resources\Users\Pages\ViewUser;
 use App\Filament\Resources\Users\UserResource;
 use App\Models\Family;
@@ -115,5 +116,25 @@ describe('Platform Impersonate Users', function () {
             ->callAction('impersonate');
 
         expect(session('success'))->toBe('Now impersonating John Doe.');
+    });
+
+    it('allows super admin to impersonate a user from the users table', function () {
+        $family = Family::factory()->create();
+        $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
+        $member = User::factory()->member()->create([
+            'family_id' => $family->id,
+            'name' => 'Table User',
+        ]);
+
+        $this->actingAs($superAdmin);
+
+        Livewire::test(ListUsers::class)
+            ->callTableAction('impersonate', $member)
+            ->assertRedirect(route('dashboard'));
+
+        $this->assertAuthenticatedAs($member);
+
+        expect(session('impersonating_from'))->toBe($superAdmin->id)
+            ->and(session('success'))->toBe('Now impersonating Table User.');
     });
 });

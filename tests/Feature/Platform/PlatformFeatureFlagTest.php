@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Features\AiAssistant;
 use App\Filament\Pages\FeatureFlags;
+use App\Http\Requests\FeatureFlagUserRequest;
 use App\Models\Family;
 use App\Models\User;
 use App\Support\PlatformFeatureRegistry;
@@ -184,6 +185,29 @@ describe('Platform Feature Flags', function () {
                 'user_id' => 99999,
             ])
             ->assertHasActionErrors(['user_id']);
+    });
+
+    it('authorizes feature flag user requests for platform super admins only', function () {
+        $family = Family::factory()->create();
+        $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
+        $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+        $member = User::factory()->member()->create(['family_id' => $family->id]);
+
+        $request = FeatureFlagUserRequest::create('/platform/feature-flags/users', 'POST', [
+            'user_id' => $member->id,
+        ]);
+        $request->setUserResolver(fn (): User => $superAdmin);
+
+        $deniedRequest = FeatureFlagUserRequest::create('/platform/feature-flags/users', 'POST', [
+            'user_id' => $member->id,
+        ]);
+        $deniedRequest->setUserResolver(fn (): User => $admin);
+
+        expect($request->authorize())->toBeTrue()
+            ->and($request->rules())->toBe([
+                'user_id' => ['required', 'exists:users,id'],
+            ])
+            ->and($deniedRequest->authorize())->toBeFalse();
     });
 });
 

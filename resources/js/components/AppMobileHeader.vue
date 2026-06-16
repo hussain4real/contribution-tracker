@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItemType } from '@/types';
 import { router } from '@inertiajs/vue3';
-import { ChevronLeft } from 'lucide-vue-next';
+import { ChevronLeft } from '@lucide/vue';
 import { computed } from 'vue';
 
 const props = withDefaults(

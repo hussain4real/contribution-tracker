@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { dashboard, home, login, register } from '@/routes';
 import { Head, Link } from '@inertiajs/vue3';
-import { ArrowRight, Check, Minus, Users } from 'lucide-vue-next';
+import { ArrowRight, Check, Minus, Users } from '@lucide/vue';
 import { computed } from 'vue';
 
 interface Plan {

@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Models\Family;
+use App\Models\FamilyCategory;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -82,4 +84,26 @@ test('subscription data falls back when a user has no family', function () {
         'can_add_members' => false,
         'features' => [],
     ]);
+});
+
+test('share exposes a legacy family category label when there is no active membership category', function () {
+    $family = Family::factory()->create();
+    $category = FamilyCategory::factory()->create([
+        'family_id' => $family->id,
+        'name' => 'Legacy Patron',
+    ]);
+    $user = User::factory()->member()->create([
+        'family_id' => $family->id,
+        'family_category_id' => $category->id,
+    ]);
+
+    $user->familyMemberships()->delete();
+    $freshUser = User::query()->findOrFail($user->id);
+
+    $request = Request::create('/test', 'GET');
+    $request->setUserResolver(fn (): User => $freshUser);
+
+    $shared = (new HandleInertiaRequests)->share($request);
+
+    expect(data_get($shared, 'auth.user.category_label'))->toBe('Legacy Patron');
 });

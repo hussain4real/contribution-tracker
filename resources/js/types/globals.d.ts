@@ -34,6 +34,15 @@ declare global {
         message: string;
     }
 
+    interface SpeechRecognitionEvent extends Event {
+        results: SpeechRecognitionResultList;
+        resultIndex: number;
+    }
+
+    interface Navigator {
+        standalone?: boolean;
+    }
+
     interface Window {
         SpeechRecognition: typeof SpeechRecognition;
         webkitSpeechRecognition: typeof SpeechRecognition;
@@ -51,6 +60,19 @@ declare module 'vite/client' {
         readonly env: ImportMetaEnv;
         readonly glob: <T>(pattern: string) => Record<string, () => Promise<T>>;
     }
+}
+
+declare module 'virtual:pwa-register' {
+    export function registerSW(options?: {
+        immediate?: boolean;
+        onNeedRefresh?: () => void;
+        onOfflineReady?: () => void;
+        onRegisteredSW?: (
+            scriptUrl: string,
+            registration: ServiceWorkerRegistration | undefined,
+        ) => void;
+        onRegisterError?: (error: unknown) => void;
+    }): (reloadPage?: boolean) => Promise<void>;
 }
 
 /// <reference types="vite-plugin-pwa/client" />

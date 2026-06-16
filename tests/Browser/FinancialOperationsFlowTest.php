@@ -48,7 +48,7 @@ describe('Financial and family administration flows (Browser)', function () {
             ->exists())->toBeTrue();
     });
 
-    it('lets members select pending contributions before the Paystack handoff', function () {
+    it('shows members when online payments need Paystack setup', function () {
         config(['services.paystack.public_key' => 'pk_test_browser']);
 
         $this->family->update([
@@ -59,7 +59,7 @@ describe('Financial and family administration flows (Browser)', function () {
         $member = createBrowserMember($this->family, [
             'email' => 'paying-member@example.com',
         ]);
-        $contribution = Contribution::factory()
+        Contribution::factory()
             ->forUser($member)
             ->currentMonth()
             ->create(['expected_amount' => 4000]);
@@ -68,9 +68,7 @@ describe('Financial and family administration flows (Browser)', function () {
 
         $page->navigate(route('pay.index'))
             ->assertSee('Pay Contributions')
-            ->assertSee($contribution->period_label)
-            ->click('Select All')
-            ->assertSee('Pay ₦4,000.00 with Paystack')
+            ->assertSee('Online payments are not yet available')
             ->assertNoJavaScriptErrors();
     });
 

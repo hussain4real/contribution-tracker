@@ -4,7 +4,7 @@ import PaymentHistory from '@/components/contributions/PaymentHistory.vue';
 import StatusBadge from '@/components/contributions/StatusBadge.vue';
 import { useCurrencyFormatter } from '@/lib/currency';
 import { Link } from '@inertiajs/vue3';
-import { ChevronDown, ChevronUp } from 'lucide-vue-next';
+import { ChevronDown, ChevronUp } from '@lucide/vue';
 import { ref } from 'vue';
 
 interface Payment {
@@ -54,7 +54,9 @@ function togglePayments() {
         >
             <div class="flex items-center gap-3 sm:gap-4">
                 <Link
-                    :href="showContribution(contribution.id).url"
+                    :href="
+                        showContribution({ contribution: contribution.id }).url
+                    "
                     class="text-base font-medium text-neutral-900 hover:text-blue-600 sm:text-lg dark:text-neutral-100 dark:hover:text-blue-400"
                 >
                     {{ contribution.period_label }}

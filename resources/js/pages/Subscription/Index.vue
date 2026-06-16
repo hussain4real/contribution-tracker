@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+    cancel,
     subscribe as subscribeAction,
     callback as subscriptionCallback,
 } from '@/actions/App/Http/Controllers/SubscriptionController';
@@ -18,7 +19,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
-import { Check } from 'lucide-vue-next';
+import { Check } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import { toast } from 'vue-sonner';
 
@@ -145,7 +146,7 @@ const subscribeToPlan = async (planId: number) => {
         popup.resumeTransaction(data.access_code, {
             onSuccess: () => {
                 router.visit(
-                    subscriptionCallback.url({
+                    subscriptionCallback.url(undefined, {
                         query: { reference: data.reference },
                     }),
                 );
@@ -160,7 +161,7 @@ const subscribeToPlan = async (planId: number) => {
                     processing.value = false;
                     processingPlanId.value = null;
                     router.visit(
-                        subscriptionCallback.url({
+                        subscriptionCallback.url(undefined, {
                             query: { reference: data.reference },
                         }),
                     );
@@ -292,7 +293,7 @@ const subscribeToPlan = async (planId: number) => {
                             v-if="plan.is_current && plan.price > 0 && is_admin"
                             variant="outline"
                             class="w-full"
-                            @click="$inertia.post('/subscription/cancel')"
+                            @click="$inertia.post(cancel().url)"
                         >
                             Cancel Plan
                         </Button>

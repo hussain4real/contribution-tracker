@@ -101,7 +101,11 @@ const categoryColors: Record<string, string> = {
                     <Link
                         v-for="member in members"
                         :key="`${member.id}-${member.month}-${member.year}`"
-                        :href="showContribution(member.contribution_id).url"
+                        :href="
+                            showContribution({
+                                contribution: member.contribution_id,
+                            }).url
+                        "
                         class="group flex items-center justify-between rounded-lg border border-neutral-200 p-4 transition-all duration-200 hover:border-red-200 hover:bg-red-50/50 hover:shadow-sm dark:border-neutral-700 dark:hover:border-red-800 dark:hover:bg-red-900/10"
                     >
                         <div class="flex flex-col gap-1.5">

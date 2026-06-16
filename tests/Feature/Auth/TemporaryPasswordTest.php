@@ -12,7 +12,7 @@ it('redirects temporary password users to update their password', function () {
 
     $this->actingAs($user)
         ->get(route('dashboard'))
-        ->assertRedirect(route('user-password.edit'))
+        ->assertRedirect(route('security.edit'))
         ->assertSessionHas('warning', 'Please change your temporary password before continuing.');
 });
 
@@ -22,7 +22,8 @@ it('allows temporary password users to view the password update page', function 
     ]);
 
     $this->actingAs($user)
-        ->get(route('user-password.edit'))
+        ->withSession(['auth.password_confirmed_at' => time()])
+        ->get(route('security.edit'))
         ->assertOk();
 });
 
@@ -32,14 +33,14 @@ it('clears temporary password enforcement after password update', function () {
     ]);
 
     $this->actingAs($user)
-        ->from(route('user-password.edit'))
+        ->from(route('security.edit'))
         ->put(route('user-password.update'), [
             'current_password' => 'password',
             'password' => 'new-password',
             'password_confirmation' => 'new-password',
         ])
         ->assertSessionHasNoErrors()
-        ->assertRedirect(route('user-password.edit'));
+        ->assertRedirect(route('security.edit'));
 
     $user->refresh();
 

@@ -3,11 +3,13 @@
 declare(strict_types=1);
 
 use App\Models\Contribution;
+use App\Models\Family;
 use App\Models\User;
 
 describe('Payment Authorization', function () {
     beforeEach(function () {
-        $this->member = User::factory()->member()->employed()->create();
+        $this->family = Family::factory()->create();
+        $this->member = User::factory()->member()->employed()->create(['family_id' => $this->family->id]);
         $this->contribution = Contribution::factory()
             ->forUser($this->member)
             ->currentMonth()
@@ -15,7 +17,7 @@ describe('Payment Authorization', function () {
     });
 
     it('forbids regular members from recording payments', function () {
-        $member = User::factory()->member()->create();
+        $member = User::factory()->member()->create(['family_id' => $this->family->id]);
 
         $this->actingAs($member)
             ->post(route('payments.store'), [
@@ -27,7 +29,7 @@ describe('Payment Authorization', function () {
     });
 
     it('forbids regular members from accessing payment creation form', function () {
-        $member = User::factory()->member()->create();
+        $member = User::factory()->member()->create(['family_id' => $this->family->id]);
 
         $this->actingAs($member)
             ->get(route('payments.create', $this->member))
@@ -35,7 +37,7 @@ describe('Payment Authorization', function () {
     });
 
     it('allows financial secretary to record payments', function () {
-        $financialSecretary = User::factory()->financialSecretary()->create();
+        $financialSecretary = User::factory()->financialSecretary()->create(['family_id' => $this->family->id]);
 
         $this->actingAs($financialSecretary)
             ->post(route('payments.store'), [
@@ -52,7 +54,7 @@ describe('Payment Authorization', function () {
     });
 
     it('allows super admin to record payments', function () {
-        $admin = User::factory()->admin()->create();
+        $admin = User::factory()->admin()->create(['family_id' => $this->family->id]);
 
         $this->actingAs($admin)
             ->post(route('payments.store'), [
@@ -69,7 +71,7 @@ describe('Payment Authorization', function () {
     });
 
     it('forbids unauthenticated users from recording payments', function () {
-        $this->post(route('payments.store'), [
+        $this->post(route('payments.store', $this->family), [
             'member_id' => $this->member->id,
             'amount' => 4000,
             'paid_at' => now()->toDateString(),
@@ -77,7 +79,7 @@ describe('Payment Authorization', function () {
     });
 
     it('forbids unauthenticated users from accessing payment form', function () {
-        $this->get(route('payments.create', $this->member))
+        $this->get(route('payments.create', [$this->family, $this->member]))
             ->assertRedirect();
     });
 });

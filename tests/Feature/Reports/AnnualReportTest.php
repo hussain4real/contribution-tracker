@@ -198,8 +198,8 @@ describe('Annual Report', function () {
         $year = now()->year;
 
         // Seed contributions across all 12 months for multiple members
-        $employed = User::factory()->employed()->create();
-        $student = User::factory()->student()->create();
+        $employed = User::factory()->employed()->create(['family_id' => $admin->family_id]);
+        $student = User::factory()->student()->create(['family_id' => $admin->family_id]);
 
         foreach ([$employed, $student] as $member) {
             for ($month = 1; $month <= 12; $month++) {
@@ -226,9 +226,9 @@ describe('Annual Report', function () {
 
         DB::disableQueryLog();
 
-        // The annual report should use a fixed number of queries (auth + contribution query
-        // with eager-loaded payments/users + Pennant and subscription feature resolution),
+        // The annual report should use a fixed number of queries (auth + current family
+        // membership resolution + contribution query with eager-loaded payments/users + Pennant and subscription feature resolution),
         // not scale with the number of months or categories.
-        expect($queryCount)->toBeLessThanOrEqual(10);
+        expect($queryCount)->toBeLessThanOrEqual(18);
     });
 });

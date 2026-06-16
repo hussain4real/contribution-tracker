@@ -35,7 +35,6 @@ function browserPageRouteNames(): array
         'members.index',
         'members.show',
         'notifications.index',
-        'passkeys.show',
         'password.confirm',
         'password.request',
         'password.reset',
@@ -59,11 +58,10 @@ function browserPageRouteNames(): array
         'reports.annual',
         'reports.index',
         'reports.monthly',
+        'security.edit',
         'subscription.index',
         'terms',
         'two-factor.login',
-        'two-factor.show',
-        'user-password.edit',
         'verification.notice',
     ];
 }
@@ -105,7 +103,6 @@ function browserCoverageAssignments(): array
         'members.index' => ['smoke:authenticated-family', 'workflow:member-management'],
         'members.show' => ['smoke:authenticated-family', 'workflow:member-management'],
         'notifications.index' => ['smoke:authenticated-family', 'workflow:mobile-shell'],
-        'passkeys.show' => ['smoke:authenticated-family'],
         'password.confirm' => ['smoke:authenticated-family'],
         'password.request' => ['smoke:guest'],
         'password.reset' => ['smoke:guest'],
@@ -129,11 +126,10 @@ function browserCoverageAssignments(): array
         'reports.annual' => ['smoke:authenticated-family'],
         'reports.index' => ['smoke:authenticated-family'],
         'reports.monthly' => ['smoke:authenticated-family'],
+        'security.edit' => ['smoke:authenticated-family'],
         'subscription.index' => ['smoke:authenticated-family'],
         'terms' => ['smoke:guest'],
         'two-factor.login' => ['smoke:authentication-challenge'],
-        'two-factor.show' => ['smoke:authenticated-family'],
-        'user-password.edit' => ['smoke:authenticated-family'],
         'verification.notice' => ['smoke:authentication-challenge'],
     ];
 }
@@ -157,7 +153,6 @@ function browserCoverageExcludedRouteName(string $routeName): bool
         'passkey.confirm-options',
         'passkey.login-options',
         'passkey.registration-options',
-        'passkey.two-factor.options',
         'password.confirmation',
         'pay.callback',
         'platform.families.export',
@@ -167,6 +162,7 @@ function browserCoverageExcludedRouteName(string $routeName): bool
         'two-factor.recovery-codes',
         'two-factor.secret-key',
         'verification.verify',
+        'well-known.passkeys',
         'webhooks.whatsapp.verify',
     ], true);
 }

@@ -13,7 +13,7 @@ import { toUrl } from '@/lib/utils';
 import { logout } from '@/routes';
 import type { NavItem } from '@/types';
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { LogOut, Menu, Settings } from 'lucide-vue-next';
+import { LogOut, Menu, Settings } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
 const page = usePage();

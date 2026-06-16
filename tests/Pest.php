@@ -191,8 +191,13 @@ function createBrowserSuperAdmin(?Family $family = null, array $attributes = [])
         ]);
 }
 
-function loginBrowserAs(User $user, string $expectedPath = '/dashboard'): PendingAwaitablePage
+function loginBrowserAs(User $user, ?string $expectedPath = null): PendingAwaitablePage
 {
+    $family = $user->currentFamily ?? $user->family;
+    $expectedPath ??= $family instanceof Family
+        ? "/{$family->slug}/dashboard"
+        : '/dashboard';
+
     $page = visit(route('login'));
 
     $page->fill('email', $user->email)

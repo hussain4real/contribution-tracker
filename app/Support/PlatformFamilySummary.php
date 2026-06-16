@@ -15,7 +15,7 @@ final class PlatformFamilySummary
      */
     public static function for(Family $family): array
     {
-        $memberIds = $family->members()->pluck('id');
+        $memberIds = $family->members()->pluck('users.id');
 
         $totalContributions = Contribution::query()
             ->whereIn('user_id', $memberIds)

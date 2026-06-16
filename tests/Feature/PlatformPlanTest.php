@@ -356,3 +356,49 @@ it('prevents deleting a plan with assigned families', function () {
 
     expect(PlatformPlan::find($plan->id))->not->toBeNull();
 });
+
+it('prevents deleting an assigned plan from the edit page header action', function () {
+    $admin = createSuperAdmin();
+
+    $plan = PlatformPlan::create([
+        'name' => 'Assigned',
+        'slug' => 'assigned',
+        'price' => 3000,
+        'max_members' => 10,
+        'features' => [],
+        'is_active' => true,
+        'sort_order' => 1,
+    ]);
+
+    Family::factory()->create(['platform_plan_id' => $plan->id]);
+
+    $this->actingAs($admin);
+
+    Livewire::test(EditPlatformPlan::class, ['record' => $plan->getRouteKey()])
+        ->callAction(DeleteAction::class)
+        ->assertNotified('Cannot delete a plan that has families assigned to it.');
+
+    expect(PlatformPlan::find($plan->id))->not->toBeNull();
+});
+
+it('deletes an unassigned plan from the edit page header action', function () {
+    $admin = createSuperAdmin();
+
+    $plan = PlatformPlan::create([
+        'name' => 'Unassigned',
+        'slug' => 'unassigned',
+        'price' => 0,
+        'max_members' => 5,
+        'features' => [],
+        'is_active' => false,
+        'sort_order' => 99,
+    ]);
+
+    $this->actingAs($admin);
+
+    Livewire::test(EditPlatformPlan::class, ['record' => $plan->getRouteKey()])
+        ->callAction(DeleteAction::class)
+        ->assertNotified();
+
+    expect(PlatformPlan::find($plan->id))->toBeNull();
+});

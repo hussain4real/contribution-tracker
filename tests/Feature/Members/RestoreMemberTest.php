@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Models\Family;
 use App\Models\User;
 
 /**
@@ -9,8 +10,9 @@ use App\Models\User;
  */
 describe('Restore Member', function () {
     beforeEach(function () {
-        $this->admin = User::factory()->admin()->create();
-        $this->archivedMember = User::factory()->member()->employed()->archived()->create();
+        $this->family = Family::factory()->create();
+        $this->admin = User::factory()->admin()->create(['family_id' => $this->family->id]);
+        $this->archivedMember = User::factory()->member()->employed()->archived()->create(['family_id' => $this->family->id]);
     });
 
     it('super admin can restore an archived member', function () {
@@ -41,7 +43,7 @@ describe('Restore Member', function () {
     });
 
     it('cannot restore non-archived member', function () {
-        $activeMember = User::factory()->member()->create();
+        $activeMember = User::factory()->member()->create(['family_id' => $this->family->id]);
 
         $this->actingAs($this->admin)
             ->post("/members/{$activeMember->id}/restore")

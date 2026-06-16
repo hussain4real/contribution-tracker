@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Http\Responses\LoginResponse;
+use App\Http\Responses\PasskeyLoginResponse;
+use App\Http\Responses\RedirectAsIntendedToCurrentFamily;
+use App\Http\Responses\RegisterResponse;
+use App\Http\Responses\TwoFactorLoginResponse;
+use App\Http\Responses\VerifyEmailResponse;
 use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
@@ -13,16 +19,37 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Inertia\ExceptionResponse;
 use Inertia\Inertia;
+use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
+use Laravel\Fortify\Contracts\RegisterResponse as RegisterResponseContract;
+use Laravel\Fortify\Contracts\TwoFactorLoginResponse as TwoFactorLoginResponseContract;
+use Laravel\Fortify\Contracts\VerifyEmailResponse as VerifyEmailResponseContract;
+use Laravel\Fortify\Http\Responses\RedirectAsIntended;
+use Laravel\Passkeys\Contracts\PasskeyLoginResponse as PasskeyLoginResponseContract;
 use Laravel\Passport\Passport;
 use Laravel\Pennant\Middleware\EnsureFeaturesAreActive;
 
 class AppServiceProvider extends ServiceProvider
 {
+    public function register(): void
+    {
+        $this->app->singleton(LoginResponseContract::class, LoginResponse::class);
+        $this->app->singleton(RegisterResponseContract::class, RegisterResponse::class);
+        $this->app->singleton(TwoFactorLoginResponseContract::class, TwoFactorLoginResponse::class);
+        $this->app->singleton(PasskeyLoginResponseContract::class, PasskeyLoginResponse::class);
+        $this->app->singleton(VerifyEmailResponseContract::class, VerifyEmailResponse::class);
+        $this->app->bind(
+            RedirectAsIntended::class,
+            fn ($app, array $parameters): RedirectAsIntendedToCurrentFamily => new RedirectAsIntendedToCurrentFamily(
+                is_string($parameters['name'] ?? null) ? $parameters['name'] : 'default',
+            ),
+        );
+    }
+
     public function boot(): void
     {
         // Gate for generating reports
         Gate::define('generate-reports', function (User $user) {
-            return $user->role->canGenerateReports();
+            return $user->activeRole()->canGenerateReports();
         });
 
         RateLimiter::for('whatsapp-notifications', function (object $job): Limit {

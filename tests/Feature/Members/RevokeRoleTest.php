@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Enums\MemberCategory;
 use App\Enums\Role;
+use App\Models\Family;
 use App\Models\User;
 
 /**
@@ -11,11 +12,12 @@ use App\Models\User;
  */
 describe('Revoke Role', function () {
     beforeEach(function () {
-        $this->admin = User::factory()->admin()->create();
+        $this->family = Family::factory()->create();
+        $this->admin = User::factory()->admin()->create(['family_id' => $this->family->id]);
     });
 
     it('super admin can revoke financial secretary role', function () {
-        $financialSecretary = User::factory()->financialSecretary()->create();
+        $financialSecretary = User::factory()->financialSecretary()->create(['family_id' => $this->family->id]);
 
         expect($financialSecretary->role)->toBe(Role::FinancialSecretary);
 
@@ -33,7 +35,7 @@ describe('Revoke Role', function () {
     });
 
     it('revoked financial secretary cannot record payments', function () {
-        $financialSecretary = User::factory()->financialSecretary()->create();
+        $financialSecretary = User::factory()->financialSecretary()->create(['family_id' => $this->family->id]);
 
         // Verify can record payments before revocation
         expect($financialSecretary->canRecordPayments())->toBeTrue();
@@ -55,7 +57,7 @@ describe('Revoke Role', function () {
 
     it('super admin can demote another super admin to member', function () {
         // Create another super admin with a category so they can be demoted
-        $anotherAdmin = User::factory()->admin()->employed()->create();
+        $anotherAdmin = User::factory()->admin()->employed()->create(['family_id' => $this->family->id]);
 
         $this->actingAs($this->admin)
             ->put("/members/{$anotherAdmin->id}", [
@@ -88,8 +90,8 @@ describe('Revoke Role', function () {
     });
 
     it('financial secretary cannot revoke roles', function () {
-        $financialSecretary = User::factory()->financialSecretary()->create();
-        $anotherFs = User::factory()->financialSecretary()->create();
+        $financialSecretary = User::factory()->financialSecretary()->create(['family_id' => $this->family->id]);
+        $anotherFs = User::factory()->financialSecretary()->create(['family_id' => $this->family->id]);
 
         $this->actingAs($financialSecretary)
             ->put("/members/{$anotherFs->id}", [

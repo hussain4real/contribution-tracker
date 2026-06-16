@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Middleware;
 
 use App\Models\PlatformPlan;
+use App\Models\User;
 use App\Support\PlatformPlanCatalog;
 use Closure;
 use Illuminate\Http\Request;
@@ -21,7 +22,12 @@ class EnsureFamilySubscription
     public function handle(Request $request, Closure $next, ?string $feature = null): Response
     {
         $user = $request->user();
-        $family = $user?->family;
+
+        if (! $user instanceof User) {
+            return $next($request);
+        }
+
+        $family = $user->currentFamily ?? $user->family;
 
         // No family means user is setting up — let them through
         if (! $family) {

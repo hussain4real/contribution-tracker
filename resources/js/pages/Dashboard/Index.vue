@@ -16,7 +16,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { useCurrencyFormatter } from '@/lib/currency';
 import { dashboard } from '@/routes';
 import { type BreadcrumbItem } from '@/types';
-import type { MonthlyBreakdown } from '@/types/dashboard';
+import type { MonthlyBreakdown, PaymentStatus } from '@/types/dashboard';
 import { Head, Link, router, usePoll } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
@@ -42,7 +42,7 @@ interface MemberStatus {
     category_label: string | null;
     expected_amount: number;
     total_paid: number;
-    current_month_status: string;
+    current_month_status: PaymentStatus;
     current_month_balance: number;
     accrued_balance: number;
     contribution_id: number;
@@ -70,7 +70,7 @@ interface Personal {
     expected_amount: number;
     total_paid: number;
     current_month_balance: number;
-    current_month_status: string;
+    current_month_status: PaymentStatus;
 }
 
 // Admin/FS view
@@ -205,7 +205,7 @@ function formatCategory(category: string | null): string {
                     :overdue-count="summary.overdue_count"
                     :collection-rate="summary.current_month_collection_rate"
                     :monthly-breakdown="summary.monthly_breakdown"
-                    :can-record-payments="can_record_payments"
+                    :can-record-payments="can_record_payments ?? false"
                     @overdue-click="showOverdueModal = true"
                 />
 
@@ -234,9 +234,10 @@ function formatCategory(category: string | null): string {
                                     <div class="min-w-0">
                                         <Link
                                             :href="
-                                                showContribution(
-                                                    member.contribution_id,
-                                                ).url
+                                                showContribution({
+                                                    contribution:
+                                                        member.contribution_id,
+                                                }).url
                                             "
                                             class="font-medium text-neutral-900 dark:text-neutral-100"
                                         >
@@ -294,7 +295,11 @@ function formatCategory(category: string | null): string {
                                             can_record_payments &&
                                             member.current_month_balance > 0
                                         "
-                                        :href="createPayment(member.id).url"
+                                        :href="
+                                            createPayment({
+                                                member: member.id,
+                                            }).url
+                                        "
                                         class="app-tap rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground"
                                     >
                                         Record payment

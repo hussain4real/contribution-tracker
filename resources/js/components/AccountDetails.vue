@@ -8,7 +8,7 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import { usePage } from '@inertiajs/vue3';
-import { Check, Copy, Landmark } from 'lucide-vue-next';
+import { Check, Copy, Landmark } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
 const page = usePage();

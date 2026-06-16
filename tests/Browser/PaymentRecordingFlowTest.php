@@ -32,7 +32,10 @@ describe('Payment Recording Flow (Browser)', function () {
     it('allows financial secretary to record a payment through the UI', function () {
         $page = loginBrowserAs($this->financialSecretary);
 
-        $page->navigate("/members/{$this->member->id}/payments/create")
+        $page->navigate(route('payments.create', [
+            'current_family' => $this->family->slug,
+            'member' => $this->member,
+        ]))
             ->assertSee('Record Payment')
             ->assertSee($this->member->name)
             ->assertSee('1 Month');
@@ -40,12 +43,22 @@ describe('Payment Recording Flow (Browser)', function () {
         fillBrowserFieldWithoutChange($page, '[name="amount"]', '4000');
         fillBrowserFieldWithoutChange($page, '[name="paid_at"]', now()->format('Y-m-d'));
 
-        $page->click('button[type="submit"]')
+        expect($page->script('() => document.querySelector("form")?.getAttribute("action")'))
+            ->toBe("/{$this->family->slug}/payments");
+        expect($page->script('() => document.querySelector("form")?.getAttribute("method")'))
+            ->toBe('post');
+
+        $page->script('() => document.querySelector("button[type=submit]")?.click()');
+
+        $page->wait(0.5);
+
+        expect($this->contribution->refresh()->isPaid())->toBeTrue();
+
+        $page
             ->assertSee('Dashboard')
             ->assertSee('Payment of ₦4,000.00 recorded for John Doe.')
             ->assertNoJavaScriptErrors();
 
-        expect($this->contribution->refresh()->isPaid())->toBeTrue();
     });
 
     it('shows pending contributions on payment form', function () {
@@ -58,7 +71,10 @@ describe('Payment Recording Flow (Browser)', function () {
 
         $page = loginBrowserAs($this->financialSecretary);
 
-        $page->navigate("/members/{$this->member->id}/payments/create")
+        $page->navigate(route('payments.create', [
+            'current_family' => $this->family->slug,
+            'member' => $this->member,
+        ]))
             ->assertSee('Pending Contributions')
             ->assertSee('remaining');
     });
@@ -66,7 +82,10 @@ describe('Payment Recording Flow (Browser)', function () {
     it('quick amount buttons work correctly', function () {
         $page = loginBrowserAs($this->financialSecretary);
 
-        $page->navigate("/members/{$this->member->id}/payments/create")
+        $page->navigate(route('payments.create', [
+            'current_family' => $this->family->slug,
+            'member' => $this->member,
+        ]))
             ->assertSee('1 Month')
             ->assertSee('2 Months')
             ->assertSee('3 Months')
