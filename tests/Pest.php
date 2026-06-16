@@ -8,6 +8,8 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Session;
 use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia;
 use Laravel\Passkeys\Passkey;
@@ -193,6 +195,9 @@ function createBrowserSuperAdmin(?Family $family = null, array $attributes = [])
 
 function loginBrowserAs(User $user, ?string $expectedPath = null): PendingAwaitablePage
 {
+    Auth::logout();
+    Session::flush();
+
     $family = $user->currentFamily ?? $user->family;
     $expectedPath ??= $family instanceof Family
         ? "/{$family->slug}/dashboard"
