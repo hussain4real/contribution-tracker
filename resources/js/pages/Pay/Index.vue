@@ -31,6 +31,11 @@ interface Props {
     category_amount?: number;
     formatted_amount?: string;
     has_paystack?: boolean;
+    bank_setup_status?:
+        | 'ready'
+        | 'missing_bank_details'
+        | 'incomplete_bank_details'
+        | 'missing_paystack_key';
     paystack_public_key?: string;
 }
 
@@ -39,6 +44,7 @@ const props = withDefaults(defineProps<Props>(), {
     category_amount: 0,
     formatted_amount: '',
     has_paystack: false,
+    bank_setup_status: 'missing_bank_details',
     paystack_public_key: '',
 });
 
@@ -78,6 +84,18 @@ const allSelected = computed(
         props.pending_contributions.length > 0 &&
         selectedIds.value.length === props.pending_contributions.length,
 );
+
+const setupMessage = computed(() => {
+    if (props.bank_setup_status === 'incomplete_bank_details') {
+        return 'Bank details are saved, but the Paystack bank code is missing. Ask your family admin to reselect the bank and save changes.';
+    }
+
+    if (props.bank_setup_status === 'missing_paystack_key') {
+        return 'Online payments are temporarily unavailable because Paystack is not fully configured for this app.';
+    }
+
+    return 'Online payments are not yet available. Your family admin needs to configure bank details to enable Paystack payments.';
+});
 
 const payWithPaystack = async () => {
     if (selectedIds.value.length === 0) {
@@ -163,8 +181,7 @@ const payWithPaystack = async () => {
                 class="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950"
             >
                 <p class="text-sm text-amber-800 dark:text-amber-200">
-                    Online payments are not yet available. Your family admin
-                    needs to configure bank details to enable Paystack payments.
+                    {{ setupMessage }}
                 </p>
             </div>
 

@@ -92,11 +92,23 @@ async function fetchBanks(): Promise<void> {
     try {
         const response = await fetch(banksRoute().url);
         banksList.value = await response.json();
+        ensureSelectedBankCode();
     } catch {
         banksList.value = [];
     } finally {
         banksLoading.value = false;
     }
+}
+
+function ensureSelectedBankCode(): void {
+    if (!selectedBank.value || selectedBankCode.value) {
+        return;
+    }
+
+    const bank = banksList.value.find(
+        (bank) => bank.name === selectedBank.value,
+    );
+    selectedBankCode.value = bank?.code ?? '';
 }
 
 function onBankSelect(bankName: string): void {

@@ -13,6 +13,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -68,6 +69,14 @@ class FamilySettingsController extends Controller
         ]);
 
         $attributes = $this->familyAttributes($validated);
+        $attributes['bank_code'] ??= $this->bankCodeForName($attributes['bank_name']);
+
+        if ($this->requiresBankCode($attributes)) {
+            throw ValidationException::withMessages([
+                'bank_name' => 'Please select a bank from the list so Paystack can identify the bank code.',
+            ]);
+        }
+
         $bankDetailsChanged = $family->bank_code !== $attributes['bank_code']
             || $family->account_number !== $attributes['account_number'];
 
@@ -156,15 +165,7 @@ class FamilySettingsController extends Controller
             abort(403);
         }
 
-        $banks = Cache::remember('paystack_banks', 86400, function () {
-            $response = $this->paystack->listBanks();
-
-            if (! ($response['status'] ?? false)) {
-                return [];
-            }
-
-            return $this->bankOptions($response['data'] ?? []);
-        });
+        $banks = $this->cachedBankOptions();
 
         return response()->json($banks);
     }
@@ -209,6 +210,49 @@ class FamilySettingsController extends Controller
             'name' => is_string($validated['name'] ?? null) ? $validated['name'] : '',
             'monthly_amount' => is_numeric($validated['monthly_amount'] ?? null) ? (int) $validated['monthly_amount'] : 0,
         ];
+    }
+
+    private function bankCodeForName(?string $bankName): ?string
+    {
+        if (! filled($bankName)) {
+            return null;
+        }
+
+        $normalizedBankName = Str::of($bankName)->lower()->squish()->value();
+
+        foreach ($this->cachedBankOptions() as $bank) {
+            if (Str::of($bank['name'])->lower()->squish()->value() === $normalizedBankName) {
+                return $bank['code'];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array{name: string, currency: string, due_day: int, bank_name: string|null, account_name: string|null, account_number: string|null, bank_code: string|null}  $attributes
+     */
+    private function requiresBankCode(array $attributes): bool
+    {
+        return filled($attributes['bank_name'])
+            && filled($attributes['account_number'])
+            && blank($attributes['bank_code']);
+    }
+
+    /**
+     * @return list<array{name: string, code: string}>
+     */
+    private function cachedBankOptions(): array
+    {
+        return Cache::remember('paystack_banks', 86400, function (): array {
+            $response = $this->paystack->listBanks();
+
+            if (! ($response['status'] ?? false)) {
+                return [];
+            }
+
+            return $this->bankOptions($response['data'] ?? []);
+        });
     }
 
     /**

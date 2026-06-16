@@ -26,9 +26,12 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\WhatsAppInboxController;
 use App\Http\Controllers\WhatsAppWebhookController;
+use App\Models\Family;
 use App\Models\PlatformPlan;
+use App\Models\User;
 use App\Support\PlatformPlanCatalog;
 use Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
@@ -78,6 +81,28 @@ Route::middleware(['auth'])
     ->name('platform.stop-impersonating');
 
 require __DIR__.'/settings.php';
+
+Route::middleware(['auth', 'verified'])->get('dashboard', function (Request $request) {
+    $user = $request->user();
+
+    abort_unless($user instanceof User, 403);
+
+    $family = $user->currentFamily
+        ?? $user->family
+        ?? $user->families()->orderByRaw('LOWER(families.name)')->first();
+
+    if (! $family instanceof Family) {
+        return redirect()->route('home');
+    }
+
+    $membership = $user->membershipForFamily($family);
+
+    if ($membership !== null && ($user->current_family_id !== $family->id || $user->family_id !== $family->id)) {
+        $user->switchFamily($family, $membership);
+    }
+
+    return redirect()->route('dashboard', ['current_family' => $family->slug]);
+})->name('legacy.dashboard');
 
 // =========================================================================
 // Family-Scoped Authenticated Routes

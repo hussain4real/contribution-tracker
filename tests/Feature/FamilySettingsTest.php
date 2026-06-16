@@ -87,6 +87,74 @@ it('updates family settings with bank code', function () {
         ->and($family->account_number)->toBe('0045502216');
 });
 
+it('derives the bank code from the selected bank name when the hidden code is missing', function () {
+    Queue::fake();
+    Http::fake([
+        'https://api.paystack.co/bank*' => Http::response([
+            'status' => true,
+            'message' => 'Banks retrieved',
+            'data' => [
+                ['name' => 'Guaranty Trust Bank', 'code' => '058', 'active' => true],
+                ['name' => 'First Bank of Nigeria', 'code' => '011', 'active' => true],
+            ],
+        ]),
+    ]);
+
+    $family = Family::factory()->create();
+    $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+
+    $this->actingAs($admin)
+        ->put(route('family.settings.update'), [
+            'name' => $family->name,
+            'currency' => $family->currency,
+            'due_day' => $family->due_day,
+            'bank_name' => 'Guaranty Trust Bank',
+            'account_name' => 'Aminu Hussain',
+            'account_number' => '0045502216',
+            'bank_code' => null,
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    expect($family->refresh()->bank_code)->toBe('058')
+        ->and($family->hasBankDetails())->toBeTrue();
+
+    Queue::assertPushed(SyncPaystackSubaccount::class);
+});
+
+it('requires selecting a known bank when bank details are missing a bank code', function () {
+    Queue::fake();
+    Http::fake([
+        'https://api.paystack.co/bank*' => Http::response([
+            'status' => true,
+            'message' => 'Banks retrieved',
+            'data' => [
+                ['name' => 'Guaranty Trust Bank', 'code' => '058', 'active' => true],
+            ],
+        ]),
+    ]);
+
+    $family = Family::factory()->create();
+    $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+
+    $this->actingAs($admin)
+        ->put(route('family.settings.update'), [
+            'name' => $family->name,
+            'currency' => $family->currency,
+            'due_day' => $family->due_day,
+            'bank_name' => 'Unknown Trust Bank',
+            'account_name' => 'Aminu Hussain',
+            'account_number' => '0045502216',
+            'bank_code' => null,
+        ])
+        ->assertRedirect()
+        ->assertSessionHasErrors('bank_name');
+
+    expect($family->refresh()->bank_code)->toBeNull();
+
+    Queue::assertNotPushed(SyncPaystackSubaccount::class);
+});
+
 it('allows family settings due day at the end of the month', function () {
     $family = Family::factory()->create();
     $admin = User::factory()->admin()->create(['family_id' => $family->id]);
