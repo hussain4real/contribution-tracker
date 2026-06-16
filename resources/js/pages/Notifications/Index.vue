@@ -23,7 +23,7 @@ import {
     Inbox,
     ReceiptText,
     Sparkles,
-} from 'lucide-vue-next';
+} from '@lucide/vue';
 import { computed } from 'vue';
 
 type NotificationStatus = 'all' | 'unread' | 'read';
@@ -146,12 +146,12 @@ function filterHref(
         query.type = type;
     }
 
-    return index({ query });
+    return index(undefined, { query });
 }
 
 function handleMarkAsRead(notification: NotificationItem): void {
     router.patch(
-        markAsRead(notification.id).url,
+        markAsRead({ notification: notification.id }).url,
         {},
         {
             only: [

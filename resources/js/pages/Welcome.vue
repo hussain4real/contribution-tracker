@@ -3,7 +3,7 @@ import ThemeToggle from '@/components/ThemeToggle.vue';
 import { Button } from '@/components/ui/button';
 import { dashboard, login, pricing, register } from '@/routes';
 import { Head, Link } from '@inertiajs/vue3';
-import { ArrowRight, CheckCircle2 } from 'lucide-vue-next';
+import { ArrowRight, CheckCircle2 } from '@lucide/vue';
 import { onMounted, onUnmounted, ref } from 'vue';
 
 interface Plan {

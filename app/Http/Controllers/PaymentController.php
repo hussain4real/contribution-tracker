@@ -6,10 +6,14 @@ namespace App\Http\Controllers;
 
 use App\Enums\MemberCategory;
 use App\Http\Requests\StorePaymentRequest;
+use App\Models\Family;
+use App\Models\FamilyMembership;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\PaymentAllocationService;
 use App\Support\CurrencyFormatter;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -28,22 +32,21 @@ class PaymentController extends Controller
         $this->authorize('create', Payment::class);
 
         $currentUser = $this->authUser();
+        $family = $this->currentFamilyFor($currentUser);
 
-        $members = User::query()
-            ->where('family_id', $currentUser->family_id)
-            ->whereNull('archived_at')
-            ->payingMembers()
-            ->with('familyCategory:id,name,monthly_amount')
-            ->orderBy('name')
-            ->get()
-            ->map(fn (User $member): array => [
-                'id' => $member->id,
-                'name' => $member->name,
-                'email' => $member->email,
-                'category' => $member->category?->value,
-                'category_label' => $member->familyCategory->name ?? $member->category?->label(),
-                'monthly_amount' => $member->getMonthlyAmount() ?? 0,
-            ]);
+        $members = $this->payingMemberships($family)
+            ->map(function (FamilyMembership $membership): array {
+                $member = $membership->user;
+
+                return [
+                    'id' => $member->id,
+                    'name' => $member->name,
+                    'email' => $member->email,
+                    'category' => $membership->category?->value,
+                    'category_label' => $membership->categoryLabel(),
+                    'monthly_amount' => $membership->monthlyAmount() ?? 0,
+                ];
+            });
 
         return Inertia::render('Payments/Index', [
             'members' => $members,
@@ -56,10 +59,13 @@ class PaymentController extends Controller
     public function create(User $member): Response
     {
         $this->authorize('create', Payment::class);
-        $currency = $member->family->currency ?? $this->authUser()->family->currency ?? '₦';
+        $family = $this->currentFamilyFor($this->authUser());
+        $membership = $this->membershipForMember($member, $family);
+        $currency = $family->currency;
 
         // Get member's pending (incomplete) contributions
         $pendingContributions = $member->contributions()
+            ->where('family_id', $family->id)
             ->incomplete()
             ->oldestFirst()
             ->get()
@@ -79,12 +85,12 @@ class PaymentController extends Controller
                 'id' => $member->id,
                 'name' => $member->name,
                 'email' => $member->email,
-                'category' => $member->category?->value,
-                'category_label' => $member->familyCategory->name ?? $member->category?->label(),
+                'category' => $membership->category?->value,
+                'category_label' => $membership->categoryLabel(),
             ],
             'pending_contributions' => $pendingContributions,
-            'category_amount' => $member->getMonthlyAmount() ?? 0,
-            'formatted_amount' => CurrencyFormatter::format($member->getMonthlyAmount() ?? 0, $currency),
+            'category_amount' => $membership->monthlyAmount() ?? 0,
+            'formatted_amount' => CurrencyFormatter::format($membership->monthlyAmount() ?? 0, $currency),
             'categories' => collect(MemberCategory::cases())->map(fn ($cat) => [
                 'value' => $cat->value,
                 'label' => "{$cat->label()} (".CurrencyFormatter::format($cat->monthlyAmount(), $currency, 0).'/month)',
@@ -98,9 +104,11 @@ class PaymentController extends Controller
     public function store(StorePaymentRequest $request): RedirectResponse
     {
         $recordedBy = $this->user($request);
+        $family = $this->currentFamilyFor($recordedBy);
         $member = User::query()
             ->whereKey($request->integer('member_id'))
             ->firstOrFail();
+        $this->membershipForMember($member, $family);
 
         $payments = $this->allocationService->allocate(
             member: $member,
@@ -110,10 +118,11 @@ class PaymentController extends Controller
             notes: $request->filled('notes') ? $request->string('notes')->toString() : null,
             targetYear: $request->filled('target_year') ? $request->integer('target_year') : null,
             targetMonth: $request->filled('target_month') ? $request->integer('target_month') : null,
+            family: $family,
         );
 
         $totalAllocated = (int) $payments->sum(fn (Payment $payment): int => $payment->amount);
-        $currency = $recordedBy->family->currency ?? $member->family->currency ?? '₦';
+        $currency = $family->currency;
         $formattedAmount = CurrencyFormatter::format($totalAllocated, $currency);
 
         return redirect()->route('dashboard')
@@ -131,5 +140,43 @@ class PaymentController extends Controller
 
         return redirect()->back()
             ->with('success', 'Payment has been deleted.');
+    }
+
+    private function currentFamilyFor(User $user): Family
+    {
+        $family = $user->currentFamily ?? $user->family;
+
+        abort_unless($family instanceof Family, 403);
+
+        return $family;
+    }
+
+    private function membershipForMember(User $member, Family $family): FamilyMembership
+    {
+        $membership = $member->membershipForFamily($family);
+
+        abort_unless($membership instanceof FamilyMembership, 404);
+
+        return $membership;
+    }
+
+    /**
+     * @return EloquentCollection<int, FamilyMembership>
+     */
+    private function payingMemberships(Family $family): EloquentCollection
+    {
+        return $family->memberships()
+            ->with(['familyCategory:id,name,monthly_amount', 'user'])
+            ->whereHas('user', function (Builder $query): void {
+                $query->whereNull('archived_at');
+            })
+            ->where(function (Builder $query): void {
+                $query->whereNotNull('family_members.family_category_id')
+                    ->orWhereNotNull('family_members.category');
+            })
+            ->join('users', 'users.id', '=', 'family_members.user_id')
+            ->orderBy('users.name')
+            ->select('family_members.*')
+            ->get();
     }
 }

@@ -8,10 +8,13 @@ use App\Enums\MemberCategory;
 use App\Enums\PaymentStatus;
 use App\Models\Contribution;
 use App\Models\Family;
+use App\Models\FamilyMembership;
 use App\Models\Payment;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Collection;
 
 class FamilyContributionReviewService
@@ -29,18 +32,20 @@ class FamilyContributionReviewService
      */
     public function monthly(User $user, int $year, int $month, ?string $status = null): array
     {
-        $user->loadMissing('family');
+        $user->loadMissing(['currentFamily', 'family']);
 
+        $family = $user->currentFamily ?? $user->family;
         $members = $this->membersForPeriod($user);
-        $contributions = $this->contributionsForPeriod($user, $year, $month);
-        $rows = $members->map(fn (User $member): array => $this->memberRow(
-            $member,
-            $contributions->firstWhere('user_id', $member->id),
+        $contributions = $family instanceof Family
+            ? $this->contributionsForPeriod($family, $year, $month)
+            : new EloquentCollection;
+        $rows = $members->map(fn (FamilyMembership $membership): array => $this->memberRow(
+            $membership,
+            $contributions->firstWhere('user_id', $membership->user_id),
         ));
         $allRows = $rows->values();
         $filteredRows = $this->filterRows($allRows, $status);
         $period = CarbonImmutable::parse(sprintf('%04d-%02d-01', $year, $month));
-        $family = $user->family;
 
         return [
             'family' => [
@@ -64,27 +69,43 @@ class FamilyContributionReviewService
     }
 
     /**
-     * @return EloquentCollection<int, User>
+     * @return EloquentCollection<int, FamilyMembership>
      */
     private function membersForPeriod(User $user): EloquentCollection
     {
-        return User::query()
-            ->where('family_id', $user->family_id)
-            ->active()
-            ->payingMembers()
-            ->with('familyCategory:id,name,monthly_amount')
-            ->withExists('pushSubscriptions')
-            ->orderBy('name')
+        $family = $user->currentFamily ?? $user->family;
+
+        if (! $family instanceof Family) {
+            return new EloquentCollection;
+        }
+
+        return $family->memberships()
+            ->with([
+                'familyCategory:id,name,monthly_amount',
+                'user' => function (Relation $query): void {
+                    $query->getQuery()->withExists('pushSubscriptions');
+                },
+            ])
+            ->whereHas('user', function (Builder $query): void {
+                $query->whereNull('archived_at');
+            })
+            ->where(function (Builder $query): void {
+                $query->whereNotNull('family_members.family_category_id')
+                    ->orWhereNotNull('family_members.category');
+            })
+            ->join('users', 'users.id', '=', 'family_members.user_id')
+            ->orderBy('users.name')
+            ->select('family_members.*')
             ->get();
     }
 
     /**
      * @return EloquentCollection<int, Contribution>
      */
-    private function contributionsForPeriod(User $user, int $year, int $month): EloquentCollection
+    private function contributionsForPeriod(Family $family, int $year, int $month): EloquentCollection
     {
         return Contribution::query()
-            ->where('family_id', $user->family_id)
+            ->where('family_id', $family->id)
             ->forMonth($year, $month)
             ->with('payments:id,contribution_id,amount')
             ->get();
@@ -93,11 +114,12 @@ class FamilyContributionReviewService
     /**
      * @return array<string, mixed>
      */
-    private function memberRow(User $member, ?Contribution $contribution): array
+    private function memberRow(FamilyMembership $membership, ?Contribution $contribution): array
     {
+        $member = $membership->user;
         $expectedAmount = $contribution instanceof Contribution
             ? $contribution->expected_amount
-            : ($member->getMonthlyAmount() ?? 0);
+            : ($membership->monthlyAmount() ?? 0);
         $paidAmount = $contribution instanceof Contribution
             ? (int) $contribution->payments->sum(fn (Payment $payment): int => $payment->amount)
             : 0;
@@ -110,8 +132,8 @@ class FamilyContributionReviewService
             'id' => $member->id,
             'name' => $member->name,
             'email' => $member->email,
-            'category' => $member->category?->value,
-            'category_label' => $member->familyCategory->name ?? $member->category?->label(),
+            'category' => $membership->category?->value,
+            'category_label' => $membership->categoryLabel(),
             'expected_amount' => $expectedAmount,
             'paid_amount' => $paidAmount,
             'balance' => $balance,

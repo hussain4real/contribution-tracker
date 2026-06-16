@@ -8,7 +8,9 @@
         "format": "prettier --write resources/",
         "format:check": "prettier --check resources/",
         "lint": "eslint .",
-        "lint:fix": "eslint . --fix"
+        "lint:check": "eslint .",
+        "lint:fix": "eslint . --fix",
+        "types:check": "vue-tsc --noEmit"
     },
     "devDependencies": {
         "@eslint/js": "^9.19.0",
@@ -33,15 +35,15 @@
     },
     "dependencies": {
         "@inertiajs/vue3": "^3.0.0",
-        "@laravel/passkeys": "^0.1.0",
+        "@laravel/passkeys": "^0.2.0",
         "@laravel/stream-vue": "^0.3.13",
+        "@lucide/vue": "^1.17.0",
         "@paystack/inline-js": "^2.22.8",
         "@tailwindcss/typography": "^0.5.19",
         "@vueuse/core": "^12.8.2",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "laravel-vite-plugin": "^3.0.0",
-        "lucide-vue-next": "^0.468.0",
         "marked": "^17.0.6",
         "playwright": "^1.59.1",
         "reka-ui": "^2.9.2",

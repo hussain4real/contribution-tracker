@@ -24,6 +24,32 @@ class UserFactory extends Factory
      */
     protected static ?string $password;
 
+    public function configure(): static
+    {
+        return $this->afterCreating(function (User $user): void {
+            if ($user->family_id === null) {
+                return;
+            }
+
+            $family = $user->family;
+
+            if (! $family instanceof Family) {
+                return;
+            }
+
+            $user->ensureFamilyMembership(
+                family: $family,
+                role: $user->role,
+                category: $user->category,
+                familyCategoryId: $user->family_category_id,
+            );
+
+            if ($user->current_family_id === null) {
+                $user->forceFill(['current_family_id' => $family->id])->save();
+            }
+        });
+    }
+
     /**
      * Define the model's default state.
      *
@@ -43,6 +69,7 @@ class UserFactory extends Factory
             'role' => Role::Member,
             'category' => MemberCategory::Employed,
             'family_id' => Family::factory(),
+            'current_family_id' => null,
         ];
     }
 

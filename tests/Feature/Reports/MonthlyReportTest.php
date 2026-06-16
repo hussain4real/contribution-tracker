@@ -7,6 +7,7 @@ use App\Enums\PaymentStatus;
 use App\Models\Contribution;
 use App\Models\Payment;
 use App\Models\User;
+use App\Services\FamilyContributionReviewService;
 use Inertia\Testing\AssertableInertia as Assert;
 
 describe('Monthly Report', function () {
@@ -212,5 +213,22 @@ describe('Monthly Report', function () {
                     ->etc()
                 )
             );
+    });
+
+    it('returns an empty monthly review for users without a family context', function () {
+        $user = User::factory()->financialSecretary()->create(['family_id' => null]);
+
+        $review = app(FamilyContributionReviewService::class)->monthly($user, 2026, 5);
+
+        expect($review['family'])
+            ->toMatchArray([
+                'name' => null,
+                'currency' => 'NGN',
+                'period' => 'May 2026',
+                'year' => 2026,
+                'month' => 5,
+            ])
+            ->and($review['members'])->toBe([])
+            ->and($review['summary']['member_count'])->toBe(0);
     });
 });

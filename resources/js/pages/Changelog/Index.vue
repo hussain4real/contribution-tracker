@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
+import { changelog, dashboard } from '@/routes';
 import { seen as markChangelogSeen } from '@/routes/changelog';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/vue3';
-import { ChevronDown, ExternalLink, Rocket } from 'lucide-vue-next';
+import { ChevronDown, ExternalLink, Rocket } from '@lucide/vue';
 import { onMounted, reactive } from 'vue';
 
 interface Release {
@@ -31,8 +32,8 @@ function toggleExpanded(id: number): void {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Dashboard', href: '/dashboard' },
-    { title: "What's New", href: '/changelog' },
+    { title: 'Dashboard', href: dashboard().url },
+    { title: "What's New", href: changelog().url },
 ];
 
 function formatDate(dateString: string): string {

@@ -17,7 +17,7 @@ import {
     DollarSign,
     FileBarChart2,
     TrendingUp,
-} from 'lucide-vue-next';
+} from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 
 interface MonthData {
@@ -64,7 +64,7 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
     },
     {
         title: `${props.year} Annual`,
-        href: annual({ query: { year: props.year } }).url,
+        href: annual(undefined, { query: { year: props.year } }).url,
     },
 ]);
 
@@ -315,7 +315,7 @@ function getBarHeight(amount: number): string {
                         </div>
                         <Link
                             :href="
-                                monthly({
+                                monthly(undefined, {
                                     query: { year, month: monthData.month },
                                 }).url
                             "

@@ -133,7 +133,7 @@ describe('Mobile app shell', function () {
                 }
             JS)
             ->click('button[aria-label="Open AI assistant"]')
-            ->assertPathIs('/ai')
+            ->assertPathIs("/{$this->family->slug}/ai")
             ->assertNoJavaScriptErrors();
     });
 
@@ -181,7 +181,7 @@ describe('Mobile app shell', function () {
         $page->fill('email', 'admin@test.com')
             ->fill('password', 'password')
             ->click('Log in')
-            ->navigate('/notifications')
+            ->navigate("/{$this->family->slug}/notifications")
             ->assertSee('Notification Center')
             ->assertSee('Timeline')
             ->assertSee('May 2026')
@@ -216,7 +216,7 @@ describe('Mobile app shell', function () {
         $page->fill('email', 'super@test.com')
             ->fill('password', 'password')
             ->click('Log in')
-            ->navigate('/family/invitations')
+            ->navigate("/{$this->family->slug}/family/invitations")
             ->assertScript(<<<'JS'
                 () => {
                     const familySettings = document.querySelector('a[href$="/family/settings"]');
@@ -226,16 +226,32 @@ describe('Mobile app shell', function () {
                         && invitations?.dataset.active === 'true';
                 }
             JS)
-            ->navigate('/platform/users')
+            ->navigate("/{$this->family->slug}/dashboard")
             ->assertScript(<<<'JS'
                 () => {
-                    const platformDashboard = document.querySelector('a[href$="/platform"]');
+                    const platformAdmin = document.querySelector('a[href$="/platform"]');
                     const platformUsers = document.querySelector('a[href$="/platform/users"]');
 
-                    return platformDashboard?.dataset.active !== 'true'
-                        && platformUsers?.dataset.active === 'true';
+                    return platformAdmin?.dataset.active !== 'true'
+                        && platformUsers === null;
                 }
             JS)
+            ->assertNoJavaScriptErrors();
+    });
+
+    it('opens the platform admin link as a full page visit', function () {
+        $superAdmin = createBrowserSuperAdmin($this->family, [
+            'email' => 'platform-link@test.com',
+        ]);
+
+        $this->actingAs($superAdmin);
+
+        $page = visit("/{$this->family->slug}/dashboard");
+
+        $page->assertSee('Platform Admin')
+            ->click('Platform Admin')
+            ->assertPathIs('/platform')
+            ->assertSee('Platform Overview')
             ->assertNoJavaScriptErrors();
     });
 });

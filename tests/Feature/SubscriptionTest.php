@@ -281,8 +281,7 @@ it('rejects subscription when an admin does not belong to a family', function ()
         ->postJson(route('subscription.subscribe'), [
             'plan_id' => $plan->id,
         ])
-        ->assertUnprocessable()
-        ->assertJson(['message' => 'You must belong to a family to subscribe.']);
+        ->assertForbidden();
 });
 
 it('returns a friendly error when subscription initialization fails', function () {

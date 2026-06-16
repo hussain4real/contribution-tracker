@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Button } from '@/components/ui/button';
 import { useSwUpdate } from '@/composables/useSwUpdate';
-import { RefreshCw, X } from 'lucide-vue-next';
+import { RefreshCw, X } from '@lucide/vue';
 import { onMounted } from 'vue';
 
 const { needRefresh, init, applyUpdate, dismissUpdate } = useSwUpdate();

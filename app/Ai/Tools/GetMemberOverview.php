@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace App\Ai\Tools;
 
 use App\Models\Contribution;
+use App\Models\Family;
+use App\Models\FamilyMembership;
 use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Database\Eloquent\Builder;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 
@@ -28,30 +31,40 @@ class GetMemberOverview implements Tool
      */
     public function handle(Request $request): string
     {
-        $members = User::query()
-            ->where('family_id', $this->user->family_id)
-            ->active()
-            ->with('familyCategory:id,name,monthly_amount')
-            ->orderBy('name')
+        $family = $this->user->currentFamily ?? $this->user->family;
+
+        if (! $family instanceof Family) {
+            return json_encode(['error' => 'User is not associated with a family.'], JSON_THROW_ON_ERROR);
+        }
+
+        $memberships = $family->memberships()
+            ->with(['familyCategory:id,name,monthly_amount', 'user'])
+            ->whereHas('user', function (Builder $query): void {
+                $query->whereNull('archived_at');
+            })
+            ->join('users', 'users.id', '=', 'family_members.user_id')
+            ->orderBy('users.name')
+            ->select('family_members.*')
             ->get();
 
         $currentContributions = Contribution::query()
-            ->where('family_id', $this->user->family_id)
+            ->where('family_id', $family->id)
             ->forMonth(now()->year, now()->month)
             ->with('payments:id,contribution_id,amount')
             ->get();
 
-        $memberData = $members->map(function (User $member) use ($currentContributions) {
+        $memberData = $memberships->map(function (FamilyMembership $membership) use ($currentContributions) {
+            $member = $membership->user;
             $currentContribution = $currentContributions->firstWhere('user_id', $member->id);
-            $monthlyAmount = $member->getMonthlyAmount();
+            $monthlyAmount = $membership->monthlyAmount();
             $paidThisMonth = $currentContribution instanceof Contribution
                 ? (int) $currentContribution->payments->sum(fn (Payment $payment): int => $payment->amount)
                 : 0;
 
             return [
                 'name' => $member->name,
-                'role' => $member->role->value,
-                'category' => $member->familyCategory->name ?? $member->category->value ?? 'None',
+                'role' => $membership->role->value,
+                'category' => $membership->categoryLabel() ?? 'None',
                 'monthly_amount' => $monthlyAmount,
                 'paid_this_month' => $paidThisMonth,
                 'outstanding_this_month' => max(0, ($monthlyAmount ?? 0) - $paidThisMonth),
@@ -60,8 +73,8 @@ class GetMemberOverview implements Tool
         })->toArray();
 
         return json_encode([
-            'total_members' => $members->count(),
-            'active_paying_members' => $members->filter(fn (User $member): bool => $member->getMonthlyAmount() !== null)->count(),
+            'total_members' => $memberships->count(),
+            'active_paying_members' => $memberships->filter(fn (FamilyMembership $membership): bool => $membership->monthlyAmount() !== null)->count(),
             'current_period' => now()->format('F Y'),
             'members' => $memberData,
         ], JSON_THROW_ON_ERROR);

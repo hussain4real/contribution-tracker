@@ -8,7 +8,7 @@ use App\Ai\Agents\FamilyAssistant;
 use App\Http\Requests\RenameAiConversationRequest;
 use App\Http\Requests\StreamAiChatRequest;
 use App\Http\Requests\TranscribeAudioRequest;
-use App\Models\User;
+use App\Models\Family;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -96,11 +96,12 @@ class AiChatController extends Controller
             }
         }
 
-        $memberNames = $user->family_id
-            ? User::query()
-                ->where('family_id', $user->family_id)
-                ->whereNull('archived_at')
-                ->pluck('name')
+        $family = $user->currentFamily ?? $user->family;
+        $memberNames = $family instanceof Family
+            ? $family->members()
+                ->whereNull('users.archived_at')
+                ->orderBy('users.name')
+                ->pluck('users.name')
                 ->toArray()
             : [];
 

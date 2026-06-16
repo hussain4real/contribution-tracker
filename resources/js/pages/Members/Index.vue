@@ -4,19 +4,14 @@ import {
     index,
     show,
 } from '@/actions/App/Http/Controllers/MemberController';
+import { index as subscriptionIndex } from '@/actions/App/Http/Controllers/SubscriptionController';
 import MemberListItem from '@/components/contributions/MemberListItem.vue';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useCurrencyFormatter } from '@/lib/currency';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/vue3';
-import {
-    Archive,
-    ArrowUpCircle,
-    ChevronRight,
-    Plus,
-    Users,
-} from 'lucide-vue-next';
+import { Archive, ArrowUpCircle, ChevronRight, Plus, Users } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
 interface Member {
@@ -120,7 +115,7 @@ const { formatCurrency } = useCurrencyFormatter();
                     }}
                     members — upgrade your plan to add more.
                 </p>
-                <Link href="/subscription">
+                <Link :href="subscriptionIndex().url">
                     <Button
                         size="sm"
                         variant="outline"
@@ -142,7 +137,7 @@ const { formatCurrency } = useCurrencyFormatter();
                     <Link
                         v-for="member in displayedMembers"
                         :key="member.id"
-                        :href="show(member.id).url"
+                        :href="show({ member: member.id }).url"
                         class="app-tap flex items-center gap-3 p-4"
                     >
                         <div

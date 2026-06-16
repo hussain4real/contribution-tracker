@@ -9,7 +9,8 @@
     "mcp": true,
     "nightwatch": true,
     "packages": [
-        "barryvdh/laravel-debugbar"
+        "barryvdh/laravel-debugbar",
+        "filament/filament"
     ],
     "sail": false,
     "skills": [

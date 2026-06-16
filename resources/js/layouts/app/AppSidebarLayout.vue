@@ -21,7 +21,7 @@ import { usePwaCacheWarmer } from '@/composables/usePwaCacheWarmer';
 import { edit as editProfile } from '@/routes/profile';
 import type { BreadcrumbItemType } from '@/types';
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { MessageCircle, X } from 'lucide-vue-next';
+import { MessageCircle, X } from '@lucide/vue';
 import { computed, onMounted, ref } from 'vue';
 
 usePwaCacheWarmer();

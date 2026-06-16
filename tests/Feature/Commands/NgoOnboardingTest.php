@@ -137,3 +137,59 @@ it('does not fail after records are created when whatsapp onboarding delivery fa
 
     Mail::assertSent(NgoOnboardingCredentialsMail::class, 2);
 });
+
+it('can skip onboarding email delivery', function () {
+    Mail::fake();
+
+    $this->artisan('ngo:onboard', [
+        '--name' => 'Qatar Quiet Fund',
+        '--admin-name' => 'Silent Admin',
+        '--admin-email' => 'admin-quiet@ngo.test',
+        '--admin-whatsapp' => '+97455550201',
+        '--financial-secretary-name' => 'Silent Finance',
+        '--financial-secretary-email' => 'finance-quiet@ngo.test',
+        '--financial-secretary-whatsapp' => '+97455550202',
+        '--skip-email' => true,
+        '--skip-whatsapp' => true,
+    ])->assertSuccessful();
+
+    expect(Family::query()->where('name', 'Qatar Quiet Fund')->exists())->toBeTrue();
+
+    Mail::assertNothingSent();
+});
+
+it('reports validation errors before creating an ngo family', function () {
+    Mail::fake();
+
+    $this->artisan('ngo:onboard', [
+        '--name' => 'Qatar Duplicate Fund',
+        '--admin-name' => 'Duplicate Admin',
+        '--admin-email' => 'duplicate@ngo.test',
+        '--admin-whatsapp' => '+97455550301',
+        '--financial-secretary-name' => 'Duplicate Finance',
+        '--financial-secretary-email' => 'duplicate@ngo.test',
+        '--financial-secretary-whatsapp' => '+97455550301',
+        '--skip-email' => true,
+        '--skip-whatsapp' => true,
+    ])
+        ->expectsOutputToContain('The financial secretary must use a different email address.')
+        ->expectsOutputToContain('The financial secretary must use a different WhatsApp number.')
+        ->assertFailed();
+
+    expect(Family::query()->where('name', 'Qatar Duplicate Fund')->exists())->toBeFalse();
+
+    Mail::assertNothingSent();
+});
+
+it('defines the ngo onboarding credentials mail content', function () {
+    $family = Family::factory()->create(['name' => 'Qatar Mail Fund']);
+    $user = User::factory()->admin()->create([
+        'family_id' => $family->id,
+        'email' => 'mail-admin@ngo.test',
+    ]);
+
+    $mail = new NgoOnboardingCredentialsMail($user, $family, 'temporary-password', route('login'));
+
+    expect($mail->envelope()->subject)->toBe('Your Qatar Mail Fund login details')
+        ->and($mail->content()->markdown)->toBe('mail.ngo-onboarding-credentials');
+});

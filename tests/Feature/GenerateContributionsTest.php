@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Enums\MemberCategory;
+use App\Enums\Role;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Models\Contribution;
 use App\Models\Family;
@@ -90,7 +92,7 @@ describe('Generate Monthly Contributions Command', function () {
             ->count())->toBe(1);
     });
 
-    it('enforces one contribution per member per month at the database level', function () {
+    it('enforces one contribution per family member per month at the database level', function () {
         $family = Family::factory()->create();
         $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
 
@@ -98,6 +100,52 @@ describe('Generate Monthly Contributions Command', function () {
 
         expect(fn () => Contribution::factory()->forUser($member)->forMonth(2026, 5)->create())
             ->toThrow(UniqueConstraintViolationException::class);
+    });
+
+    it('creates same-period contributions per family membership after a member switches families', function () {
+        $primaryFamily = Family::factory()->create(['due_day' => 28]);
+        $secondaryFamily = Family::factory()->create(['due_day' => 28]);
+        $member = User::factory()->member()->employed()->create(['family_id' => $primaryFamily->id]);
+        $member->ensureFamilyMembership($secondaryFamily, Role::Member, MemberCategory::Student);
+        $member->forceFill([
+            'current_family_id' => $secondaryFamily->id,
+            'family_id' => $secondaryFamily->id,
+            'role' => Role::Member,
+            'category' => MemberCategory::Student,
+        ])->save();
+
+        $this->artisan('contributions:generate', [
+            '--family' => $primaryFamily->id,
+            '--year' => 2026,
+            '--month' => 5,
+        ])->assertSuccessful();
+
+        $this->artisan('contributions:generate', [
+            '--family' => $secondaryFamily->id,
+            '--year' => 2026,
+            '--month' => 5,
+        ])->assertSuccessful();
+
+        $primaryContribution = Contribution::query()
+            ->where('family_id', $primaryFamily->id)
+            ->where('user_id', $member->id)
+            ->where('year', 2026)
+            ->where('month', 5)
+            ->firstOrFail();
+        $secondaryContribution = Contribution::query()
+            ->where('family_id', $secondaryFamily->id)
+            ->where('user_id', $member->id)
+            ->where('year', 2026)
+            ->where('month', 5)
+            ->firstOrFail();
+
+        expect($primaryContribution->expected_amount)->toBe(MemberCategory::Employed->monthlyAmount())
+            ->and($secondaryContribution->expected_amount)->toBe(MemberCategory::Student->monthlyAmount())
+            ->and(Contribution::query()
+                ->where('user_id', $member->id)
+                ->where('year', 2026)
+                ->where('month', 5)
+                ->count())->toBe(2);
     });
 
     it('skips archived members', function () {

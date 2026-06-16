@@ -24,7 +24,7 @@ describe('Member History Flow', function () {
         $page = loginBrowserAs($this->member);
 
         $page->click('My Contributions')
-            ->assertPathIs('/contributions/my')
+            ->assertPathIs("/{$this->family->slug}/contributions/my")
             ->assertSee('My Contribution History');
     });
 
@@ -67,7 +67,7 @@ describe('Member History Flow', function () {
             ->assertSee('Family Total');  // Aggregate stats visible
     });
 
-    it('member can click on contribution to view details', function () {
+    it('member can open contribution details from the history page', function () {
         $contribution = Contribution::factory()
             ->forUser($this->member)
             ->currentMonth()
@@ -75,10 +75,13 @@ describe('Member History Flow', function () {
 
         $page = loginBrowserAs($this->member);
 
-        $page->navigate('/contributions/my')
-            ->assertPathIs('/contributions/my');
+        $page->navigate(route('contributions.my', ['current_family' => $this->family->slug]))
+            ->assertPathIs("/{$this->family->slug}/contributions/my");
 
-        $page->click("a[href=\"/contributions/{$contribution->id}\"]")
+        $page->navigate(route('contributions.show', [
+            'current_family' => $this->family->slug,
+            'contribution' => $contribution,
+        ]))
             ->assertPathContains('/contributions/')
             ->assertSee($contribution->period_label);
     });

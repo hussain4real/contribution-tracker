@@ -1,3 +1,4 @@
+import { currentFamilySlug } from '@/lib/familyRouteDefaults';
 import { onMounted } from 'vue';
 
 const CACHE_NAME = 'inertia-pages-v3';
@@ -8,12 +9,12 @@ const SESSION_FLAG = 'pwa-cache-warmed';
  * immediately on a cold offline launch. Each entry must be a fully
  * authenticated, cacheable GET route.
  */
-const ROUTES_TO_WARM = [
-    '/dashboard',
-    '/members',
-    '/contributions/my',
-    '/contributions',
-    '/payments',
+const TENANT_ROUTES_TO_WARM = [
+    'dashboard',
+    'members',
+    'contributions/my',
+    'contributions',
+    'payments',
 ];
 
 function isStandalonePwa(): boolean {
@@ -49,13 +50,23 @@ async function warmCache(): Promise<void> {
         return;
     }
 
+    const familySlug = currentFamilySlug();
+
+    if (!familySlug) {
+        return;
+    }
+
+    const routesToWarm = TENANT_ROUTES_TO_WARM.map(
+        (path) => `/${familySlug}/${path}`,
+    );
+
     sessionStorage.setItem(SESSION_FLAG, '1');
 
     try {
         const cache = await caches.open(CACHE_NAME);
 
         await Promise.allSettled(
-            ROUTES_TO_WARM.map(async (path) => {
+            routesToWarm.map(async (path) => {
                 try {
                     const response = await fetch(path, {
                         credentials: 'same-origin',

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
     create as createExpense,
+    destroy as destroyExpense,
     index,
 } from '@/actions/App/Http/Controllers/ExpenseController';
 import { Button } from '@/components/ui/button';
@@ -8,7 +9,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { useCurrencyFormatter } from '@/lib/currency';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { Plus, Receipt, Trash2 } from 'lucide-vue-next';
+import { Plus, Receipt, Trash2 } from '@lucide/vue';
 
 interface ExpenseItem {
     id: number;
@@ -52,7 +53,7 @@ function formatDate(date: string): string {
 
 function deleteExpense(id: number): void {
     if (confirm('Are you sure you want to delete this expense?')) {
-        router.delete(route('expenses.destroy', id));
+        router.delete(destroyExpense({ expense: id }).url);
     }
 }
 </script>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { index, store } from '@/actions/App/Http/Controllers/MemberController';
+import { index as subscriptionIndex } from '@/actions/App/Http/Controllers/SubscriptionController';
 import HeadingSmall from '@/components/HeadingSmall.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
@@ -9,7 +10,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { useCurrencyFormatter } from '@/lib/currency';
 import { type BreadcrumbItem } from '@/types';
 import { Form, Head, Link, usePage } from '@inertiajs/vue3';
-import { ArrowUpCircle } from 'lucide-vue-next';
+import { ArrowUpCircle } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
 interface CategoryOption {
@@ -83,7 +84,7 @@ const { formatCurrency } = useCurrencyFormatter();
                         your plan to add more members.
                     </p>
                     <div class="mt-4 flex gap-3">
-                        <Link href="/subscription">
+                        <Link :href="subscriptionIndex().url">
                             <Button>
                                 <ArrowUpCircle class="mr-2 h-4 w-4" />
                                 Upgrade Plan

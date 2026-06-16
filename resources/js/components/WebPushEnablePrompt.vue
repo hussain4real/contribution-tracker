@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { useWebPush } from '@/composables/useWebPush';
 import { edit as editProfile } from '@/routes/profile';
 import { Link, usePage } from '@inertiajs/vue3';
-import { BellRing, X } from 'lucide-vue-next';
+import { BellRing, X } from '@lucide/vue';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
 const PROMPT_INTERVAL_MS = 60 * 60 * 1000;

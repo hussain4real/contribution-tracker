@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\User;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Testing\AssertableInertia as Assert;
 use Laravel\Passkeys\Actions\VerifyPasskey;
 use Mockery\MockInterface;
@@ -12,19 +13,19 @@ test('passkeys settings page can be rendered with a fresh empty list', function 
 
     $this->actingAs($user)
         ->withSession(['auth.password_confirmed_at' => time()])
-        ->get(route('passkeys.show'))
+        ->get(route('security.edit'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->component('settings/Passkeys')
+            ->component('settings/Security')
             ->has('passkeys', 0)
         );
 });
 
-test('passkeys settings page requires password confirmation', function () {
+test('security settings page requires password confirmation', function () {
     $user = User::factory()->withoutTwoFactor()->create();
 
     $this->actingAs($user)
-        ->get(route('passkeys.show'))
+        ->get(route('security.edit'))
         ->assertRedirect(route('password.confirm'));
 });
 
@@ -37,10 +38,10 @@ test('passkeys settings page lists official passkeys', function () {
 
     $this->actingAs($user)
         ->withSession(['auth.password_confirmed_at' => time()])
-        ->get(route('passkeys.show'))
+        ->get(route('security.edit'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->component('settings/Passkeys')
+            ->component('settings/Security')
             ->has('passkeys', 3)
         );
 });
@@ -156,8 +157,20 @@ test('a user cannot delete another users passkey', function () {
 test('passkey routes require authentication', function () {
     $passkey = createTestPasskeyFor(User::factory()->withoutTwoFactor()->create());
 
-    $this->get(route('passkeys.show'))->assertRedirect();
+    Auth::logout();
+    $this->flushSession();
+
+    $this->get(route('security.edit'))->assertRedirect(route('login'));
     $this->get(route('passkey.registration-options'))->assertRedirect(route('login'));
     $this->post(route('passkey.store'))->assertRedirect(route('login'));
     $this->delete(route('passkey.destroy', $passkey))->assertRedirect(route('login'));
+});
+
+test('passkey well-known endpoint points to security settings', function () {
+    $this->getJson(route('well-known.passkeys'))
+        ->assertOk()
+        ->assertJson([
+            'enroll' => route('security.edit'),
+            'manage' => route('security.edit'),
+        ]);
 });

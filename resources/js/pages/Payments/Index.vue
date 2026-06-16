@@ -8,7 +8,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { useCurrencyFormatter } from '@/lib/currency';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/vue3';
-import { ChevronRight, CreditCard, Users } from 'lucide-vue-next';
+import { ChevronRight, CreditCard, Users } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
 interface Member {
@@ -131,7 +131,7 @@ const { formatCurrency } = useCurrencyFormatter();
                     <Link
                         v-for="member in filteredMembers"
                         :key="member.id"
-                        :href="createPayment(member.id).url"
+                        :href="createPayment({ member: member.id }).url"
                         class="flex items-center justify-between gap-3 px-4 py-4 transition hover:bg-neutral-50 sm:gap-4 sm:px-6 dark:hover:bg-neutral-800"
                     >
                         <div class="flex min-w-0 items-center gap-3 sm:gap-4">

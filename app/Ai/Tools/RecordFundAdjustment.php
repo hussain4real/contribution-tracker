@@ -46,8 +46,13 @@ class RecordFundAdjustment implements Tool
             return json_encode(['error' => 'A description is required for the fund adjustment.'], JSON_THROW_ON_ERROR);
         }
 
-        $family = $this->user->family;
-        $currency = $family instanceof Family ? $family->currency : '₦';
+        $family = $this->user->currentFamily ?? $this->user->family;
+
+        if (! $family instanceof Family) {
+            return json_encode(['error' => 'User is not associated with a family.'], JSON_THROW_ON_ERROR);
+        }
+
+        $currency = $family->currency;
         $formattedAmount = CurrencyFormatter::format($amount, $currency);
 
         if (! $confirmed) {
@@ -63,7 +68,7 @@ class RecordFundAdjustment implements Tool
         }
 
         $adjustment = FundAdjustment::create([
-            'family_id' => $this->user->family_id,
+            'family_id' => $family->id,
             'amount' => $amount,
             'description' => $description,
             'recorded_at' => $recordedAt,

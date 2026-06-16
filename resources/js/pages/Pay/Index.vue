@@ -119,7 +119,9 @@ const payWithPaystack = async () => {
         popup.resumeTransaction(data.access_code, {
             onSuccess: () => {
                 router.visit(
-                    payCallback.url({ query: { reference: data.reference } }),
+                    payCallback.url(undefined, {
+                        query: { reference: data.reference },
+                    }),
                 );
             },
             onCancel: () => {
@@ -131,7 +133,7 @@ const payWithPaystack = async () => {
                     processing.value = false;
                     // If still processing when popup closes, check via callback
                     router.visit(
-                        payCallback.url({
+                        payCallback.url(undefined, {
                             query: { reference: data.reference },
                         }),
                     );

@@ -41,6 +41,12 @@ class SendInvitation implements Tool
             return json_encode(['error' => 'Only family admins and financial secretaries can send invitations.'], JSON_THROW_ON_ERROR);
         }
 
+        $family = $this->user->currentFamily ?? $this->user->family;
+
+        if (! $family instanceof Family) {
+            return json_encode(['error' => 'User is not associated with a family.'], JSON_THROW_ON_ERROR);
+        }
+
         $deliveryMethodValue = $this->stringFromRequest($request['delivery_method'] ?? null, InvitationDeliveryMethod::Email->value);
         $deliveryMethod = InvitationDeliveryMethod::tryFrom($deliveryMethodValue);
         $email = $this->nullableStringFromRequest($request['email'] ?? null);
@@ -84,7 +90,7 @@ class SendInvitation implements Tool
             return json_encode(['error' => 'Only family admins can invite admin or financial secretary roles.'], JSON_THROW_ON_ERROR);
         }
 
-        $existingMemberQuery = User::query()->where('family_id', $this->user->family_id);
+        $existingMemberQuery = $family->members();
 
         if ($deliveryMethod === InvitationDeliveryMethod::Email) {
             $existingMemberQuery->where('email', $contact);
@@ -103,7 +109,7 @@ class SendInvitation implements Tool
         }
 
         $existingInvitationQuery = FamilyInvitation::query()
-            ->where('family_id', $this->user->family_id)
+            ->where('family_id', $family->id)
             ->where('delivery_method', $deliveryMethod)
             ->pending()
             ->when(
@@ -122,8 +128,7 @@ class SendInvitation implements Tool
             return json_encode(['error' => $message], JSON_THROW_ON_ERROR);
         }
 
-        $family = $this->user->family;
-        $familyName = $family instanceof Family ? $family->name : 'the family';
+        $familyName = $family->name;
 
         if (! $confirmed) {
             return json_encode([
@@ -140,7 +145,7 @@ class SendInvitation implements Tool
         }
 
         $invitation = FamilyInvitation::create([
-            'family_id' => $this->user->family_id,
+            'family_id' => $family->id,
             'email' => $deliveryMethod === InvitationDeliveryMethod::Email ? $contact : null,
             'delivery_method' => $deliveryMethod,
             'whatsapp_phone' => $deliveryMethod === InvitationDeliveryMethod::WhatsApp ? $contact : null,

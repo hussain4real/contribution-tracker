@@ -251,7 +251,7 @@ class OnboardNgoFamily
         string $password,
         ?int $categoryId,
     ): User {
-        return User::create([
+        $user = User::create([
             'name' => $name,
             'email' => $email,
             'email_verified_at' => now(),
@@ -260,10 +260,20 @@ class OnboardNgoFamily
             'role' => $role,
             'category' => $categoryId === null ? null : MemberCategory::Employed,
             'family_id' => $family->id,
+            'current_family_id' => $family->id,
             'family_category_id' => $categoryId,
             'whatsapp_phone' => $whatsapp,
             'whatsapp_verified_at' => now(),
         ]);
+
+        $user->ensureFamilyMembership(
+            family: $family,
+            role: $role,
+            category: $categoryId === null ? null : MemberCategory::Employed,
+            familyCategoryId: $categoryId,
+        );
+
+        return $user;
     }
 
     private function temporaryPassword(): string

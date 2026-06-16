@@ -34,7 +34,7 @@ function githubRelease(array $overrides = []): array
 }
 
 it('requires authentication to access the changelog', function () {
-    $this->get('/changelog')
+    $this->get(route('changelog'))
         ->assertRedirect();
 });
 

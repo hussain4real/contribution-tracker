@@ -4,6 +4,7 @@ import {
     index,
     store,
 } from '@/actions/App/Http/Controllers/InvitationController';
+import { index as subscriptionIndex } from '@/actions/App/Http/Controllers/SubscriptionController';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
@@ -20,13 +21,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Form, Head, Link, router, usePage } from '@inertiajs/vue3';
-import {
-    ArrowUpCircle,
-    Mail,
-    MessageCircle,
-    Plus,
-    Trash2,
-} from 'lucide-vue-next';
+import { ArrowUpCircle, Mail, MessageCircle, Plus, Trash2 } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
 interface Invitation {
@@ -84,7 +79,7 @@ function confirmDelete(): void {
     }
 
     deleting.value = true;
-    router.delete(destroy(deletingInvitation.value.id).url, {
+    router.delete(destroy({ invitation: deletingInvitation.value.id }).url, {
         preserveScroll: true,
         onFinish: () => {
             deleting.value = false;
@@ -142,7 +137,7 @@ function statusBadge(invitation: Invitation): { text: string; class: string } {
                     }}
                     members — upgrade your plan to invite more.
                 </p>
-                <Link href="/subscription">
+                <Link :href="subscriptionIndex().url">
                     <Button
                         size="sm"
                         variant="outline"

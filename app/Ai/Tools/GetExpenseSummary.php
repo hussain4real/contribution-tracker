@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Ai\Tools;
 
 use App\Models\Expense;
+use App\Models\Family;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
@@ -27,11 +28,17 @@ class GetExpenseSummary implements Tool
      */
     public function handle(Request $request): string
     {
+        $family = $this->user->currentFamily ?? $this->user->family;
+
+        if (! $family instanceof Family) {
+            return json_encode(['error' => 'User is not associated with a family.'], JSON_THROW_ON_ERROR);
+        }
+
         $startDate = $this->stringFromRequest($request['start_date'] ?? null, now()->startOfMonth()->toDateString());
         $endDate = $this->stringFromRequest($request['end_date'] ?? null, now()->endOfMonth()->toDateString());
 
         $baseQuery = Expense::query()
-            ->where('family_id', $this->user->family_id)
+            ->where('family_id', $family->id)
             ->spentBetween($startDate, $endDate);
 
         $totalAmount = (clone $baseQuery)->sum('amount');

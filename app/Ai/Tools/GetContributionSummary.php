@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Ai\Tools;
 
 use App\Models\Contribution;
+use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -29,11 +30,17 @@ class GetContributionSummary implements Tool
      */
     public function handle(Request $request): string
     {
+        $family = $this->user->currentFamily ?? $this->user->family;
+
+        if (! $family instanceof Family) {
+            return json_encode(['error' => 'User is not associated with a family.'], JSON_THROW_ON_ERROR);
+        }
+
         $year = $this->integerFromRequest($request['year'] ?? null, now()->year);
         $month = $this->nullableIntegerFromRequest($request['month'] ?? null);
 
         $query = Contribution::query()
-            ->where('family_id', $this->user->family_id)
+            ->where('family_id', $family->id)
             ->where('year', $year)
             ->with(['user:id,name', 'payments:id,contribution_id,amount'])
             ->whereHas('user', fn (Builder $query): Builder => $query->whereNull('archived_at'));

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useNetworkStatus } from '@/composables/useNetworkStatus';
-import { Wifi, WifiOff } from 'lucide-vue-next';
+import { Wifi, WifiOff } from '@lucide/vue';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 
 const { isOnline, cachedAt, justReconnected } = useNetworkStatus();

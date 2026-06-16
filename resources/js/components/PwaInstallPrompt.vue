@@ -10,7 +10,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { usePwaInstall } from '@/composables/usePwaInstall';
-import { Download } from 'lucide-vue-next';
+import { Download } from '@lucide/vue';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
 const { isInstallable, isInstalled, dismissed, init, install, dismiss } =

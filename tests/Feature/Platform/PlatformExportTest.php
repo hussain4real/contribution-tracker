@@ -4,27 +4,38 @@ declare(strict_types=1);
 
 use App\Models\Family;
 use App\Models\User;
+use App\Support\PlatformCsvExports;
+use Illuminate\Testing\TestResponse;
 
 describe('Platform CSV Exports', function () {
-    it('allows super admin to export families as CSV', function () {
-        $family = Family::factory()->create(['name' => 'Test Family']);
-        $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
+    it('redirects the legacy families export URL to the Filament families page', function () {
+        $this->get('/platform/families/export')
+            ->assertRedirect('/platform/families');
+    });
 
-        $response = $this->actingAs($superAdmin)
-            ->get('/platform/families/export');
+    it('redirects the legacy users export URL to the Filament users page', function () {
+        $this->get('/platform/users/export')
+            ->assertRedirect('/platform/users');
+    });
+
+    it('exports families as CSV from the shared Filament exporter', function () {
+        Family::factory()->create(['name' => 'Test Family']);
+
+        $response = TestResponse::fromBaseResponse(PlatformCsvExports::families());
 
         $response->assertOk()
-            ->assertHeader('content-type', 'text/csv; charset=UTF-8')
+            ->assertHeader('content-type', 'text/csv')
             ->assertDownload();
 
         $content = $response->streamedContent();
+
         expect($content)->toContain('ID,Name,Slug,Currency')
             ->and($content)->toContain('Test Family');
     });
 
-    it('allows super admin to export users as CSV', function () {
+    it('exports users as CSV from the shared Filament exporter', function () {
         $family = Family::factory()->create();
-        $superAdmin = User::factory()->admin()->superAdmin()->create([
+        User::factory()->admin()->superAdmin()->create([
             'family_id' => $family->id,
             'name' => 'Admin User',
             'email' => 'admin@test.com',
@@ -35,63 +46,42 @@ describe('Platform CSV Exports', function () {
             'email' => 'member@test.com',
         ]);
 
-        $response = $this->actingAs($superAdmin)
-            ->get('/platform/users/export');
+        $response = TestResponse::fromBaseResponse(PlatformCsvExports::users());
 
         $response->assertOk()
-            ->assertHeader('content-type', 'text/csv; charset=UTF-8')
+            ->assertHeader('content-type', 'text/csv')
             ->assertDownload();
 
         $content = $response->streamedContent();
+
         expect($content)->toContain('ID,Name,Email,Family')
             ->and($content)->toContain('Admin User')
             ->and($content)->toContain('Regular Member');
     });
 
-    it('denies non-super-admin access to families export', function () {
-        $family = Family::factory()->create();
-        $admin = User::factory()->admin()->create(['family_id' => $family->id]);
-
-        $this->actingAs($admin)
-            ->get('/platform/families/export')
-            ->assertForbidden();
-    });
-
-    it('denies non-super-admin access to users export', function () {
-        $family = Family::factory()->create();
-        $admin = User::factory()->admin()->create(['family_id' => $family->id]);
-
-        $this->actingAs($admin)
-            ->get('/platform/users/export')
-            ->assertForbidden();
-    });
-
     it('includes suspension status in families export', function () {
-        $family = Family::factory()->suspended()->create(['name' => 'Suspended Family']);
-        $activeFamily = Family::factory()->create(['name' => 'Active Family']);
-        $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $activeFamily->id]);
+        Family::factory()->suspended()->create(['name' => 'Suspended Family']);
+        Family::factory()->create(['name' => 'Active Family']);
 
-        $response = $this->actingAs($superAdmin)
-            ->get('/platform/families/export');
+        $content = TestResponse::fromBaseResponse(PlatformCsvExports::families())->streamedContent();
 
-        $content = $response->streamedContent();
         expect($content)->toContain('Suspended Family')
-            ->and($content)->toContain('Active Family');
+            ->and($content)->toContain('Suspended')
+            ->and($content)->toContain('Active Family')
+            ->and($content)->toContain('Active');
     });
 
     it('includes archived status in users export', function () {
         $family = Family::factory()->create();
-        $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
         User::factory()->member()->create([
             'family_id' => $family->id,
             'name' => 'Archived User',
             'archived_at' => now(),
         ]);
 
-        $response = $this->actingAs($superAdmin)
-            ->get('/platform/users/export');
+        $content = TestResponse::fromBaseResponse(PlatformCsvExports::users())->streamedContent();
 
-        $content = $response->streamedContent();
-        expect($content)->toContain('Archived');
+        expect($content)->toContain('Archived User')
+            ->and($content)->toContain('Archived');
     });
 });

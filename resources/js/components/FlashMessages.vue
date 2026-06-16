@@ -1,15 +1,9 @@
 <script setup lang="ts">
 import { usePage } from '@inertiajs/vue3';
-import { AlertTriangle, CheckCircle, X, XCircle } from 'lucide-vue-next';
+import { AlertTriangle, CheckCircle, X, XCircle } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 
-interface Flash {
-    success?: string | null;
-    error?: string | null;
-    warning?: string | null;
-}
-
-const page = usePage<{ flash: Flash }>();
+const page = usePage();
 
 const flash = computed(() => page.props.flash);
 const showSuccess = ref(false);

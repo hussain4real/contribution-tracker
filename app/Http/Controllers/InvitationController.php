@@ -33,10 +33,10 @@ class InvitationController extends Controller
             abort(403);
         }
 
-        $family = $user->family;
+        $family = $this->currentFamilyFor($user);
 
         $invitations = FamilyInvitation::query()
-            ->where('family_id', $user->family_id)
+            ->where('family_id', $family->id)
             ->with('inviter')
             ->latest()
             ->get()
@@ -60,7 +60,7 @@ class InvitationController extends Controller
 
         return Inertia::render('Family/Invitations', [
             'invitations' => $invitations,
-            'family_name' => $family instanceof Family ? $family->name : 'the family',
+            'family_name' => $family->name,
             'roles' => $this->getRoleOptions($user),
         ]);
     }
@@ -72,6 +72,8 @@ class InvitationController extends Controller
         if (! $user->canAddMembers()) {
             abort(403);
         }
+
+        $family = $this->currentFamilyFor($user);
 
         if (! $request->has('delivery_method')) {
             $request->merge(['delivery_method' => InvitationDeliveryMethod::Email->value]);
@@ -99,7 +101,7 @@ class InvitationController extends Controller
         $email = $attributes['email'];
         $whatsappPhone = $attributes['whatsapp_phone'];
 
-        $existingMemberQuery = User::query()->where('family_id', $user->family_id);
+        $existingMemberQuery = $family->members();
 
         if ($deliveryMethod === InvitationDeliveryMethod::Email) {
             $existingMemberQuery->where('email', $email);
@@ -118,7 +120,7 @@ class InvitationController extends Controller
         }
 
         $existingInvitationQuery = FamilyInvitation::query()
-            ->where('family_id', $user->family_id)
+            ->where('family_id', $family->id)
             ->where('delivery_method', $deliveryMethod)
             ->pending()
             ->when(
@@ -138,7 +140,7 @@ class InvitationController extends Controller
         }
 
         $invitation = FamilyInvitation::create([
-            'family_id' => $user->family_id,
+            'family_id' => $family->id,
             'email' => $email,
             'delivery_method' => $deliveryMethod,
             'whatsapp_phone' => $whatsappPhone,
@@ -173,7 +175,7 @@ class InvitationController extends Controller
 
         if (
             ! $user->canAddMembers()
-            || $invitation->family_id !== $user->family_id
+            || $invitation->family_id !== $this->currentFamilyFor($user)->id
             || ! $this->canCancelInvitation($user, $invitation)
         ) {
             abort(403);
@@ -200,6 +202,21 @@ class InvitationController extends Controller
 
         if ($invitation->isExpired()) {
             return redirect()->route('home')->with('error', 'This invitation has expired.');
+        }
+
+        $user = $this->nullableAuthUser();
+
+        if ($user instanceof User && $this->invitationMatchesUser($invitation, $user)) {
+            $family = $invitation->family;
+
+            if ($family instanceof Family) {
+                $user->ensureFamilyMembership($family, $invitation->role);
+                $user->switchFamily($family);
+                $invitation->update(['accepted_at' => now()]);
+
+                return to_route('dashboard')
+                    ->with('success', "You joined {$family->name}.");
+            }
         }
 
         return Inertia::render('auth/AcceptInvitation', [
@@ -242,6 +259,31 @@ class InvitationController extends Controller
     private function canCancelInvitation(User $user, FamilyInvitation $invitation): bool
     {
         return $user->canManageRoles() || $invitation->role === Role::Member;
+    }
+
+    private function currentFamilyFor(User $user): Family
+    {
+        $family = $user->currentFamily ?? $user->family;
+
+        abort_unless($family instanceof Family, 403);
+
+        return $family;
+    }
+
+    private function invitationMatchesUser(FamilyInvitation $invitation, User $user): bool
+    {
+        if ($invitation->email !== null && strcasecmp($invitation->email, $user->email) === 0) {
+            return true;
+        }
+
+        return $invitation->whatsapp_phone !== null && $invitation->whatsapp_phone === $user->whatsapp_phone;
+    }
+
+    private function nullableAuthUser(): ?User
+    {
+        $user = auth()->user();
+
+        return $user instanceof User ? $user : null;
     }
 
     /**

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+    destroy as destroyFundAdjustment,
     index,
     store,
 } from '@/actions/App/Http/Controllers/FundAdjustmentController';
@@ -12,7 +13,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { useCurrencyFormatter } from '@/lib/currency';
 import { type BreadcrumbItem } from '@/types';
 import { Form, Head, Link, router } from '@inertiajs/vue3';
-import { Landmark, Plus, Trash2 } from 'lucide-vue-next';
+import { Landmark, Plus, Trash2 } from '@lucide/vue';
 import { ref } from 'vue';
 
 interface AdjustmentItem {
@@ -61,7 +62,7 @@ function formatDate(date: string): string {
 
 function deleteAdjustment(id: number): void {
     if (confirm('Are you sure you want to delete this fund adjustment?')) {
-        router.delete(route('fund-adjustments.destroy', id));
+        router.delete(destroyFundAdjustment({ fund_adjustment: id }).url);
     }
 }
 

@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
+use App\Enums\MemberCategory;
 use App\Enums\PaymentStatus;
+use App\Enums\Role;
 use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\FamilyCategory;
@@ -13,8 +15,9 @@ use Inertia\Testing\AssertableInertia as Assert;
 
 describe('Record Full Payment', function () {
     beforeEach(function () {
-        $this->financialSecretary = User::factory()->financialSecretary()->create();
-        $this->member = User::factory()->member()->employed()->create();
+        $this->family = Family::factory()->create();
+        $this->financialSecretary = User::factory()->financialSecretary()->create(['family_id' => $this->family->id]);
+        $this->member = User::factory()->member()->employed()->create(['family_id' => $this->family->id]);
     });
 
     it('financial secretary can access payment creation form', function () {
@@ -37,6 +40,14 @@ describe('Record Full Payment', function () {
             'family_id' => $family->id,
             'name' => 'Active Paying',
         ]);
+        $secondaryFamily = Family::factory()->create();
+        $activePayingMember->ensureFamilyMembership($secondaryFamily, Role::Member, MemberCategory::Student);
+        $activePayingMember->forceFill([
+            'current_family_id' => $secondaryFamily->id,
+            'family_id' => $secondaryFamily->id,
+            'role' => Role::Member,
+            'category' => MemberCategory::Student,
+        ])->save();
         User::factory()->member()->nonPaying()->create([
             'family_id' => $family->id,
             'name' => 'Non Paying',
@@ -47,14 +58,14 @@ describe('Record Full Payment', function () {
         ]);
 
         $this->actingAs($financialSecretary)
-            ->get(route('payments.index'))
+            ->get("/{$family->slug}/payments")
             ->assertSuccessful()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Payments/Index')
                 ->has('members', 1)
                 ->where('members.0.id', $activePayingMember->id)
                 ->where('members.0.name', 'Active Paying')
-                ->where('members.0.monthly_amount', $activePayingMember->getMonthlyAmount())
+                ->where('members.0.monthly_amount', MemberCategory::Employed->monthlyAmount())
             );
     });
 
@@ -177,7 +188,7 @@ describe('Record Full Payment', function () {
     });
 
     it('super admin can record a full payment', function () {
-        $admin = User::factory()->admin()->create();
+        $admin = User::factory()->admin()->create(['family_id' => $this->family->id]);
 
         $contribution = Contribution::factory()
             ->forUser($this->member)
@@ -255,6 +266,46 @@ describe('Record Full Payment', function () {
                 'paid_at' => 'invalid-date',
             ])
             ->assertSessionHasErrors('paid_at');
+    });
+
+    it('records payments against the active family membership after a member switches families', function () {
+        $primaryFamily = Family::factory()->create(['currency' => 'NGN']);
+        $secondaryFamily = Family::factory()->create(['currency' => 'QAR']);
+        $financialSecretary = User::factory()->financialSecretary()->create(['family_id' => $primaryFamily->id]);
+        $member = User::factory()->member()->employed()->create(['family_id' => $primaryFamily->id]);
+        $member->ensureFamilyMembership($secondaryFamily, Role::Member, MemberCategory::Student);
+        $member->forceFill([
+            'current_family_id' => $secondaryFamily->id,
+            'family_id' => $secondaryFamily->id,
+            'role' => Role::Member,
+            'category' => MemberCategory::Student,
+        ])->save();
+
+        $primaryContribution = Contribution::factory()->create([
+            'family_id' => $primaryFamily->id,
+            'user_id' => $member->id,
+            'year' => now()->year,
+            'month' => now()->month,
+            'expected_amount' => MemberCategory::Employed->monthlyAmount(),
+        ]);
+        $secondaryContribution = Contribution::factory()->create([
+            'family_id' => $secondaryFamily->id,
+            'user_id' => $member->id,
+            'year' => now()->year,
+            'month' => now()->month,
+            'expected_amount' => MemberCategory::Student->monthlyAmount(),
+        ]);
+
+        $this->actingAs($financialSecretary)
+            ->post("/{$primaryFamily->slug}/payments", [
+                'member_id' => $member->id,
+                'amount' => MemberCategory::Employed->monthlyAmount(),
+                'paid_at' => now()->toDateString(),
+            ])
+            ->assertRedirect("/{$primaryFamily->slug}/dashboard");
+
+        expect($primaryContribution->refresh()->status)->toBe(PaymentStatus::Paid)
+            ->and($secondaryContribution->refresh()->total_paid)->toBe(0);
     });
 
     it('allows admins to delete recent payments', function () {

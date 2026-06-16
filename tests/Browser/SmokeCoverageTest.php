@@ -178,21 +178,20 @@ it('smokes authenticated family pages', function () {
     navigateAndAssertBrowserSmoke($page, route('family.settings'), 'Family Settings');
     navigateAndAssertBrowserSmoke($page, route('family.invitations'), 'Invitations');
     navigateAndAssertBrowserSmoke($page, route('profile.edit'), 'Profile settings');
-    navigateAndAssertBrowserSmoke($page, route('user-password.edit'), 'Update password');
     navigateAndAssertBrowserSmoke($page, route('appearance.edit'), 'Appearance settings');
 
     $passwordConfirmPath = parse_url(route('password.confirm'), PHP_URL_PATH) ?: '/user/confirm-password';
-    $twoFactorSettingsPath = parse_url(route('two-factor.show'), PHP_URL_PATH) ?: '/settings/two-factor';
+    $securitySettingsPath = parse_url(route('security.edit'), PHP_URL_PATH) ?: '/settings/security';
 
-    $page->navigate(route('two-factor.show'))
+    $page->navigate(route('security.edit'))
         ->assertPathIs($passwordConfirmPath)
         ->fill('password', 'password')
         ->click('@confirm-password-button')
-        ->assertPathIs($twoFactorSettingsPath)
+        ->assertPathIs($securitySettingsPath)
         ->assertNoJavaScriptErrors();
 
-    assertBrowserSmoke($page, 'Two-factor authentication');
-    navigateAndAssertBrowserSmoke($page, route('passkeys.show'), 'Passkeys');
+    assertBrowserSmoke($page, 'Security');
+    assertBrowserSmoke($page, 'Passkeys');
 });
 
 it('grows the AI chat composer before scrolling', function () {
@@ -304,7 +303,7 @@ it('smokes platform administration pages', function () {
     ]);
     createBrowserMember($family, ['name' => 'Platform Smoke Member']);
 
-    PlatformPlan::create([
+    $plan = PlatformPlan::create([
         'name' => 'Browser Premium',
         'slug' => 'browser-premium',
         'price' => 5000,
@@ -315,12 +314,17 @@ it('smokes platform administration pages', function () {
         'sort_order' => 1,
     ]);
 
-    $page = loginBrowserAs($superAdmin);
+    $this->actingAs($superAdmin);
 
-    navigateAndAssertBrowserSmoke($page, route('platform.dashboard'), 'Platform Overview');
-    navigateAndAssertBrowserSmoke($page, route('platform.families'), 'All Families');
-    navigateAndAssertBrowserSmoke($page, route('platform.families.show', $family), 'Platform Smoke Family');
-    navigateAndAssertBrowserSmoke($page, route('platform.users'), 'All Users');
-    navigateAndAssertBrowserSmoke($page, route('platform.plans'), 'Platform Plans');
-    navigateAndAssertBrowserSmoke($page, route('platform.feature-flags'), 'Feature Flags');
+    $page = visit('/platform/plans');
+
+    assertBrowserSmoke($page, 'Browser Premium');
+    navigateAndAssertBrowserSmoke($page, '/platform/plans/create', 'Create');
+    navigateAndAssertBrowserSmoke($page, "/platform/plans/{$plan->id}/edit", 'Edit Platform Plan');
+    navigateAndAssertBrowserSmoke($page, '/platform', 'Platform Overview');
+    navigateAndAssertBrowserSmoke($page, '/platform/families', 'Platform Smoke Family');
+    navigateAndAssertBrowserSmoke($page, "/platform/families/{$family->slug}/view", 'Platform Smoke Family');
+    navigateAndAssertBrowserSmoke($page, '/platform/users', 'Platform Smoke Member');
+    navigateAndAssertBrowserSmoke($page, "/platform/users/{$superAdmin->id}/view", 'platform-browser@example.com');
+    navigateAndAssertBrowserSmoke($page, '/platform/feature-flags', 'AI Assistant');
 });

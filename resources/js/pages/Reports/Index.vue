@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/vue3';
-import { Calendar, CalendarDays, FileBarChart2 } from 'lucide-vue-next';
+import { Calendar, CalendarDays, FileBarChart2 } from '@lucide/vue';
 
 interface Props {
     years?: number[];
@@ -95,7 +95,7 @@ const monthNames = [
                     </p>
                     <Link
                         :href="
-                            monthly({
+                            monthly(undefined, {
                                 query: {
                                     year: current_year,
                                     month: current_month,
@@ -142,7 +142,13 @@ const monthNames = [
                         See yearly trends, monthly breakdowns, and category-wise
                         contribution analysis for any year.
                     </p>
-                    <Link :href="annual({ query: { year: current_year } }).url">
+                    <Link
+                        :href="
+                            annual(undefined, {
+                                query: { year: current_year },
+                            }).url
+                        "
+                    >
                         <Button variant="outline" class="w-full">
                             <CalendarDays class="mr-2 h-4 w-4" />
                             View {{ current_year }} Annual Report
@@ -173,7 +179,9 @@ const monthNames = [
                         </h3>
                         <div class="flex gap-2">
                             <Link
-                                :href="annual({ query: { year } }).url"
+                                :href="
+                                    annual(undefined, { query: { year } }).url
+                                "
                                 class="flex-1"
                             >
                                 <Button
@@ -186,7 +194,7 @@ const monthNames = [
                             </Link>
                             <Link
                                 :href="
-                                    monthly({
+                                    monthly(undefined, {
                                         query: { year, month: current_month },
                                     }).url
                                 "

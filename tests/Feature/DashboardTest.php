@@ -8,7 +8,9 @@ use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('guests are redirected away from dashboard', function () {
-    $response = $this->get(route('dashboard'));
+    $family = Family::factory()->create();
+
+    $response = $this->get(route('dashboard', $family));
     $response->assertRedirect();
 });
 

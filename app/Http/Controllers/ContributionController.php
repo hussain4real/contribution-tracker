@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\Contribution;
+use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
 use Carbon\Carbon;
@@ -33,9 +34,13 @@ class ContributionController extends Controller
     public function my(): Response
     {
         $user = $this->authUser();
+        $family = $user->currentFamily ?? $user->family;
+
+        abort_unless($family instanceof Family, 403);
 
         $contributionModels = Contribution::query()
             ->where('user_id', $user->id)
+            ->where('family_id', $family->id)
             ->with(['payments.recorder'])
             ->orderByDesc('year')
             ->orderByDesc('month')
@@ -59,7 +64,7 @@ class ContributionController extends Controller
         $currentMonth = now()->month;
 
         $allContributions = Contribution::query()
-            ->where('family_id', $user->family_id)
+            ->where('family_id', $family->id)
             ->where('year', $currentYear)
             ->where('month', $currentMonth)
             ->get();
@@ -104,8 +109,9 @@ class ContributionController extends Controller
     {
         $this->authorize('view', $contribution);
 
-        $contribution->load(['user.familyCategory:id,name,monthly_amount', 'payments.recorder']);
+        $contribution->load(['user.familyMemberships.familyCategory:id,name,monthly_amount', 'payments.recorder']);
         $contributionUser = $contribution->user;
+        $membership = $contributionUser?->membershipForFamilyId($contribution->family_id);
 
         return Inertia::render('Contributions/Show', [
             'contribution' => [
@@ -123,7 +129,7 @@ class ContributionController extends Controller
                     'id' => $contributionUser?->id,
                     'name' => $contributionUser?->name,
                     'email' => $contributionUser?->email,
-                    'category' => $contributionUser?->familyCategory->name ?? $contributionUser?->category?->label(),
+                    'category' => $membership?->categoryLabel(),
                 ],
             ],
             'can_record_payment' => $this->user($request)->canRecordPayments(),
@@ -136,8 +142,10 @@ class ContributionController extends Controller
     public function generate(Request $request): RedirectResponse
     {
         $user = $this->user($request);
+        $family = $user->currentFamily ?? $user->family;
 
         $this->authorize('create', Contribution::class);
+        abort_unless($family instanceof Family, 403);
 
         $year = $this->integerInput($request->input('year'), now()->year);
         $month = $this->integerInput($request->input('month'), now()->month);
@@ -145,7 +153,7 @@ class ContributionController extends Controller
         Artisan::call('contributions:generate', [
             '--year' => $year,
             '--month' => $month,
-            '--family' => $user->family_id,
+            '--family' => $family->id,
         ]);
 
         $periodLabel = Carbon::createFromDate($year, $month, 1)->format('F Y');

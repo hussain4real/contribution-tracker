@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import FamilySwitcher from '@/components/FamilySwitcher.vue';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
@@ -32,6 +33,7 @@ const { primaryItems, adminItems, platformItems, footerItems } =
                     </SidebarMenuButton>
                 </SidebarMenuItem>
             </SidebarMenu>
+            <FamilySwitcher />
         </SidebarHeader>
 
         <SidebarContent>
