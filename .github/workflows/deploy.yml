@@ -52,7 +52,7 @@ jobs:
         run: npm run build
 
       - name: Run Tests
-        run: ./vendor/bin/pest
+        run: php -d max_execution_time=0 ./vendor/bin/pest --coverage --compact --parallel --min=100
 
   deploy:
     runs-on: ubuntu-latest

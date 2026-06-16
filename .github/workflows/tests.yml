@@ -50,4 +50,4 @@ jobs:
         run: npm run build
 
       - name: Tests
-        run: ./vendor/bin/pest --coverage --compact --parallel --min=100
+        run: php -d max_execution_time=0 ./vendor/bin/pest --coverage --compact --parallel --min=100
