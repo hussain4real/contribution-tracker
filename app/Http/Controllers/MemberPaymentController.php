@@ -35,8 +35,10 @@ class MemberPaymentController extends Controller
     public function show(): Response
     {
         $user = $this->authUser();
+        $family = app(Family::class);
 
         $pendingContributions = $user->contributions()
+            ->where('family_id', $family->id)
             ->incomplete()
             ->oldestFirst()
             ->get()
@@ -51,7 +53,6 @@ class MemberPaymentController extends Controller
                 'period_label' => $contribution->period_label,
             ]);
 
-        $family = app(Family::class);
         $paystackPublicKey = $this->stringConfig('services.paystack.public_key');
         $bankSetupStatus = $this->bankSetupStatus($family, $paystackPublicKey);
 
@@ -73,9 +74,9 @@ class MemberPaymentController extends Controller
         $validated = $request->validated();
 
         $user = $this->authUser();
-        $family = $user->family;
+        $family = app(Family::class);
 
-        if (! $family instanceof Family || ! $family->hasBankDetails()) {
+        if (! $family->hasBankDetails()) {
             return response()->json([
                 'message' => 'Online payments are not set up for your family. Ask your admin to configure bank details.',
             ], 422);
@@ -85,6 +86,7 @@ class MemberPaymentController extends Controller
 
         // Calculate total from selected contributions
         $contributions = $user->contributions()
+            ->where('family_id', $family->id)
             ->whereIn('id', $contributionIds)
             ->incomplete()
             ->get();
