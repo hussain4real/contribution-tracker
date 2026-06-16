@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Models\Family;
+use App\Models\FamilyMembership;
 use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -45,11 +47,20 @@ class StorePaymentRequest extends FormRequest
     {
         $validator->after(function (Validator $validator) {
             $memberId = $this->integerInput('member_id');
+            $user = $this->user();
+            $family = $user instanceof User ? ($user->currentFamily ?? $user->family) : null;
 
             if ($memberId !== null) {
                 $member = User::query()->find($memberId);
-                if ($member && $member->getMonthlyAmount() === null) {
-                    $validator->errors()->add('member_id', 'This member does not have a contribution category assigned.');
+
+                if ($member && $family instanceof Family) {
+                    $membership = $member->membershipForFamily($family);
+
+                    if (! $membership instanceof FamilyMembership) {
+                        $validator->errors()->add('member_id', 'The selected member does not belong to this family.');
+                    } elseif ($membership->monthlyAmount() === null) {
+                        $validator->errors()->add('member_id', 'This member does not have a contribution category assigned.');
+                    }
                 }
             }
 

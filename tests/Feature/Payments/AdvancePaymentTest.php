@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Enums\PaymentStatus;
 use App\Models\Contribution;
+use App\Models\Family;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -14,8 +15,9 @@ use Inertia\Testing\AssertableInertia as Assert;
  */
 describe('Advance Payments (FR-018)', function () {
     beforeEach(function () {
-        $this->financialSecretary = User::factory()->financialSecretary()->create();
-        $this->member = User::factory()->member()->employed()->create();
+        $this->family = Family::factory()->create();
+        $this->financialSecretary = User::factory()->financialSecretary()->create(['family_id' => $this->family->id]);
+        $this->member = User::factory()->member()->employed()->create(['family_id' => $this->family->id]);
     });
 
     it('allows payment for next month', function () {

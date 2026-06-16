@@ -55,6 +55,24 @@ class FamilyMembership extends Pivot
         return $this->belongsTo(FamilyCategory::class);
     }
 
+    public function monthlyAmount(): ?int
+    {
+        if ($this->familyCategory instanceof FamilyCategory) {
+            return $this->familyCategory->monthly_amount;
+        }
+
+        return $this->category?->monthlyAmount();
+    }
+
+    public function categoryLabel(): ?string
+    {
+        if ($this->familyCategory instanceof FamilyCategory) {
+            return $this->familyCategory->name;
+        }
+
+        return $this->category?->label();
+    }
+
     /**
      * @return array<string, string>
      */

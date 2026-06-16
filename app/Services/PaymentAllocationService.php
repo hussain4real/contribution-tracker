@@ -6,10 +6,12 @@ namespace App\Services;
 
 use App\Models\Contribution;
 use App\Models\Family;
+use App\Models\FamilyMembership;
 use App\Models\Payment;
 use App\Models\User;
 use DateTimeInterface;
 use Illuminate\Support\Collection;
+use InvalidArgumentException;
 
 class PaymentAllocationService
 {
@@ -35,13 +37,26 @@ class PaymentAllocationService
         User $recordedBy,
         ?string $notes = null,
         ?int $targetYear = null,
-        ?int $targetMonth = null
+        ?int $targetMonth = null,
+        ?Family $family = null,
     ): Collection {
+        $family ??= $recordedBy->currentFamily ?? $recordedBy->family;
+
+        if (! $family instanceof Family) {
+            throw new InvalidArgumentException('A family context is required to allocate a payment.');
+        }
+
+        $membership = $member->membershipForFamily($family);
+
+        if (! $membership instanceof FamilyMembership) {
+            throw new InvalidArgumentException('The selected member does not belong to the active family.');
+        }
+
         $payments = $this->newPaymentCollection();
         $remainingAmount = $amount;
 
         // Get or create contributions up to target month
-        $contributions = $this->getContributionsToAllocate($member, $targetYear, $targetMonth);
+        $contributions = $this->getContributionsToAllocate($member, $family, $membership, $targetYear, $targetMonth);
 
         foreach ($contributions as $contribution) {
             if ($remainingAmount <= 0) {
@@ -88,6 +103,8 @@ class PaymentAllocationService
 
             $additionalPayments = $this->allocateToFutureMonths(
                 $member,
+                $family,
+                $membership,
                 $remainingAmount,
                 $paidAt,
                 $recordedBy,
@@ -109,10 +126,16 @@ class PaymentAllocationService
      *
      * @return Collection<int, Contribution>
      */
-    private function getContributionsToAllocate(User $member, ?int $targetYear, ?int $targetMonth): Collection
-    {
+    private function getContributionsToAllocate(
+        User $member,
+        Family $family,
+        FamilyMembership $membership,
+        ?int $targetYear,
+        ?int $targetMonth,
+    ): Collection {
         // Get all existing incomplete contributions for this member, sorted oldest first
         $contributions = Contribution::forUser($member->id)
+            ->where('family_id', $family->id)
             ->incomplete()
             ->oldestFirst()
             ->get();
@@ -126,12 +149,13 @@ class PaymentAllocationService
             if (! $targetExists) {
                 // Check if target contribution exists but is already paid
                 $existingTarget = Contribution::forUser($member->id)
+                    ->where('family_id', $family->id)
                     ->forMonth($targetYear, $targetMonth)
                     ->first();
 
                 if (! $existingTarget) {
                     // Create the target month contribution
-                    $targetContribution = $this->createContribution($member, $targetYear, $targetMonth);
+                    $targetContribution = $this->createContribution($member, $family, $membership, $targetYear, $targetMonth);
                     $contributions->push($targetContribution);
                 }
             }
@@ -143,11 +167,12 @@ class PaymentAllocationService
             $currentMonth = now()->month;
 
             $currentContribution = Contribution::forUser($member->id)
+                ->where('family_id', $family->id)
                 ->forMonth($currentYear, $currentMonth)
                 ->first();
 
             if (! $currentContribution) {
-                $currentContribution = $this->createContribution($member, $currentYear, $currentMonth);
+                $currentContribution = $this->createContribution($member, $family, $membership, $currentYear, $currentMonth);
             }
 
             $contributions->push($currentContribution);
@@ -163,17 +188,16 @@ class PaymentAllocationService
     /**
      * Create a contribution for a specific month.
      */
-    private function createContribution(User $member, int $year, int $month): Contribution
+    private function createContribution(User $member, Family $family, FamilyMembership $membership, int $year, int $month): Contribution
     {
-        $family = $member->family;
-        $dueDay = $family instanceof Family ? $family->due_day : Contribution::DUE_DAY;
+        $dueDay = $family->due_day ?? Contribution::DUE_DAY;
 
         return Contribution::create([
-            'family_id' => $member->family_id,
+            'family_id' => $family->id,
             'user_id' => $member->id,
             'year' => $year,
             'month' => $month,
-            'expected_amount' => $member->getMonthlyAmount() ?? 0,
+            'expected_amount' => $membership->monthlyAmount() ?? 0,
             'due_date' => Contribution::dueDateForMonth($year, $month, $dueDay),
         ]);
     }
@@ -185,6 +209,8 @@ class PaymentAllocationService
      */
     private function allocateToFutureMonths(
         User $member,
+        Family $family,
+        FamilyMembership $membership,
         int $remainingAmount,
         DateTimeInterface|string $paidAt,
         User $recordedBy,
@@ -201,11 +227,12 @@ class PaymentAllocationService
 
         while ($remainingAmount > 0 && $date->lte($maxAdvanceDate)) {
             $contribution = Contribution::forUser($member->id)
+                ->where('family_id', $family->id)
                 ->forMonth($date->year, $date->month)
                 ->first();
 
             if (! $contribution) {
-                $contribution = $this->createContribution($member, $date->year, $date->month);
+                $contribution = $this->createContribution($member, $family, $membership, $date->year, $date->month);
             }
 
             if (! $contribution->isPaid()) {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -36,28 +37,30 @@ return new class extends Migration
                 ->nullOnDelete();
         });
 
-        DB::statement(<<<'SQL'
-            INSERT INTO family_members (
-                family_id,
-                user_id,
-                role,
-                category,
-                family_category_id,
-                created_at,
-                updated_at
-            )
-            SELECT
-                family_id,
-                id,
-                role,
-                category,
-                family_category_id,
-                COALESCE(created_at, CURRENT_TIMESTAMP),
-                COALESCE(updated_at, CURRENT_TIMESTAMP)
-            FROM users
-            WHERE family_id IS NOT NULL
-            ON CONFLICT (family_id, user_id) DO NOTHING
-        SQL);
+        DB::table('users')
+            ->select(['id', 'family_id', 'role', 'category', 'family_category_id', 'created_at', 'updated_at'])
+            ->whereNotNull('family_id')
+            ->orderBy('id')
+            ->chunkById(500, function (Collection $users): void {
+                $timestamp = now();
+                $memberships = $users
+                    ->map(function (object $user) use ($timestamp): array {
+                        $record = (array) $user;
+
+                        return [
+                            'family_id' => $record['family_id'],
+                            'user_id' => $record['id'],
+                            'role' => $record['role'],
+                            'category' => $record['category'],
+                            'family_category_id' => $record['family_category_id'],
+                            'created_at' => $record['created_at'] ?? $timestamp,
+                            'updated_at' => $record['updated_at'] ?? $timestamp,
+                        ];
+                    })
+                    ->all();
+
+                DB::table('family_members')->insertOrIgnore($memberships);
+            });
 
         DB::statement('UPDATE users SET current_family_id = family_id WHERE current_family_id IS NULL AND family_id IS NOT NULL');
     }

@@ -6,7 +6,6 @@ namespace App\Console\Commands;
 
 use App\Models\Contribution;
 use App\Models\Family;
-use App\Models\User;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -49,26 +48,30 @@ class GenerateMonthlyContributions extends Command
         $totalSkipped = 0;
 
         foreach ($families as $family) {
-            $members = User::query()
-                ->with('familyCategory')
-                ->where('family_id', $family->id)
-                ->active()
+            $memberships = $family->memberships()
+                ->with(['familyCategory', 'user'])
+                ->whereHas('user', function (Builder $query): void {
+                    $query->whereNull('archived_at');
+                })
                 ->where(function (Builder $query): void {
-                    $query->whereNotNull('family_category_id')
-                        ->orWhereNotNull('category');
+                    $query->whereNotNull('family_members.family_category_id')
+                        ->orWhereNotNull('family_members.category');
                 })
                 ->get();
 
-            foreach ($members as $member) {
+            foreach ($memberships as $membership) {
+                $member = $membership->user;
+                $expectedAmount = (int) $membership->monthlyAmount();
+
                 $dueDay = $family->due_day ?? Contribution::DUE_DAY;
 
                 $contribution = Contribution::query()->firstOrCreate([
+                    'family_id' => $family->id,
                     'user_id' => $member->id,
                     'year' => $year,
                     'month' => $month,
                 ], [
-                    'family_id' => $family->id,
-                    'expected_amount' => $member->getMonthlyAmount() ?? 0,
+                    'expected_amount' => $expectedAmount,
                     'due_date' => Contribution::dueDateForMonth($year, $month, $dueDay),
                 ]);
 

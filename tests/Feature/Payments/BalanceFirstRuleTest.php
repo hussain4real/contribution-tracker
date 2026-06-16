@@ -21,8 +21,9 @@ afterEach(function () {
  */
 describe('Balance-First Rule (FR-020)', function () {
     beforeEach(function () {
-        $this->financialSecretary = User::factory()->financialSecretary()->create();
-        $this->member = User::factory()->member()->employed()->create();
+        $this->family = Family::factory()->create();
+        $this->financialSecretary = User::factory()->financialSecretary()->create(['family_id' => $this->family->id]);
+        $this->member = User::factory()->member()->employed()->create(['family_id' => $this->family->id]);
     });
 
     it('auto-applies payment to oldest incomplete month first', function () {
@@ -218,9 +219,7 @@ describe('Balance-First Rule (FR-020)', function () {
     it('clamps created target month contribution due date for February', function () {
         Carbon::setTestNow(Carbon::create(2027, 1, 15, 12));
 
-        $family = Family::factory()->create(['due_day' => 30]);
-        $this->financialSecretary->update(['family_id' => $family->id]);
-        $this->member->update(['family_id' => $family->id]);
+        $this->family->update(['due_day' => 30]);
 
         $this->actingAs($this->financialSecretary)
             ->post(route('payments.store'), [

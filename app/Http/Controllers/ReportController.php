@@ -7,10 +7,13 @@ namespace App\Http\Controllers;
 use App\Enums\MemberCategory;
 use App\Enums\PaymentStatus;
 use App\Models\Contribution;
+use App\Models\Family;
+use App\Models\FamilyMembership;
 use App\Models\Payment;
-use App\Models\User;
 use App\Services\FamilyContributionReviewService;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\JoinClause;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -46,27 +49,42 @@ class ReportController extends Controller
         $monthDate = Carbon::parse(sprintf('%04d-%02d-01', $year, $month));
 
         $currentUser = $this->user($request);
-        $familyId = $currentUser->family_id;
+        $family = $currentUser->currentFamily ?? $currentUser->family;
+
+        abort_unless($family instanceof Family, 403);
 
         // Get all active members
-        $members = User::query()
-            ->where('family_id', $familyId)
-            ->whereNull('archived_at')
-            ->payingMembers()
-            ->with(['contributions.payments', 'familyCategory:id,name,monthly_amount'])
+        $members = $family->memberships()
+            ->with([
+                'familyCategory:id,name,monthly_amount',
+                'user.contributions.payments',
+            ])
+            ->whereHas('user', function (Builder $query): void {
+                $query->whereNull('archived_at');
+            })
+            ->where(function (Builder $query): void {
+                $query->whereNotNull('family_members.family_category_id')
+                    ->orWhereNotNull('family_members.category');
+            })
+            ->join('users', 'users.id', '=', 'family_members.user_id')
+            ->orderBy('users.name')
+            ->select('family_members.*')
             ->paginate(15)
-            ->through(function (User $member) use ($year, $month): array {
+            ->through(function (FamilyMembership $membership) use ($family, $year, $month): array {
+                $member = $membership->user;
                 $contribution = $member->contributions->first(
-                    fn (Contribution $contribution): bool => $contribution->year === $year && $contribution->month === $month,
+                    fn (Contribution $contribution): bool => $contribution->family_id === $family->id
+                        && $contribution->year === $year
+                        && $contribution->month === $month,
                 );
-                $expectedAmount = $member->getMonthlyAmount() ?? 0;
+                $expectedAmount = $membership->monthlyAmount() ?? 0;
                 $paidAmount = $contribution instanceof Contribution ? $this->paidAmount($contribution) : 0;
 
                 return [
                     'id' => $member->id,
                     'name' => $member->name,
-                    'category' => $member->category?->value,
-                    'category_label' => $member->familyCategory->name ?? $member->category?->label(),
+                    'category' => $membership->category?->value,
+                    'category_label' => $membership->categoryLabel(),
                     'expected_amount' => $expectedAmount,
                     'paid_amount' => $paidAmount,
                     'balance' => $expectedAmount - $paidAmount,
@@ -95,14 +113,22 @@ class ReportController extends Controller
         $year = $this->integerInput($request->get('year'), now()->year);
 
         $currentUser = $this->user($request);
-        $familyId = $currentUser->family_id;
+        $family = $currentUser->currentFamily ?? $currentUser->family;
+
+        abort_unless($family instanceof Family, 403);
 
         // Fetch all contributions for the year in a single query
         $allContributions = Contribution::query()
-            ->where('family_id', $familyId)
-            ->where('year', $year)
-            ->with(['payments', 'user'])
-            ->get();
+            ->select('contributions.*', 'family_members.category as membership_category')
+            ->leftJoin('family_members', function (JoinClause $join) use ($family): void {
+                $join->on('family_members.user_id', '=', 'contributions.user_id')
+                    ->where('family_members.family_id', $family->id);
+            })
+            ->where('contributions.family_id', $family->id)
+            ->where('contributions.year', $year)
+            ->with('payments')
+            ->get()
+            ->keyBy('id');
 
         // Generate monthly breakdown for all 12 months
         $monthlyBreakdown = [];
@@ -148,7 +174,7 @@ class ReportController extends Controller
         $byCategory = [];
         foreach (MemberCategory::cases() as $category) {
             $categoryContributions = $allContributions->filter(function (Contribution $contribution) use ($category): bool {
-                return $contribution->user !== null && $contribution->user->category === $category;
+                return $contribution->getAttribute('membership_category') === $category->value;
             });
 
             $categoryExpected = (int) $categoryContributions->sum(fn (Contribution $contribution): int => $contribution->expected_amount);

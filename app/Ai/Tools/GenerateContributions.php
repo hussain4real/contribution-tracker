@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Ai\Tools;
 
+use App\Models\Family;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -32,6 +33,12 @@ class GenerateContributions implements Tool
             return json_encode(['error' => 'Only family admins can generate contributions.'], JSON_THROW_ON_ERROR);
         }
 
+        $family = $this->user->currentFamily ?? $this->user->family;
+
+        if (! $family instanceof Family) {
+            return json_encode(['error' => 'User is not associated with a family.'], JSON_THROW_ON_ERROR);
+        }
+
         $year = $this->integerFromRequest($request['year'] ?? null, now()->year);
         $month = $this->integerFromRequest($request['month'] ?? null, now()->month);
         $confirmed = ($request['confirmed'] ?? false) === true;
@@ -53,7 +60,7 @@ class GenerateContributions implements Tool
         Artisan::call('contributions:generate', [
             '--year' => $year,
             '--month' => $month,
-            '--family' => $this->user->family_id,
+            '--family' => $family->id,
         ]);
 
         $output = trim(Artisan::output());

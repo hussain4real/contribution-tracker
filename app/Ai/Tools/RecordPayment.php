@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Ai\Tools;
 
 use App\Models\Family;
+use App\Models\FamilyMembership;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\PaymentAllocationService;
@@ -34,6 +35,12 @@ class RecordPayment implements Tool
             return json_encode(['error' => 'You do not have permission to record payments. Only admins and financial secretaries can do this.'], JSON_THROW_ON_ERROR);
         }
 
+        $family = $this->user->currentFamily ?? $this->user->family;
+
+        if (! $family instanceof Family) {
+            return json_encode(['error' => 'User is not associated with a family.'], JSON_THROW_ON_ERROR);
+        }
+
         $memberName = $this->nullableStringFromRequest($request['member_name'] ?? null);
         $amount = $this->nullableIntegerFromRequest($request['amount'] ?? null);
         $paidAt = $this->stringFromRequest($request['paid_at'] ?? null, now()->toDateString());
@@ -51,19 +58,22 @@ class RecordPayment implements Tool
         }
 
         // Find member by name within the family
-        $members = User::query()
-            ->where('family_id', $this->user->family_id)
-            ->active()
-            ->with('familyCategory:id,name,monthly_amount')
-            ->where('name', 'like', "%{$memberName}%")
-            ->get(['id', 'name', 'category', 'family_category_id']);
+        $memberships = $family->memberships()
+            ->with(['familyCategory:id,name,monthly_amount', 'user'])
+            ->join('users', 'users.id', '=', 'family_members.user_id')
+            ->whereNull('users.archived_at')
+            ->where('users.name', 'like', "%{$memberName}%")
+            ->select('family_members.*')
+            ->get();
 
-        if ($members->isEmpty()) {
+        if ($memberships->isEmpty()) {
             return json_encode(['error' => "No active family member found matching \"{$memberName}\"."], JSON_THROW_ON_ERROR);
         }
 
-        if ($members->count() > 1) {
-            $names = $members->pluck('name')->toArray();
+        if ($memberships->count() > 1) {
+            $names = $memberships
+                ->map(fn (FamilyMembership $membership): string => $membership->user->name)
+                ->toArray();
 
             return json_encode([
                 'error' => 'Multiple members match that name. Please be more specific.',
@@ -71,9 +81,11 @@ class RecordPayment implements Tool
             ], JSON_THROW_ON_ERROR);
         }
 
-        $member = $members->first();
+        $membership = $memberships->first();
 
-        if ($member->getMonthlyAmount() === null) {
+        $member = $membership->user;
+
+        if ($membership->monthlyAmount() === null) {
             return json_encode(['error' => "{$member->name} does not have a contribution category assigned. Please assign one first."], JSON_THROW_ON_ERROR);
         }
 
@@ -87,8 +99,7 @@ class RecordPayment implements Tool
             }
         }
 
-        $family = $this->user->family;
-        $currency = $family instanceof Family ? $family->currency : '₦';
+        $currency = $family->currency;
         $formattedAmount = CurrencyFormatter::format($amount, $currency);
         $targetInfo = ($targetYear !== null && $targetMonth !== null)
             ? ' for '.now()->setYear($targetYear)->setMonth($targetMonth)->format('F Y')
@@ -119,6 +130,7 @@ class RecordPayment implements Tool
             notes: $notes,
             targetYear: $targetYear,
             targetMonth: $targetMonth,
+            family: $family,
         );
 
         $totalAllocated = (int) $payments->sum(fn (Payment $payment): int => $payment->amount);

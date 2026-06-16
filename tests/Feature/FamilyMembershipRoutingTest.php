@@ -2,11 +2,13 @@
 
 declare(strict_types=1);
 
+use App\Enums\MemberCategory;
 use App\Enums\Role;
 use App\Models\Family;
 use App\Models\FamilyCategory;
 use App\Models\FamilyInvitation;
 use App\Models\User;
+use Inertia\Testing\AssertableInertia as Assert;
 
 test('legacy user family fields create a current family membership', function () {
     $family = Family::factory()->create();
@@ -66,6 +68,40 @@ test('family switching updates url defaults and legacy family mirrors', function
         ->and($user->family_id)->toBe($secondaryFamily->id)
         ->and($user->role)->toBe(Role::Member)
         ->and(route('dashboard', absolute: false))->toBe("/{$secondaryFamily->slug}/dashboard");
+});
+
+test('member lists use family memberships after a member switches to another family', function () {
+    $primaryFamily = Family::factory()->create(['name' => 'Primary Family']);
+    $secondaryFamily = Family::factory()->create(['name' => 'Secondary Family']);
+    $admin = User::factory()->admin()->create([
+        'family_id' => $primaryFamily->id,
+        'name' => 'Z Admin',
+    ]);
+    $member = User::factory()->member()->employed()->create([
+        'family_id' => $primaryFamily->id,
+        'name' => 'A Multi Family Member',
+    ]);
+
+    $member->ensureFamilyMembership($secondaryFamily, Role::FinancialSecretary, MemberCategory::Student);
+    $member->forceFill([
+        'current_family_id' => $secondaryFamily->id,
+        'family_id' => $secondaryFamily->id,
+        'role' => Role::FinancialSecretary,
+        'category' => MemberCategory::Student,
+    ])->save();
+
+    expect($member->refresh()->family_id)->toBe($secondaryFamily->id);
+
+    $this->actingAs($admin)
+        ->get("/{$primaryFamily->slug}/members")
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Members/Index')
+            ->where('members.0.id', $member->id)
+            ->where('members.0.role', Role::Member->value)
+            ->where('members.0.category', MemberCategory::Employed->value)
+            ->where('members.0.monthly_amount', MemberCategory::Employed->monthlyAmount())
+        );
 });
 
 test('existing users can accept invitations into another family', function () {
