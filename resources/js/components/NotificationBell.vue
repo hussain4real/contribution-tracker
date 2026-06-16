@@ -16,7 +16,7 @@ import {
 import { useCurrencyFormatter } from '@/lib/currency';
 import type { AppNotification } from '@/types';
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { Bell } from 'lucide-vue-next';
+import { Bell } from '@lucide/vue';
 import { computed } from 'vue';
 
 const page = usePage();
@@ -32,7 +32,11 @@ const recentNotifications = computed(
 );
 
 function handleMarkAsRead(notification: AppNotification): void {
-    router.patch(markAsRead(notification.id).url, {}, { preserveScroll: true });
+    router.patch(
+        markAsRead({ notification: notification.id }).url,
+        {},
+        { preserveScroll: true },
+    );
 }
 
 function handleMarkAllAsRead(): void {

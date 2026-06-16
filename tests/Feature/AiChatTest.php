@@ -101,16 +101,12 @@ test('growth plan users can visit the AI chat page when the feature flag is acti
         );
 });
 
-test('AI chat index handles users without a family', function () {
+test('AI chat index rejects users without a family membership', function () {
     $user = User::factory()->create(['family_id' => null]);
 
     $this->actingAs($user)
         ->get(route('ai.index'))
-        ->assertSuccessful()
-        ->assertInertia(fn (Assert $page) => $page
-            ->component('Ai/Chat')
-            ->where('memberNames', [])
-        );
+        ->assertForbidden();
 });
 
 test('AI chat index reports transcription unavailable without a configured provider', function () {
@@ -565,7 +561,7 @@ test('rename validates title is required', function () {
 
 test('guests cannot post to the AI transcribe endpoint', function () {
     $this->postJson(route('ai.transcribe'))
-        ->assertForbidden();
+        ->assertUnauthorized();
 });
 
 test('the transcribe endpoint validates an audio file is required', function () {

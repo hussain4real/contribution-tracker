@@ -9,6 +9,7 @@ use App\Enums\Role;
 use App\Http\Requests\StoreMemberRequest;
 use App\Http\Requests\UpdateMemberRequest;
 use App\Models\Contribution;
+use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
@@ -99,14 +100,21 @@ class MemberController extends Controller
         $attributes = $this->memberAttributes($validated);
         $currentUser = $this->user($request);
 
-        User::create([
+        $family = $currentUser->currentFamily ?? $currentUser->family;
+
+        abort_unless($family instanceof Family, 403);
+
+        $member = User::create([
             'name' => $attributes['name'],
             'email' => $attributes['email'],
             'password' => Hash::make($attributes['password'] ?? ''),
             'category' => $attributes['category'],
             'role' => $attributes['role'],
-            'family_id' => $currentUser->family_id,
+            'family_id' => $family->id,
+            'current_family_id' => $family->id,
         ]);
+
+        $member->ensureFamilyMembership($family, $attributes['role'], $attributes['category']);
 
         return redirect()
             ->route('members.index')
@@ -122,6 +130,7 @@ class MemberController extends Controller
     public function show(User $member): Response
     {
         $currentUser = $this->authUser();
+        $this->authorizeMemberInCurrentFamily($currentUser, $member);
         $member->loadMissing('familyCategory:id,name,monthly_amount');
 
         // Determine if user can view contribution history
@@ -207,6 +216,7 @@ class MemberController extends Controller
     public function edit(User $member): Response
     {
         $user = $this->authUser();
+        $this->authorizeMemberInCurrentFamily($user, $member);
 
         if (! $user->canManageMembers()) {
             abort(403);
@@ -236,6 +246,7 @@ class MemberController extends Controller
         $attributes = $this->memberAttributes($validated, includePassword: false);
 
         $currentUser = $this->authUser();
+        $family = $this->authorizeMemberInCurrentFamily($currentUser, $member);
         $newRole = $attributes['role'];
         $oldRole = $member->role;
         $roleChanged = $oldRole !== $newRole;
@@ -272,6 +283,13 @@ class MemberController extends Controller
         }
 
         $member->update($data);
+        $member->ensureFamilyMembership($family, $newRole, $attributes['category'])
+            ->forceFill([
+                'role' => $newRole,
+                'category' => $attributes['category'],
+                'family_category_id' => $member->family_category_id,
+            ])
+            ->save();
 
         $redirect = redirect()->route('members.show', $member)
             ->with('success', 'Member updated successfully.');
@@ -291,6 +309,7 @@ class MemberController extends Controller
     public function destroy(User $member): RedirectResponse
     {
         $user = $this->authUser();
+        $this->authorizeMemberInCurrentFamily($user, $member);
 
         if (! $user->canManageMembers()) {
             abort(403);
@@ -320,6 +339,7 @@ class MemberController extends Controller
     public function restore(User $member): RedirectResponse
     {
         $user = $this->authUser();
+        $this->authorizeMemberInCurrentFamily($user, $member);
 
         if (! $user->canManageMembers()) {
             abort(403);
@@ -394,5 +414,14 @@ class MemberController extends Controller
     private function nullableString(mixed $value): ?string
     {
         return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    private function authorizeMemberInCurrentFamily(User $user, User $member): Family
+    {
+        $family = $user->currentFamily ?? $user->family;
+
+        abort_unless($family instanceof Family && $member->belongsToFamily($family), 404);
+
+        return $family;
     }
 }

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\Contribution;
+use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -12,10 +13,11 @@ use Inertia\Testing\AssertableInertia as Assert;
  */
 describe('Member Authorization', function () {
     beforeEach(function () {
-        $this->admin = User::factory()->admin()->create();
-        $this->financialSecretary = User::factory()->financialSecretary()->create();
-        $this->member = User::factory()->member()->employed()->create();
-        $this->targetMember = User::factory()->member()->student()->create();
+        $this->family = Family::factory()->create();
+        $this->admin = User::factory()->admin()->create(['family_id' => $this->family->id]);
+        $this->financialSecretary = User::factory()->financialSecretary()->create(['family_id' => $this->family->id]);
+        $this->member = User::factory()->member()->employed()->create(['family_id' => $this->family->id]);
+        $this->targetMember = User::factory()->member()->student()->create(['family_id' => $this->family->id]);
     });
 
     // Index - All authenticated users can view list
@@ -229,7 +231,7 @@ describe('Member Authorization', function () {
 
     // Restore - Only Admin
     it('financial secretary cannot restore member', function () {
-        $archivedMember = User::factory()->member()->archived()->create();
+        $archivedMember = User::factory()->member()->archived()->create(['family_id' => $this->family->id]);
 
         $this->actingAs($this->financialSecretary)
             ->post("/members/{$archivedMember->id}/restore")

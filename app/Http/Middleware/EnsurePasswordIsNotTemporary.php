@@ -31,14 +31,14 @@ class EnsurePasswordIsNotTemporary
         }
 
         return redirect()
-            ->route('user-password.edit')
+            ->route('security.edit')
             ->with('warning', 'Please change your temporary password before continuing.');
     }
 
     private function isAllowedRoute(Request $request): bool
     {
         return $request->routeIs(
-            'user-password.edit',
+            'security.edit',
             'user-password.update',
             'logout',
             'password.confirm',

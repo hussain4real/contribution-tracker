@@ -18,13 +18,19 @@ class SetFamilyContext
      */
     public function handle(Request $request, Closure $next): Response
     {
+        if (app()->bound('current-family')) {
+            return $next($request);
+        }
+
         $user = $request->user();
 
-        if ($user && $user->family_id) {
-            $family = $user->family;
+        if ($user) {
+            $family = $user->currentFamily ?? $user->family;
 
-            app()->instance('current-family', $family);
-            app()->instance(Family::class, $family);
+            if ($family instanceof Family) {
+                app()->instance('current-family', $family);
+                app()->instance(Family::class, $family);
+            }
         }
 
         return $next($request);

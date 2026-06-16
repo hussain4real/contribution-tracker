@@ -3,6 +3,7 @@ import { show as showContribution } from '@/actions/App/Http/Controllers/Contrib
 import { create as createPayment } from '@/actions/App/Http/Controllers/PaymentController';
 import StatusBadge from '@/components/contributions/StatusBadge.vue';
 import { useCurrencyFormatter } from '@/lib/currency';
+import type { PaymentStatus } from '@/types/dashboard';
 import { Link } from '@inertiajs/vue3';
 
 interface Member {
@@ -12,7 +13,7 @@ interface Member {
     category_label: string | null;
     expected_amount: number;
     total_paid: number;
-    current_month_status: string;
+    current_month_status: PaymentStatus;
     current_month_balance: number;
     accrued_balance: number;
     contribution_id: number;
@@ -41,7 +42,10 @@ function formatCategory(category: string | null): string {
     >
         <td class="px-3 py-3 sm:px-4">
             <Link
-                :href="showContribution(member.contribution_id).url"
+                :href="
+                    showContribution({ contribution: member.contribution_id })
+                        .url
+                "
                 class="font-medium text-neutral-900 hover:text-blue-600 dark:text-neutral-100 dark:hover:text-blue-400"
             >
                 {{ member.name }}
@@ -86,7 +90,7 @@ function formatCategory(category: string | null): string {
             </span>
             <Link
                 v-if="canRecordPayments && member.current_month_balance > 0"
-                :href="createPayment(member.id).url"
+                :href="createPayment({ member: member.id }).url"
                 class="ml-2 text-xs text-blue-600 hover:underline dark:text-blue-400"
             >
                 Pay

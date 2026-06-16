@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { LoaderCircle, RotateCw } from 'lucide-vue-next';
+import { LoaderCircle, RotateCw } from '@lucide/vue';
 
 defineProps<{
     distance: number;

@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
@@ -34,6 +35,7 @@ use Illuminate\Support\Carbon;
  * @property PlatformPlan|null $platformPlan
  * @property User|null $owner
  * @property Collection<int, User> $members
+ * @property Collection<int, FamilyMembership> $memberships
  * @property Collection<int, FamilyCategory> $categories
  * @property int $members_count
  */
@@ -83,6 +85,11 @@ class Family extends Model
             'suspended_at' => 'datetime',
             'current_period_end' => 'datetime',
         ];
+    }
+
+    public function getRouteKeyName(): string
+    {
+        return 'slug';
     }
 
     // =========================================================================
@@ -148,11 +155,24 @@ class Family extends Model
     /**
      * Members belonging to this family.
      *
-     * @return HasMany<User, $this>
+     * @return BelongsToMany<User, $this, FamilyMembership, 'pivot'>
      */
-    public function members(): HasMany
+    public function members(): BelongsToMany
     {
-        return $this->hasMany(User::class);
+        return $this->belongsToMany(User::class, 'family_members')
+            ->using(FamilyMembership::class)
+            ->withPivot(['id', 'role', 'category', 'family_category_id'])
+            ->withTimestamps();
+    }
+
+    /**
+     * Membership rows belonging to this family.
+     *
+     * @return HasMany<FamilyMembership, $this>
+     */
+    public function memberships(): HasMany
+    {
+        return $this->hasMany(FamilyMembership::class);
     }
 
     /**

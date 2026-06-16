@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { index as aiIndex } from '@/actions/App/Http/Controllers/AiChatController';
 import { router, usePage } from '@inertiajs/vue3';
-import { BotMessageSquare, GripHorizontal, Sparkles } from 'lucide-vue-next';
+import { BotMessageSquare, GripHorizontal, Sparkles } from '@lucide/vue';
 import type { CSSProperties } from 'vue';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
@@ -36,7 +36,7 @@ const showAssistant = computed(
     () =>
         !!page.props.featureFlags?.ai_assistant &&
         !!page.props.subscription?.features.includes('ai_assistant') &&
-        !page.url.startsWith('/ai'),
+        page.component !== 'Ai/Chat',
 );
 
 const buttonStyle = computed<CSSProperties>(() => ({

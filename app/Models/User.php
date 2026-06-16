@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Concerns\HasFamilies;
 use App\Enums\MemberCategory;
 use App\Enums\Role;
 use Database\Factories\UserFactory;
@@ -36,10 +37,13 @@ use NotificationChannels\WebPush\HasPushSubscriptions;
  * @property Carbon|null $email_verified_at
  * @property Carbon|null $must_change_password_at
  * @property int|null $family_id
+ * @property int|null $current_family_id
  * @property bool $is_super_admin
  * @property MemberCategory|null $category
  * @property FamilyCategory|null $familyCategory
  * @property Family|null $family
+ * @property Family|null $currentFamily
+ * @property FamilyMembership|null $currentFamilyMembership
  * @property Role $role
  * @property string|null $whatsapp_phone
  * @property Carbon|null $whatsapp_verified_at
@@ -48,7 +52,7 @@ use NotificationChannels\WebPush\HasPushSubscriptions;
 class User extends Authenticatable implements FilamentUser, MustVerifyEmail, OAuthenticatable, PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
-    use HasApiTokens, HasFactory, HasPushSubscriptions, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
+    use HasApiTokens, HasFactory, HasFamilies, HasPushSubscriptions, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
 
     /**
      * The attributes that are mass assignable.
@@ -63,6 +67,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail, OAu
         'role',
         'category',
         'family_id',
+        'current_family_id',
         'family_category_id',
         'is_super_admin',
         'archived_at',
@@ -289,7 +294,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail, OAu
      */
     public function isAdmin(): bool
     {
-        return $this->role === Role::Admin;
+        return $this->activeRole() === Role::Admin;
     }
 
     /**
@@ -297,7 +302,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail, OAu
      */
     public function isFinancialSecretary(): bool
     {
-        return $this->role === Role::FinancialSecretary;
+        return $this->activeRole() === Role::FinancialSecretary;
     }
 
     /**
@@ -305,7 +310,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail, OAu
      */
     public function isMember(): bool
     {
-        return $this->role === Role::Member;
+        return $this->activeRole() === Role::Member;
     }
 
     /**
@@ -313,7 +318,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail, OAu
      */
     public function canRecordPayments(): bool
     {
-        return $this->role->canRecordPayments();
+        return $this->activeRole()->canRecordPayments();
     }
 
     /**
@@ -321,7 +326,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail, OAu
      */
     public function canManageMembers(): bool
     {
-        return $this->role->canManageMembers();
+        return $this->activeRole()->canManageMembers();
     }
 
     /**
@@ -329,7 +334,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail, OAu
      */
     public function canAddMembers(): bool
     {
-        return $this->role->canAddMembers();
+        return $this->activeRole()->canAddMembers();
     }
 
     /**
@@ -337,7 +342,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail, OAu
      */
     public function canManageRoles(): bool
     {
-        return $this->role->canManageRoles();
+        return $this->activeRole()->canManageRoles();
     }
 
     /**
@@ -345,7 +350,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail, OAu
      */
     public function canViewAllMembers(): bool
     {
-        return $this->role->canViewAllMembers();
+        return $this->activeRole()->canViewAllMembers();
     }
 
     /**
@@ -353,6 +358,16 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail, OAu
      */
     public function getMonthlyAmount(): ?int
     {
+        $membership = $this->currentFamilyMembership();
+
+        if ($membership?->familyCategory !== null) {
+            return $membership->familyCategory->monthly_amount;
+        }
+
+        if ($membership?->category !== null) {
+            return $membership->category->monthlyAmount();
+        }
+
         if ($this->familyCategory !== null) {
             return $this->familyCategory->monthly_amount;
         }
@@ -378,5 +393,12 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail, OAu
     public function routeNotificationForWhatsApp(): ?string
     {
         return $this->hasVerifiedWhatsApp() ? $this->whatsapp_phone : null;
+    }
+
+    public function activeRole(): Role
+    {
+        $membership = $this->currentFamilyMembership();
+
+        return $membership instanceof FamilyMembership ? $membership->role : $this->role;
     }
 }

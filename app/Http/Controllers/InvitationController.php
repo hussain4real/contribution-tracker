@@ -99,7 +99,8 @@ class InvitationController extends Controller
         $email = $attributes['email'];
         $whatsappPhone = $attributes['whatsapp_phone'];
 
-        $existingMemberQuery = User::query()->where('family_id', $user->family_id);
+        $existingMemberQuery = User::query()
+            ->whereHas('familyMemberships', fn ($query) => $query->where('family_members.family_id', $user->family_id));
 
         if ($deliveryMethod === InvitationDeliveryMethod::Email) {
             $existingMemberQuery->where('email', $email);
@@ -202,6 +203,21 @@ class InvitationController extends Controller
             return redirect()->route('home')->with('error', 'This invitation has expired.');
         }
 
+        $user = $this->nullableAuthUser();
+
+        if ($user instanceof User && $this->invitationMatchesUser($invitation, $user)) {
+            $family = $invitation->family;
+
+            if ($family instanceof Family) {
+                $user->ensureFamilyMembership($family, $invitation->role);
+                $user->switchFamily($family);
+                $invitation->update(['accepted_at' => now()]);
+
+                return to_route('dashboard')
+                    ->with('success', "You joined {$family->name}.");
+            }
+        }
+
         return Inertia::render('auth/AcceptInvitation', [
             'invitation' => [
                 'token' => $invitation->token,
@@ -242,6 +258,22 @@ class InvitationController extends Controller
     private function canCancelInvitation(User $user, FamilyInvitation $invitation): bool
     {
         return $user->canManageRoles() || $invitation->role === Role::Member;
+    }
+
+    private function invitationMatchesUser(FamilyInvitation $invitation, User $user): bool
+    {
+        if ($invitation->email !== null && strcasecmp($invitation->email, $user->email) === 0) {
+            return true;
+        }
+
+        return $invitation->whatsapp_phone !== null && $invitation->whatsapp_phone === $user->whatsapp_phone;
+    }
+
+    private function nullableAuthUser(): ?User
+    {
+        $user = auth()->user();
+
+        return $user instanceof User ? $user : null;
     }
 
     /**

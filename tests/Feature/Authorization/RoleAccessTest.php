@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Enums\MemberCategory;
 use App\Enums\Role;
 use App\Models\Contribution;
+use App\Models\Family;
 use App\Models\User;
 
 /**
@@ -12,8 +13,9 @@ use App\Models\User;
  */
 describe('Role Access', function () {
     beforeEach(function () {
-        $this->admin = User::factory()->admin()->create();
-        $this->member = User::factory()->member()->employed()->create();
+        $this->family = Family::factory()->create();
+        $this->admin = User::factory()->admin()->create(['family_id' => $this->family->id]);
+        $this->member = User::factory()->member()->employed()->create(['family_id' => $this->family->id]);
         $this->contribution = Contribution::factory()
             ->forUser($this->member)
             ->currentMonth()
@@ -21,7 +23,7 @@ describe('Role Access', function () {
     });
 
     it('newly assigned financial secretary can access payment form', function () {
-        $newFs = User::factory()->member()->create();
+        $newFs = User::factory()->member()->create(['family_id' => $this->family->id]);
 
         // Assign FS role
         $this->actingAs($this->admin)
@@ -41,7 +43,7 @@ describe('Role Access', function () {
     });
 
     it('newly assigned financial secretary can record payments', function () {
-        $newFs = User::factory()->member()->create();
+        $newFs = User::factory()->member()->create(['family_id' => $this->family->id]);
 
         // Assign FS role
         $this->actingAs($this->admin)
@@ -70,7 +72,7 @@ describe('Role Access', function () {
     });
 
     it('demoted financial secretary cannot access payment form', function () {
-        $fs = User::factory()->financialSecretary()->create();
+        $fs = User::factory()->financialSecretary()->create(['family_id' => $this->family->id]);
 
         // Verify can access before demotion
         $this->actingAs($fs)
@@ -95,7 +97,7 @@ describe('Role Access', function () {
     });
 
     it('demoted financial secretary cannot record payments', function () {
-        $fs = User::factory()->financialSecretary()->create();
+        $fs = User::factory()->financialSecretary()->create(['family_id' => $this->family->id]);
 
         // Demote to member
         $this->actingAs($this->admin)
@@ -119,7 +121,7 @@ describe('Role Access', function () {
     });
 
     it('newly promoted admin can manage members', function () {
-        $newAdmin = User::factory()->member()->create();
+        $newAdmin = User::factory()->member()->create(['family_id' => $this->family->id]);
 
         // Promote to admin
         $this->actingAs($this->admin)
@@ -139,8 +141,8 @@ describe('Role Access', function () {
     });
 
     it('newly promoted admin can assign roles', function () {
-        $newAdmin = User::factory()->member()->create();
-        $targetMember = User::factory()->member()->create();
+        $newAdmin = User::factory()->member()->create(['family_id' => $this->family->id]);
+        $targetMember = User::factory()->member()->create(['family_id' => $this->family->id]);
 
         // Promote to admin
         $this->actingAs($this->admin)
@@ -169,7 +171,7 @@ describe('Role Access', function () {
 
     it('demoted admin cannot manage members', function () {
         // Create another admin with a category
-        $anotherAdmin = User::factory()->admin()->employed()->create();
+        $anotherAdmin = User::factory()->admin()->employed()->create(['family_id' => $this->family->id]);
 
         // Demote to member
         $this->actingAs($this->admin)

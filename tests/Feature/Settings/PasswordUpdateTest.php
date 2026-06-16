@@ -4,15 +4,22 @@ declare(strict_types=1);
 
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Inertia\Testing\AssertableInertia as Assert;
 
-test('password update page is displayed', function () {
+test('security settings page is displayed', function () {
     $user = User::factory()->create();
 
     $response = $this
         ->actingAs($user)
-        ->get(route('user-password.edit'));
+        ->withSession(['auth.password_confirmed_at' => time()])
+        ->get(route('security.edit'));
 
-    $response->assertStatus(200);
+    $response
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('settings/Security')
+            ->has('passkeys')
+        );
 });
 
 test('password can be updated', function () {
@@ -20,7 +27,7 @@ test('password can be updated', function () {
 
     $response = $this
         ->actingAs($user)
-        ->from(route('user-password.edit'))
+        ->from(route('security.edit'))
         ->put(route('user-password.update'), [
             'current_password' => 'password',
             'password' => 'new-password',
@@ -29,7 +36,7 @@ test('password can be updated', function () {
 
     $response
         ->assertSessionHasNoErrors()
-        ->assertRedirect(route('user-password.edit'));
+        ->assertRedirect(route('security.edit'));
 
     expect(Hash::check('new-password', $user->refresh()->password))->toBeTrue();
 });
@@ -39,7 +46,7 @@ test('correct password must be provided to update password', function () {
 
     $response = $this
         ->actingAs($user)
-        ->from(route('user-password.edit'))
+        ->from(route('security.edit'))
         ->put(route('user-password.update'), [
             'current_password' => 'wrong-password',
             'password' => 'new-password',
@@ -48,5 +55,11 @@ test('correct password must be provided to update password', function () {
 
     $response
         ->assertSessionHasErrors('current_password')
-        ->assertRedirect(route('user-password.edit'));
+        ->assertRedirect(route('security.edit'));
+});
+
+test('old security settings pages are not registered', function () {
+    $this->get('/settings/password')->assertNotFound();
+    $this->get('/settings/two-factor')->assertNotFound();
+    $this->get('/settings/passkeys')->assertNotFound();
 });

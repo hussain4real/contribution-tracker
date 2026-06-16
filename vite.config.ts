@@ -3,6 +3,7 @@ import { wayfinder } from '@laravel/vite-plugin-wayfinder';
 import tailwindcss from '@tailwindcss/vite';
 import vue from '@vitejs/plugin-vue';
 import laravel from 'laravel-vite-plugin';
+import { bunny } from 'laravel-vite-plugin/fonts';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
@@ -14,6 +15,11 @@ export default defineConfig({
         laravel({
             input: ['resources/js/app.ts', 'resources/css/app.css'],
             refresh: true,
+            fonts: [
+                bunny('Instrument Sans', {
+                    weights: [400, 500, 600],
+                }),
+            ],
         }),
         inertia({
             pages: './pages',
@@ -51,7 +57,7 @@ export default defineConfig({
                 background_color: '#ffffff',
                 display: 'standalone',
                 scope: '/',
-                start_url: '/dashboard',
+                start_url: '/',
                 icons: [
                     {
                         src: '/pwa-192x192.png',
@@ -74,7 +80,7 @@ export default defineConfig({
                     {
                         name: 'Dashboard',
                         short_name: 'Dashboard',
-                        url: '/dashboard',
+                        url: '/',
                         icons: [
                             {
                                 src: '/pwa-192x192.png',
@@ -86,7 +92,7 @@ export default defineConfig({
                     {
                         name: 'My Contributions',
                         short_name: 'Contributions',
-                        url: '/contributions/my',
+                        url: '/',
                         icons: [
                             {
                                 src: '/pwa-192x192.png',
@@ -98,7 +104,7 @@ export default defineConfig({
                     {
                         name: 'Notifications',
                         short_name: 'Alerts',
-                        url: '/notifications',
+                        url: '/',
                         icons: [
                             {
                                 src: '/pwa-192x192.png',

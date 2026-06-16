@@ -179,7 +179,10 @@ class ContributionReminderNotification extends Notification implements ShouldQue
             ->data([
                 'notification_id' => $notification->id,
                 'contribution_id' => $this->contribution->id,
-                'url' => route('contributions.show', $this->contribution),
+                'url' => route('contributions.show', [
+                    'current_family' => $this->familySlug(),
+                    'contribution' => $this->contribution,
+                ]),
                 'type' => $this->type,
             ])
             ->options(['TTL' => 60 * 60 * 24]);
@@ -195,5 +198,12 @@ class ContributionReminderNotification extends Notification implements ShouldQue
         $family = $this->contribution->family;
 
         return $family instanceof Family ? $family->name : 'your family';
+    }
+
+    private function familySlug(): string
+    {
+        $family = $this->contribution->family;
+
+        return $family instanceof Family ? $family->slug : (string) $this->contribution->family_id;
     }
 }

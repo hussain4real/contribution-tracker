@@ -36,7 +36,7 @@ import {
     User,
     X,
     XCircle,
-} from 'lucide-vue-next';
+} from '@lucide/vue';
 import { marked } from 'marked';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
@@ -1124,7 +1124,7 @@ function submitRename(): void {
     if (!renamingConversation.value || !renameTitle.value.trim()) return;
 
     router.patch(
-        rename(renamingConversation.value.id).url,
+        rename({ conversation: renamingConversation.value.id }).url,
         { title: renameTitle.value.trim() },
         {
             preserveScroll: true,
@@ -1148,7 +1148,7 @@ function confirmDelete(): void {
 
     const conversationId = deletingConversation.value.id;
 
-    router.delete(destroy(conversationId).url, {
+    router.delete(destroy({ conversation: conversationId }).url, {
         preserveScroll: true,
         onSuccess: () => {
             deletingConversation.value = null;

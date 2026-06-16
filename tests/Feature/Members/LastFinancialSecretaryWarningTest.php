@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Enums\Role;
+use App\Models\Family;
 use App\Models\User;
 
 /**
@@ -12,13 +13,14 @@ use App\Models\User;
  */
 describe('Last Financial Secretary Warning', function () {
     beforeEach(function () {
-        $this->admin = User::factory()->admin()->create();
+        $this->family = Family::factory()->create();
+        $this->admin = User::factory()->admin()->create(['family_id' => $this->family->id]);
     });
 
     it('allows removing financial secretary when others exist', function () {
         // Create two financial secretaries
-        $fs1 = User::factory()->financialSecretary()->create();
-        $fs2 = User::factory()->financialSecretary()->create();
+        $fs1 = User::factory()->financialSecretary()->create(['family_id' => $this->family->id]);
+        $fs2 = User::factory()->financialSecretary()->create(['family_id' => $this->family->id]);
 
         // Remove first FS
         $this->actingAs($this->admin)
@@ -36,7 +38,7 @@ describe('Last Financial Secretary Warning', function () {
 
     it('warns when removing the last financial secretary', function () {
         // Create only one financial secretary
-        $lastFs = User::factory()->financialSecretary()->create();
+        $lastFs = User::factory()->financialSecretary()->create(['family_id' => $this->family->id]);
 
         // Attempt to remove last FS
         $response = $this->actingAs($this->admin)
@@ -57,7 +59,7 @@ describe('Last Financial Secretary Warning', function () {
 
     it('allows last financial secretary removal with confirmation', function () {
         // Create only one financial secretary
-        $lastFs = User::factory()->financialSecretary()->create();
+        $lastFs = User::factory()->financialSecretary()->create(['family_id' => $this->family->id]);
 
         // Remove with force flag
         $response = $this->actingAs($this->admin)
@@ -77,7 +79,7 @@ describe('Last Financial Secretary Warning', function () {
 
     it('does not warn when super admin can also record payments', function () {
         // Super admin exists and can record payments, so removing last FS is less critical
-        $lastFs = User::factory()->financialSecretary()->create();
+        $lastFs = User::factory()->financialSecretary()->create(['family_id' => $this->family->id]);
 
         $response = $this->actingAs($this->admin)
             ->put("/members/{$lastFs->id}", [
@@ -94,8 +96,9 @@ describe('Last Financial Secretary Warning', function () {
 
     it('counts only active financial secretaries', function () {
         // Create one active and one archived financial secretary
-        $activeFs = User::factory()->financialSecretary()->create();
+        $activeFs = User::factory()->financialSecretary()->create(['family_id' => $this->family->id]);
         User::factory()->financialSecretary()->create([
+            'family_id' => $this->family->id,
             'archived_at' => now(),
         ]);
 

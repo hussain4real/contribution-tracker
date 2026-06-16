@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Models\Family;
 use App\Models\User;
 
 describe('Report Authorization', function () {
@@ -31,7 +32,9 @@ describe('Report Authorization', function () {
         });
 
         it('requires authentication', function () {
-            $this->get('/reports')
+            $family = Family::factory()->create();
+
+            $this->get("/{$family->slug}/reports")
                 ->assertRedirect();
         });
     });
@@ -62,7 +65,9 @@ describe('Report Authorization', function () {
         });
 
         it('requires authentication for monthly report', function () {
-            $this->get('/reports/monthly')
+            $family = Family::factory()->create();
+
+            $this->get("/{$family->slug}/reports/monthly")
                 ->assertRedirect();
         });
     });
@@ -93,7 +98,9 @@ describe('Report Authorization', function () {
         });
 
         it('requires authentication for annual report', function () {
-            $this->get('/reports/annual')
+            $family = Family::factory()->create();
+
+            $this->get("/{$family->slug}/reports/annual")
                 ->assertRedirect();
         });
     });

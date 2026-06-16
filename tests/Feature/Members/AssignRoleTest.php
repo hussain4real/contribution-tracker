@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Enums\Role;
+use App\Models\Family;
 use App\Models\User;
 
 /**
@@ -29,11 +30,12 @@ function assignRolePayload(User $member, string $role): array
  */
 describe('Assign Role', function () {
     beforeEach(function () {
-        $this->admin = User::factory()->admin()->create();
+        $this->family = Family::factory()->create();
+        $this->admin = User::factory()->admin()->create(['family_id' => $this->family->id]);
     });
 
     it('super admin can assign financial secretary role to a member', function () {
-        $member = User::factory()->member()->create();
+        $member = User::factory()->member()->create(['family_id' => $this->family->id]);
 
         expect($member->role)->toBe(Role::Member);
 
@@ -46,7 +48,7 @@ describe('Assign Role', function () {
     });
 
     it('super admin can assign super admin role to a member', function () {
-        $member = User::factory()->member()->create();
+        $member = User::factory()->member()->create(['family_id' => $this->family->id]);
 
         $this->actingAs($this->admin)
             ->put("/members/{$member->id}", assignRolePayload($member, 'admin'))
@@ -57,8 +59,8 @@ describe('Assign Role', function () {
     });
 
     it('financial secretary cannot assign roles', function () {
-        $financialSecretary = User::factory()->financialSecretary()->create();
-        $member = User::factory()->member()->create();
+        $financialSecretary = User::factory()->financialSecretary()->create(['family_id' => $this->family->id]);
+        $member = User::factory()->member()->create(['family_id' => $this->family->id]);
 
         $this->actingAs($financialSecretary)
             ->put("/members/{$member->id}", assignRolePayload($member, 'financial_secretary'))
@@ -69,8 +71,8 @@ describe('Assign Role', function () {
     });
 
     it('member cannot assign roles', function () {
-        $regularMember = User::factory()->member()->create();
-        $targetMember = User::factory()->member()->create();
+        $regularMember = User::factory()->member()->create(['family_id' => $this->family->id]);
+        $targetMember = User::factory()->member()->create(['family_id' => $this->family->id]);
 
         $this->actingAs($regularMember)
             ->put("/members/{$targetMember->id}", assignRolePayload($targetMember, 'financial_secretary'))
@@ -78,7 +80,7 @@ describe('Assign Role', function () {
     });
 
     it('assigned financial secretary can record payments', function () {
-        $member = User::factory()->member()->create();
+        $member = User::factory()->member()->create(['family_id' => $this->family->id]);
 
         // Assign FS role
         $this->actingAs($this->admin)
@@ -91,7 +93,7 @@ describe('Assign Role', function () {
     });
 
     it('returns success flash message after role assignment', function () {
-        $member = User::factory()->member()->create();
+        $member = User::factory()->member()->create(['family_id' => $this->family->id]);
 
         $response = $this->actingAs($this->admin)
             ->put("/members/{$member->id}", assignRolePayload($member, 'financial_secretary'));

@@ -21,9 +21,11 @@ final class PlatformCsvExports
         return response()->streamDownload(function () use ($families): void {
             $handle = fopen('php://output', 'w');
 
+            // @codeCoverageIgnoreStart
             if ($handle === false) {
                 return;
             }
+            // @codeCoverageIgnoreEnd
 
             fputcsv($handle, ['ID', 'Name', 'Slug', 'Currency', 'Due Day', 'Owner', 'Members', 'Suspended', 'Created']);
 
@@ -57,9 +59,11 @@ final class PlatformCsvExports
         return response()->streamDownload(function () use ($users): void {
             $handle = fopen('php://output', 'w');
 
+            // @codeCoverageIgnoreStart
             if ($handle === false) {
                 return;
             }
+            // @codeCoverageIgnoreEnd
 
             fputcsv($handle, ['ID', 'Name', 'Email', 'Family', 'Role', 'Category', 'Status', 'Joined']);
 

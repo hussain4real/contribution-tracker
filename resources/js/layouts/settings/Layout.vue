@@ -4,10 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { toUrl, urlIsActive } from '@/lib/utils';
 import { edit as editAppearance } from '@/routes/appearance';
-import { show as showPasskeys } from '@/routes/passkeys';
 import { edit as editProfile } from '@/routes/profile';
-import { show } from '@/routes/two-factor';
-import { edit as editPassword } from '@/routes/user-password';
+import { edit as editSecurity } from '@/routes/security';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
 
@@ -18,19 +16,9 @@ const sidebarNavItems: NavItem[] = [
         component: 'settings/Profile',
     },
     {
-        title: 'Password',
-        href: editPassword(),
-        component: 'settings/Password',
-    },
-    {
-        title: 'Two-Factor Auth',
-        href: show(),
-        component: 'settings/TwoFactor',
-    },
-    {
-        title: 'Passkeys',
-        href: showPasskeys(),
-        component: 'settings/Passkeys',
+        title: 'Security',
+        href: editSecurity(),
+        component: 'settings/Security',
     },
     {
         title: 'Appearance',

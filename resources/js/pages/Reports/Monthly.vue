@@ -16,7 +16,7 @@ import {
     FileBarChart2,
     TrendingUp,
     Users,
-} from 'lucide-vue-next';
+} from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 
 interface MemberData {
@@ -89,7 +89,9 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
     },
     {
         title: `${props.month_name} ${props.year}`,
-        href: monthly({ query: { year: props.year, month: props.month } }).url,
+        href: monthly(undefined, {
+            query: { year: props.year, month: props.month },
+        }).url,
     },
 ]);
 

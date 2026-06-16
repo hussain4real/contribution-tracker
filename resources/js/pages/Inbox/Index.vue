@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/vue3';
-import { MessageCircle, MessageSquare } from 'lucide-vue-next';
+import { MessageCircle, MessageSquare } from '@lucide/vue';
 
 interface Thread {
     phone: string;

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Enums\MemberCategory;
+use App\Models\Family;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -12,8 +13,9 @@ use Inertia\Testing\AssertableInertia as Assert;
  */
 describe('Update Member', function () {
     beforeEach(function () {
-        $this->admin = User::factory()->admin()->create();
-        $this->member = User::factory()->member()->employed()->create();
+        $this->family = Family::factory()->create();
+        $this->admin = User::factory()->admin()->create(['family_id' => $this->family->id]);
+        $this->member = User::factory()->member()->employed()->create(['family_id' => $this->family->id]);
     });
 
     it('super admin can access member edit form', function () {
@@ -84,7 +86,10 @@ describe('Update Member', function () {
 
     it('validates unique email excludes current member', function () {
         // Create another member
-        $otherMember = User::factory()->member()->create(['email' => 'other@example.com']);
+        $otherMember = User::factory()->member()->create([
+            'family_id' => $this->family->id,
+            'email' => 'other@example.com',
+        ]);
 
         // Try to update to the other member's email
         $this->actingAs($this->admin)

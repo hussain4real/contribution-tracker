@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Enums\MemberCategory;
 use App\Models\Contribution;
+use App\Models\Family;
 use App\Models\User;
 
 /**
@@ -15,8 +16,9 @@ use App\Models\User;
  */
 describe('Category Change Next Month', function () {
     beforeEach(function () {
-        $this->admin = User::factory()->admin()->create();
-        $this->member = User::factory()->member()->employed()->create();
+        $this->family = Family::factory()->create();
+        $this->admin = User::factory()->admin()->create(['family_id' => $this->family->id]);
+        $this->member = User::factory()->member()->employed()->create(['family_id' => $this->family->id]);
     });
 
     it('existing current month contribution keeps old amount after category change', function () {
@@ -94,6 +96,7 @@ describe('Category Change Next Month', function () {
 
         foreach ($transitions as $transition) {
             $member = User::factory()->member()->create([
+                'family_id' => $this->family->id,
                 'category' => MemberCategory::from($transition['from']),
             ]);
 

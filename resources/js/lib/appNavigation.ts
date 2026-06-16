@@ -12,7 +12,7 @@ import { index as reportsIndex } from '@/actions/App/Http/Controllers/ReportCont
 import { index as subscriptionIndex } from '@/actions/App/Http/Controllers/SubscriptionController';
 import { index as whatsappInboxIndex } from '@/actions/App/Http/Controllers/WhatsAppInboxController';
 import { urlIsActive } from '@/lib/utils';
-import { dashboard } from '@/routes';
+import { changelog, dashboard } from '@/routes';
 import { edit as editProfile } from '@/routes/profile';
 import type { NavItem } from '@/types';
 import { usePage } from '@inertiajs/vue3';
@@ -35,7 +35,7 @@ import {
     User,
     Users,
     Wallet,
-} from 'lucide-vue-next';
+} from '@lucide/vue';
 import { computed } from 'vue';
 
 type NavigationGroup = {
@@ -179,7 +179,7 @@ export function useAppNavigation() {
 
         items.push({
             title: "What's New",
-            href: '/changelog',
+            href: changelog(),
             icon: Rocket,
             component: 'Changelog/Index',
             section: 'main',

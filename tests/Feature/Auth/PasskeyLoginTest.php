@@ -59,7 +59,7 @@ test('official passkey login succeeds with a verified passkey', function () {
     ]);
 
     $response->assertOk()
-        ->assertJsonPath('redirect', route('dashboard'));
+        ->assertJsonPath('redirect', route('dashboard', absolute: false));
 
     $this->assertAuthenticatedAs($user);
     $response->assertCookie(auth()->guard('web')->getRecallerName());

@@ -6,6 +6,8 @@ namespace App\Http\Middleware;
 
 use App\Features\AiAssistant;
 use App\Models\Family;
+use App\Models\FamilyCategory;
+use App\Models\FamilyMembership;
 use App\Models\PlatformPlan;
 use App\Models\User;
 use App\Services\GitHubReleaseService;
@@ -42,7 +44,44 @@ class HandleInertiaRequests extends Middleware
         $user = $request->user();
 
         if ($user instanceof User) {
-            $user->loadMissing('familyCategory:id,name,monthly_amount');
+            $user->loadMissing([
+                'currentFamily:id,name,slug,currency,due_day,bank_name,account_name,account_number',
+                'family:id,name,slug,currency,due_day,bank_name,account_name,account_number',
+                'familyCategory:id,name,monthly_amount',
+            ]);
+        }
+
+        $boundFamily = app()->bound('current-family') ? app('current-family') : null;
+        $currentFamily = $boundFamily instanceof Family
+            ? $boundFamily
+            : ($user instanceof User ? ($user->currentFamily ?? $user->family) : null);
+        $currentMembership = $user instanceof User ? $user->currentFamilyMembership() : null;
+        $activeRole = $currentMembership instanceof FamilyMembership
+            ? $currentMembership->role
+            : ($user instanceof User ? $user->role : null);
+        $activeCategoryValue = $currentMembership instanceof FamilyMembership
+            ? $currentMembership->category?->value
+            : ($user instanceof User ? $user->category?->value : null);
+        $activeCategoryLabel = null;
+
+        if ($currentMembership instanceof FamilyMembership) {
+            $activeCategoryLabel = $currentMembership->category?->label();
+
+            if (
+                $currentMembership->family_category_id !== null
+                && $currentMembership->familyCategory instanceof FamilyCategory
+            ) {
+                $activeCategoryLabel = $currentMembership->familyCategory->name;
+            }
+        } elseif ($user instanceof User) {
+            $activeCategoryLabel = $user->category?->label();
+
+            if (
+                $user->family_category_id !== null
+                && $user->familyCategory instanceof FamilyCategory
+            ) {
+                $activeCategoryLabel = $user->familyCategory->name;
+            }
         }
 
         return [
@@ -50,42 +89,45 @@ class HandleInertiaRequests extends Middleware
             'name' => config('app.name'),
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [
-                'user' => $user ? [
+                'user' => $user instanceof User ? [
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
                     'email_verified_at' => $user->email_verified_at,
-                    'role' => $user->role->value,
-                    'role_label' => $user->role->label(),
-                    'category' => $user->category?->value,
-                    'category_label' => $user->familyCategory->name ?? $user->category?->label(),
+                    'role' => $activeRole?->value,
+                    'role_label' => $activeRole?->label(),
+                    'category' => $activeCategoryValue,
+                    'category_label' => $activeCategoryLabel,
                     'family_id' => $user->family_id,
+                    'current_family_id' => $user->current_family_id,
                     'is_super_admin' => $user->is_super_admin,
                     'whatsapp_phone' => $user->whatsapp_phone,
                     'whatsapp_verified_at' => $user->whatsapp_verified_at,
                 ] : null,
                 'can' => $user ? [
-                    'add_members' => $user->role->canAddMembers(),
-                    'manage_members' => $user->role->canManageMembers(),
-                    'record_payments' => $user->role->canRecordPayments(),
-                    'generate_reports' => $user->role->canGenerateReports(),
+                    'add_members' => $activeRole?->canAddMembers() ?? false,
+                    'manage_members' => $activeRole?->canManageMembers() ?? false,
+                    'record_payments' => $activeRole?->canRecordPayments() ?? false,
+                    'generate_reports' => $activeRole?->canGenerateReports() ?? false,
                 ] : null,
             ],
-            'family' => $user?->family ? [
-                'id' => $user->family->id,
-                'name' => $user->family->name,
-                'currency' => $user->family->currency,
-                'due_day' => $user->family->due_day,
-                'bank_name' => $user->family->bank_name,
-                'account_name' => $user->family->account_name,
-                'account_number' => $user->family->account_number,
+            'family' => $currentFamily ? [
+                'id' => $currentFamily->id,
+                'name' => $currentFamily->name,
+                'slug' => $currentFamily->slug,
+                'currency' => $currentFamily->currency,
+                'due_day' => $currentFamily->due_day,
+                'bank_name' => $currentFamily->bank_name,
+                'account_name' => $currentFamily->account_name,
+                'account_number' => $currentFamily->account_number,
             ] : null,
+            'families' => $user ? fn () => $user->toUserFamilies() : null,
             'flash' => [
                 'success' => fn () => $request->hasSession() ? $request->session()->get('success') : null,
                 'error' => fn () => $request->hasSession() ? $request->session()->get('error') : null,
                 'warning' => fn () => $request->hasSession() ? $request->session()->get('warning') : null,
             ],
-            'subscription' => $user?->family ? fn () => $this->subscriptionData($user) : null,
+            'subscription' => $currentFamily && $user instanceof User ? fn () => $this->subscriptionData($user) : null,
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'impersonating' => $request->hasSession() && $request->session()->has('impersonating_from'),
             'featureFlags' => $user ? [
@@ -113,7 +155,7 @@ class HandleInertiaRequests extends Middleware
      */
     private function subscriptionData(User $user): array
     {
-        $family = $user->family;
+        $family = $user->currentFamily ?? $user->family;
 
         if (! $family instanceof Family) {
             return [

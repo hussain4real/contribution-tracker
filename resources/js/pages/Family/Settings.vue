@@ -3,6 +3,9 @@ import {
     banks as banksRoute,
     destroyCategory,
     edit,
+    storeCategory,
+    update,
+    updateCategory,
 } from '@/actions/App/Http/Controllers/FamilySettingsController';
 import Heading from '@/components/Heading.vue';
 import HeadingSmall from '@/components/HeadingSmall.vue';
@@ -14,7 +17,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { formatCurrencyAmount } from '@/lib/currency';
 import { type BreadcrumbItem } from '@/types';
 import { Form, Head, router } from '@inertiajs/vue3';
-import { Check, ChevronsUpDown, Pencil, Plus, Trash2 } from 'lucide-vue-next';
+import { Check, ChevronsUpDown, Pencil, Plus, Trash2 } from '@lucide/vue';
 import {
     ComboboxAnchor,
     ComboboxContent,
@@ -121,7 +124,7 @@ function formatCurrency(amount: number): string {
 
 function deleteCategory(id: number): void {
     if (confirm('Are you sure you want to delete this category?')) {
-        router.delete(destroyCategory(id).url);
+        router.delete(destroyCategory({ category: id }).url);
     }
 }
 
@@ -152,7 +155,7 @@ function cancelEdit(): void {
                 />
 
                 <Form
-                    action="/family/settings"
+                    :action="update().url"
                     method="put"
                     #default="{ errors, processing, recentlySuccessful }"
                     class="mt-4 space-y-4"
@@ -326,7 +329,11 @@ function cancelEdit(): void {
                     >
                         <template v-if="editingCategory?.id === category.id">
                             <Form
-                                :action="`/family/categories/${category.id}`"
+                                :action="
+                                    updateCategory({
+                                        category: category.id,
+                                    }).url
+                                "
                                 method="put"
                                 #default="{ errors, processing }"
                                 class="flex flex-1 items-end gap-3"
@@ -428,7 +435,7 @@ function cancelEdit(): void {
 
                     <Form
                         v-if="showNewCategoryForm"
-                        action="/family/categories"
+                        :action="storeCategory().url"
                         method="post"
                         #default="{ errors, processing }"
                         class="flex items-end gap-3 rounded-lg border p-4"

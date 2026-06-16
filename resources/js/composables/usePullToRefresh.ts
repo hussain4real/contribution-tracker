@@ -102,7 +102,6 @@ export function usePullToRefresh() {
         if (pullDistance.value >= REFRESH_THRESHOLD) {
             isRefreshing.value = true;
             router.reload({
-                preserveScroll: true,
                 onFinish: () => {
                     isRefreshing.value = false;
                     resetPull();
