@@ -46,7 +46,6 @@ export default defineConfig({
                 'favicon.ico',
                 'favicon.svg',
                 'apple-touch-icon.png',
-                'offline.html',
             ],
             manifest: {
                 name: 'FamilyFunds',
@@ -120,6 +119,12 @@ export default defineConfig({
                 skipWaiting: true,
                 clientsClaim: true,
                 importScripts: ['/web-push-sw.js'],
+                additionalManifestEntries: [
+                    {
+                        url: '/offline.html',
+                        revision: CACHE_VERSION,
+                    },
+                ],
                 navigateFallback: '/offline.html',
                 navigateFallbackDenylist: [/^\/build\//, /^\/api\//],
                 runtimeCaching: [
