@@ -88,6 +88,25 @@ it('explains when visible bank details are missing the paystack bank code', func
         );
 });
 
+it('explains when bank details have not been saved', function () {
+    $family = Family::factory()->create([
+        'bank_name' => null,
+        'account_name' => null,
+        'account_number' => null,
+        'bank_code' => null,
+    ]);
+    $member = User::factory()->create(['family_id' => $family->id]);
+
+    $this->actingAs($member)
+        ->get(route('pay.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Pay/Index')
+            ->where('has_paystack', false)
+            ->where('bank_setup_status', 'missing_bank_details')
+        );
+});
+
 it('explains when paystack is not configured for the app', function () {
     config(['services.paystack.public_key' => null]);
 
@@ -106,6 +125,26 @@ it('explains when paystack is not configured for the app', function () {
             ->component('Pay/Index')
             ->where('has_paystack', false)
             ->where('bank_setup_status', 'missing_paystack_key')
+        );
+});
+
+it('marks online payments as ready when bank details and paystack key are configured', function () {
+    $family = Family::factory()->create([
+        'bank_name' => 'Guaranty Trust Bank',
+        'account_name' => 'Aminu Hussain',
+        'account_number' => '0045502216',
+        'bank_code' => '058',
+    ]);
+    $member = User::factory()->create(['family_id' => $family->id]);
+
+    $this->actingAs($member)
+        ->get(route('pay.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Pay/Index')
+            ->where('has_paystack', true)
+            ->where('bank_setup_status', 'ready')
+            ->where('paystack_public_key', 'pk_test_public')
         );
 });
 

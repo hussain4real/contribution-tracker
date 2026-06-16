@@ -52,7 +52,7 @@ describe('Financial and family administration flows (Browser)', function () {
         config(['services.paystack.public_key' => 'pk_test_browser']);
 
         $this->family->update([
-            'bank_code' => '999',
+            'bank_code' => null,
             'account_number' => '0123456789',
         ]);
 
@@ -64,9 +64,9 @@ describe('Financial and family administration flows (Browser)', function () {
             ->currentMonth()
             ->create(['expected_amount' => 4000]);
 
-        $page = loginBrowserAs($member);
+        $this->actingAs($member);
 
-        $page->navigate(route('pay.index', ['current_family' => $this->family->slug], false))
+        visit("/{$this->family->slug}/pay")
             ->assertSee('Pay Contributions')
             ->assertSee('Bank details are saved, but the Paystack bank code is missing')
             ->assertNoJavaScriptErrors();
