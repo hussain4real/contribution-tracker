@@ -70,6 +70,15 @@ test('family switching updates url defaults and legacy family mirrors', function
         ->and(route('dashboard', absolute: false))->toBe("/{$secondaryFamily->slug}/dashboard");
 });
 
+test('legacy dashboard path redirects installed pwa launches to the current family dashboard', function () {
+    $family = Family::factory()->create(['name' => 'PWA Launch Family']);
+    $user = User::factory()->admin()->create(['family_id' => $family->id]);
+
+    $this->actingAs($user)
+        ->get(route('legacy.dashboard'))
+        ->assertRedirect("/{$family->slug}/dashboard");
+});
+
 test('member lists use family memberships after a member switches to another family', function () {
     $primaryFamily = Family::factory()->create(['name' => 'Primary Family']);
     $secondaryFamily = Family::factory()->create(['name' => 'Secondary Family']);

@@ -53,12 +53,14 @@ class MemberPaymentController extends Controller
 
         $family = $user->family;
         $paystackPublicKey = $this->stringConfig('services.paystack.public_key');
+        $bankSetupStatus = $this->bankSetupStatus($family, $paystackPublicKey);
 
         return Inertia::render('Pay/Index', [
             'pending_contributions' => $pendingContributions,
             'category_amount' => $user->getMonthlyAmount() ?? 0,
             'formatted_amount' => CurrencyFormatter::format($user->getMonthlyAmount() ?? 0, $family instanceof Family ? $family->currency : null),
-            'has_paystack' => $family instanceof Family && $family->hasBankDetails() && $paystackPublicKey !== '',
+            'has_paystack' => $bankSetupStatus === 'ready',
+            'bank_setup_status' => $bankSetupStatus,
             'paystack_public_key' => $paystackPublicKey,
         ]);
     }
@@ -244,6 +246,25 @@ class MemberPaymentController extends Controller
         $value = config($key);
 
         return is_string($value) ? $value : '';
+    }
+
+    private function bankSetupStatus(?Family $family, string $paystackPublicKey): string
+    {
+        if (! $family instanceof Family) {
+            return 'missing_bank_details';
+        }
+
+        if (! $family->hasBankDetails()) {
+            return filled($family->bank_name) || filled($family->account_name) || filled($family->account_number)
+                ? 'incomplete_bank_details'
+                : 'missing_bank_details';
+        }
+
+        if ($paystackPublicKey === '') {
+            return 'missing_paystack_key';
+        }
+
+        return 'ready';
     }
 
     /**
