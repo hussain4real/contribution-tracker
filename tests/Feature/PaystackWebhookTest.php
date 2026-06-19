@@ -6,7 +6,9 @@ use App\Enums\TransactionStatus;
 use App\Enums\TransactionType;
 use App\Http\Controllers\PaystackWebhookController;
 use App\Models\Contribution;
+use App\Models\Expense;
 use App\Models\Family;
+use App\Models\Payment;
 use App\Models\PaystackTransaction;
 use App\Models\User;
 
@@ -15,6 +17,11 @@ beforeEach(function () {
         'services.paystack.secret_key' => 'sk_test_secret',
         'services.paystack.base_url' => 'https://api.paystack.co',
         'services.paystack.webhook_secret' => 'whsec_test123',
+        'services.paystack.fee_policy' => 'payer_pays',
+        'services.paystack.local_fee_basis_points' => 150,
+        'services.paystack.local_fee_fixed_kobo' => 10_000,
+        'services.paystack.local_fee_fixed_waiver_threshold_kobo' => 250_000,
+        'services.paystack.local_fee_cap_kobo' => 200_000,
     ]);
 });
 
@@ -52,6 +59,10 @@ it('processes charge.success for contribution payment', function () {
         'family_id' => $family->id,
         'type' => TransactionType::Contribution,
         'amount' => 4000,
+        'gross_amount_kobo' => 416_244,
+        'estimated_fee_kobo' => 16_244,
+        'settled_amount_kobo' => 400_000,
+        'fee_policy' => 'payer_pays',
         'status' => TransactionStatus::Pending,
         'metadata' => [
             'contribution_ids' => [$contribution->id],
@@ -64,7 +75,8 @@ it('processes charge.success for contribution payment', function () {
         'event' => 'charge.success',
         'data' => [
             'reference' => 'TXN_TEST001',
-            'amount' => 400000, // kobo
+            'amount' => 416244, // gross kobo
+            'fees' => 16244,
             'paid_at' => now()->toDateString(),
             'status' => 'success',
         ],
@@ -75,7 +87,10 @@ it('processes charge.success for contribution payment', function () {
     ])->assertSuccessful();
 
     $transaction->refresh();
-    expect($transaction->status)->toBe(TransactionStatus::Success);
+    expect($transaction->status)->toBe(TransactionStatus::Success)
+        ->and($transaction->actual_fee_kobo)->toBe(16_244)
+        ->and($transaction->settled_amount_kobo)->toBe(400_000)
+        ->and(Payment::where('contribution_id', $contribution->id)->sum('amount'))->toBe(4000);
 });
 
 it('prevents double processing of charge.success', function () {
@@ -106,6 +121,60 @@ it('prevents double processing of charge.success', function () {
     // Should still be success, not re-processed
     $transaction->refresh();
     expect($transaction->status)->toBe(TransactionStatus::Success);
+});
+
+it('records a Paystack fee expense when webhook settlement is short', function () {
+    $family = Family::factory()->create([
+        'paystack_subaccount_code' => 'ACCT_test',
+    ]);
+    $member = User::factory()->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->create([
+        'family_id' => $family->id,
+        'user_id' => $member->id,
+        'expected_amount' => 4000,
+        'year' => now()->year,
+        'month' => now()->month,
+    ]);
+    $transaction = PaystackTransaction::create([
+        'reference' => 'TXN_WEBHOOK_SHORTFALL',
+        'user_id' => $member->id,
+        'family_id' => $family->id,
+        'type' => TransactionType::Contribution,
+        'amount' => 4000,
+        'gross_amount_kobo' => 416_244,
+        'estimated_fee_kobo' => 16_244,
+        'settled_amount_kobo' => 400_000,
+        'fee_policy' => 'payer_pays',
+        'status' => TransactionStatus::Pending,
+        'metadata' => [
+            'contribution_ids' => [$contribution->id],
+            'target_year' => $contribution->year,
+            'target_month' => $contribution->month,
+        ],
+    ]);
+
+    $payload = encodeJsonPayload([
+        'event' => 'charge.success',
+        'data' => [
+            'reference' => 'TXN_WEBHOOK_SHORTFALL',
+            'amount' => 416244,
+            'fees' => 17244,
+            'paid_at' => now()->toDateString(),
+            'status' => 'success',
+        ],
+    ]);
+
+    $this->postJson(route('webhooks.paystack'), decodeJsonObject($payload), [
+        'X-Paystack-Signature' => signPayload($payload),
+    ])->assertSuccessful();
+
+    $expense = Expense::query()->where('family_id', $family->id)->firstOrFail();
+
+    expect($transaction->refresh()->settled_amount_kobo)->toBe(399_000)
+        ->and($transaction->actual_fee_kobo)->toBe(17_244)
+        ->and(Payment::where('contribution_id', $contribution->id)->sum('amount'))->toBe(4000)
+        ->and($expense->amount)->toBe(10)
+        ->and($expense->description)->toBe('Paystack processing fee shortfall for transaction TXN_WEBHOOK_SHORTFALL');
 });
 
 it('treats non-pending matching charge.success transactions as already processed', function () {
@@ -192,6 +261,8 @@ it('rejects charge.success with amount mismatch', function () {
         'family_id' => $family->id,
         'type' => TransactionType::Contribution,
         'amount' => 4000,
+        'gross_amount_kobo' => 416_244,
+        'estimated_fee_kobo' => 16_244,
         'status' => TransactionStatus::Pending,
     ]);
 
@@ -199,7 +270,8 @@ it('rejects charge.success with amount mismatch', function () {
         'event' => 'charge.success',
         'data' => [
             'reference' => 'TXN_MISMATCH',
-            'amount' => 200000, // Wrong amount (2000 Naira in kobo, expected 4000)
+            'amount' => 400000, // Wrong gross amount (expected 416244)
+            'fees' => 16244,
         ],
     ]);
 

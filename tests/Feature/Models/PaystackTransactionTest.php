@@ -18,6 +18,11 @@ it('casts transaction fields and exposes relationships', function () {
         'family_id' => $family->id,
         'type' => TransactionType::Subscription,
         'amount' => '5000',
+        'gross_amount_kobo' => '516000',
+        'estimated_fee_kobo' => '16000',
+        'actual_fee_kobo' => '15950',
+        'settled_amount_kobo' => '500050',
+        'fee_policy' => 'payer_pays',
         'status' => TransactionStatus::Pending,
         'paystack_response' => ['status' => true],
         'metadata' => ['plan' => 'family'],
@@ -26,6 +31,13 @@ it('casts transaction fields and exposes relationships', function () {
     expect($transaction->type)->toBe(TransactionType::Subscription)
         ->and($transaction->status)->toBe(TransactionStatus::Pending)
         ->and($transaction->amount)->toBe(5000)
+        ->and($transaction->gross_amount_kobo)->toBe(516000)
+        ->and($transaction->estimated_fee_kobo)->toBe(16000)
+        ->and($transaction->actual_fee_kobo)->toBe(15950)
+        ->and($transaction->settled_amount_kobo)->toBe(500050)
+        ->and($transaction->fee_policy)->toBe('payer_pays')
+        ->and($transaction->expectedGrossAmountKobo())->toBe(516000)
+        ->and($transaction->contributionAmountKobo())->toBe(500000)
         ->and($transaction->paystack_response)->toBe(['status' => true])
         ->and($transaction->metadata)->toBe(['plan' => 'family'])
         ->and($transaction->user()->firstOrFail()->is($user))->toBeTrue()

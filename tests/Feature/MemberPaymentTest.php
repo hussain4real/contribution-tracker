@@ -5,12 +5,14 @@ declare(strict_types=1);
 use App\Enums\TransactionStatus;
 use App\Enums\TransactionType;
 use App\Models\Contribution;
+use App\Models\Expense;
 use App\Models\Family;
 use App\Models\FamilyCategory;
 use App\Models\Payment;
 use App\Models\PaystackTransaction;
 use App\Models\PlatformPlan;
 use App\Models\User;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -19,6 +21,11 @@ beforeEach(function () {
         'services.paystack.secret_key' => 'sk_test_secret',
         'services.paystack.public_key' => 'pk_test_public',
         'services.paystack.base_url' => 'https://api.paystack.co',
+        'services.paystack.fee_policy' => 'payer_pays',
+        'services.paystack.local_fee_basis_points' => 150,
+        'services.paystack.local_fee_fixed_kobo' => 10_000,
+        'services.paystack.local_fee_fixed_waiver_threshold_kobo' => 250_000,
+        'services.paystack.local_fee_cap_kobo' => 200_000,
     ]);
 
     // Create a free plan so the subscription middleware doesn't block
@@ -145,6 +152,8 @@ it('marks online payments as ready when bank details and paystack key are config
             ->where('has_paystack', true)
             ->where('bank_setup_status', 'ready')
             ->where('paystack_public_key', 'pk_test_public')
+            ->where('paystack_fee.policy', 'payer_pays')
+            ->where('paystack_fee.basis_points', 150)
         );
 });
 
@@ -211,12 +220,53 @@ it('initiates a payment for selected contributions', function () {
         'expected_amount' => 4000,
     ]);
 
-    $this->actingAs($member)
-        ->postJson(route('pay.initiate'), [
-            'contribution_ids' => [$contribution->id],
-        ])
+    $this->actingAs($member);
+
+    $response = $this->postJson(route('pay.initiate'), [
+        'contribution_ids' => [$contribution->id],
+    ]);
+
+    $response
         ->assertSuccessful()
-        ->assertJsonStructure(['access_code', 'authorization_url', 'reference']);
+        ->assertJsonStructure(['access_code', 'authorization_url', 'reference'])
+        ->assertJson([
+            'contribution_amount_kobo' => 400_000,
+            'gross_amount_kobo' => 416_244,
+            'estimated_fee_kobo' => 16_244,
+        ]);
+
+    $responsePayload = $response->json();
+
+    if (! is_array($responsePayload)) {
+        throw new RuntimeException('Expected Paystack initiation response to be a JSON object.');
+    }
+
+    $reference = stringValue($responsePayload, 'reference');
+
+    Http::assertSent(function (Request $request) use ($family, $member, $reference): bool {
+        $data = $request->data();
+        $metadata = $data['metadata'] ?? [];
+
+        return str_ends_with($request->url(), '/transaction/initialize')
+            && stringValue($data, 'email') === $member->email
+            && intValue($data, 'amount') === 416_244
+            && stringValue($data, 'reference') === $reference
+            && stringValue($data, 'subaccount') === $family->paystack_subaccount_code
+            && stringValue($data, 'bearer') === 'subaccount'
+            && is_array($metadata)
+            && intValue($metadata, 'contribution_amount_kobo') === 400_000
+            && intValue($metadata, 'gross_amount_kobo') === 416_244
+            && intValue($metadata, 'estimated_fee_kobo') === 16_244
+            && stringValue($metadata, 'fee_policy') === 'payer_pays';
+    });
+
+    $transaction = PaystackTransaction::where('reference', $reference)->firstOrFail();
+
+    expect($transaction->amount)->toBe(4000)
+        ->and($transaction->gross_amount_kobo)->toBe(416_244)
+        ->and($transaction->estimated_fee_kobo)->toBe(16_244)
+        ->and($transaction->settled_amount_kobo)->toBe(400_000)
+        ->and($transaction->fee_policy)->toBe('payer_pays');
 });
 
 it('marks the transaction failed when paystack initialization fails', function () {
@@ -481,7 +531,8 @@ it('allocates a successful callback payment', function () {
             'message' => 'Verification successful',
             'data' => [
                 'status' => 'success',
-                'amount' => 400000,
+                'amount' => 416244,
+                'fees' => 16244,
                 'reference' => 'TXN_SUCCESS',
                 'channel' => 'card',
                 'currency' => 'NGN',
@@ -504,6 +555,10 @@ it('allocates a successful callback payment', function () {
         'family_id' => $family->id,
         'type' => TransactionType::Contribution,
         'amount' => 4000,
+        'gross_amount_kobo' => 416_244,
+        'estimated_fee_kobo' => 16_244,
+        'settled_amount_kobo' => 400_000,
+        'fee_policy' => 'payer_pays',
         'status' => TransactionStatus::Pending,
         'metadata' => [
             'contribution_ids' => [$contribution->id],
@@ -518,7 +573,114 @@ it('allocates a successful callback payment', function () {
         ->assertSessionHas('success', 'Payment successful! Your contributions have been updated.');
 
     expect($transaction->refresh()->status)->toBe(TransactionStatus::Success)
+        ->and($transaction->actual_fee_kobo)->toBe(16_244)
+        ->and($transaction->settled_amount_kobo)->toBe(400_000)
+        ->and(Expense::query()->where('family_id', $family->id)->exists())->toBeFalse()
         ->and(Payment::where('contribution_id', $contribution->id)->sum('amount'))->toBe(4000);
+});
+
+it('records only the settlement shortfall as a Paystack fee expense', function () {
+    Http::fake([
+        'api.paystack.co/transaction/verify/TXN_SHORTFALL' => Http::response([
+            'status' => true,
+            'message' => 'Verification successful',
+            'data' => [
+                'status' => 'success',
+                'amount' => 416244,
+                'fees' => 17244,
+                'reference' => 'TXN_SHORTFALL',
+                'channel' => 'card',
+                'currency' => 'NGN',
+                'paid_at' => '2026-05-11',
+                'metadata' => [],
+            ],
+        ]),
+    ]);
+
+    $family = Family::factory()->create([
+        'bank_name' => 'Kuda Bank',
+        'bank_code' => '090267',
+        'account_number' => '1234567890',
+    ]);
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
+    $transaction = PaystackTransaction::create([
+        'reference' => 'TXN_SHORTFALL',
+        'user_id' => $member->id,
+        'family_id' => $family->id,
+        'type' => TransactionType::Contribution,
+        'amount' => 4000,
+        'gross_amount_kobo' => 416_244,
+        'estimated_fee_kobo' => 16_244,
+        'settled_amount_kobo' => 400_000,
+        'fee_policy' => 'payer_pays',
+        'status' => TransactionStatus::Pending,
+        'metadata' => [
+            'contribution_ids' => [$contribution->id],
+            'target_year' => $contribution->year,
+            'target_month' => $contribution->month,
+        ],
+    ]);
+
+    $this->actingAs($member)
+        ->get(route('pay.callback', ['reference' => 'TXN_SHORTFALL']))
+        ->assertRedirect(route('pay.index'))
+        ->assertSessionHas('success', 'Payment successful! Your contributions have been updated.');
+
+    $expense = Expense::query()->where('family_id', $family->id)->firstOrFail();
+
+    expect($transaction->refresh()->settled_amount_kobo)->toBe(399_000)
+        ->and($transaction->actual_fee_kobo)->toBe(17_244)
+        ->and(Payment::where('contribution_id', $contribution->id)->sum('amount'))->toBe(4000)
+        ->and($expense->amount)->toBe(10)
+        ->and($expense->description)->toBe('Paystack processing fee shortfall for transaction TXN_SHORTFALL');
+});
+
+it('rejects successful callbacks when the verified gross amount does not match', function () {
+    Http::fake([
+        'api.paystack.co/transaction/verify/TXN_BAD_AMOUNT' => Http::response([
+            'status' => true,
+            'message' => 'Verification successful',
+            'data' => [
+                'status' => 'success',
+                'amount' => 400000,
+                'fees' => 16244,
+                'reference' => 'TXN_BAD_AMOUNT',
+                'paid_at' => '2026-05-11',
+            ],
+        ]),
+    ]);
+
+    $family = Family::factory()->create([
+        'bank_name' => 'Kuda Bank',
+        'bank_code' => '090267',
+        'account_number' => '1234567890',
+    ]);
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
+    $transaction = PaystackTransaction::create([
+        'reference' => 'TXN_BAD_AMOUNT',
+        'user_id' => $member->id,
+        'family_id' => $family->id,
+        'type' => TransactionType::Contribution,
+        'amount' => 4000,
+        'gross_amount_kobo' => 416_244,
+        'estimated_fee_kobo' => 16_244,
+        'status' => TransactionStatus::Pending,
+        'metadata' => [
+            'contribution_ids' => [$contribution->id],
+            'target_year' => $contribution->year,
+            'target_month' => $contribution->month,
+        ],
+    ]);
+
+    $this->actingAs($member)
+        ->get(route('pay.callback', ['reference' => 'TXN_BAD_AMOUNT']))
+        ->assertRedirect(route('pay.index'))
+        ->assertSessionHas('error', 'Payment amount could not be verified. Please contact support if you were charged.');
+
+    expect($transaction->refresh()->status)->toBe(TransactionStatus::Failed)
+        ->and(Payment::where('contribution_id', $contribution->id)->exists())->toBeFalse();
 });
 
 it('handles successful callbacks that were already processed', function () {

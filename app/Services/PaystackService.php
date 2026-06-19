@@ -30,7 +30,7 @@ class PaystackService
     /**
      * Initialize a transaction.
      *
-     * @param  array{email: string, amount: int, reference?: string, callback_url?: string, subaccount?: string, metadata?: array<string, mixed>}  $data
+     * @param  array{email: string, amount: int, reference?: string, callback_url?: string, subaccount?: string, bearer?: string, metadata?: array<string, mixed>}  $data
      * @return array<string, mixed>
      */
     public function initializeTransaction(array $data): array
