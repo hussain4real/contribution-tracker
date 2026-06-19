@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\TransactionStatus;
 use App\Enums\TransactionType;
+use App\Models\Expense;
 use App\Models\Family;
 use App\Models\PaystackTransaction;
 use App\Models\User;
@@ -71,9 +72,9 @@ class PaystackWebhookController extends Controller
             return response()->json(['message' => 'Already processed']);
         }
 
-        // Verify amount matches (Paystack sends amount in kobo, we store in Naira)
+        // Verify amount matches the gross Paystack charge in kobo.
         $paystackAmountKobo = is_numeric($data['amount'] ?? null) ? (int) $data['amount'] : 0;
-        $expectedAmountKobo = $transaction->amount * 100;
+        $expectedAmountKobo = $transaction->expectedGrossAmountKobo();
         if ($paystackAmountKobo !== $expectedAmountKobo) {
             Log::warning('Paystack webhook: amount mismatch', [
                 'reference' => $reference,
@@ -81,21 +82,21 @@ class PaystackWebhookController extends Controller
                 'received_kobo' => $paystackAmountKobo,
             ]);
 
-            $transaction->update([
-                'status' => TransactionStatus::Failed,
-                'paystack_response' => $data,
-            ]);
+            $attributes = $this->paystackSettlementAttributes($transaction, $data);
+            $attributes['status'] = TransactionStatus::Failed;
+
+            $transaction->update($attributes);
 
             return response()->json(['message' => 'Amount mismatch'], 400);
         }
 
         // Atomic update to prevent race condition with callback
+        $attributes = $this->paystackSettlementAttributes($transaction, $data, forQuery: true);
+        $attributes['status'] = TransactionStatus::Success;
+
         $updated = PaystackTransaction::where('reference', $reference)
             ->where('status', TransactionStatus::Pending)
-            ->update([
-                'status' => TransactionStatus::Success,
-                'paystack_response' => json_encode($data),
-            ]);
+            ->update($attributes);
 
         if ($updated === 0) {
             return response()->json(['message' => 'Already processed']);
@@ -137,6 +138,8 @@ class PaystackWebhookController extends Controller
             targetYear: is_numeric($targetYear) ? (int) $targetYear : null,
             targetMonth: is_numeric($targetMonth) ? (int) $targetMonth : null,
         );
+
+        $this->recordSettlementShortfallExpense($transaction, $member, $data);
     }
 
     /**
@@ -233,5 +236,58 @@ class PaystackWebhookController extends Controller
         }
 
         return $items;
+    }
+
+    private function nullableInt(mixed $value): ?int
+    {
+        return is_numeric($value) ? (int) $value : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<model-property<PaystackTransaction>, mixed>
+     */
+    private function paystackSettlementAttributes(PaystackTransaction $transaction, array $data, bool $forQuery = false): array
+    {
+        $grossAmountKobo = $this->nullableInt($data['amount'] ?? null) ?? $transaction->expectedGrossAmountKobo();
+        $actualFeeKobo = $this->nullableInt($data['fees'] ?? null);
+        $effectiveFeeKobo = $actualFeeKobo
+            ?? $transaction->estimated_fee_kobo
+            ?? max(0, $grossAmountKobo - $transaction->contributionAmountKobo());
+
+        $attributes = [
+            'paystack_response' => $forQuery ? json_encode($data) : $data,
+            'gross_amount_kobo' => $grossAmountKobo,
+            'settled_amount_kobo' => max(0, $grossAmountKobo - $effectiveFeeKobo),
+        ];
+
+        if ($actualFeeKobo !== null) {
+            $attributes['actual_fee_kobo'] = $actualFeeKobo;
+        }
+
+        return $attributes;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function recordSettlementShortfallExpense(PaystackTransaction $transaction, User $member, array $data): void
+    {
+        $settledAmountKobo = $transaction->settled_amount_kobo ?? $transaction->expectedGrossAmountKobo();
+        $shortfallKobo = $transaction->contributionAmountKobo() - $settledAmountKobo;
+
+        if ($shortfallKobo <= 0) {
+            return;
+        }
+
+        $paidAt = $data['paid_at'] ?? now()->toDateString();
+
+        Expense::create([
+            'family_id' => $transaction->family_id,
+            'amount' => intdiv($shortfallKobo + 99, 100),
+            'description' => "Paystack processing fee shortfall for transaction {$transaction->reference}",
+            'spent_at' => is_scalar($paidAt) ? (string) $paidAt : now()->toDateString(),
+            'recorded_by' => $member->id,
+        ]);
     }
 }

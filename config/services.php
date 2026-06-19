@@ -59,6 +59,11 @@ return [
         'public_key' => env('PAYSTACK_PUBLIC_KEY'),
         'webhook_secret' => env('PAYSTACK_WEBHOOK_SECRET'),
         'base_url' => env('PAYSTACK_BASE_URL', 'https://api.paystack.co'),
+        'fee_policy' => env('PAYSTACK_FEE_POLICY', 'payer_pays'),
+        'local_fee_basis_points' => (int) env('PAYSTACK_LOCAL_FEE_BASIS_POINTS', 150),
+        'local_fee_fixed_kobo' => (int) env('PAYSTACK_LOCAL_FEE_FIXED_KOBO', 10000),
+        'local_fee_fixed_waiver_threshold_kobo' => (int) env('PAYSTACK_LOCAL_FEE_FIXED_WAIVER_THRESHOLD_KOBO', 250000),
+        'local_fee_cap_kobo' => (int) env('PAYSTACK_LOCAL_FEE_CAP_KOBO', 200000),
     ],
 
     'whatsapp' => [

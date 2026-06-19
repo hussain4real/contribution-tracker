@@ -26,6 +26,14 @@ interface PendingContribution {
     period_label: string;
 }
 
+interface PaystackFeeConfig {
+    policy: string;
+    basis_points: number;
+    fixed_kobo: number;
+    waiver_threshold_kobo: number;
+    cap_kobo: number;
+}
+
 interface Props {
     pending_contributions?: PendingContribution[];
     category_amount?: number;
@@ -37,6 +45,7 @@ interface Props {
         | 'incomplete_bank_details'
         | 'missing_paystack_key';
     paystack_public_key?: string;
+    paystack_fee?: PaystackFeeConfig;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -46,6 +55,13 @@ const props = withDefaults(defineProps<Props>(), {
     has_paystack: false,
     bank_setup_status: 'missing_bank_details',
     paystack_public_key: '',
+    paystack_fee: () => ({
+        policy: 'payer_pays',
+        basis_points: 150,
+        fixed_kobo: 10000,
+        waiver_threshold_kobo: 250000,
+        cap_kobo: 200000,
+    }),
 });
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -62,6 +78,75 @@ const totalSelected = computed(() => {
         .filter((c) => selectedIds.value.includes(c.id))
         .reduce((sum, c) => sum + c.balance, 0);
 });
+
+const selectedContributionKobo = computed(() => {
+    return Math.max(0, Math.round(totalSelected.value * 100));
+});
+
+const paystackFeeForGrossAmountKobo = (grossAmountKobo: number): number => {
+    if (grossAmountKobo <= 0) {
+        return 0;
+    }
+
+    const percentageFee = Math.ceil(
+        (grossAmountKobo * props.paystack_fee.basis_points) / 10000,
+    );
+    const fixedFee =
+        grossAmountKobo < props.paystack_fee.waiver_threshold_kobo
+            ? 0
+            : props.paystack_fee.fixed_kobo;
+
+    return Math.min(percentageFee + fixedFee, props.paystack_fee.cap_kobo);
+};
+
+const grossAmountKobo = computed(() => {
+    const targetAmountKobo = selectedContributionKobo.value;
+
+    if (targetAmountKobo <= 0) {
+        return 0;
+    }
+
+    let low = targetAmountKobo;
+    let high =
+        targetAmountKobo +
+        Math.max(
+            paystackFeeForGrossAmountKobo(targetAmountKobo),
+            props.paystack_fee.fixed_kobo,
+            props.paystack_fee.cap_kobo,
+        );
+    let attempts = 0;
+
+    while (
+        high - paystackFeeForGrossAmountKobo(high) < targetAmountKobo &&
+        attempts < 32
+    ) {
+        high *= 2;
+        attempts += 1;
+    }
+
+    while (low < high) {
+        const midpoint = Math.floor((low + high) / 2);
+
+        if (
+            midpoint - paystackFeeForGrossAmountKobo(midpoint) >=
+            targetAmountKobo
+        ) {
+            high = midpoint;
+        } else {
+            low = midpoint + 1;
+        }
+    }
+
+    return low;
+});
+
+const estimatedFeeKobo = computed(() => {
+    return Math.max(0, grossAmountKobo.value - selectedContributionKobo.value);
+});
+
+const formatKobo = (amountKobo: number) => {
+    return formatAmount(amountKobo / 100);
+};
 
 const toggleContribution = (id: number, checked: boolean) => {
     if (checked) {
@@ -209,8 +294,37 @@ const payWithPaystack = async () => {
                         v-if="selectedIds.length > 0"
                         class="text-sm font-medium"
                     >
-                        Total: {{ formatAmount(totalSelected) }}
+                        Contribution:
+                        {{ formatAmount(totalSelected) }}
                     </p>
+                </div>
+
+                <div
+                    v-if="selectedIds.length > 0"
+                    class="space-y-2 rounded-lg border bg-muted/30 p-4 text-sm"
+                >
+                    <div class="flex items-center justify-between gap-4">
+                        <span class="text-muted-foreground">
+                            Contribution due
+                        </span>
+                        <span class="font-medium">
+                            {{ formatAmount(totalSelected) }}
+                        </span>
+                    </div>
+                    <div class="flex items-center justify-between gap-4">
+                        <span class="text-muted-foreground">
+                            Paystack fee
+                        </span>
+                        <span class="font-medium">
+                            {{ formatKobo(estimatedFeeKobo) }}
+                        </span>
+                    </div>
+                    <div
+                        class="flex items-center justify-between gap-4 border-t pt-2 text-base font-semibold"
+                    >
+                        <span>Total to pay</span>
+                        <span>{{ formatKobo(grossAmountKobo) }}</span>
+                    </div>
                 </div>
 
                 <div class="space-y-2">
@@ -282,7 +396,7 @@ const payWithPaystack = async () => {
                                 ? 'Processing...'
                                 : selectedIds.length === 0
                                   ? 'Select contributions to pay'
-                                  : `Pay ${formatAmount(totalSelected)} with Paystack`
+                                  : `Pay ${formatKobo(grossAmountKobo)} with Paystack`
                         }}
                     </Button>
                 </div>
