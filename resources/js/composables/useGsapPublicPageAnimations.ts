@@ -4,7 +4,7 @@ type AnimationContext = {
     revert: () => void;
 };
 
-type Gsap = typeof import('gsap')['gsap'];
+type Gsap = (typeof import('gsap'))['gsap'];
 
 type SectionTargets = {
     section: Element;
@@ -34,9 +34,7 @@ function uniqueElements(groups: Element[][]): Element[] {
     return [...new Set(groups.flat())];
 }
 
-export function useGsapPublicPageAnimations(
-    root: Ref<HTMLElement | null>,
-): {
+export function useGsapPublicPageAnimations(root: Ref<HTMLElement | null>): {
     animateDisclosureEnter: (element: Element, done: () => void) => void;
     animateDisclosureLeave: (element: Element, done: () => void) => void;
 } {

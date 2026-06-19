@@ -154,7 +154,6 @@ function memberLimitLabel(plan: Plan): string {
 function featureLabel(feature: string): string {
     return props.availableFeatures[feature] || feature;
 }
-
 </script>
 
 <template>
@@ -448,10 +447,7 @@ function featureLabel(feature: string): string {
         </section>
 
         <!-- Features Section -->
-        <section
-            id="section-features"
-            class="py-16 sm:py-24"
-        >
+        <section id="section-features" class="py-16 sm:py-24">
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div class="mx-auto max-w-2xl text-center">
                     <h2
@@ -595,10 +591,7 @@ function featureLabel(feature: string): string {
         </section>
 
         <!-- Testimonials Section -->
-        <section
-            id="section-testimonials"
-            class="py-16 sm:py-24"
-        >
+        <section id="section-testimonials" class="py-16 sm:py-24">
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div class="mx-auto max-w-2xl text-center">
                     <h2

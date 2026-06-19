@@ -135,19 +135,13 @@ const pricingPlanLadder = computed<PlanLadderItem[]>(() => {
             amount: plan.formatted_price,
             memberValue:
                 plan.max_members === null ? 'Custom' : String(plan.max_members),
-            memberCaption:
-                plan.max_members === null ? 'limit' : 'members',
+            memberCaption: plan.max_members === null ? 'limit' : 'members',
             recommended: plan.is_recommended,
         };
     });
 });
 
-const pricingFeatures = [
-    'Online payments',
-    'Reports',
-    'Exports',
-    'WhatsApp',
-];
+const pricingFeatures = ['Online payments', 'Reports', 'Exports', 'WhatsApp'];
 
 function cleanupAnimation(): void {
     animationContext?.revert();
