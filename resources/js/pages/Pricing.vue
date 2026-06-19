@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import ThemeToggle from '@/components/ThemeToggle.vue';
+import HeroGsapAnimation from '@/components/home/HeroGsapAnimation.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { useGsapPublicPageAnimations } from '@/composables/useGsapPublicPageAnimations';
 import { dashboard, home, login, register } from '@/routes';
 import { Head, Link } from '@inertiajs/vue3';
 import { ArrowRight, Check, Minus, Users } from '@lucide/vue';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 interface Plan {
     id: number;
@@ -43,6 +45,9 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const featureLabels = computed(() => props.available_features);
+const pageRoot = ref<HTMLElement | null>(null);
+
+useGsapPublicPageAnimations(pageRoot);
 
 const comparisonRows: ComparisonRow[] = [
     {
@@ -148,7 +153,7 @@ function comparisonCellLabel(plan: Plan, row: ComparisonRow): string {
 <template>
     <Head title="Pricing" />
 
-    <div class="min-h-svh bg-background text-foreground">
+    <div ref="pageRoot" class="min-h-svh bg-background text-foreground">
         <header
             class="sticky top-0 z-40 border-b bg-background/90 backdrop-blur"
         >
@@ -191,56 +196,111 @@ function comparisonCellLabel(plan: Plan, row: ComparisonRow): string {
         </header>
 
         <main>
-            <section class="border-b bg-muted/30 py-16 sm:py-20">
-                <div class="mx-auto max-w-4xl px-4 text-center sm:px-6">
-                    <Badge variant="secondary">Monthly NGN pricing</Badge>
-                    <h1
-                        class="mt-5 text-4xl font-bold tracking-tight sm:text-5xl"
-                    >
-                        Plans for families, groups, and organizations
-                    </h1>
-                    <p
-                        class="mx-auto mt-5 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg"
-                    >
-                        Start free, then upgrade when your group needs online
-                        payments, reports, exports, AI assistance, or WhatsApp
-                        workflows.
-                    </p>
-                    <div
-                        class="mt-8 flex flex-col justify-center gap-3 sm:flex-row"
-                    >
-                        <Link
-                            :href="
-                                $page.props.auth.user
-                                    ? dashboard()
-                                    : props.canRegister
-                                      ? register()
-                                      : login()
-                            "
+            <section
+                class="border-b border-emerald-100/80 bg-linear-to-br from-emerald-50 via-background to-sky-50 py-14 sm:py-20 dark:border-slate-800 dark:from-slate-950 dark:via-background dark:to-emerald-950/50"
+            >
+                <div
+                    class="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-[0.92fr_1.08fr] lg:px-8"
+                >
+                    <div class="max-w-2xl text-center lg:text-left">
+                        <Badge variant="secondary">Monthly NGN pricing</Badge>
+                        <h1
+                            class="mt-5 text-4xl font-bold tracking-tight sm:text-6xl"
                         >
-                            <Button size="lg" class="w-full sm:w-auto">
-                                {{
+                            Choose the plan that fits your group.
+                        </h1>
+                        <p
+                            class="mt-5 text-base leading-7 text-muted-foreground sm:text-lg"
+                        >
+                            Start free, then upgrade when your group needs
+                            online payments, reports, exports, AI assistance, or
+                            WhatsApp workflows.
+                        </p>
+                        <div
+                            class="mt-8 flex flex-col justify-center gap-3 sm:flex-row lg:justify-start"
+                        >
+                            <Link
+                                :href="
                                     $page.props.auth.user
-                                        ? 'Open dashboard'
-                                        : 'Create account'
-                                }}
-                                <ArrowRight class="size-4" />
-                            </Button>
-                        </Link>
-                        <Link :href="home()">
-                            <Button
-                                variant="outline"
-                                size="lg"
-                                class="w-full sm:w-auto"
+                                        ? dashboard()
+                                        : props.canRegister
+                                          ? register()
+                                          : login()
+                                "
                             >
-                                Back to overview
-                            </Button>
-                        </Link>
+                                <Button size="lg" class="w-full sm:w-auto">
+                                    {{
+                                        $page.props.auth.user
+                                            ? 'Open dashboard'
+                                            : 'Create account'
+                                    }}
+                                    <ArrowRight class="size-4" />
+                                </Button>
+                            </Link>
+                            <Link :href="home()">
+                                <Button
+                                    variant="outline"
+                                    size="lg"
+                                    class="w-full bg-background/70 sm:w-auto"
+                                >
+                                    Back to overview
+                                </Button>
+                            </Link>
+                        </div>
+
+                        <div
+                            class="mt-8 grid gap-3 text-left sm:grid-cols-3 lg:max-w-xl"
+                        >
+                            <div
+                                class="rounded-lg border bg-background/70 p-4 shadow-sm backdrop-blur"
+                            >
+                                <p
+                                    class="text-sm font-medium text-muted-foreground"
+                                >
+                                    Starts at
+                                </p>
+                                <p class="mt-1 text-xl font-bold">Free</p>
+                            </div>
+                            <div
+                                class="rounded-lg border border-emerald-300 bg-emerald-50/80 p-4 shadow-sm backdrop-blur dark:border-emerald-900 dark:bg-emerald-950/40"
+                            >
+                                <p
+                                    class="text-sm font-medium text-emerald-700 dark:text-emerald-300"
+                                >
+                                    Recommended
+                                </p>
+                                <p class="mt-1 text-xl font-bold">Family</p>
+                            </div>
+                            <div
+                                class="rounded-lg border bg-background/70 p-4 shadow-sm backdrop-blur"
+                            >
+                                <p
+                                    class="text-sm font-medium text-muted-foreground"
+                                >
+                                    Scales to
+                                </p>
+                                <p class="mt-1 text-xl font-bold">
+                                    250 members
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mx-auto w-full max-w-xl lg:mx-0 lg:max-w-none">
+                        <HeroGsapAnimation
+                            label="Animated FamilyFund pricing plan ladder"
+                            variant="pricing"
+                            :plans="props.plans"
+                        />
                     </div>
                 </div>
             </section>
 
-            <section class="py-12 sm:py-16">
+            <section
+                class="py-12 sm:py-16"
+                data-gsap-section
+                data-testid="pricing-plan-card-animation"
+            >
                 <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                     <div
                         class="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
@@ -249,6 +309,11 @@ function comparisonCellLabel(plan: Plan, row: ComparisonRow): string {
                         <div
                             v-for="plan in props.plans"
                             :key="plan.id"
+                            data-gsap-card
+                            data-gsap-hover
+                            :data-gsap-highlight="
+                                plan.is_recommended ? 'true' : undefined
+                            "
                             :class="[
                                 'relative flex min-h-[540px] flex-col rounded-lg border bg-card p-5 shadow-sm',
                                 plan.is_recommended
@@ -349,6 +414,7 @@ function comparisonCellLabel(plan: Plan, row: ComparisonRow): string {
                     </div>
 
                     <div
+                        data-gsap-reveal
                         class="mt-8 rounded-lg border bg-muted/30 p-5 text-sm leading-6 text-muted-foreground"
                     >
                         Subscription prices are final monthly platform prices.
@@ -359,7 +425,11 @@ function comparisonCellLabel(plan: Plan, row: ComparisonRow): string {
                 </div>
             </section>
 
-            <section class="border-t bg-muted/20 py-12 sm:py-16">
+            <section
+                class="border-t bg-muted/20 py-12 sm:py-16"
+                data-gsap-section
+                data-testid="pricing-comparison-animation"
+            >
                 <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                     <div class="max-w-3xl">
                         <Badge variant="secondary">Plans comparison</Badge>
@@ -377,6 +447,7 @@ function comparisonCellLabel(plan: Plan, row: ComparisonRow): string {
 
                     <div
                         class="mt-8 overflow-x-auto rounded-lg border bg-background"
+                        data-gsap-reveal
                     >
                         <table
                             class="min-w-[920px] table-fixed divide-y text-sm"
@@ -414,6 +485,7 @@ function comparisonCellLabel(plan: Plan, row: ComparisonRow): string {
                                     v-for="row in comparisonRows"
                                     :key="row.label"
                                     class="align-top"
+                                    data-gsap-row
                                 >
                                     <th scope="row" class="px-4 py-4 text-left">
                                         <span

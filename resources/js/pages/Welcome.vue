@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import ThemeToggle from '@/components/ThemeToggle.vue';
+import HeroGsapAnimation from '@/components/home/HeroGsapAnimation.vue';
 import { Button } from '@/components/ui/button';
+import { useGsapPublicPageAnimations } from '@/composables/useGsapPublicPageAnimations';
 import { dashboard, login, pricing, register } from '@/routes';
 import { Head, Link } from '@inertiajs/vue3';
 import { ArrowRight, CheckCircle2 } from '@lucide/vue';
-import { onMounted, onUnmounted, ref } from 'vue';
+import { ref } from 'vue';
 
 interface Plan {
     id: number;
@@ -133,6 +135,9 @@ const faqs = [
 ];
 
 const openFaqIndex = ref<number | null>(null);
+const pageRoot = ref<HTMLElement | null>(null);
+const { animateDisclosureEnter, animateDisclosureLeave } =
+    useGsapPublicPageAnimations(pageRoot);
 
 function toggleFaq(index: number): void {
     openFaqIndex.value = openFaqIndex.value === index ? null : index;
@@ -149,30 +154,6 @@ function memberLimitLabel(plan: Plan): string {
 function featureLabel(feature: string): string {
     return props.availableFeatures[feature] || feature;
 }
-
-const visibleSections = ref<Set<string>>(new Set());
-let observer: IntersectionObserver | null = null;
-
-onMounted(() => {
-    observer = new IntersectionObserver(
-        (entries) => {
-            entries.forEach((entry) => {
-                if (entry.isIntersecting) {
-                    visibleSections.value.add(entry.target.id);
-                }
-            });
-        },
-        { threshold: 0.1 },
-    );
-
-    document.querySelectorAll('[data-animate]').forEach((el) => {
-        observer?.observe(el);
-    });
-});
-
-onUnmounted(() => {
-    observer?.disconnect();
-});
 </script>
 
 <template>
@@ -182,6 +163,7 @@ onUnmounted(() => {
     </Head>
 
     <div
+        ref="pageRoot"
         class="min-h-screen bg-linear-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900"
     >
         <!-- Header -->
@@ -239,110 +221,118 @@ onUnmounted(() => {
         </header>
 
         <!-- Hero Section -->
-        <section class="relative overflow-hidden pt-32 pb-16 sm:pt-40 sm:pb-24">
-            <!-- Background decoration -->
-            <div class="absolute inset-0 -z-10 overflow-hidden">
-                <div
-                    class="absolute -top-40 right-0 h-125 w-125 rounded-full bg-linear-to-br from-emerald-400/20 to-teal-500/20 blur-3xl dark:from-emerald-400/10 dark:to-teal-500/10"
-                />
-                <div
-                    class="absolute top-40 -left-20 h-100 w-100 rounded-full bg-linear-to-br from-blue-400/20 to-indigo-500/20 blur-3xl dark:from-blue-400/10 dark:to-indigo-500/10"
-                />
-            </div>
-
+        <section
+            class="relative overflow-hidden border-b border-emerald-100/80 bg-linear-to-br from-emerald-50 via-white to-sky-50 pt-28 pb-12 sm:pt-32 sm:pb-16 dark:border-slate-800 dark:from-slate-950 dark:via-slate-950 dark:to-emerald-950/50"
+        >
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                <div class="mx-auto max-w-3xl text-center">
-                    <div
-                        class="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-1.5 text-sm font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                    >
-                        <span class="relative flex size-2">
-                            <span
-                                class="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75"
-                            ></span>
-                            <span
-                                class="relative inline-flex size-2 rounded-full bg-emerald-500"
-                            ></span>
-                        </span>
-                        Now tracking contributions
-                    </div>
-
-                    <h1
-                        class="text-4xl font-bold tracking-tight text-slate-900 sm:text-6xl dark:text-white"
-                    >
-                        Keep Your Family
-                        <span
-                            class="bg-linear-to-r from-emerald-600 to-teal-500 bg-clip-text text-transparent"
-                        >
-                            Financially United
-                        </span>
-                    </h1>
-
-                    <p
-                        class="mt-6 text-lg leading-8 text-slate-600 dark:text-slate-400"
-                    >
-                        A simple, transparent way to manage monthly family
-                        contributions. Track payments, view balances, and keep
-                        everyone accountable — all in one place.
-                    </p>
-
-                    <div
-                        class="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row"
-                    >
-                        <Link
-                            v-if="!$page.props.auth.user && props.canRegister"
-                            :href="register()"
-                        >
-                            <Button
-                                size="lg"
-                                class="w-full bg-linear-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-500/25 hover:from-emerald-700 hover:to-teal-700 sm:w-auto"
-                            >
-                                Start Tracking Today
-                                <ArrowRight class="size-4" />
-                            </Button>
-                        </Link>
-                        <Link
-                            v-else-if="$page.props.auth.user"
-                            :href="dashboard()"
-                        >
-                            <Button
-                                size="lg"
-                                class="w-full bg-linear-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-500/25 hover:from-emerald-700 hover:to-teal-700 sm:w-auto"
-                            >
-                                Go to Dashboard
-                                <ArrowRight class="size-4" />
-                            </Button>
-                        </Link>
-                        <Link v-if="!$page.props.auth.user" :href="pricing()">
-                            <Button
-                                variant="outline"
-                                size="lg"
-                                class="w-full border-slate-300 sm:w-auto dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
-                            >
-                                View Pricing
-                            </Button>
-                        </Link>
-                    </div>
-                </div>
-
-                <!-- Stats -->
-                <div class="mx-auto mt-16 max-w-4xl">
-                    <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <div
+                    class="grid items-center gap-10 lg:grid-cols-[0.95fr_1.05fr]"
+                >
+                    <div class="max-w-2xl text-center lg:text-left">
                         <div
-                            v-for="stat in stats"
-                            :key="stat.label"
-                            class="rounded-2xl border border-slate-200 bg-white/60 p-6 text-center backdrop-blur-sm transition-all hover:border-emerald-300 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900/60 dark:hover:border-emerald-700"
+                            class="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white/80 px-4 py-1.5 text-sm font-medium text-emerald-700 shadow-sm dark:border-emerald-800 dark:bg-slate-900/80 dark:text-emerald-300"
+                        >
+                            <span class="relative flex size-2">
+                                <span
+                                    class="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75"
+                                ></span>
+                                <span
+                                    class="relative inline-flex size-2 rounded-full bg-emerald-500"
+                                ></span>
+                            </span>
+                            Now tracking contributions
+                        </div>
+
+                        <h1
+                            class="text-5xl font-bold tracking-tight text-slate-950 sm:text-7xl dark:text-white"
+                        >
+                            FamilyFund
+                        </h1>
+
+                        <p
+                            class="mt-5 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl dark:text-slate-100"
+                        >
+                            Keep Your Family Financially United.
+                        </p>
+
+                        <p
+                            class="mt-5 text-lg leading-8 text-slate-600 dark:text-slate-300"
+                        >
+                            A simple, transparent way to manage monthly family
+                            contributions. Track payments, view balances, and
+                            keep everyone accountable in one shared workspace.
+                        </p>
+
+                        <div
+                            class="mt-10 flex flex-col items-center gap-4 sm:flex-row lg:items-start"
+                        >
+                            <Link
+                                v-if="
+                                    !$page.props.auth.user && props.canRegister
+                                "
+                                :href="register()"
+                            >
+                                <Button
+                                    size="lg"
+                                    class="w-full bg-linear-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-500/25 hover:from-emerald-700 hover:to-teal-700 sm:w-auto"
+                                >
+                                    Start Tracking Today
+                                    <ArrowRight class="size-4" />
+                                </Button>
+                            </Link>
+                            <Link
+                                v-else-if="$page.props.auth.user"
+                                :href="dashboard()"
+                            >
+                                <Button
+                                    size="lg"
+                                    class="w-full bg-linear-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-500/25 hover:from-emerald-700 hover:to-teal-700 sm:w-auto"
+                                >
+                                    Go to Dashboard
+                                    <ArrowRight class="size-4" />
+                                </Button>
+                            </Link>
+                            <Link
+                                v-if="!$page.props.auth.user"
+                                :href="pricing()"
+                            >
+                                <Button
+                                    variant="outline"
+                                    size="lg"
+                                    class="w-full border-slate-300 bg-white/70 sm:w-auto dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:bg-slate-800"
+                                >
+                                    View Pricing
+                                </Button>
+                            </Link>
+                        </div>
+
+                        <div
+                            class="mt-10 grid grid-cols-2 gap-3 text-left sm:grid-cols-4 lg:max-w-xl"
                         >
                             <div
-                                class="text-2xl font-bold text-emerald-600 sm:text-3xl dark:text-emerald-400"
+                                v-for="stat in stats"
+                                :key="stat.label"
+                                class="rounded-lg border border-white/80 bg-white/65 p-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/65"
                             >
-                                {{ stat.value }}
-                            </div>
-                            <div
-                                class="mt-1 text-sm text-slate-600 dark:text-slate-400"
-                            >
-                                {{ stat.label }}
+                                <div
+                                    class="text-xl font-bold text-emerald-600 dark:text-emerald-400"
+                                >
+                                    {{ stat.value }}
+                                </div>
+                                <div
+                                    class="mt-1 text-xs font-medium text-slate-600 dark:text-slate-400"
+                                >
+                                    {{ stat.label }}
+                                </div>
                             </div>
                         </div>
+                    </div>
+
+                    <div class="mx-auto w-full max-w-xl lg:mx-0 lg:max-w-none">
+                        <HeroGsapAnimation
+                            label="Animated FamilyFund contribution dashboard"
+                            variant="home"
+                        />
                     </div>
                 </div>
             </div>
@@ -352,17 +342,14 @@ onUnmounted(() => {
         <section
             v-if="props.pricingPreviewPlans.length"
             id="section-pricing"
-            data-animate
+            data-gsap-section
+            data-testid="home-pricing-preview-animation"
             class="border-y border-slate-200 bg-white py-16 dark:border-slate-800 dark:bg-slate-950"
-            :class="
-                visibleSections.has('section-pricing')
-                    ? 'animate-fade-in-up'
-                    : 'opacity-0'
-            "
         >
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div
                     class="flex flex-col justify-between gap-6 md:flex-row md:items-end"
+                    data-gsap-reveal
                 >
                     <div class="max-w-2xl">
                         <h2
@@ -389,6 +376,11 @@ onUnmounted(() => {
                     <div
                         v-for="plan in props.pricingPreviewPlans"
                         :key="plan.id"
+                        data-gsap-card
+                        data-gsap-hover
+                        :data-gsap-highlight="
+                            plan.is_recommended ? 'true' : undefined
+                        "
                         :class="[
                             'flex min-h-72 flex-col rounded-lg border p-5 shadow-sm transition-all',
                             plan.is_recommended
@@ -455,16 +447,7 @@ onUnmounted(() => {
         </section>
 
         <!-- Features Section -->
-        <section
-            id="section-features"
-            data-animate
-            class="py-16 sm:py-24"
-            :class="
-                visibleSections.has('section-features')
-                    ? 'animate-fade-in-up'
-                    : 'opacity-0'
-            "
-        >
+        <section id="section-features" class="py-16 sm:py-24">
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div class="mx-auto max-w-2xl text-center">
                     <h2
@@ -564,16 +547,12 @@ onUnmounted(() => {
         <!-- How It Works Section -->
         <section
             id="section-how-it-works"
-            data-animate
+            data-gsap-section
+            data-testid="home-steps-animation"
             class="border-t border-slate-200 bg-slate-50 py-16 sm:py-24 dark:border-slate-800 dark:bg-slate-900/50"
-            :class="
-                visibleSections.has('section-how-it-works')
-                    ? 'animate-fade-in-up'
-                    : 'opacity-0'
-            "
         >
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                <div class="mx-auto max-w-2xl text-center">
+                <div class="mx-auto max-w-2xl text-center" data-gsap-reveal>
                     <h2
                         class="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl dark:text-white"
                     >
@@ -588,6 +567,7 @@ onUnmounted(() => {
                     <div
                         v-for="step in steps"
                         :key="step.number"
+                        data-gsap-step
                         class="relative text-center"
                     >
                         <div
@@ -611,16 +591,7 @@ onUnmounted(() => {
         </section>
 
         <!-- Testimonials Section -->
-        <section
-            id="section-testimonials"
-            data-animate
-            class="py-16 sm:py-24"
-            :class="
-                visibleSections.has('section-testimonials')
-                    ? 'animate-fade-in-up'
-                    : 'opacity-0'
-            "
-        >
+        <section id="section-testimonials" class="py-16 sm:py-24">
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div class="mx-auto max-w-2xl text-center">
                     <h2
@@ -686,16 +657,12 @@ onUnmounted(() => {
         <!-- FAQ Section -->
         <section
             id="section-faq"
-            data-animate
+            data-gsap-section
+            data-testid="home-faq-animation"
             class="border-t border-slate-200 bg-slate-50 py-16 sm:py-24 dark:border-slate-800 dark:bg-slate-900/50"
-            :class="
-                visibleSections.has('section-faq')
-                    ? 'animate-fade-in-up'
-                    : 'opacity-0'
-            "
         >
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                <div class="mx-auto max-w-2xl text-center">
+                <div class="mx-auto max-w-2xl text-center" data-gsap-reveal>
                     <h2
                         class="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl dark:text-white"
                     >
@@ -709,7 +676,12 @@ onUnmounted(() => {
                 <div
                     class="mx-auto mt-12 max-w-3xl divide-y divide-slate-200 dark:divide-slate-700"
                 >
-                    <div v-for="(faq, index) in faqs" :key="index" class="py-5">
+                    <div
+                        v-for="(faq, index) in faqs"
+                        :key="index"
+                        class="py-5"
+                        data-gsap-row
+                    >
                         <button
                             @click="toggleFaq(index)"
                             class="flex w-full items-center justify-between text-left"
@@ -737,12 +709,9 @@ onUnmounted(() => {
                             </svg>
                         </button>
                         <Transition
-                            enter-active-class="transition duration-200 ease-out"
-                            enter-from-class="max-h-0 opacity-0"
-                            enter-to-class="max-h-40 opacity-100"
-                            leave-active-class="transition duration-150 ease-in"
-                            leave-from-class="max-h-40 opacity-100"
-                            leave-to-class="max-h-0 opacity-0"
+                            :css="false"
+                            @enter="animateDisclosureEnter"
+                            @leave="animateDisclosureLeave"
                         >
                             <div
                                 v-if="openFaqIndex === index"
@@ -762,6 +731,8 @@ onUnmounted(() => {
 
         <!-- CTA Section -->
         <section
+            data-gsap-section
+            data-testid="home-final-cta-animation"
             class="relative isolate overflow-hidden bg-linear-to-br from-emerald-600 to-teal-700 py-16 sm:py-24"
         >
             <div
@@ -769,7 +740,7 @@ onUnmounted(() => {
             />
 
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                <div class="mx-auto max-w-2xl text-center">
+                <div class="mx-auto max-w-2xl text-center" data-gsap-reveal>
                     <h2
                         class="text-3xl font-bold tracking-tight text-white sm:text-4xl"
                     >
@@ -779,7 +750,7 @@ onUnmounted(() => {
                         Join families who trust FamilyFund to manage their
                         contributions with transparency and ease.
                     </p>
-                    <div class="mt-10">
+                    <div class="mt-10" data-gsap-card data-gsap-hover>
                         <Link
                             v-if="!$page.props.auth.user && props.canRegister"
                             :href="register()"

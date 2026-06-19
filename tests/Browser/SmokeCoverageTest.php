@@ -11,12 +11,15 @@ use App\Models\Payment;
 use App\Models\PlatformPlan;
 use App\Models\User;
 use App\Models\WhatsAppMessage;
+use Database\Seeders\PlatformPlanSeeder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Laravel\Pennant\Feature;
 
 it('smokes public and guest authentication pages', function () {
+    $this->seed(PlatformPlanSeeder::class);
+
     $family = createBrowserFamily();
     $admin = createBrowserAdmin($family);
     $member = createBrowserMember($family);
@@ -28,8 +31,75 @@ it('smokes public and guest authentication pages', function () {
     $resetToken = Password::createToken($member);
 
     $page = visit(route('home'));
+    $assertPublicGsapSurface = function (int $minimumSectionCount) use ($page): array {
+        $result = $page->script(<<<'JS'
+            () => ({
+                heroCount: document.querySelectorAll('[data-testid="public-gsap-animation"]').length,
+                heroText: (document.querySelector('[data-testid="public-gsap-animation"]')?.textContent || '').replace(/\s+/g, ' ').trim(),
+                pricingPlanItems: Array.from(document.querySelectorAll('[data-testid="pricing-plan-ladder-item"]')).map((item) => ({
+                    slug: item.getAttribute('data-plan-slug'),
+                    name: item.getAttribute('data-plan-name'),
+                    amount: item.getAttribute('data-plan-amount'),
+                    memberValue: item.getAttribute('data-plan-member-value'),
+                    memberCaption: item.getAttribute('data-plan-member-caption'),
+                })),
+                sectionCount: document.querySelectorAll('[data-gsap-section]').length,
+                hoverCount: document.querySelectorAll('[data-gsap-hover]').length,
+                canvasCount: document.querySelectorAll('canvas').length,
+            })
+        JS);
+
+        if (! is_array($result)) {
+            throw new RuntimeException('Expected browser script to return public animation measurements.');
+        }
+
+        expect($result['heroCount'] ?? 0)->toBeGreaterThanOrEqual(1)
+            ->and($result['sectionCount'] ?? 0)->toBeGreaterThanOrEqual($minimumSectionCount)
+            ->and($result['hoverCount'] ?? 0)->toBeGreaterThanOrEqual(1)
+            ->and($result['canvasCount'] ?? 1)->toBe(0);
+
+        return $result;
+    };
 
     assertBrowserSmoke($page, 'Financially United');
+    $assertPublicGsapSurface(3);
+    navigateAndAssertBrowserSmoke($page, route('pricing'), 'Compare every plan feature');
+    $pricingSurface = $assertPublicGsapSurface(2);
+    $pricingHeroText = $pricingSurface['heroText'] ?? null;
+
+    if (! is_string($pricingHeroText)) {
+        throw new RuntimeException('Expected pricing hero text to be returned.');
+    }
+
+    $pricingPlanItems = $pricingSurface['pricingPlanItems'] ?? null;
+
+    if (! is_array($pricingPlanItems)) {
+        throw new RuntimeException('Expected pricing plan ladder items to be returned.');
+    }
+
+    $familyLadderPlan = collect($pricingPlanItems)->firstWhere('slug', 'family');
+    $growthLadderPlan = collect($pricingPlanItems)->firstWhere('slug', 'growth');
+
+    if (! is_array($familyLadderPlan) || ! is_array($growthLadderPlan)) {
+        throw new RuntimeException('Expected Family and Growth ladder plans to be present.');
+    }
+
+    expect($pricingHeroText)
+        ->toContain('Family')
+        ->toContain('₦3,000')
+        ->toContain('Growth')
+        ->toContain('₦7,500')
+        ->not->toContain('₦4k')
+        ->not->toContain('₦9k');
+
+    expect($familyLadderPlan['amount'] ?? null)
+        ->toBe('₦3,000')
+        ->and($familyLadderPlan['memberValue'] ?? null)->toBe('25')
+        ->and($familyLadderPlan['memberCaption'] ?? null)->toBe('members')
+        ->and($growthLadderPlan['amount'] ?? null)->toBe('₦7,500')
+        ->and($growthLadderPlan['memberValue'] ?? null)->toBe('75')
+        ->and($growthLadderPlan['memberCaption'] ?? null)->toBe('members');
+
     navigateAndAssertBrowserSmoke($page, route('privacy'), 'Privacy Policy');
     navigateAndAssertBrowserSmoke($page, route('terms'), 'Terms of Service');
     navigateAndAssertBrowserSmoke($page, route('data-deletion'), 'Data Deletion');
