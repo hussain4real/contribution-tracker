@@ -11,12 +11,15 @@ use App\Models\Payment;
 use App\Models\PlatformPlan;
 use App\Models\User;
 use App\Models\WhatsAppMessage;
+use Database\Seeders\PlatformPlanSeeder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Laravel\Pennant\Feature;
 
 it('smokes public and guest authentication pages', function () {
+    $this->seed(PlatformPlanSeeder::class);
+
     $family = createBrowserFamily();
     $admin = createBrowserAdmin($family);
     $member = createBrowserMember($family);
@@ -28,8 +31,30 @@ it('smokes public and guest authentication pages', function () {
     $resetToken = Password::createToken($member);
 
     $page = visit(route('home'));
+    $assertPublicGsapSurface = function (int $minimumSectionCount) use ($page): void {
+        $result = $page->script(<<<'JS'
+            () => ({
+                heroCount: document.querySelectorAll('[data-testid="public-gsap-animation"]').length,
+                sectionCount: document.querySelectorAll('[data-gsap-section]').length,
+                hoverCount: document.querySelectorAll('[data-gsap-hover]').length,
+                canvasCount: document.querySelectorAll('canvas').length,
+            })
+        JS);
+
+        if (! is_array($result)) {
+            throw new RuntimeException('Expected browser script to return public animation measurements.');
+        }
+
+        expect($result['heroCount'] ?? 0)->toBeGreaterThanOrEqual(1)
+            ->and($result['sectionCount'] ?? 0)->toBeGreaterThanOrEqual($minimumSectionCount)
+            ->and($result['hoverCount'] ?? 0)->toBeGreaterThanOrEqual(1)
+            ->and($result['canvasCount'] ?? 1)->toBe(0);
+    };
 
     assertBrowserSmoke($page, 'Financially United');
+    $assertPublicGsapSurface(3);
+    navigateAndAssertBrowserSmoke($page, route('pricing'), 'Compare every plan feature');
+    $assertPublicGsapSurface(2);
     navigateAndAssertBrowserSmoke($page, route('privacy'), 'Privacy Policy');
     navigateAndAssertBrowserSmoke($page, route('terms'), 'Terms of Service');
     navigateAndAssertBrowserSmoke($page, route('data-deletion'), 'Data Deletion');

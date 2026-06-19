@@ -24,3 +24,15 @@ it('launches installed pwas through the legacy dashboard redirect', function () 
 
     expect($contents)->toContain("start_url: '/dashboard'");
 });
+
+it('keeps marketing hero animations in bundled javascript instead of runtime asset caches', function () {
+    $contents = file_get_contents(__DIR__.'/../../vite.config.ts');
+
+    if ($contents === false) {
+        throw new RuntimeException('Unable to read Vite configuration.');
+    }
+
+    expect($contents)
+        ->not->toContain('interactive-assets-${CACHE_VERSION}')
+        ->toContain('static-resources-${CACHE_VERSION}');
+});
