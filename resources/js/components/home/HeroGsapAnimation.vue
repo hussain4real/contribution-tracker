@@ -12,10 +12,38 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 interface Props {
     label: string;
     variant?: 'home' | 'pricing';
+    plans?: PricingPlan[];
+}
+
+interface PricingPlan {
+    id: number;
+    name: string;
+    slug: string;
+    formatted_price: string;
+    max_members: number | null;
+    is_recommended: boolean;
+}
+
+type PlanTone = 'slate' | 'emerald' | 'sky' | 'teal';
+
+interface PlanDisplayHint {
+    height: string;
+    tone: PlanTone;
+}
+
+interface PlanLadderItem extends PlanDisplayHint {
+    key: string;
+    slug: string;
+    name: string;
+    amount: string;
+    memberValue: string;
+    memberCaption: string;
+    recommended: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
     variant: 'home',
+    plans: () => [],
 });
 
 type AnimationContext = {
@@ -41,37 +69,78 @@ const paymentRows = [
     { name: 'Maryam S.', amount: '₦12,000', status: 'Due' },
 ];
 
-const planLadder = [
+const fallbackPricingPlans: PricingPlan[] = [
     {
+        id: 0,
         name: 'Free',
-        amount: '₦0',
-        height: 'h-24',
-        members: '10',
-        tone: 'slate',
+        slug: 'free',
+        formatted_price: 'Free',
+        max_members: 5,
+        is_recommended: false,
     },
     {
+        id: 1,
         name: 'Family',
-        amount: '₦4k',
-        height: 'h-36',
-        members: '50',
-        tone: 'emerald',
-        recommended: true,
+        slug: 'family',
+        formatted_price: '₦3,000',
+        max_members: 25,
+        is_recommended: true,
     },
     {
+        id: 2,
         name: 'Growth',
-        amount: '₦9k',
-        height: 'h-48',
-        members: '150',
-        tone: 'sky',
+        slug: 'growth',
+        formatted_price: '₦7,500',
+        max_members: 75,
+        is_recommended: false,
     },
     {
-        name: 'Org',
-        amount: 'Custom',
-        height: 'h-56',
-        members: '250+',
-        tone: 'teal',
+        id: 3,
+        name: 'Organization',
+        slug: 'organization',
+        formatted_price: '₦20,000',
+        max_members: 250,
+        is_recommended: false,
     },
 ];
+
+const planDisplayHintsBySlug: Record<string, PlanDisplayHint> = {
+    free: { height: 'h-24', tone: 'slate' },
+    family: { height: 'h-36', tone: 'emerald' },
+    growth: { height: 'h-48', tone: 'sky' },
+    organization: { height: 'h-56', tone: 'teal' },
+};
+
+const fallbackPlanDisplayHints: PlanDisplayHint[] = [
+    { height: 'h-24', tone: 'slate' },
+    { height: 'h-36', tone: 'emerald' },
+    { height: 'h-48', tone: 'sky' },
+    { height: 'h-56', tone: 'teal' },
+];
+
+const pricingPlanLadder = computed<PlanLadderItem[]>(() => {
+    const plans = props.plans.length > 0 ? props.plans : fallbackPricingPlans;
+
+    return plans.map((plan, index) => {
+        const hint =
+            planDisplayHintsBySlug[plan.slug] ??
+            fallbackPlanDisplayHints[index] ??
+            fallbackPlanDisplayHints[fallbackPlanDisplayHints.length - 1];
+
+        return {
+            ...hint,
+            key: `${plan.slug}-${plan.id}`,
+            slug: plan.slug,
+            name: plan.name,
+            amount: plan.formatted_price,
+            memberValue:
+                plan.max_members === null ? 'Custom' : String(plan.max_members),
+            memberCaption:
+                plan.max_members === null ? 'limit' : 'members',
+            recommended: plan.is_recommended,
+        };
+    });
+});
 
 const pricingFeatures = [
     'Online payments',
@@ -299,9 +368,15 @@ onBeforeUnmount(() => {
                 data-gsap-reveal
             >
                 <div
-                    v-for="plan in planLadder"
-                    :key="plan.name"
+                    v-for="plan in pricingPlanLadder"
+                    :key="plan.key"
                     class="flex min-w-0 flex-col items-center gap-3"
+                    data-testid="pricing-plan-ladder-item"
+                    :data-plan-slug="plan.slug"
+                    :data-plan-name="plan.name"
+                    :data-plan-amount="plan.amount"
+                    :data-plan-member-value="plan.memberValue"
+                    :data-plan-member-caption="plan.memberCaption"
                 >
                     <div
                         class="relative flex w-full max-w-24 flex-col justify-end overflow-hidden rounded-lg border bg-white/85 p-2 shadow-sm dark:bg-slate-900/85"
@@ -331,9 +406,11 @@ onBeforeUnmount(() => {
                             }"
                         >
                             <p class="text-[11px] font-semibold">
-                                {{ plan.members }}
+                                {{ plan.memberValue }}
                             </p>
-                            <p class="mt-1 text-[10px]">members</p>
+                            <p class="mt-1 text-[10px]">
+                                {{ plan.memberCaption }}
+                            </p>
                         </div>
                     </div>
                     <div class="text-center">

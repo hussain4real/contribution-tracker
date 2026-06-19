@@ -290,6 +290,7 @@ function comparisonCellLabel(plan: Plan, row: ComparisonRow): string {
                         <HeroGsapAnimation
                             label="Animated FamilyFund pricing plan ladder"
                             variant="pricing"
+                            :plans="props.plans"
                         />
                     </div>
                 </div>
