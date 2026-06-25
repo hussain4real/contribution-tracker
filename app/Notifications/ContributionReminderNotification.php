@@ -117,6 +117,9 @@ class ContributionReminderNotification extends Notification implements ShouldQue
             ->subject($subject)
             ->markdown('mail.contribution-reminder', [
                 'contribution' => $this->contribution,
+                'contributionsUrl' => route('contributions.my', [
+                    'current_family' => $this->familySlug(),
+                ]),
                 'type' => $this->type,
                 'userName' => $this->notifiableName($notifiable),
                 'familyName' => $this->familyName(),
