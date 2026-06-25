@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Notifications\ContributionReminderNotification;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Queue\Middleware\RateLimited;
+use Illuminate\Support\Facades\URL;
 use NotificationChannels\WebPush\WebPushChannel;
 use NotificationChannels\WebPush\WebPushMessage;
 
@@ -74,6 +75,19 @@ describe('ContributionReminderNotification', function () {
         expect($mail)->toBeInstanceOf(MailMessage::class)
             ->and($mail->subject)->toContain('Reminder')
             ->and($mail->subject)->toContain($contribution->period_label);
+    });
+
+    it('renders mail with an explicit family-scoped contributions link', function () {
+        $family = Family::factory()->create(['slug' => 'smith-family']);
+        $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($user)->currentMonth()->create();
+
+        URL::defaults([]);
+
+        $mail = (new ContributionReminderNotification($contribution, 'reminder'))->toMail($user);
+
+        expect((string) $mail->render())
+            ->toContain(route('contributions.my', ['current_family' => $family->slug]));
     });
 
     it('builds correct mail content for follow_up type', function () {
