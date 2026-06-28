@@ -14,12 +14,14 @@ function recoveryCodesFor(User $user): array
 }
 
 test('recovery codes mail contains all recovery codes', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->create([
+        'name' => "Johnson O'Reilly",
+    ]);
     $recoveryCodes = recoveryCodesFor($user);
 
     $mailable = new TwoFactorRecoveryCodesMail($user, $recoveryCodes);
 
-    $mailable->assertSeeInHtml(e($user->name));
+    $mailable->assertSeeInHtml($user->name, false);
 
     foreach ($recoveryCodes as $code) {
         $mailable->assertSeeInHtml($code);

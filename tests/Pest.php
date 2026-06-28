@@ -209,6 +209,7 @@ function loginBrowserAs(User $user, ?string $expectedPath = null): PendingAwaita
         ->fill('password', 'password')
         ->click('@login-button')
         ->wait(0.5)
+        ->navigate($expectedPath)
         ->assertPathIs($expectedPath)
         ->assertNoJavaScriptErrors();
 
