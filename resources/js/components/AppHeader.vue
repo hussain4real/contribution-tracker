@@ -47,7 +47,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const page = usePage();
 const auth = computed(() => page.props.auth);
-const user = computed(() => auth.value.user);
+const user = computed(() => auth.value?.user ?? null);
 
 const isCurrentRoute = computed(
     () => (url: NonNullable<InertiaLinkProps['href']>) =>

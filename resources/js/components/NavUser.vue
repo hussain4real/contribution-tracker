@@ -17,7 +17,7 @@ import { computed } from 'vue';
 import UserMenuContent from './UserMenuContent.vue';
 
 const page = usePage();
-const user = computed(() => page.props.auth.user);
+const user = computed(() => page.props.auth?.user ?? null);
 const { isMobile, state } = useSidebar();
 </script>
 

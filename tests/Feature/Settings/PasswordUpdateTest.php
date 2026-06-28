@@ -18,6 +18,7 @@ test('security settings page is displayed', function () {
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('settings/Security')
+            ->where('auth.user.id', $user->id)
             ->has('passkeys')
         );
 });
