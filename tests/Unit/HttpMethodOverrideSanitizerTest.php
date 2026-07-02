@@ -6,11 +6,18 @@ use App\Http\HttpMethodOverrideSanitizer;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Exception\SuspiciousOperationException;
 
+beforeEach(function () {
+    $this->originalGet = $_GET;
+    $this->originalPost = $_POST;
+    $this->originalRequest = $_REQUEST;
+    $this->originalServer = $_SERVER;
+});
+
 afterEach(function () {
-    $_GET = [];
-    $_POST = [];
-    $_REQUEST = [];
-    $_SERVER = [];
+    $_GET = $this->originalGet;
+    $_POST = $this->originalPost;
+    $_REQUEST = $this->originalRequest;
+    $_SERVER = $this->originalServer;
 });
 
 it('removes unsupported form method overrides before the request is captured', function () {
