@@ -31,7 +31,7 @@ final class HttpMethodOverrideSanitizer
     }
 
     /**
-     * @param  array<string, mixed>  $input
+     * @param  array<mixed>  $input
      */
     private static function sanitizeInputBag(array &$input): void
     {
