@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Http\HttpMethodOverrideSanitizer;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Exception\SuspiciousOperationException;
