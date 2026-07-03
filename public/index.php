@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\HttpMethodOverrideSanitizer;
 use Illuminate\Foundation\Application;
 use Illuminate\Http\Request;
 
@@ -18,5 +19,7 @@ require __DIR__.'/../vendor/autoload.php';
 // Bootstrap Laravel and handle the request...
 /** @var Application $app */
 $app = require_once __DIR__.'/../bootstrap/app.php';
+
+HttpMethodOverrideSanitizer::sanitizeGlobals();
 
 $app->handleRequest(Request::capture());
