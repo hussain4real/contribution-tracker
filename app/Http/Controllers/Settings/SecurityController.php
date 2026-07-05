@@ -18,7 +18,7 @@ class SecurityController extends Controller
     public function edit(TwoFactorAuthenticationRequest $request): Response
     {
         $user = $this->user($request);
-        $passwordRules = Password::defaults() ?? Password::min(8);
+        $passwordRules = Password::defaults();
 
         $props = [
             'canManageTwoFactor' => Features::canManageTwoFactorAuthentication(),
