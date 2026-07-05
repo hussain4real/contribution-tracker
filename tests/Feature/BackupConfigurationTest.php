@@ -69,15 +69,20 @@ test('backup retention keeps fourteen daily backups with weekly and monthly hist
 test('backup notifications are failure only', function () {
     $notifications = config('backup.notifications.notifications');
 
+    if (! is_array($notifications)) {
+        throw new RuntimeException('Expected backup notifications config to be an array.');
+    }
+
     expect($notifications)->toHaveKeys([
         BackupHasFailedNotification::class,
-        CleanupHasFailedNotification::class,
-        UnhealthyBackupWasFoundNotification::class,
-    ])->and($notifications)->not->toHaveKeys([
         BackupWasSuccessfulNotification::class,
+        CleanupHasFailedNotification::class,
         CleanupWasSuccessfulNotification::class,
         HealthyBackupWasFoundNotification::class,
-    ]);
+        UnhealthyBackupWasFoundNotification::class,
+    ])->and($notifications[BackupWasSuccessfulNotification::class])->toBe([])
+        ->and($notifications[CleanupWasSuccessfulNotification::class])->toBe([])
+        ->and($notifications[HealthyBackupWasFoundNotification::class])->toBe([]);
 });
 
 test('backup scheduler runs production backup workflow in qatar time', function () {
