@@ -10,6 +10,7 @@
     "nightwatch": true,
     "packages": [
         "barryvdh/laravel-debugbar",
+        "spatie/laravel-backup",
         "filament/filament"
     ],
     "sail": false,
@@ -25,6 +26,7 @@
         "pest-testing",
         "inertia-vue-development",
         "tailwindcss-development",
+        "laravel-backup",
         "debug-using-debugbar",
         "starter-kit-upgrade"
     ]
