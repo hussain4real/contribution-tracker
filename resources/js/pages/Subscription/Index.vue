@@ -102,9 +102,7 @@ const statusVariant = computed(() => {
     };
 
     return (map[props.subscription_status] || 'secondary') as
-        | 'default'
-        | 'secondary'
-        | 'destructive';
+        'default' | 'secondary' | 'destructive';
 });
 
 const subscribeToPlan = async (planId: number) => {

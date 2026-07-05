@@ -493,11 +493,9 @@ function createStream() {
                 onSuccess: (page) => {
                     const props = page.props as Record<string, unknown>;
                     const updatedConversations = props.conversations as
-                        | Conversation[]
-                        | undefined;
+                        Conversation[] | undefined;
                     const updatedMessages = props.messages as
-                        | Message[]
-                        | undefined;
+                        Message[] | undefined;
 
                     let resolvedConversationId =
                         currentConversationId.value ?? null;

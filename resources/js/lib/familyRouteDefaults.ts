@@ -11,8 +11,7 @@ function pageSnapshot(): InertiaPageSnapshot | null {
     }
 
     const historyPage = window.history.state?.page as
-        | InertiaPageSnapshot
-        | undefined;
+        InertiaPageSnapshot | undefined;
 
     if (historyPage) {
         return historyPage;
