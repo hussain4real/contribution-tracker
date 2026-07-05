@@ -12,8 +12,10 @@ use App\Http\Responses\TwoFactorLoginResponse;
 use App\Http\Responses\VerifyEmailResponse;
 use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\LazyLoadingViolationException;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -27,6 +29,7 @@ use Laravel\Fortify\Http\Responses\RedirectAsIntended;
 use Laravel\Passkeys\Contracts\PasskeyLoginResponse as PasskeyLoginResponseContract;
 use Laravel\Passport\Passport;
 use Laravel\Pennant\Middleware\EnsureFeaturesAreActive;
+use RuntimeException;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -47,6 +50,8 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $this->requireEncryptedProductionBackups();
+
         // Gate for generating reports
         Gate::define('generate-reports', function (User $user) {
             return $user->activeRole()->canGenerateReports();
@@ -94,6 +99,27 @@ class AppServiceProvider extends ServiceProvider
             } else {
                 throw new LazyLoadingViolationException($model, $relation);
             }
+        });
+    }
+
+    private function requireEncryptedProductionBackups(): void
+    {
+        Event::listen(CommandStarting::class, function (CommandStarting $event): void {
+            if (! $this->app->isProduction()) {
+                return;
+            }
+
+            if (! in_array($event->command, ['backup:run', 'backups:sync-google-drive'], true)) {
+                return;
+            }
+
+            $password = config('backup.backup.password');
+
+            if (is_string($password) && trim($password) !== '') {
+                return;
+            }
+
+            throw new RuntimeException('BACKUP_ARCHIVE_PASSWORD is required before production backups can run.');
         });
     }
 }

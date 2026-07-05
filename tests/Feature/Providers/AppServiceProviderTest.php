@@ -6,10 +6,14 @@ use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\LazyLoadingViolationException;
+use Illuminate\Foundation\Testing\WithConsoleEvents;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\View\View;
 use Laravel\Passport\Contracts\AuthorizationViewResponse;
+
+uses(WithConsoleEvents::class);
 
 it('configures the whatsapp notification rate limiter', function () {
     config(['services.whatsapp.rate_limit_per_minute' => 0]);
@@ -74,6 +78,57 @@ it('throws lazy loading violations outside production', function () {
     Model::preventLazyLoading(false);
     Model::automaticallyEagerLoadRelationships();
 });
+
+it('does not require a backup archive password outside production', function () {
+    config()->set('backup.backup.password', '');
+    config()->set('backup.google_drive.enabled', false);
+
+    $exitCode = Artisan::call('backups:sync-google-drive');
+
+    expect($exitCode)->toBe(1)
+        ->and(Artisan::output())->toContain('Google Drive backup sync is disabled.');
+});
+
+it('does not require a backup archive password for unrelated production commands', function () {
+    app()->detectEnvironment(fn (): string => 'production');
+    config()->set('backup.backup.password', '');
+
+    try {
+        expect(Artisan::call('inspire'))->toBe(0);
+    } finally {
+        app()->detectEnvironment(fn (): string => 'testing');
+    }
+});
+
+it('allows production backup commands when the archive password is configured', function () {
+    app()->detectEnvironment(fn (): string => 'production');
+    config()->set('backup.backup.password', 'configured-secret');
+    config()->set('backup.google_drive.enabled', false);
+
+    try {
+        $exitCode = Artisan::call('backups:sync-google-drive');
+
+        expect($exitCode)->toBe(1)
+            ->and(Artisan::output())->toContain('Google Drive backup sync is disabled.');
+    } finally {
+        app()->detectEnvironment(fn (): string => 'testing');
+    }
+});
+
+it('requires a backup archive password before production backup commands run', function (string $command, array $parameters) {
+    app()->detectEnvironment(fn (): string => 'production');
+    config()->set('backup.backup.password', '');
+
+    try {
+        expect(fn () => Artisan::call($command, $parameters))
+            ->toThrow(RuntimeException::class, 'BACKUP_ARCHIVE_PASSWORD is required before production backups can run.');
+    } finally {
+        app()->detectEnvironment(fn (): string => 'testing');
+    }
+})->with([
+    'local backup run' => ['backup:run', ['--only-to-disk' => 'local', '--disable-notifications' => true]],
+    'google drive sync' => ['backups:sync-google-drive', []],
+]);
 
 it('logs lazy loading violations in production', function () {
     app()->detectEnvironment(fn (): string => 'production');
