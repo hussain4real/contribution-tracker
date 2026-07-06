@@ -63,42 +63,58 @@ it('smokes public and guest authentication pages', function () {
 
     assertBrowserSmoke($page, 'See who paid and who still owes');
     $assertPublicGsapSurface(3);
-    navigateAndAssertBrowserSmoke($page, route('pricing'), 'Compare every plan feature');
-    $pricingSurface = $assertPublicGsapSurface(2);
-    $pricingHeroText = $pricingSurface['heroText'] ?? null;
+    navigateAndAssertBrowserSmoke($page, route('pricing'), 'Plan details without the spreadsheet scroll.');
+    $pricingSurface = $page->script(<<<'JS'
+        () => ({
+            decisionGuideText: (document.querySelector('[data-testid="pricing-decision-guide"]')?.textContent || '').replace(/\s+/g, ' ').trim(),
+            planRows: Array.from(document.querySelectorAll('[data-testid="pricing-plan-row"]')).map((item) => ({
+                slug: item.getAttribute('data-plan-slug'),
+                name: item.getAttribute('data-plan-name'),
+                amount: item.getAttribute('data-plan-amount'),
+                memberLimit: item.getAttribute('data-plan-member-limit'),
+                text: item.textContent?.replace(/\s+/g, ' ').trim() || '',
+            })),
+            sectionCount: document.querySelectorAll('[data-gsap-section]').length,
+            hoverCount: document.querySelectorAll('[data-gsap-hover]').length,
+            mobileAccordionCount: document.querySelectorAll('#plan-details details').length,
+            documentWidth: document.documentElement.scrollWidth,
+            viewportWidth: document.documentElement.clientWidth,
+        })
+    JS);
 
-    if (! is_string($pricingHeroText)) {
-        throw new RuntimeException('Expected pricing hero text to be returned.');
+    if (! is_array($pricingSurface)) {
+        throw new RuntimeException('Expected browser script to return pricing page measurements.');
     }
 
-    $pricingPlanItems = $pricingSurface['pricingPlanItems'] ?? null;
+    $pricingPlanRows = $pricingSurface['planRows'] ?? null;
 
-    if (! is_array($pricingPlanItems)) {
-        throw new RuntimeException('Expected pricing plan ladder items to be returned.');
+    if (! is_array($pricingPlanRows)) {
+        throw new RuntimeException('Expected pricing plan rows to be returned.');
     }
 
-    $familyLadderPlan = collect($pricingPlanItems)->firstWhere('slug', 'family');
-    $growthLadderPlan = collect($pricingPlanItems)->firstWhere('slug', 'growth');
+    $familyPlanRow = collect($pricingPlanRows)->firstWhere('slug', 'family');
+    $growthPlanRow = collect($pricingPlanRows)->firstWhere('slug', 'growth');
 
-    if (! is_array($familyLadderPlan) || ! is_array($growthLadderPlan)) {
-        throw new RuntimeException('Expected Family and Growth ladder plans to be present.');
+    if (! is_array($familyPlanRow) || ! is_array($growthPlanRow)) {
+        throw new RuntimeException('Expected Family and Growth pricing rows to be present.');
     }
 
-    expect($pricingHeroText)
-        ->toContain('Family')
-        ->toContain('₦3,000')
-        ->toContain('Growth')
-        ->toContain('₦7,500')
-        ->not->toContain('₦4k')
-        ->not->toContain('₦9k');
+    expect($pricingSurface['decisionGuideText'] ?? '')
+        ->toContain('Choose Family')
+        ->and($pricingSurface['sectionCount'] ?? 0)->toBeGreaterThanOrEqual(3)
+        ->and($pricingSurface['hoverCount'] ?? 0)->toBeGreaterThanOrEqual(1)
+        ->and($pricingSurface['mobileAccordionCount'] ?? 0)->toBeGreaterThanOrEqual(4)
+        ->and($pricingSurface['documentWidth'] ?? 0)->toBeLessThanOrEqual(
+            ($pricingSurface['viewportWidth'] ?? 0) + 1,
+        );
 
-    expect($familyLadderPlan['amount'] ?? null)
+    expect($familyPlanRow['amount'] ?? null)
         ->toBe('₦3,000')
-        ->and($familyLadderPlan['memberValue'] ?? null)->toBe('25')
-        ->and($familyLadderPlan['memberCaption'] ?? null)->toBe('members')
-        ->and($growthLadderPlan['amount'] ?? null)->toBe('₦7,500')
-        ->and($growthLadderPlan['memberValue'] ?? null)->toBe('75')
-        ->and($growthLadderPlan['memberCaption'] ?? null)->toBe('members');
+        ->and($familyPlanRow['memberLimit'] ?? null)->toBe('25')
+        ->and($familyPlanRow['text'] ?? '')->toContain('Choose Family')
+        ->and($growthPlanRow['amount'] ?? null)->toBe('₦7,500')
+        ->and($growthPlanRow['memberLimit'] ?? null)->toBe('75')
+        ->and($growthPlanRow['text'] ?? '')->toContain('Choose Growth');
 
     navigateAndAssertBrowserSmoke($page, route('privacy'), 'Privacy Policy');
     navigateAndAssertBrowserSmoke($page, route('terms'), 'Terms of Service');
