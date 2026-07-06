@@ -2,10 +2,11 @@
 import {
     ArrowRight,
     CheckCircle2,
-    CreditCard,
+    ClipboardCheck,
+    ReceiptText,
+    ShieldCheck,
     TrendingUp,
     Users,
-    Wallet,
 } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
@@ -50,6 +51,8 @@ type AnimationContext = {
     revert: () => void;
 };
 
+type ContributionStatus = 'Paid' | 'Partial' | 'Still owes';
+
 const root = ref<HTMLElement | null>(null);
 const isReducedMotion = ref(false);
 const isPricing = computed(() => props.variant === 'pricing');
@@ -57,16 +60,34 @@ const isPricing = computed(() => props.variant === 'pricing');
 let motionPreference: MediaQueryList | null = null;
 let animationContext: AnimationContext | null = null;
 
-const homeStats = [
-    { label: 'Paid this month', value: '92%', tone: 'emerald' },
-    { label: 'Members settled', value: '18/21', tone: 'sky' },
-    { label: 'Reports ready', value: '4', tone: 'slate' },
+const contributionSummary = [
+    { label: 'Paid', value: '17', tone: 'emerald' },
+    { label: 'Partial', value: '3', tone: 'amber' },
+    { label: 'Still owes', value: '4', tone: 'rose' },
 ];
 
 const paymentRows = [
-    { name: 'Amina H.', amount: '₦24,000', status: 'Paid' },
-    { name: 'Farouk B.', amount: '₦18,000', status: 'Partial' },
-    { name: 'Maryam S.', amount: '₦12,000', status: 'Due' },
+    {
+        name: 'Amina H.',
+        expected: '₦24,000',
+        paid: '₦24,000',
+        balance: '₦0',
+        status: 'Paid' as ContributionStatus,
+    },
+    {
+        name: 'Farouk B.',
+        expected: '₦18,000',
+        paid: '₦10,000',
+        balance: '₦8,000',
+        status: 'Partial' as ContributionStatus,
+    },
+    {
+        name: 'Maryam S.',
+        expected: '₦12,000',
+        paid: '₦0',
+        balance: '₦12,000',
+        status: 'Still owes' as ContributionStatus,
+    },
 ];
 
 const fallbackPricingPlans: PricingPlan[] = [
@@ -172,11 +193,11 @@ async function animateScene(): Promise<void> {
         const pulseTargets = gsap.utils.toArray('[data-gsap-pulse]');
 
         if (revealTargets.length) {
-            gsap.set(revealTargets, { opacity: 0, y: 18 });
+            gsap.set(revealTargets, { y: 18 });
         }
 
         if (popTargets.length) {
-            gsap.set(popTargets, { opacity: 0, scale: 0.94 });
+            gsap.set(popTargets, { scale: 0.96 });
         }
 
         if (meterTargets.length) {
@@ -199,7 +220,6 @@ async function animateScene(): Promise<void> {
 
         if (revealTargets.length) {
             timeline.to(revealTargets, {
-                opacity: 1,
                 y: 0,
                 duration: 0.7,
                 stagger: 0.08,
@@ -210,7 +230,6 @@ async function animateScene(): Promise<void> {
             timeline.to(
                 popTargets,
                 {
-                    opacity: 1,
                     scale: 1,
                     duration: 0.5,
                     stagger: 0.06,
@@ -305,21 +324,13 @@ onBeforeUnmount(() => {
 <template>
     <div
         ref="root"
-        class="relative isolate min-h-[360px] overflow-hidden rounded-lg border border-emerald-200/80 bg-white shadow-2xl shadow-emerald-900/10 sm:min-h-[430px] dark:border-emerald-900/60 dark:bg-slate-950"
+        class="relative isolate min-h-[360px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm sm:min-h-[430px] dark:border-slate-800 dark:bg-slate-950"
         role="img"
         :aria-label="label"
         data-testid="public-gsap-animation"
         :data-motion="isReducedMotion ? 'reduced' : 'animated'"
     >
-        <div
-            class="absolute inset-0 bg-linear-to-br from-emerald-50 via-white to-sky-50 dark:from-slate-950 dark:via-slate-900 dark:to-emerald-950"
-        />
-        <div
-            class="absolute -top-20 -right-16 size-48 rounded-full bg-emerald-300/25 blur-3xl dark:bg-emerald-500/15"
-        />
-        <div
-            class="absolute -bottom-16 -left-12 size-44 rounded-full bg-sky-300/25 blur-3xl dark:bg-sky-500/10"
-        />
+        <div class="absolute inset-0 bg-slate-50/70 dark:bg-slate-900/35" />
 
         <div
             v-if="isReducedMotion"
@@ -448,174 +459,171 @@ onBeforeUnmount(() => {
 
         <div
             v-else
-            class="relative flex min-h-[360px] flex-col gap-4 p-5 sm:min-h-[430px] sm:p-7"
+            class="relative flex min-h-[360px] flex-col gap-4 p-4 sm:min-h-[430px] sm:p-6"
         >
             <div
-                class="rounded-lg border border-emerald-200 bg-white/85 p-4 shadow-lg shadow-emerald-900/5 backdrop-blur dark:border-emerald-900/70 dark:bg-slate-900/85"
+                class="flex items-start justify-between gap-4 border-b border-slate-200 pb-4 dark:border-slate-800"
                 data-gsap-reveal
             >
-                <div class="flex items-start justify-between gap-4">
-                    <div>
-                        <p
-                            class="text-sm font-medium text-slate-500 dark:text-slate-400"
-                        >
-                            Family fund balance
-                        </p>
-                        <p
-                            class="mt-1 text-3xl font-bold text-slate-950 dark:text-white"
-                        >
-                            ₦348,000
-                        </p>
-                    </div>
-                    <div
-                        class="rounded-full bg-emerald-600 p-3 text-white shadow-lg shadow-emerald-600/25"
-                        data-gsap-pulse
+                <div>
+                    <p
+                        class="text-sm font-semibold text-emerald-800 dark:text-emerald-300"
                     >
-                        <Wallet class="size-5" />
-                    </div>
+                        July contribution review
+                    </p>
+                    <h3
+                        class="mt-2 text-2xl font-bold tracking-tight text-slate-950 dark:text-white"
+                    >
+                        Who paid and who still owes
+                    </h3>
                 </div>
                 <div
-                    class="mt-5 h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"
+                    class="flex size-11 items-center justify-center rounded-lg bg-emerald-700 text-white dark:bg-emerald-500 dark:text-emerald-950"
+                    data-gsap-pulse
                 >
-                    <div
-                        class="h-full w-[92%] rounded-full bg-linear-to-r from-emerald-500 to-teal-500"
-                        data-gsap-meter
-                    />
-                </div>
-                <div
-                    class="mt-4 grid grid-cols-3 gap-2 text-center text-xs font-medium"
-                >
-                    <div
-                        v-for="stat in homeStats"
-                        :key="stat.label"
-                        class="rounded-md border border-slate-200 bg-white/75 p-2 dark:border-slate-800 dark:bg-slate-950/70"
-                        data-gsap-pop
-                    >
-                        <p
-                            class="text-base font-bold"
-                            :class="{
-                                'text-emerald-600 dark:text-emerald-400':
-                                    stat.tone === 'emerald',
-                                'text-sky-600 dark:text-sky-400':
-                                    stat.tone === 'sky',
-                                'text-slate-700 dark:text-slate-200':
-                                    stat.tone === 'slate',
-                            }"
-                        >
-                            {{ stat.value }}
-                        </p>
-                        <p class="mt-1 text-slate-500 dark:text-slate-400">
-                            {{ stat.label }}
-                        </p>
-                    </div>
+                    <ClipboardCheck class="size-5" />
                 </div>
             </div>
 
-            <div class="grid flex-1 gap-4 sm:grid-cols-[1fr_0.78fr]">
+            <div
+                class="grid grid-cols-3 divide-x divide-slate-200 rounded-lg border border-slate-200 bg-white text-center dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-950"
+                data-gsap-reveal
+            >
                 <div
-                    class="rounded-lg border border-slate-200 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/80"
-                    data-gsap-reveal
+                    v-for="summary in contributionSummary"
+                    :key="summary.label"
+                    class="p-3"
+                    data-gsap-pop
                 >
-                    <div class="mb-4 flex items-center justify-between gap-3">
-                        <div>
-                            <p
-                                class="text-sm font-semibold text-slate-900 dark:text-white"
-                            >
-                                Recent payments
-                            </p>
-                            <p
-                                class="text-xs text-slate-500 dark:text-slate-400"
-                            >
-                                Clear status for every member
-                            </p>
-                        </div>
-                        <CreditCard class="size-4 text-emerald-500" />
-                    </div>
-                    <div class="space-y-3">
-                        <div
-                            v-for="row in paymentRows"
-                            :key="row.name"
-                            class="flex items-center justify-between gap-3 rounded-md bg-slate-50 p-2 dark:bg-slate-950/70"
-                            data-gsap-pop
-                        >
-                            <div class="min-w-0">
-                                <p
-                                    class="truncate text-sm font-medium text-slate-900 dark:text-white"
-                                >
-                                    {{ row.name }}
-                                </p>
-                                <p
-                                    class="text-xs text-slate-500 dark:text-slate-400"
-                                >
-                                    {{ row.amount }}
-                                </p>
-                            </div>
-                            <span
-                                class="rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                                :class="{
-                                    'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300':
-                                        row.status === 'Paid',
-                                    'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300':
-                                        row.status === 'Partial',
-                                    'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300':
-                                        row.status === 'Due',
-                                }"
-                            >
-                                {{ row.status }}
-                            </span>
-                        </div>
-                    </div>
+                    <p
+                        class="text-2xl font-bold"
+                        :class="{
+                            'text-emerald-700 dark:text-emerald-300':
+                                summary.tone === 'emerald',
+                            'text-amber-700 dark:text-amber-300':
+                                summary.tone === 'amber',
+                            'text-rose-700 dark:text-rose-300':
+                                summary.tone === 'rose',
+                        }"
+                    >
+                        {{ summary.value }}
+                    </p>
+                    <p
+                        class="mt-1 text-xs font-medium text-slate-600 dark:text-slate-400"
+                    >
+                        {{ summary.label }}
+                    </p>
                 </div>
+            </div>
 
-                <div class="grid gap-4">
-                    <div
-                        class="rounded-lg border border-slate-200 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/80"
-                        data-gsap-float
-                    >
-                        <div class="flex items-center gap-3">
-                            <div
-                                class="rounded-md bg-sky-100 p-2 text-sky-700 dark:bg-sky-950 dark:text-sky-300"
-                            >
-                                <Users class="size-4" />
-                            </div>
-                            <div>
-                                <p
-                                    class="text-sm font-semibold text-slate-900 dark:text-white"
-                                >
-                                    21 members
-                                </p>
-                                <p
-                                    class="text-xs text-slate-500 dark:text-slate-400"
-                                >
-                                    4 categories
-                                </p>
-                            </div>
-                        </div>
+            <div
+                class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950"
+                data-gsap-reveal
+            >
+                <div
+                    class="grid grid-cols-[1.15fr_0.8fr_0.85fr_auto] gap-3 border-b border-slate-200 px-3 py-2 text-[11px] font-semibold text-slate-500 dark:border-slate-800 dark:text-slate-400"
+                >
+                    <span>Member</span>
+                    <span>Paid</span>
+                    <span>Balance</span>
+                    <span>Status</span>
+                </div>
+                <div
+                    v-for="row in paymentRows"
+                    :key="row.name"
+                    class="grid grid-cols-[1.15fr_0.8fr_0.85fr_auto] items-center gap-3 px-3 py-3 text-xs"
+                    data-gsap-pop
+                >
+                    <div class="min-w-0">
+                        <p
+                            class="truncate font-semibold text-slate-950 dark:text-white"
+                        >
+                            {{ row.name }}
+                        </p>
+                        <p class="mt-0.5 text-slate-500 dark:text-slate-400">
+                            Expected {{ row.expected }}
+                        </p>
                     </div>
-                    <div
-                        class="rounded-lg border border-emerald-200 bg-emerald-50/80 p-4 shadow-sm backdrop-blur dark:border-emerald-900 dark:bg-emerald-950/40"
-                        data-gsap-float
+                    <span
+                        class="font-medium text-slate-800 dark:text-slate-200"
                     >
-                        <div class="flex items-center gap-3">
-                            <div
-                                class="rounded-md bg-white p-2 text-emerald-700 dark:bg-slate-950 dark:text-emerald-300"
-                            >
-                                <TrendingUp class="size-4" />
-                            </div>
-                            <div>
-                                <p
-                                    class="text-sm font-semibold text-emerald-900 dark:text-emerald-100"
-                                >
-                                    Monthly report
-                                </p>
-                                <p
-                                    class="text-xs text-emerald-700 dark:text-emerald-300"
-                                >
-                                    Ready to share
-                                </p>
-                            </div>
-                        </div>
+                        {{ row.paid }}
+                    </span>
+                    <span
+                        class="font-medium text-slate-800 dark:text-slate-200"
+                    >
+                        {{ row.balance }}
+                    </span>
+                    <span
+                        class="rounded-full px-2 py-1 text-[11px] font-semibold"
+                        :class="{
+                            'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200':
+                                row.status === 'Paid',
+                            'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200':
+                                row.status === 'Partial',
+                            'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200':
+                                row.status === 'Still owes',
+                        }"
+                    >
+                        {{ row.status }}
+                    </span>
+                </div>
+            </div>
+
+            <div class="grid gap-3 text-sm sm:grid-cols-3" data-gsap-reveal>
+                <div
+                    class="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950"
+                    data-gsap-pop
+                >
+                    <div class="flex items-center gap-2">
+                        <Users
+                            class="size-4 text-slate-700 dark:text-slate-300"
+                        />
+                        <span
+                            class="font-semibold text-slate-950 dark:text-white"
+                        >
+                            24 members
+                        </span>
                     </div>
+                    <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                        4 contribution categories
+                    </p>
+                </div>
+                <div
+                    class="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950"
+                    data-gsap-pop
+                >
+                    <div class="flex items-center gap-2">
+                        <ReceiptText
+                            class="size-4 text-slate-700 dark:text-slate-300"
+                        />
+                        <span
+                            class="font-semibold text-slate-950 dark:text-white"
+                        >
+                            Audit trail
+                        </span>
+                    </div>
+                    <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                        Recorded by and date retained
+                    </p>
+                </div>
+                <div
+                    class="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950"
+                    data-gsap-pop
+                >
+                    <div class="flex items-center gap-2">
+                        <ShieldCheck
+                            class="size-4 text-slate-700 dark:text-slate-300"
+                        />
+                        <span
+                            class="font-semibold text-slate-950 dark:text-white"
+                        >
+                            Role access
+                        </span>
+                    </div>
+                    <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                        Full view for treasurers
+                    </p>
                 </div>
             </div>
         </div>
