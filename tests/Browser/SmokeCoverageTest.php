@@ -61,7 +61,7 @@ it('smokes public and guest authentication pages', function () {
         return $result;
     };
 
-    assertBrowserSmoke($page, 'Financially United');
+    assertBrowserSmoke($page, 'See who paid and who still owes');
     $assertPublicGsapSurface(3);
     navigateAndAssertBrowserSmoke($page, route('pricing'), 'Compare every plan feature');
     $pricingSurface = $assertPublicGsapSurface(2);

@@ -30,10 +30,6 @@ function collectTargets(section: Element): SectionTargets {
     };
 }
 
-function uniqueElements(groups: Element[][]): Element[] {
-    return [...new Set(groups.flat())];
-}
-
 export function useGsapPublicPageAnimations(root: Ref<HTMLElement | null>): {
     animateDisclosureEnter: (element: Element, done: () => void) => void;
     animateDisclosureLeave: (element: Element, done: () => void) => void;
@@ -82,7 +78,6 @@ export function useGsapPublicPageAnimations(root: Ref<HTMLElement | null>): {
 
         if (targets.revealTargets.length) {
             timeline.to(targets.revealTargets, {
-                autoAlpha: 1,
                 y: 0,
                 stagger: 0.08,
             });
@@ -92,7 +87,6 @@ export function useGsapPublicPageAnimations(root: Ref<HTMLElement | null>): {
             timeline.to(
                 targets.cardTargets,
                 {
-                    autoAlpha: 1,
                     scale: 1,
                     y: 0,
                     stagger: 0.07,
@@ -105,7 +99,6 @@ export function useGsapPublicPageAnimations(root: Ref<HTMLElement | null>): {
             timeline.to(
                 targets.stepTargets,
                 {
-                    autoAlpha: 1,
                     scale: 1,
                     y: 0,
                     stagger: 0.12,
@@ -118,7 +111,6 @@ export function useGsapPublicPageAnimations(root: Ref<HTMLElement | null>): {
             timeline.to(
                 targets.rowTargets,
                 {
-                    autoAlpha: 1,
                     x: 0,
                     stagger: 0.035,
                 },
@@ -219,17 +211,6 @@ export function useGsapPublicPageAnimations(root: Ref<HTMLElement | null>): {
                 section.setAttribute('data-gsap-state', 'pending');
 
                 const targets = collectTargets(section);
-                const initialTargets = uniqueElements([
-                    targets.revealTargets,
-                    targets.cardTargets,
-                    targets.stepTargets,
-                    targets.rowTargets,
-                ]);
-
-                if (initialTargets.length) {
-                    gsap.set(initialTargets, { autoAlpha: 0 });
-                }
-
                 if (targets.revealTargets.length) {
                     gsap.set(targets.revealTargets, { y: 18 });
                 }
