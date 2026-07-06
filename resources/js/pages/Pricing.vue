@@ -87,10 +87,7 @@ const primaryPlan = computed(
     () => recommendedPlan.value ?? props.plans[0] ?? null,
 );
 const organizationPlan = computed(
-    () =>
-        props.plans.find((plan) => plan.slug === 'organization') ??
-        props.plans.at(-1) ??
-        null,
+    () => props.plans.find((plan) => plan.slug === 'organization') ?? null,
 );
 
 useGsapPublicPageAnimations(pageRoot);
@@ -277,7 +274,7 @@ const trustItems: TrustItem[] = [
         icon: FileText,
         title: 'Exports do not lock you in',
         description:
-            'Paid plans can export contribution data when the group needs an offline review trail.',
+            'Growth and Organization can export contribution data when the group needs an offline review trail.',
     },
     {
         icon: ShieldCheck,

@@ -99,14 +99,19 @@ it('smokes public and guest authentication pages', function () {
         throw new RuntimeException('Expected Family and Growth pricing rows to be present.');
     }
 
+    $documentWidth = $pricingSurface['documentWidth'] ?? null;
+    $viewportWidth = $pricingSurface['viewportWidth'] ?? null;
+
+    if (! is_int($documentWidth) || ! is_int($viewportWidth)) {
+        throw new RuntimeException('Expected pricing page width measurements to be integers.');
+    }
+
     expect($pricingSurface['decisionGuideText'] ?? '')
         ->toContain('Choose Family')
         ->and($pricingSurface['sectionCount'] ?? 0)->toBeGreaterThanOrEqual(3)
         ->and($pricingSurface['hoverCount'] ?? 0)->toBeGreaterThanOrEqual(1)
         ->and($pricingSurface['mobileAccordionCount'] ?? 0)->toBeGreaterThanOrEqual(4)
-        ->and($pricingSurface['documentWidth'] ?? 0)->toBeLessThanOrEqual(
-            ($pricingSurface['viewportWidth'] ?? 0) + 1,
-        );
+        ->and($documentWidth)->toBeLessThanOrEqual($viewportWidth + 1);
 
     expect($familyPlanRow['amount'] ?? null)
         ->toBe('₦3,000')
