@@ -6,6 +6,7 @@ use App\Ai\Tools\SendInvitation;
 use App\Enums\InvitationDeliveryMethod;
 use App\Mail\FamilyInvitationMail;
 use App\Models\Family;
+use App\Models\FamilyCategory;
 use App\Models\FamilyInvitation;
 use App\Models\User;
 use App\Services\WhatsAppService;
@@ -17,6 +18,10 @@ beforeEach(function () {
     $this->admin = User::factory()->admin()->create(['family_id' => $this->family->id]);
     $this->financialSecretary = User::factory()->financialSecretary()->create(['family_id' => $this->family->id]);
     $this->member = User::factory()->member()->create(['family_id' => $this->family->id]);
+    $this->familyCategory = FamilyCategory::query()
+        ->where('family_id', $this->family->id)
+        ->where('slug', 'employed')
+        ->firstOrFail();
 });
 
 test('admin can preview invitation sending', function () {
@@ -25,6 +30,7 @@ test('admin can preview invitation sending', function () {
     $result = decodeToolResult($tool->handle(new Request([
         'email' => 'newmember@example.com',
         'role' => 'member',
+        'category' => $this->familyCategory->slug,
     ])));
 
     expect($result['status'])->toBe('confirmation_required')
@@ -42,6 +48,7 @@ test('admin can execute invitation sending', function () {
     $result = decodeToolResult($tool->handle(new Request([
         'email' => 'newmember@example.com',
         'role' => 'member',
+        'category' => $this->familyCategory->slug,
         'confirmed' => true,
     ])));
 
@@ -79,6 +86,7 @@ test('admin can execute invitation sending over whatsapp', function () {
         'delivery_method' => InvitationDeliveryMethod::WhatsApp->value,
         'whatsapp_phone' => '+2348012345678',
         'role' => 'member',
+        'category' => $this->familyCategory->slug,
         'confirmed' => true,
     ])));
 
@@ -101,6 +109,7 @@ test('financial secretary can execute member invitation sending', function () {
     $result = decodeToolResult($tool->handle(new Request([
         'email' => 'newmember@example.com',
         'role' => 'member',
+        'category' => $this->familyCategory->slug,
         'confirmed' => true,
     ])));
 
@@ -122,6 +131,7 @@ test('financial secretary cannot invite privileged roles', function () {
     $result = decodeToolResult($tool->handle(new Request([
         'email' => 'newadmin@example.com',
         'role' => 'admin',
+        'category' => $this->familyCategory->slug,
         'confirmed' => true,
     ])));
 
@@ -134,6 +144,7 @@ test('member cannot send invitations', function () {
     $result = decodeToolResult($tool->handle(new Request([
         'email' => 'newmember@example.com',
         'role' => 'member',
+        'category' => $this->familyCategory->slug,
     ])));
 
     expect($result['error'])->toContain('Only family admins and financial secretaries');
@@ -145,6 +156,7 @@ test('invitation rejects invalid email', function () {
     $result = decodeToolResult($tool->handle(new Request([
         'email' => 'not-an-email',
         'role' => 'member',
+        'category' => $this->familyCategory->slug,
     ])));
 
     expect($result['error'])->toContain('valid email');
@@ -157,6 +169,7 @@ test('invitation rejects invalid delivery method', function () {
         'delivery_method' => 'sms',
         'email' => 'test@example.com',
         'role' => 'member',
+        'category' => $this->familyCategory->slug,
     ])));
 
     expect($result['error'])->toContain('valid delivery method');
@@ -169,6 +182,7 @@ test('invitation rejects invalid whatsapp phone', function () {
         'delivery_method' => InvitationDeliveryMethod::WhatsApp->value,
         'whatsapp_phone' => '08012345678',
         'role' => 'member',
+        'category' => $this->familyCategory->slug,
     ])));
 
     expect($result['error'])->toContain('valid WhatsApp number');
@@ -180,6 +194,7 @@ test('invitation execution requires whatsapp phone for whatsapp delivery', funct
     $result = decodeToolResult($tool->handle(new Request([
         'delivery_method' => InvitationDeliveryMethod::WhatsApp->value,
         'role' => 'member',
+        'category' => $this->familyCategory->slug,
         'confirmed' => true,
     ])));
 
@@ -191,6 +206,7 @@ test('invitation requires a role', function () {
 
     $result = decodeToolResult($tool->handle(new Request([
         'email' => 'test@example.com',
+        'category' => $this->familyCategory->slug,
     ])));
 
     expect($result['error'])->toContain('A role is required');
@@ -202,9 +218,28 @@ test('invitation rejects invalid role', function () {
     $result = decodeToolResult($tool->handle(new Request([
         'email' => 'test@example.com',
         'role' => 'superadmin',
+        'category' => $this->familyCategory->slug,
     ])));
 
     expect($result['error'])->toContain('Invalid role');
+});
+
+test('invitation requires one of the current family contribution categories', function () {
+    $tool = new SendInvitation($this->admin);
+
+    $invalidResult = decodeToolResult($tool->handle(new Request([
+        'email' => 'test@example.com',
+        'role' => 'member',
+        'category' => 'not-a-family-category',
+    ])));
+    $missingResult = decodeToolResult($tool->handle(new Request([
+        'email' => 'other@example.com',
+        'role' => 'member',
+    ])));
+
+    expect($invalidResult['error'])->toBe('A valid family contribution category is required.')
+        ->and($invalidResult['available_categories'])->toHaveKey($this->familyCategory->slug)
+        ->and($missingResult['error'])->toBe('A valid family contribution category is required.');
 });
 
 test('invitation rejects existing family member email', function () {
@@ -213,6 +248,7 @@ test('invitation rejects existing family member email', function () {
     $result = decodeToolResult($tool->handle(new Request([
         'email' => $this->member->email,
         'role' => 'member',
+        'category' => $this->familyCategory->slug,
     ])));
 
     expect($result['error'])->toContain('already belongs to a member');
@@ -229,6 +265,7 @@ test('invitation rejects existing family member whatsapp phone', function () {
         'delivery_method' => InvitationDeliveryMethod::WhatsApp->value,
         'whatsapp_phone' => '+2348012345678',
         'role' => 'member',
+        'category' => $this->familyCategory->slug,
     ])));
 
     expect($result['error'])->toContain('WhatsApp number already belongs to a member');
@@ -245,6 +282,7 @@ test('invitation rejects duplicate pending invitation', function () {
     $result = decodeToolResult($tool->handle(new Request([
         'email' => 'pending@example.com',
         'role' => 'member',
+        'category' => $this->familyCategory->slug,
     ])));
 
     expect($result['error'])->toContain('already pending');
@@ -261,6 +299,7 @@ test('invitation rejects duplicate pending whatsapp invitation', function () {
         'delivery_method' => InvitationDeliveryMethod::WhatsApp->value,
         'whatsapp_phone' => '+2348012345678',
         'role' => 'member',
+        'category' => $this->familyCategory->slug,
     ])));
 
     expect($result['error'])->toContain('already pending for this WhatsApp number');
@@ -282,6 +321,7 @@ test('invitation deletes whatsapp invite when sending fails', function () {
         'delivery_method' => InvitationDeliveryMethod::WhatsApp->value,
         'whatsapp_phone' => '+2348012345678',
         'role' => 'member',
+        'category' => $this->familyCategory->slug,
         'confirmed' => true,
     ])));
 
@@ -300,6 +340,7 @@ test('invitation can be sent to email with expired invitation', function () {
     $result = decodeToolResult($tool->handle(new Request([
         'email' => 'expired@example.com',
         'role' => 'member',
+        'category' => $this->familyCategory->slug,
     ])));
 
     expect($result['status'])->toBe('confirmation_required');

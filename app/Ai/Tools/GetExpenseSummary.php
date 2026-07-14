@@ -39,6 +39,7 @@ class GetExpenseSummary implements Tool
 
         $baseQuery = Expense::query()
             ->where('family_id', $family->id)
+            ->effective()
             ->spentBetween($startDate, $endDate);
 
         $totalAmount = (clone $baseQuery)->sum('amount');

@@ -12,6 +12,7 @@ use App\Models\Payment;
 use App\Models\PaystackTransaction;
 use App\Models\PlatformPlan;
 use App\Models\User;
+use App\Services\PaystackContributionSettlementService;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -572,11 +573,47 @@ it('allocates a successful callback payment', function () {
         ->assertRedirect(route('pay.index'))
         ->assertSessionHas('success', 'Payment successful! Your contributions have been updated.');
 
-    expect($transaction->refresh()->status)->toBe(TransactionStatus::Success)
+    expect($transaction->refresh()->status)->toBe(TransactionStatus::Allocated)
+        ->and($transaction->payment_batch_id)->not->toBeNull()
         ->and($transaction->actual_fee_kobo)->toBe(16_244)
         ->and($transaction->settled_amount_kobo)->toBe(400_000)
         ->and(Expense::query()->where('family_id', $family->id)->exists())->toBeFalse()
         ->and(Payment::where('contribution_id', $contribution->id)->sum('amount'))->toBe(4000);
+});
+
+it('reports when a verified callback cannot yet be posted to the ledger', function () {
+    Http::fake([
+        'api.paystack.co/transaction/verify/TXN_UNPOSTED' => Http::response([
+            'status' => true,
+            'data' => [
+                'status' => 'success',
+                'amount' => 400000,
+                'reference' => 'TXN_UNPOSTED',
+            ],
+        ]),
+    ]);
+
+    $member = User::factory()->member()->employed()->create();
+    $transaction = PaystackTransaction::create([
+        'reference' => 'TXN_UNPOSTED',
+        'user_id' => $member->id,
+        'family_id' => $member->family_id,
+        'type' => TransactionType::Contribution,
+        'amount' => 4000,
+        'gross_amount_kobo' => 400000,
+        'status' => TransactionStatus::Pending,
+    ]);
+    $settlement = Mockery::mock(PaystackContributionSettlementService::class);
+    $settlement->shouldReceive('settle')
+        ->once()
+        ->with('TXN_UNPOSTED', Mockery::type('array'))
+        ->andReturn($transaction);
+    app()->instance(PaystackContributionSettlementService::class, $settlement);
+
+    $this->actingAs($member)
+        ->get(route('pay.callback', ['reference' => 'TXN_UNPOSTED']))
+        ->assertRedirect(route('pay.index'))
+        ->assertSessionHas('error', 'Payment was verified but could not be posted. Support has been notified.');
 });
 
 it('records only the settlement shortfall as a Paystack fee expense', function () {
@@ -677,7 +714,7 @@ it('rejects successful callbacks when the verified gross amount does not match',
     $this->actingAs($member)
         ->get(route('pay.callback', ['reference' => 'TXN_BAD_AMOUNT']))
         ->assertRedirect(route('pay.index'))
-        ->assertSessionHas('error', 'Payment amount could not be verified. Please contact support if you were charged.');
+        ->assertSessionHas('error', 'Could not verify payment. Your payment will be confirmed shortly.');
 
     expect($transaction->refresh()->status)->toBe(TransactionStatus::Failed)
         ->and(Payment::where('contribution_id', $contribution->id)->exists())->toBeFalse();
@@ -712,7 +749,7 @@ it('handles successful callbacks that were already processed', function () {
     $this->actingAs($member)
         ->get(route('pay.callback', ['reference' => 'TXN_ALREADY_SUCCESS']))
         ->assertRedirect(route('pay.index'))
-        ->assertSessionHas('success', 'Payment successful! Your contributions have been updated.');
+        ->assertSessionHas('success', 'Payment already confirmed.');
 });
 
 it('returns already confirmed when a non-success callback arrives for a successful transaction', function () {

@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Channels\WhatsAppMessage as WhatsAppMessageBuilder;
 use App\Http\Requests\ReplyWhatsAppMessageRequest;
+use App\Models\Family;
 use App\Models\User;
 use App\Models\WhatsAppMessage;
 use App\Services\WhatsAppService;
@@ -41,18 +42,19 @@ class WhatsAppInboxController extends Controller
         $this->authorizeInboxAccess();
 
         $user = $this->authUser();
+        $familyId = $this->familyId($user);
 
         // Subquery to fetch the latest message body per phone number for the family.
         $latestBodySub = WhatsAppMessage::query()
             ->select('body')
             ->whereColumn('from', 'wam.from')
-            ->where('family_id', $user->family_id)
+            ->where('family_id', $familyId)
             ->orderByDesc('created_at')
             ->limit(1);
 
         $rows = WhatsAppMessage::query()
             ->from('whatsapp_messages as wam')
-            ->where('family_id', $user->family_id)
+            ->where('family_id', $familyId)
             ->selectRaw('"from" as phone, MAX(created_at) as last_at, COUNT(*) as message_count, MAX(user_id) as user_id')
             ->selectSub($latestBodySub, 'last_body')
             ->groupBy('from')
@@ -99,9 +101,10 @@ class WhatsAppInboxController extends Controller
         $this->authorizeInboxAccess();
 
         $user = $this->authUser();
+        $familyId = $this->familyId($user);
 
         $messages = WhatsAppMessage::query()
-            ->where('family_id', $user->family_id)
+            ->where('family_id', $familyId)
             ->where(function ($query) use ($phone): void {
                 $query->where('from', $phone)->orWhere('to', $phone);
             })
@@ -117,7 +120,7 @@ class WhatsAppInboxController extends Controller
             ]);
 
         $lastInbound = WhatsAppMessage::query()
-            ->where('family_id', $user->family_id)
+            ->where('family_id', $familyId)
             ->where('from', $phone)
             ->where('direction', 'inbound')
             ->latest('created_at')
@@ -127,7 +130,7 @@ class WhatsAppInboxController extends Controller
             && $lastInbound->created_at?->diffInHours(now()) < self::REPLY_WINDOW_HOURS;
 
         $member = WhatsAppMessage::query()
-            ->where('family_id', $user->family_id)
+            ->where('family_id', $familyId)
             ->where('from', $phone)
             ->whereNotNull('user_id')
             ->latest('created_at')
@@ -155,9 +158,10 @@ class WhatsAppInboxController extends Controller
         $validated = $request->validated();
 
         $user = $this->authUser();
+        $familyId = $this->familyId($user);
 
         $lastInbound = WhatsAppMessage::query()
-            ->where('family_id', $user->family_id)
+            ->where('family_id', $familyId)
             ->where('from', $phone)
             ->where('direction', 'inbound')
             ->latest('created_at')
@@ -188,6 +192,15 @@ class WhatsAppInboxController extends Controller
      */
     protected function authorizeInboxAccess(): void
     {
-        abort_unless($this->authUser()->role->canViewAllMembers(), 403);
+        abort_unless($this->authUser()->activeRole()->canViewAllMembers(), 403);
+    }
+
+    private function familyId(User $user): int
+    {
+        $family = $user->currentFamily ?? $user->family;
+
+        abort_unless($family instanceof Family && $user->belongsToFamily($family), 403);
+
+        return $family->id;
     }
 }

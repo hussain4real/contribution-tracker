@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace App\Ai\Tools;
 
-use App\Models\Expense;
 use App\Models\Family;
 use App\Models\FundAdjustment;
-use App\Models\Payment;
 use App\Models\User;
+use App\Support\EffectiveLedger;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
@@ -39,19 +38,10 @@ class GetFundBalance implements Tool
         $familyId = $family->id;
         $includeBreakdown = ($request['include_breakdown'] ?? false) === true;
 
-        // Amounts are stored as integers (whole currency units) across all models
-        $totalPayments = (int) Payment::query()
-            ->join('contributions', 'contributions.id', '=', 'payments.contribution_id')
-            ->where('contributions.family_id', $familyId)
-            ->sum('payments.amount');
-
-        $totalAdjustments = (int) FundAdjustment::query()
-            ->where('family_id', $familyId)
-            ->sum('amount');
-
-        $totalExpenses = (int) Expense::query()
-            ->where('family_id', $familyId)
-            ->sum('amount');
+        $ledger = app(EffectiveLedger::class);
+        $totalPayments = $ledger->paymentsTotal($familyId);
+        $totalAdjustments = $ledger->adjustmentsTotal($familyId);
+        $totalExpenses = $ledger->expensesTotal($familyId);
 
         $balance = $totalPayments + $totalAdjustments - $totalExpenses;
         $result = [
@@ -62,6 +52,7 @@ class GetFundBalance implements Tool
         if ($includeBreakdown) {
             $recentAdjustments = FundAdjustment::query()
                 ->where('family_id', $familyId)
+                ->effective()
                 ->with('recorder:id,name')
                 ->latestFirst()
                 ->limit(10)

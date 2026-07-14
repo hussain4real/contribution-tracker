@@ -18,6 +18,7 @@ class RecentPayments extends TableWidget
     {
         return $table
             ->query(fn (): Builder => Payment::query()
+                ->effective()
                 ->with(['contribution.user', 'recorder'])
                 ->latest())
             ->columns([

@@ -7,6 +7,7 @@ namespace Database\Factories;
 use App\Enums\MemberCategory;
 use App\Enums\Role;
 use App\Models\Family;
+use App\Models\FamilyCategory;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -37,12 +38,34 @@ class UserFactory extends Factory
                 return;
             }
 
-            $user->ensureFamilyMembership(
+            $familyCategoryId = $user->family_category_id;
+
+            if ($familyCategoryId === null && $user->category !== null) {
+                $familyCategory = FamilyCategory::query()->firstOrCreate([
+                    'family_id' => $family->id,
+                    'slug' => $user->category->value,
+                ], [
+                    'name' => $user->category->label(),
+                    'monthly_amount' => $user->category->monthlyAmount(),
+                    'sort_order' => (int) array_search($user->category, MemberCategory::cases(), true),
+                ]);
+                $familyCategoryId = $familyCategory->id;
+                $user->forceFill(['family_category_id' => $familyCategoryId])->save();
+            }
+
+            $membership = $user->ensureFamilyMembership(
                 family: $family,
                 role: $user->role,
                 category: $user->category,
-                familyCategoryId: $user->family_category_id,
+                familyCategoryId: $familyCategoryId,
             );
+
+            if ($user->archived_at !== null && $membership->archived_at === null) {
+                $membership->forceFill([
+                    'archived_at' => $user->archived_at,
+                    'archive_reason' => 'Legacy archived user fixture.',
+                ])->saveQuietly();
+            }
 
             if ($user->current_family_id === null) {
                 $user->forceFill(['current_family_id' => $family->id])->save();

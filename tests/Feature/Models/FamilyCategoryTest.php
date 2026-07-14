@@ -38,8 +38,9 @@ it('exposes family and assigned user relationships', function () {
         'family_id' => $family->id,
         'family_category_id' => $category->id,
     ]);
+    $membership = $category->memberships()->firstOrFail();
 
     expect($category->family()->firstOrFail()->is($family))->toBeTrue()
-        ->and($category->users)->toHaveCount(1)
-        ->and($category->users()->firstOrFail()->is($user))->toBeTrue();
+        ->and($category->memberships)->toHaveCount(1)
+        ->and($membership->user->is($user))->toBeTrue();
 });

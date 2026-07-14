@@ -4,16 +4,18 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Enums\MemberCategory;
 use App\Enums\PaymentStatus;
+use App\Enums\ReportFormat;
+use App\Enums\ReportScheduleFrequency;
+use App\Enums\ReportType;
 use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\FamilyMembership;
 use App\Models\Payment;
+use App\Models\ReportSchedule;
 use App\Services\FamilyContributionReviewService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Query\JoinClause;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -27,15 +29,44 @@ class ReportController extends Controller
     /**
      * Display the report dashboard.
      */
-    public function index(): Response
+    public function index(Request $request): Response
     {
         $currentYear = now()->year;
         $years = range($currentYear - 5, $currentYear);
+        $user = $this->user($request);
+        $family = $user->currentFamily ?? $user->family;
+        abort_unless($family instanceof Family, 403);
 
         return Inertia::render('Reports/Index', [
             'years' => $years,
             'current_year' => $currentYear,
             'current_month' => now()->month,
+            'report_types' => collect(ReportType::cases())
+                ->reject(fn (ReportType $type): bool => $type === ReportType::Receipt)
+                ->map(fn (ReportType $type): array => ['value' => $type->value, 'label' => $type->label()])
+                ->values(),
+            'formats' => collect(ReportFormat::cases())->map(fn (ReportFormat $format): array => [
+                'value' => $format->value,
+                'label' => strtoupper($format->value),
+            ]),
+            'frequencies' => collect(ReportScheduleFrequency::cases())->map(fn (ReportScheduleFrequency $frequency): array => [
+                'value' => $frequency->value,
+                'label' => str($frequency->value)->headline()->toString(),
+            ]),
+            'members' => $family->memberships()->active()->with('user:id,name')->get()
+                ->map(fn (FamilyMembership $membership): array => ['id' => $membership->user_id, 'name' => $membership->displayName()])
+                ->sortBy('name')->values(),
+            'schedules' => $family->reportSchedules()->withCount('deliveries')->latest()->get()
+                ->map(fn (ReportSchedule $schedule): array => [
+                    'id' => $schedule->id,
+                    'name' => $schedule->name,
+                    'report_type' => $schedule->report_type->label(),
+                    'format' => strtoupper($schedule->format->value),
+                    'frequency' => str($schedule->frequency->value)->headline()->toString(),
+                    'next_run_at' => $schedule->next_run_at->toIso8601String(),
+                    'deliveries_count' => $schedule->deliveries_count,
+                    'is_active' => $schedule->is_active,
+                ]),
         ]);
     }
 
@@ -59,9 +90,7 @@ class ReportController extends Controller
                 'familyCategory:id,name,monthly_amount',
                 'user.contributions.payments',
             ])
-            ->whereHas('user', function (Builder $query): void {
-                $query->whereNull('archived_at');
-            })
+            ->active()
             ->where(function (Builder $query): void {
                 $query->whereNotNull('family_members.family_category_id')
                     ->orWhereNotNull('family_members.category');
@@ -77,14 +106,24 @@ class ReportController extends Controller
                         && $contribution->year === $year
                         && $contribution->month === $month,
                 );
-                $expectedAmount = $membership->monthlyAmount() ?? 0;
-                $paidAmount = $contribution instanceof Contribution ? $this->paidAmount($contribution) : 0;
+                $snapshot = $membership->contributionCategorySnapshot($year, $month);
+                $expectedAmount = $snapshot['category_amount'] ?? 0;
+                $paidAmount = 0;
+                $categorySlug = $snapshot['category_slug'];
+                $categoryName = $snapshot['category_name'];
+
+                if ($contribution instanceof Contribution) {
+                    $expectedAmount = $contribution->expected_amount;
+                    $paidAmount = $this->paidAmount($contribution);
+                    $categorySlug = $contribution->category_slug ?? $categorySlug;
+                    $categoryName = $contribution->category_name ?? $categoryName;
+                }
 
                 return [
                     'id' => $member->id,
-                    'name' => $member->name,
-                    'category' => $membership->category?->value,
-                    'category_label' => $membership->categoryLabel(),
+                    'name' => $membership->displayName(),
+                    'category' => $categorySlug,
+                    'category_label' => $categoryName,
                     'expected_amount' => $expectedAmount,
                     'paid_amount' => $paidAmount,
                     'balance' => $expectedAmount - $paidAmount,
@@ -119,11 +158,6 @@ class ReportController extends Controller
 
         // Fetch all contributions for the year in a single query
         $allContributions = Contribution::query()
-            ->select('contributions.*', 'family_members.category as membership_category')
-            ->leftJoin('family_members', function (JoinClause $join) use ($family): void {
-                $join->on('family_members.user_id', '=', 'contributions.user_id')
-                    ->where('family_members.family_id', $family->id);
-            })
             ->where('contributions.family_id', $family->id)
             ->where('contributions.year', $year)
             ->with('payments')
@@ -172,16 +206,17 @@ class ReportController extends Controller
 
         // Calculate by category for the year using already-loaded data
         $byCategory = [];
-        foreach (MemberCategory::cases() as $category) {
-            $categoryContributions = $allContributions->filter(function (Contribution $contribution) use ($category): bool {
-                return $contribution->getAttribute('membership_category') === $category->value;
-            });
+        foreach ($allContributions->groupBy('category_slug') as $slug => $categoryContributions) {
+            $slug = is_string($slug) && $slug !== '' ? $slug : 'uncategorized';
 
             $categoryExpected = (int) $categoryContributions->sum(fn (Contribution $contribution): int => $contribution->expected_amount);
             $categoryCollected = (int) $categoryContributions->sum(fn (Contribution $contribution): int => $this->paidAmount($contribution));
 
-            $byCategory[$category->value] = [
-                'label' => $category->label(),
+            $first = $categoryContributions->first();
+            $byCategory[$slug] = [
+                'label' => $first instanceof Contribution && filled($first->category_name)
+                    ? $first->category_name
+                    : 'Uncategorized',
                 'expected' => $categoryExpected,
                 'collected' => $categoryCollected,
                 'outstanding' => $categoryExpected - $categoryCollected,

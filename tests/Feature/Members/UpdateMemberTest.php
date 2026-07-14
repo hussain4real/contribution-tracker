@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-use App\Enums\MemberCategory;
+use App\Enums\Role;
 use App\Models\Family;
+use App\Models\FamilyCategory;
 use App\Models\User;
-use Illuminate\Support\Facades\Hash;
 use Inertia\Testing\AssertableInertia as Assert;
 
 /**
@@ -16,6 +16,22 @@ describe('Update Member', function () {
         $this->family = Family::factory()->create();
         $this->admin = User::factory()->admin()->create(['family_id' => $this->family->id]);
         $this->member = User::factory()->member()->employed()->create(['family_id' => $this->family->id]);
+        $this->employed = FamilyCategory::query()
+            ->where('family_id', $this->family->id)
+            ->where('slug', 'employed')
+            ->firstOrFail();
+        $this->student = FamilyCategory::factory()->create([
+            'family_id' => $this->family->id,
+            'name' => 'Student',
+            'slug' => 'student',
+            'monthly_amount' => 1000,
+        ]);
+        $this->unemployed = FamilyCategory::factory()->create([
+            'family_id' => $this->family->id,
+            'name' => 'Unemployed',
+            'slug' => 'unemployed',
+            'monthly_amount' => 2000,
+        ]);
     });
 
     it('super admin can access member edit form', function () {
@@ -32,32 +48,30 @@ describe('Update Member', function () {
             );
     });
 
-    it('super admin can update member name', function () {
+    it('super admin can update the family display name without changing global name', function () {
         $this->actingAs($this->admin)
             ->put("/members/{$this->member->id}", [
-                'name' => 'Updated Name',
-                'email' => $this->member->email,
-                'category' => memberCategoryValue($this->member),
+                'display_name' => 'Updated Name',
+                'family_category_id' => $this->employed->id,
                 'role' => $this->member->role->value,
             ])
             ->assertRedirect();
 
-        $this->member->refresh();
-        expect($this->member->name)->toBe('Updated Name');
+        expect($this->member->refresh()->name)->not->toBe('Updated Name')
+            ->and($this->member->membershipForFamily($this->family)?->display_name)->toBe('Updated Name');
     });
 
     it('super admin can update member category', function () {
         $this->actingAs($this->admin)
             ->put("/members/{$this->member->id}", [
-                'name' => $this->member->name,
-                'email' => $this->member->email,
-                'category' => 'student',
+                'display_name' => $this->member->name,
+                'family_category_id' => $this->student->id,
                 'role' => $this->member->role->value,
+                'effective_immediately' => true,
             ])
             ->assertRedirect();
 
-        $this->member->refresh();
-        expect($this->member->category)->toBe(MemberCategory::Student);
+        expect($this->member->membershipForFamily($this->family)?->family_category_id)->toBe($this->student->id);
     });
 
     it('category change affects expected amount', function () {
@@ -66,66 +80,81 @@ describe('Update Member', function () {
 
         $this->actingAs($this->admin)
             ->put("/members/{$this->member->id}", [
-                'name' => $this->member->name,
-                'email' => $this->member->email,
-                'category' => 'unemployed',
+                'display_name' => $this->member->name,
+                'family_category_id' => $this->unemployed->id,
                 'role' => $this->member->role->value,
+                'effective_immediately' => true,
             ])
             ->assertRedirect();
 
         $this->member->refresh();
         // Now unemployed (₦2,000)
-        expect($this->member->getMonthlyAmount())->toBe(2000);
+        expect($this->member->getMonthlyAmount())->toBe(2000)
+            ->and($this->member->currentFamilyMembership()?->monthlyAmount())->toBe(2000);
     });
 
     it('validates required fields on update', function () {
         $this->actingAs($this->admin)
             ->put("/members/{$this->member->id}", [])
-            ->assertSessionHasErrors(['name', 'email', 'category']);
+            ->assertSessionHasErrors(['display_name', 'family_category_id', 'role']);
     });
 
-    it('validates unique email excludes current member', function () {
-        // Create another member
+    it('does not let a family administrator change a members global email', function () {
         $otherMember = User::factory()->member()->create([
             'family_id' => $this->family->id,
             'email' => 'other@example.com',
         ]);
 
-        // Try to update to the other member's email
         $this->actingAs($this->admin)
             ->put("/members/{$this->member->id}", [
-                'name' => $this->member->name,
+                'display_name' => $this->member->name,
                 'email' => 'other@example.com',
-                'category' => memberCategoryValue($this->member),
+                'family_category_id' => $this->employed->id,
                 'role' => $this->member->role->value,
             ])
-            ->assertSessionHasErrors(['email']);
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        expect($this->member->refresh()->email)->not->toBe('other@example.com');
     });
 
     it('can keep same email on update', function () {
         $this->actingAs($this->admin)
             ->put("/members/{$this->member->id}", [
-                'name' => 'New Name',
+                'display_name' => 'New Name',
                 'email' => $this->member->email, // Same email
-                'category' => memberCategoryValue($this->member),
+                'family_category_id' => $this->employed->id,
                 'role' => $this->member->role->value,
             ])
             ->assertRedirect()
             ->assertSessionHasNoErrors();
     });
 
-    it('can update member password when provided', function () {
+    it('does not let a family administrator change a members global password', function () {
+        $originalPassword = $this->member->password;
+
         $this->actingAs($this->admin)
             ->put("/members/{$this->member->id}", [
-                'name' => $this->member->name,
-                'email' => $this->member->email,
-                'category' => memberCategoryValue($this->member),
+                'display_name' => $this->member->name,
+                'family_category_id' => $this->employed->id,
                 'role' => $this->member->role->value,
                 'password' => 'new-password',
                 'password_confirmation' => 'new-password',
             ])
             ->assertRedirect();
 
-        expect(Hash::check('new-password', $this->member->refresh()->password))->toBeTrue();
+        expect($this->member->refresh()->password)->toBe($originalPassword);
+    });
+
+    it('does not let a family administrator demote their own membership', function () {
+        $this->actingAs($this->admin)
+            ->put("/members/{$this->admin->id}", [
+                'display_name' => $this->admin->name,
+                'family_category_id' => $this->employed->id,
+                'role' => Role::Member->value,
+            ])
+            ->assertRedirect();
+
+        expect($this->admin->membershipForFamily($this->family)?->role)->toBe(Role::Admin);
     });
 });

@@ -50,13 +50,21 @@ it('allows only admins to create contributions', function () {
         ->and($policy->create($this->member))->toBeFalse();
 });
 
-it('allows only same-family admins to mutate contributions', function (string $ability) {
+it('allows only same-family admins to update or delete contributions', function (string $ability) {
     $policy = new ContributionPolicy;
 
     expect($policy->{$ability}($this->admin, $this->contribution))->toBeTrue()
         ->and($policy->{$ability}($this->financialSecretary, $this->contribution))->toBeFalse()
         ->and($policy->{$ability}($this->outsider, $this->contribution))->toBeFalse();
-})->with(['update', 'delete', 'restore', 'forceDelete']);
+})->with(['update', 'delete']);
+
+it('denies restoring or force deleting contributions', function (string $ability) {
+    $policy = new ContributionPolicy;
+
+    expect($policy->{$ability}($this->admin, $this->contribution))->toBeFalse()
+        ->and($policy->{$ability}($this->financialSecretary, $this->contribution))->toBeFalse()
+        ->and($policy->{$ability}($this->outsider, $this->contribution))->toBeFalse();
+})->with(['restore', 'forceDelete']);
 
 it('allows only elevated roles to view member contribution details', function () {
     $policy = new ContributionPolicy;

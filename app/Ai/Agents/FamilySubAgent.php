@@ -89,7 +89,7 @@ abstract class FamilySubAgent implements Agent, CanActAsTool, HasMiddleware, Has
 
         return <<<CONTEXT
         Family workspace: {$familyName}.
-        User: {$this->user->name} (role: {$this->user->role->value}).
+        User: {$this->user->name} (role: {$this->user->activeRole()->value}).
         Currency: {$currency}.
         Today's date: {$currentDate}.
         Current year: {$currentYear}.

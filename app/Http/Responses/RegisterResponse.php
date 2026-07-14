@@ -15,6 +15,6 @@ class RegisterResponse implements RegisterResponseContract
 
     public function toResponse($request): Response
     {
-        return redirect()->intended($this->redirectPathForCurrentFamily($request, Fortify::redirects('register')));
+        return $this->redirectToIntendedOrDefault($request, $this->redirectPathForCurrentFamily($request, Fortify::redirects('register')));
     }
 }

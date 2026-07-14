@@ -97,10 +97,14 @@ describe('Last Financial Secretary Warning', function () {
     it('counts only active financial secretaries', function () {
         // Create one active and one archived financial secretary
         $activeFs = User::factory()->financialSecretary()->create(['family_id' => $this->family->id]);
-        User::factory()->financialSecretary()->create([
+        $archivedSecretary = User::factory()->financialSecretary()->create([
             'family_id' => $this->family->id,
-            'archived_at' => now(),
         ]);
+        $archivedSecretary->membershipForFamily($this->family)?->forceFill([
+            'archived_at' => now(),
+            'archived_by' => $this->admin->id,
+            'archive_reason' => 'No longer active.',
+        ])->save();
 
         // Removing the active FS should trigger warning since archived doesn't count
         $response = $this->actingAs($this->admin)

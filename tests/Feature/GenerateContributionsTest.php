@@ -150,10 +150,11 @@ describe('Generate Monthly Contributions Command', function () {
 
     it('skips archived members', function () {
         $family = Family::factory()->create();
-        User::factory()->member()->employed()->create([
-            'family_id' => $family->id,
+        $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $member->membershipForFamily($family)?->forceFill([
             'archived_at' => now(),
-        ]);
+            'archive_reason' => 'No longer active.',
+        ])->save();
 
         $this->artisan('contributions:generate', ['--family' => $family->id])
             ->assertSuccessful();
@@ -169,6 +170,24 @@ describe('Generate Monthly Contributions Command', function () {
         ]);
 
         $this->artisan('contributions:generate', ['--family' => $family->id])
+            ->assertSuccessful();
+
+        expect(Contribution::where('family_id', $family->id)->count())->toBe(0);
+    });
+
+    it('skips contribution categories with no payable amount', function () {
+        $family = Family::factory()->create();
+        $category = FamilyCategory::factory()->create([
+            'family_id' => $family->id,
+            'monthly_amount' => 0,
+        ]);
+        User::factory()->member()->nonPaying()->create([
+            'family_id' => $family->id,
+            'family_category_id' => $category->id,
+        ]);
+
+        $this->artisan('contributions:generate', ['--family' => $family->id])
+            ->expectsOutput('Created 0 contributions, skipped 1 (already exist).')
             ->assertSuccessful();
 
         expect(Contribution::where('family_id', $family->id)->count())->toBe(0);

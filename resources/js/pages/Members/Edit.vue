@@ -28,11 +28,11 @@ interface Member {
     name: string;
     email: string;
     role: string;
-    category: string | null;
+    family_category_id: number | null;
 }
 
 interface CategoryOption {
-    value: string;
+    value: number;
     label: string;
     amount: number;
 }
@@ -65,17 +65,17 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-const selectedCategory = ref(props.member.category ?? 'employed');
+const selectedCategory = ref<number | null>(
+    props.member.family_category_id ?? props.categories[0]?.value ?? null,
+);
 const selectedRole = ref(props.member.role);
 const showRoleConfirmDialog = ref(false);
 const processing = ref(false);
 const errors = reactive<Record<string, string>>({});
 
 const formData = reactive({
-    name: props.member.name,
-    email: props.member.email,
-    password: '',
-    password_confirmation: '',
+    display_name: props.member.name,
+    effective_immediately: false,
 });
 
 const selectedCategoryAmount = computed(() => {
@@ -116,12 +116,10 @@ function submitForm() {
     router.put(
         update({ member: props.member.id }).url,
         {
-            name: formData.name,
-            email: formData.email,
-            password: formData.password || undefined,
-            password_confirmation: formData.password_confirmation || undefined,
-            category: selectedCategory.value,
+            display_name: formData.display_name,
+            family_category_id: selectedCategory.value,
             role: selectedRole.value,
+            effective_immediately: formData.effective_immediately,
         },
         {
             preserveScroll: true,
@@ -162,62 +160,32 @@ function cancelRoleChange() {
 
                     <form @submit.prevent="handleSubmit" class="mt-6 space-y-6">
                         <div class="grid gap-2">
-                            <Label for="name">Full Name</Label>
+                            <Label for="display_name"
+                                >Family Display Name</Label
+                            >
                             <Input
-                                id="name"
-                                v-model="formData.name"
+                                id="display_name"
+                                v-model="formData.display_name"
                                 type="text"
                                 required
                                 autocomplete="name"
                                 placeholder="Enter full name"
                             />
-                            <InputError :message="errors.name" />
+                            <InputError :message="errors.display_name" />
+                            <p class="text-sm text-muted-foreground">
+                                This name is used only in this family. The
+                                member controls their account email and
+                                password.
+                            </p>
                         </div>
 
                         <div class="grid gap-2">
-                            <Label for="email">Email Address</Label>
-                            <Input
-                                id="email"
-                                v-model="formData.email"
-                                type="email"
-                                required
-                                autocomplete="email"
-                                placeholder="email@example.com"
-                            />
-                            <InputError :message="errors.email" />
-                        </div>
-
-                        <div class="grid gap-2">
-                            <Label for="password"
-                                >New Password (optional)</Label
+                            <Label for="family_category_id"
+                                >Member Category</Label
                             >
-                            <Input
-                                id="password"
-                                v-model="formData.password"
-                                type="password"
-                                autocomplete="new-password"
-                                placeholder="Leave blank to keep current"
-                            />
-                            <InputError :message="errors.password" />
-                        </div>
-
-                        <div class="grid gap-2">
-                            <Label for="password_confirmation"
-                                >Confirm New Password</Label
-                            >
-                            <Input
-                                id="password_confirmation"
-                                v-model="formData.password_confirmation"
-                                type="password"
-                                autocomplete="new-password"
-                                placeholder="Confirm new password"
-                            />
-                        </div>
-
-                        <div class="grid gap-2">
-                            <Label for="category">Member Category</Label>
                             <select
-                                id="category"
+                                id="family_category_id"
+                                name="family_category_id"
                                 v-model="selectedCategory"
                                 required
                                 class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
@@ -244,11 +212,32 @@ function cancelRoleChange() {
                             <p
                                 class="text-xs text-amber-600 dark:text-amber-400"
                             >
-                                Note: Category changes take effect from the next
-                                month.
+                                Category changes take effect next month unless
+                                you choose the immediate option below.
                             </p>
-                            <InputError :message="errors.category" />
+                            <InputError :message="errors.family_category_id" />
                         </div>
+
+                        <label
+                            class="flex items-start gap-3 rounded-lg border p-4"
+                        >
+                            <input
+                                v-model="formData.effective_immediately"
+                                type="checkbox"
+                                class="mt-1"
+                            />
+                            <span>
+                                <span class="block text-sm font-medium"
+                                    >Apply category change this month</span
+                                >
+                                <span
+                                    class="block text-sm text-muted-foreground"
+                                >
+                                    Leave unchecked to apply it from the first
+                                    day of next month.
+                                </span>
+                            </span>
+                        </label>
 
                         <div class="grid gap-2">
                             <Label for="role">Role</Label>

@@ -10,7 +10,6 @@ use App\Models\FamilyMembership;
 use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Illuminate\Database\Eloquent\Builder;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 
@@ -39,9 +38,7 @@ class GetMemberOverview implements Tool
 
         $memberships = $family->memberships()
             ->with(['familyCategory:id,name,monthly_amount', 'user'])
-            ->whereHas('user', function (Builder $query): void {
-                $query->whereNull('archived_at');
-            })
+            ->active()
             ->join('users', 'users.id', '=', 'family_members.user_id')
             ->orderBy('users.name')
             ->select('family_members.*')
@@ -62,7 +59,7 @@ class GetMemberOverview implements Tool
                 : 0;
 
             return [
-                'name' => $member->name,
+                'name' => $membership->displayName(),
                 'role' => $membership->role->value,
                 'category' => $membership->categoryLabel() ?? 'None',
                 'monthly_amount' => $monthlyAmount,

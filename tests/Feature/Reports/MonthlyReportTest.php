@@ -39,8 +39,8 @@ describe('Monthly Report', function () {
         $admin = User::factory()->admin()->create();
 
         // Create members with different categories
-        $employed = User::factory()->employed()->create();
-        $student = User::factory()->student()->create();
+        $employed = User::factory()->employed()->create(['family_id' => $admin->family_id]);
+        $student = User::factory()->student()->create(['family_id' => $admin->family_id]);
 
         // Create contributions for current month
         $contribution1 = Contribution::factory()->create([
@@ -88,17 +88,15 @@ describe('Monthly Report', function () {
         $admin = User::factory()->admin()->create();
 
         // Create members with different categories
-        User::factory()->employed()->count(3)->create();
-        User::factory()->student()->count(2)->create();
+        User::factory()->employed()->count(3)->create(['family_id' => $admin->family_id]);
+        User::factory()->student()->count(2)->create(['family_id' => $admin->family_id]);
 
         // Create contributions for current month
         User::query()
             ->whereNot('id', $admin->id)
             ->get()
             ->each(function (User $user) {
-                Contribution::factory()->create([
-                    'user_id' => $user->id,
-                    'month' => now()->startOfMonth(),
+                Contribution::factory()->forUser($user)->currentMonth()->create([
                     'expected_amount' => $user->getMonthlyAmount(),
                 ]);
             });

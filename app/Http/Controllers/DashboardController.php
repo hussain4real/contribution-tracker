@@ -6,12 +6,11 @@ namespace App\Http\Controllers;
 
 use App\Enums\PaymentStatus;
 use App\Models\Contribution;
-use App\Models\Expense;
 use App\Models\Family;
 use App\Models\FamilyMembership;
-use App\Models\FundAdjustment;
 use App\Models\Payment;
 use App\Models\User;
+use App\Support\EffectiveLedger;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Inertia\Inertia;
@@ -19,6 +18,8 @@ use Inertia\Response;
 
 class DashboardController extends Controller
 {
+    public function __construct(private readonly EffectiveLedger $ledger) {}
+
     /**
      * Display the contribution dashboard with role-based props.
      *
@@ -42,8 +43,9 @@ class DashboardController extends Controller
         $allContributions = Contribution::query()
             ->where('family_id', $family->id)
             ->with(['user.familyMemberships.familyCategory:id,name,monthly_amount', 'payments.recorder'])
-            ->whereHas('user', function (Builder $query): void {
-                $query->whereNull('archived_at');
+            ->whereHas('user.familyMemberships', function ($query) use ($family): void {
+                $query->where('family_members.family_id', $family->id)
+                    ->whereNull('family_members.archived_at');
             })
             ->get();
 
@@ -53,9 +55,7 @@ class DashboardController extends Controller
 
         $membersWithContributions = $currentMonthContributions->pluck('user_id');
         $membersNeedingContributions = $family->memberships()
-            ->whereHas('user', function (Builder $query): void {
-                $query->whereNull('archived_at');
-            })
+            ->active()
             ->where(function (Builder $query): void {
                 $query->whereNotNull('family_members.family_category_id')
                     ->orWhereNotNull('family_members.category');
@@ -94,7 +94,7 @@ class DashboardController extends Controller
      */
     private function calculateSummary(Family $family, Collection $currentMonthContributions, Collection $allContributions): array
     {
-        $totalMembers = $family->members()->whereNull('users.archived_at')->count();
+        $totalMembers = $family->memberships()->active()->count();
         $totalExpected = (int) $currentMonthContributions->sum(fn (Contribution $contribution): int => $contribution->expected_amount);
         $currentMonthCollected = (int) $currentMonthContributions->sum(fn (Contribution $contribution): int => $this->paidAmount($contribution));
         $totalOutstanding = $totalExpected - $currentMonthCollected;
@@ -151,9 +151,9 @@ class DashboardController extends Controller
 
             return [
                 'id' => $member?->id,
-                'name' => $member?->name,
-                'category' => $membership?->category?->value,
-                'category_label' => $membership?->categoryLabel(),
+                'name' => $membership?->displayName() ?? $member?->name,
+                'category' => $contribution->category_slug,
+                'category_label' => $contribution->category_name ?? $membership?->categoryLabel(),
                 'expected_amount' => $contribution->expected_amount,
                 'total_paid' => $totalPaid,
                 'current_month_status' => $contribution->status->value,
@@ -183,8 +183,9 @@ class DashboardController extends Controller
                     'id' => $payment->id,
                     'amount' => $payment->amount,
                     'paid_at' => $payment->paid_at->toDateString(),
-                    'member_name' => $contribution->user instanceof User ? $contribution->user->name : 'Unknown',
-                    'category' => $this->contributionMembership($contribution)?->categoryLabel(),
+                    'member_name' => $this->contributionMembership($contribution)?->displayName()
+                        ?? ($contribution->user instanceof User ? $contribution->user->name : 'Unknown'),
+                    'category' => $contribution->category_name,
                     'recorded_by' => $payment->recorder?->name,
                     'month' => $contribution->month,
                     'year' => $contribution->year,
@@ -233,7 +234,7 @@ class DashboardController extends Controller
             ->where('year', $year)
             ->where('month', $month)
             ->first();
-        $expectedAmount = $user->membershipForFamily($family)?->monthlyAmount() ?? 0;
+        $expectedAmount = $user->membershipForFamily($family)?->monthlyAmountForPeriod($year, $month) ?? 0;
 
         if (! $contribution) {
             return [
@@ -275,9 +276,10 @@ class DashboardController extends Controller
 
             $members[] = [
                 'id' => $contribution->user?->id,
-                'name' => $contribution->user instanceof User ? $contribution->user->name : 'Unknown',
-                'category' => $membership?->category?->value,
-                'category_label' => $membership?->categoryLabel(),
+                'name' => $membership?->displayName()
+                    ?? ($contribution->user instanceof User ? $contribution->user->name : 'Unknown'),
+                'category' => $contribution->category_slug,
+                'category_label' => $contribution->category_name ?? $membership?->categoryLabel(),
                 'month' => $contribution->month,
                 'year' => $contribution->year,
                 'expected_amount' => $contribution->expected_amount,
@@ -307,16 +309,7 @@ class DashboardController extends Controller
      */
     private function calculateFundBalance(int $familyId): int
     {
-        $totalPayments = (int) Payment::query()
-            ->whereIn(
-                'contribution_id',
-                Contribution::query()->where('family_id', $familyId)->select('id'),
-            )
-            ->sum('amount');
-        $totalAdjustments = (int) FundAdjustment::query()->where('family_id', $familyId)->sum('amount');
-        $totalExpenses = (int) Expense::query()->where('family_id', $familyId)->sum('amount');
-
-        return $totalPayments + $totalAdjustments - $totalExpenses;
+        return $this->ledger->balance($familyId);
     }
 
     private function paidAmount(Contribution $contribution): int

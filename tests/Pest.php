@@ -3,7 +3,9 @@
 declare(strict_types=1);
 
 use App\Ai\Agents\FamilySubAgent;
+use App\Enums\MemberCategory;
 use App\Models\Family;
+use App\Models\FamilyCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Http\Response;
@@ -109,10 +111,32 @@ function memberCategoryValue(User $user): string
  */
 function createBrowserFamily(array $attributes = []): Family
 {
-    return Family::factory()->create([
+    $family = Family::factory()->create([
         'name' => 'Browser Family',
         ...$attributes,
     ]);
+
+    foreach (MemberCategory::cases() as $sortOrder => $category) {
+        FamilyCategory::query()->firstOrCreate([
+            'family_id' => $family->id,
+            'slug' => $category->value,
+        ], [
+            'name' => $category->label(),
+            'monthly_amount' => $category->monthlyAmount(),
+            'sort_order' => $sortOrder,
+        ]);
+    }
+
+    return $family;
+}
+
+function browserFamilyCategoryId(Family $family, string $slug): int
+{
+    return FamilyCategory::query()
+        ->where('family_id', $family->id)
+        ->where('slug', $slug)
+        ->firstOrFail()
+        ->id;
 }
 
 /**
@@ -199,17 +223,19 @@ function loginBrowserAs(User $user, ?string $expectedPath = null): PendingAwaita
     Session::flush();
 
     $family = $user->currentFamily ?? $user->family;
-    $expectedPath ??= $family instanceof Family
-        ? "/{$family->slug}/dashboard"
-        : '/dashboard';
+    $expectedPath ??= match (true) {
+        $user->isSuperAdmin() => route('filament.platform.pages.dashboard', absolute: false),
+        $family instanceof Family => "/{$family->slug}/dashboard",
+        default => '/dashboard',
+    };
+    $redirectWait = $user->isSuperAdmin() ? 2 : 0.5;
 
     $page = visit(route('login'));
 
     $page->fill('email', $user->email)
         ->fill('password', 'password')
         ->click('@login-button')
-        ->wait(0.5)
-        ->navigate($expectedPath)
+        ->wait($redirectWait)
         ->assertPathIs($expectedPath)
         ->assertNoJavaScriptErrors();
 

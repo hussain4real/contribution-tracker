@@ -35,5 +35,5 @@ it('exposes descriptions and json schemas for all ai tools', function (string $t
     'record expense' => [RecordExpense::class, ['amount', 'description', 'spent_at', 'confirmed']],
     'record fund adjustment' => [RecordFundAdjustment::class, ['amount', 'description', 'recorded_at', 'confirmed']],
     'record payment' => [RecordPayment::class, ['member_name', 'amount', 'paid_at', 'notes', 'target_year', 'target_month', 'confirmed']],
-    'send invitation' => [SendInvitation::class, ['delivery_method', 'email', 'whatsapp_phone', 'role', 'confirmed']],
+    'send invitation' => [SendInvitation::class, ['delivery_method', 'email', 'whatsapp_phone', 'role', 'category', 'confirmed']],
 ]);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Actions\AssignFamilyCategory;
 use App\Jobs\SyncPaystackSubaccount;
 use App\Models\Family;
 use App\Models\FamilyCategory;
@@ -35,7 +36,7 @@ class FamilySettingsController extends Controller
                 'name' => $category->name,
                 'monthly_amount' => $category->monthly_amount,
                 'sort_order' => $category->sort_order,
-                'members_count' => $category->users()->count(),
+                'members_count' => $category->memberships()->active()->count(),
             ]);
 
         return Inertia::render('Family/Settings', [
@@ -114,11 +115,14 @@ class FamilySettingsController extends Controller
         return redirect()->back()->with('success', 'Category added.');
     }
 
-    public function updateCategory(Request $request, FamilyCategory $category): RedirectResponse
-    {
-        $user = $this->authUser();
+    public function updateCategory(
+        Request $request,
+        FamilyCategory $category,
+        AssignFamilyCategory $assignFamilyCategory,
+    ): RedirectResponse {
+        $family = $this->adminFamily();
 
-        if (! $user->isAdmin() || $category->family_id !== $user->family_id) {
+        if ($category->family_id !== $family->id) {
             abort(403);
         }
 
@@ -128,25 +132,35 @@ class FamilySettingsController extends Controller
         ]);
         $attributes = $this->categoryAttributes($validated);
 
+        $memberships = $category->memberships()->active()->get();
+
         $category->update([
             'name' => $attributes['name'],
             'slug' => Str::slug($attributes['name']),
             'monthly_amount' => $attributes['monthly_amount'],
         ]);
 
+        foreach ($memberships as $membership) {
+            $assignFamilyCategory->handle($membership, $category, $this->authUser());
+        }
+
         return redirect()->back()->with('success', 'Category updated.');
     }
 
     public function destroyCategory(FamilyCategory $category): RedirectResponse
     {
-        $user = $this->authUser();
+        $family = $this->adminFamily();
 
-        if (! $user->isAdmin() || $category->family_id !== $user->family_id) {
+        if ($category->family_id !== $family->id) {
             abort(403);
         }
 
-        if ($category->users()->exists()) {
-            return redirect()->back()->with('error', 'Cannot delete a category with active members.');
+        if (
+            $category->memberships()->exists()
+            || $category->assignments()->exists()
+            || $category->contributionSnapshots()->exists()
+        ) {
+            return redirect()->back()->with('error', 'Cannot delete a category that is referenced by member or contribution history.');
         }
 
         $category->delete();
@@ -174,11 +188,13 @@ class FamilySettingsController extends Controller
     {
         $user = $this->authUser();
 
-        if (! $user->isAdmin() || ! $user->family instanceof Family) {
+        $family = $user->currentFamily ?? $user->family;
+
+        if (! $user->isAdmin() || ! $family instanceof Family || ! $user->belongsToFamily($family)) {
             abort(403);
         }
 
-        return $user->family;
+        return $family;
     }
 
     /**

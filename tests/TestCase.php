@@ -8,6 +8,8 @@ use AllowDynamicProperties;
 use App\Models\Contribution;
 use App\Models\Expense;
 use App\Models\Family;
+use App\Models\FamilyCategory;
+use App\Models\FamilyMembership;
 use App\Models\FundAdjustment;
 use App\Models\Payment;
 use App\Models\User;
@@ -36,6 +38,11 @@ use Symfony\Component\HttpFoundation\Response;
  * @property User $user
  * @property Family $family
  * @property Family $otherFamily
+ * @property FamilyCategory $employed
+ * @property FamilyCategory $familyCategory
+ * @property FamilyCategory $student
+ * @property FamilyCategory $unemployed
+ * @property FamilyMembership $archivedMembership
  * @property Contribution $contribution
  * @property Contribution $employedContribution
  * @property Contribution $memberContribution

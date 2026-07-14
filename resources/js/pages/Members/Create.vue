@@ -14,7 +14,7 @@ import { ArrowUpCircle } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
 interface CategoryOption {
-    value: string;
+    value: number;
     label: string;
     amount: number;
 }
@@ -42,7 +42,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-const selectedCategory = ref('member');
+const selectedCategory = ref<number | null>(props.categories[0]?.value ?? null);
 const selectedRole = ref('member');
 
 const selectedCategoryAmount = computed(() => {
@@ -102,7 +102,7 @@ const { formatCurrency } = useCurrencyFormatter();
                 >
                     <HeadingSmall
                         title="Add New Member"
-                        description="Create a new family member account"
+                        description="Create a managed account. The member must replace the temporary password when they first sign in."
                     />
 
                     <Form
@@ -164,10 +164,12 @@ const { formatCurrency } = useCurrencyFormatter();
                         </div>
 
                         <div class="grid gap-2">
-                            <Label for="category">Member Category</Label>
+                            <Label for="family_category_id"
+                                >Member Category</Label
+                            >
                             <select
-                                id="category"
-                                name="category"
+                                id="family_category_id"
+                                name="family_category_id"
                                 v-model="selectedCategory"
                                 required
                                 class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
@@ -191,7 +193,7 @@ const { formatCurrency } = useCurrencyFormatter();
                                     formatCurrency(selectedCategoryAmount)
                                 }}</strong>
                             </p>
-                            <InputError :message="errors.category" />
+                            <InputError :message="errors.family_category_id" />
                         </div>
 
                         <div class="grid gap-2">

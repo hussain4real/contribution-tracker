@@ -168,34 +168,35 @@ it('validates description max length', function () {
 });
 
 // =========================================================================
-// Destroy
+// Reverse
 // =========================================================================
 
-it('allows super admin to delete an expense', function () {
+it('allows super admin to reverse an expense without deleting it', function () {
     $expense = Expense::factory()->recordedBy($this->admin)->create();
 
     $this->actingAs($this->admin)
-        ->delete(route('expenses.destroy', $expense))
-        ->assertRedirect(route('expenses.index'));
+        ->post(route('expenses.reverse', $expense), ['reason' => 'Duplicate expense'])
+        ->assertRedirect();
 
-    expect(Expense::count())->toBe(0);
+    expect(Expense::count())->toBe(1)
+        ->and($expense->reversal()->exists())->toBeTrue();
 });
 
-it('denies financial secretary from deleting an expense', function () {
+it('denies financial secretary from reversing an expense', function () {
     $expense = Expense::factory()->recordedBy($this->financialSecretary)->create();
 
     $this->actingAs($this->financialSecretary)
-        ->delete(route('expenses.destroy', $expense))
+        ->post(route('expenses.reverse', $expense), ['reason' => 'Duplicate expense'])
         ->assertForbidden();
 
     expect(Expense::count())->toBe(1);
 });
 
-it('denies regular member from deleting an expense', function () {
+it('denies regular member from reversing an expense', function () {
     $expense = Expense::factory()->recordedBy($this->admin)->create();
 
     $this->actingAs($this->member)
-        ->delete(route('expenses.destroy', $expense))
+        ->post(route('expenses.reverse', $expense), ['reason' => 'Duplicate expense'])
         ->assertForbidden();
 
     expect(Expense::count())->toBe(1);

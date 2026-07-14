@@ -7,6 +7,7 @@ namespace App\Mcp\Tools;
 use App\Mcp\Resources\FamilyFundReviewApp;
 use App\Mcp\Tools\Concerns\AuthorizesFamilyFundReview;
 use App\Models\Contribution;
+use App\Models\Family;
 use App\Models\User;
 use App\Notifications\ContributionReminderNotification;
 use Carbon\CarbonImmutable;
@@ -129,8 +130,10 @@ class SendFamilyFundReviewReminders extends Tool
      */
     private function preview(User $user, Collection $contributionIds, Collection $channels): array
     {
+        $family = $user->currentFamily ?? $user->family;
+        $familyId = $family instanceof Family ? $family->id : 0;
         $contributions = Contribution::query()
-            ->where('family_id', $user->family_id)
+            ->where('family_id', $familyId)
             ->whereIn('id', $contributionIds)
             ->with(['user', 'family', 'payments'])
             ->get()
@@ -144,7 +147,11 @@ class SendFamilyFundReviewReminders extends Tool
             /** @var Contribution|null $contribution */
             $contribution = $contributions->get($contributionId);
 
-            if ($contribution === null || $contribution->user === null || $contribution->user->isArchived()) {
+            if (
+                $contribution === null
+                || $contribution->user === null
+                || $contribution->user->membershipForFamilyId($familyId) === null
+            ) {
                 $invalid[] = [
                     'contribution_id' => $contributionId,
                     'reason' => 'Contribution was not found for this family.',

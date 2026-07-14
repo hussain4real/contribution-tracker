@@ -263,7 +263,7 @@ it('smokes authenticated family pages', function () {
     navigateAndAssertBrowserSmoke($page, route('expenses.index'), 'Expenses');
     navigateAndAssertBrowserSmoke($page, route('expenses.create'), 'Record Expense');
     navigateAndAssertBrowserSmoke($page, route('fund-adjustments.index'), 'Fund Adjustments');
-    navigateAndAssertBrowserSmoke($page, route('reports.index'), 'Contribution Reports');
+    navigateAndAssertBrowserSmoke($page, route('reports.index'), 'Reports & exports');
     navigateAndAssertBrowserSmoke($page, route('reports.monthly'), now()->format('F Y').' Report');
     navigateAndAssertBrowserSmoke($page, route('reports.annual'), 'Annual Report');
     navigateAndAssertBrowserSmoke($page, route('family.settings'), 'Family Settings');

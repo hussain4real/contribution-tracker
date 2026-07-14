@@ -101,7 +101,7 @@ class CreateNewUser implements CreatesNewUsers
             ->where('token', $input['invitation_token'])
             ->whereNull('accepted_at')
             ->where('expires_at', '>', now())
-            ->with('family')
+            ->with(['family', 'familyCategory'])
             ->firstOrFail();
 
         $user = User::create([
@@ -111,11 +111,16 @@ class CreateNewUser implements CreatesNewUsers
             'role' => $invitation->role,
             'family_id' => $invitation->family_id,
             'current_family_id' => $invitation->family_id,
+            'family_category_id' => $invitation->family_category_id,
             'whatsapp_phone' => $invitation->whatsapp_phone,
         ]);
 
         if ($invitation->family) {
-            $user->ensureFamilyMembership($invitation->family, $invitation->role);
+            $user->ensureFamilyMembership(
+                $invitation->family,
+                $invitation->role,
+                familyCategoryId: $invitation->family_category_id,
+            );
         }
 
         $invitation->update(['accepted_at' => now()]);

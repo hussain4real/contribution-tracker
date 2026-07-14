@@ -33,9 +33,16 @@ it('allows admins and financial secretaries to create fund adjustments', functio
         ->and($this->policy->create($this->member))->toBeFalse();
 });
 
-it('allows only same-family payment recorders to mutate fund adjustments', function (string $ability) {
-    expect($this->policy->{$ability}($this->admin, $this->fundAdjustment))->toBeTrue()
-        ->and($this->policy->{$ability}($this->financialSecretary, $this->fundAdjustment))->toBeTrue()
+it('allows only same-family payment recorders to reverse fund adjustments', function () {
+    expect($this->policy->delete($this->admin, $this->fundAdjustment))->toBeTrue()
+        ->and($this->policy->delete($this->financialSecretary, $this->fundAdjustment))->toBeTrue()
+        ->and($this->policy->delete($this->member, $this->fundAdjustment))->toBeFalse()
+        ->and($this->policy->delete($this->outsider, $this->fundAdjustment))->toBeFalse();
+});
+
+it('denies direct mutation of immutable fund adjustments', function (string $ability) {
+    expect($this->policy->{$ability}($this->admin, $this->fundAdjustment))->toBeFalse()
+        ->and($this->policy->{$ability}($this->financialSecretary, $this->fundAdjustment))->toBeFalse()
         ->and($this->policy->{$ability}($this->member, $this->fundAdjustment))->toBeFalse()
         ->and($this->policy->{$ability}($this->outsider, $this->fundAdjustment))->toBeFalse();
-})->with(['update', 'delete', 'restore', 'forceDelete']);
+})->with(['update', 'restore', 'forceDelete']);

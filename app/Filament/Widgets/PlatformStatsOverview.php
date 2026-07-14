@@ -25,8 +25,8 @@ class PlatformStatsOverview extends StatsOverviewWidget
             Stat::make('Active users', User::active()->count()),
             Stat::make('Archived users', User::archived()->count()),
             Stat::make('Total contributions', Contribution::count()),
-            Stat::make('Total payments', '₦'.number_format((int) Payment::sum('amount'))),
-            Stat::make('Total expenses', '₦'.number_format((int) Expense::sum('amount'))),
+            Stat::make('Total payments', '₦'.number_format((int) Payment::effective()->sum('amount'))),
+            Stat::make('Total expenses', '₦'.number_format((int) Expense::effective()->sum('amount'))),
         ];
     }
 }

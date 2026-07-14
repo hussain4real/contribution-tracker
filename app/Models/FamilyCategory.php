@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Support\CurrencyFormatter;
 use Database\Factories\FamilyCategoryFactory;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -20,6 +21,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $sort_order
  * @property-read string $formatted_amount
  * @property-read string $label_with_amount
+ * @property-read Collection<int, FamilyMembership> $memberships
+ * @property-read Collection<int, FamilyMembershipCategoryAssignment> $assignments
+ * @property-read Collection<int, Contribution> $contributionSnapshots
  */
 class FamilyCategory extends Model
 {
@@ -66,14 +70,22 @@ class FamilyCategory extends Model
         return $this->belongsTo(Family::class);
     }
 
-    /**
-     * Users assigned to this category.
-     *
-     * @return HasMany<User, $this>
-     */
-    public function users(): HasMany
+    /** @return HasMany<FamilyMembership, $this> */
+    public function memberships(): HasMany
     {
-        return $this->hasMany(User::class);
+        return $this->hasMany(FamilyMembership::class);
+    }
+
+    /** @return HasMany<FamilyMembershipCategoryAssignment, $this> */
+    public function assignments(): HasMany
+    {
+        return $this->hasMany(FamilyMembershipCategoryAssignment::class);
+    }
+
+    /** @return HasMany<Contribution, $this> */
+    public function contributionSnapshots(): HasMany
+    {
+        return $this->hasMany(Contribution::class);
     }
 
     // =========================================================================

@@ -21,10 +21,13 @@ class FundAdjustmentController extends Controller
         $this->authorize('viewAny', FundAdjustment::class);
 
         $user = $this->authUser();
+        $family = $user->currentFamily ?? $user->family;
+
+        abort_unless($family !== null, 403);
 
         $adjustments = FundAdjustment::query()
-            ->where('family_id', $user->family_id)
-            ->with('recorder')
+            ->where('family_id', $family->id)
+            ->with(['recorder', 'reversal'])
             ->latestFirst()
             ->latest('id')
             ->paginate(20)
@@ -35,6 +38,9 @@ class FundAdjustmentController extends Controller
                 'recorded_at' => $adjustment->recorded_at->toDateString(),
                 'recorded_by' => $adjustment->recorder?->name,
                 'created_at' => $adjustment->created_at?->toDateString(),
+                'is_reversed' => $adjustment->isReversed(),
+                'reversal_reason' => $adjustment->reversal?->reason,
+                'can_reverse' => $user->can('delete', $adjustment) && ! $adjustment->isReversed(),
             ]);
 
         return Inertia::render('FundAdjustments/Index', [
@@ -49,32 +55,22 @@ class FundAdjustmentController extends Controller
     public function store(StoreFundAdjustmentRequest $request): RedirectResponse
     {
         $user = $this->user($request);
+        $family = $user->currentFamily ?? $user->family;
+
+        abort_unless($family !== null, 403);
         $amount = $request->integer('amount');
 
         FundAdjustment::create([
-            'family_id' => $user->family_id,
+            'family_id' => $family->id,
             'amount' => $amount,
             'description' => $request->string('description')->toString(),
             'recorded_at' => $request->string('recorded_at')->toString(),
             'recorded_by' => $user->id,
         ]);
 
-        $formattedAmount = CurrencyFormatter::format($amount, $user->family?->currency);
+        $formattedAmount = CurrencyFormatter::format($amount, $family->currency);
 
         return redirect()->route('fund-adjustments.index')
             ->with('success', "Fund adjustment of {$formattedAmount} recorded successfully.");
-    }
-
-    /**
-     * Remove the specified fund adjustment.
-     */
-    public function destroy(FundAdjustment $fundAdjustment): RedirectResponse
-    {
-        $this->authorize('delete', $fundAdjustment);
-
-        $fundAdjustment->delete();
-
-        return redirect()->route('fund-adjustments.index')
-            ->with('success', 'Fund adjustment has been deleted.');
     }
 }

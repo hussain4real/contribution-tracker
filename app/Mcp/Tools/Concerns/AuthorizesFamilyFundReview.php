@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Mcp\Tools\Concerns;
 
+use App\Models\Family;
 use App\Models\User;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -26,7 +27,9 @@ trait AuthorizesFamilyFundReview
             return Response::error('Permission denied. Admin or Financial Secretary access is required.');
         }
 
-        if ($user->family_id === null) {
+        $family = $user->currentFamily ?? $user->family;
+
+        if (! $family instanceof Family || ! $user->belongsToFamily($family)) {
             return Response::error('A family workspace is required.');
         }
 

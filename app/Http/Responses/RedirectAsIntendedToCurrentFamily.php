@@ -17,6 +17,6 @@ class RedirectAsIntendedToCurrentFamily implements Responsable
 
     public function toResponse($request): Response
     {
-        return redirect()->intended($this->redirectPathForCurrentFamily($request, Fortify::redirects($this->name)));
+        return $this->redirectToIntendedOrDefault($request, $this->redirectPathForCurrentFamily($request, Fortify::redirects($this->name)));
     }
 }

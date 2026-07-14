@@ -351,6 +351,10 @@ it('updates family categories in the admins family', function () {
     $family = Family::factory()->create();
     $admin = User::factory()->admin()->create(['family_id' => $family->id]);
     $category = FamilyCategory::factory()->create(['family_id' => $family->id]);
+    $member = User::factory()->member()->create([
+        'family_id' => $family->id,
+        'family_category_id' => $category->id,
+    ]);
 
     $this->actingAs($admin)
         ->put(route('family.categories.update', $category), [
@@ -362,7 +366,8 @@ it('updates family categories in the admins family', function () {
 
     expect($category->refresh()->name)->toBe('Working Adults')
         ->and($category->slug)->toBe('working-adults')
-        ->and($category->monthly_amount)->toBe(4500);
+        ->and($category->monthly_amount)->toBe(4500)
+        ->and($member->membershipForFamily($family)?->categoryAssignments()->count())->toBe(2);
 });
 
 it('prevents category updates outside the admins family', function () {
@@ -389,7 +394,7 @@ it('prevents deleting a category with active members', function () {
     $this->actingAs($admin)
         ->delete(route('family.categories.destroy', $category))
         ->assertRedirect()
-        ->assertSessionHas('error', 'Cannot delete a category with active members.');
+        ->assertSessionHas('error', 'Cannot delete a category that is referenced by member or contribution history.');
 
     expect($category->refresh()->exists)->toBeTrue();
 });

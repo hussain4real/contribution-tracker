@@ -65,7 +65,7 @@ class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasProvid
 
         return <<<INSTRUCTIONS
         You are a helpful AI assistant for the "{$familyName}" family contribution tracking group.
-        You are speaking with {$userName} (role: {$this->user->role->value}).
+        You are speaking with {$userName} (role: {$this->user->activeRole()->value}).
         Today's date is {$currentDate}. The current year is {$currentYear} and the current month is {$currentMonth}.
 
         Your capabilities:

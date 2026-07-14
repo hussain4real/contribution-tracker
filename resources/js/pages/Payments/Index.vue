@@ -1,14 +1,33 @@
 <script setup lang="ts">
 import { index as membersIndex } from '@/actions/App/Http/Controllers/MemberController';
+import PaymentBatchReversalController from '@/actions/App/Http/Controllers/PaymentBatchReversalController';
 import {
     create as createPayment,
     index,
 } from '@/actions/App/Http/Controllers/PaymentController';
+import PaymentReceiptController from '@/actions/App/Http/Controllers/PaymentReceiptController';
+import InputError from '@/components/InputError.vue';
+import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useCurrencyFormatter } from '@/lib/currency';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link } from '@inertiajs/vue3';
-import { ChevronRight, CreditCard, Users } from '@lucide/vue';
+import { Head, Link, router } from '@inertiajs/vue3';
+import {
+    ChevronRight,
+    CreditCard,
+    Download,
+    RotateCcw,
+    Users,
+} from '@lucide/vue';
 import { computed, ref } from 'vue';
 
 interface Member {
@@ -22,6 +41,23 @@ interface Member {
 
 interface Props {
     members?: Member[];
+    receipts?: ReceiptItem[];
+}
+
+interface ReceiptItem {
+    id: number;
+    receipt_number: number;
+    member_name: string;
+    total_amount: number;
+    paid_at: string;
+    method: string;
+    source: string;
+    reference: string | null;
+    recorded_by: string | null;
+    allocations_count: number;
+    is_reversed: boolean;
+    reversal_reason: string | null;
+    can_reverse: boolean;
 }
 
 const props = defineProps<Props>();
@@ -34,6 +70,10 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const searchQuery = ref('');
+const reversalTarget = ref<ReceiptItem | null>(null);
+const reversalReason = ref('');
+const reversalError = ref('');
+const reversing = ref(false);
 
 const filteredMembers = computed(() => {
     if (!props.members) return [];
@@ -48,6 +88,30 @@ const filteredMembers = computed(() => {
 });
 
 const { formatCurrency } = useCurrencyFormatter();
+
+function reverseReceipt(): void {
+    if (!reversalTarget.value || reversalReason.value.trim().length < 5) {
+        reversalError.value = 'Enter a reason of at least 5 characters.';
+        return;
+    }
+
+    reversing.value = true;
+    router.post(
+        PaymentBatchReversalController({
+            payment_batch: reversalTarget.value.id,
+        }).url,
+        { reason: reversalReason.value },
+        {
+            preserveScroll: true,
+            onSuccess: () => (reversalTarget.value = null),
+            onError: (errors) => {
+                reversalError.value =
+                    errors.reason ?? 'Unable to reverse this receipt.';
+            },
+            onFinish: () => (reversing.value = false),
+        },
+    );
+}
 </script>
 
 <template>
@@ -177,6 +241,142 @@ const { formatCurrency } = useCurrencyFormatter();
                     </Link>
                 </div>
             </div>
+
+            <div
+                class="rounded-xl border border-sidebar-border/70 bg-white dark:border-sidebar-border dark:bg-neutral-900"
+            >
+                <div class="border-b px-6 py-4">
+                    <h2 class="text-lg font-medium">Recent receipts</h2>
+                    <p class="text-sm text-muted-foreground">
+                        Posted receipts are immutable. Use reversal to correct
+                        an entry while retaining its audit history.
+                    </p>
+                </div>
+                <div
+                    v-if="!receipts?.length"
+                    class="p-6 text-center text-sm text-muted-foreground"
+                >
+                    No receipts recorded yet.
+                </div>
+                <div v-else class="overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="border-b text-muted-foreground">
+                            <tr>
+                                <th class="px-6 py-3">Receipt</th>
+                                <th class="px-6 py-3">Member</th>
+                                <th class="px-6 py-3">Date / Method</th>
+                                <th class="px-6 py-3 text-right">Amount</th>
+                                <th class="px-6 py-3"></th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y">
+                            <tr
+                                v-for="receipt in receipts"
+                                :key="receipt.id"
+                                :class="{ 'opacity-60': receipt.is_reversed }"
+                            >
+                                <td class="px-6 py-4 font-medium">
+                                    #{{ receipt.receipt_number }}
+                                    <span
+                                        v-if="receipt.is_reversed"
+                                        class="ml-2 text-xs text-amber-600"
+                                        >Reversed</span
+                                    >
+                                </td>
+                                <td class="px-6 py-4">
+                                    {{ receipt.member_name }}
+                                    <p class="text-xs text-muted-foreground">
+                                        {{ receipt.allocations_count }}
+                                        allocation(s)
+                                    </p>
+                                </td>
+                                <td class="px-6 py-4">
+                                    {{ receipt.paid_at }} · {{ receipt.method }}
+                                    <p
+                                        v-if="receipt.reference"
+                                        class="text-xs text-muted-foreground"
+                                    >
+                                        {{ receipt.reference }}
+                                    </p>
+                                </td>
+                                <td class="px-6 py-4 text-right font-semibold">
+                                    {{ formatCurrency(receipt.total_amount) }}
+                                </td>
+                                <td class="px-6 py-4 text-right">
+                                    <Button size="sm" variant="ghost" as-child>
+                                        <a
+                                            :href="
+                                                PaymentReceiptController({
+                                                    payment_batch: receipt.id,
+                                                }).url
+                                            "
+                                        >
+                                            <Download class="mr-2 h-4 w-4" />
+                                            Receipt
+                                        </a>
+                                    </Button>
+                                    <Button
+                                        v-if="receipt.can_reverse"
+                                        size="sm"
+                                        variant="ghost"
+                                        class="text-red-600"
+                                        @click="
+                                            reversalTarget = receipt;
+                                            reversalReason = '';
+                                            reversalError = '';
+                                        "
+                                    >
+                                        <RotateCcw class="mr-2 h-4 w-4" />
+                                        Reverse
+                                    </Button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <Dialog
+                :open="reversalTarget !== null"
+                @update:open="(open) => !open && (reversalTarget = null)"
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle
+                            >Reverse receipt #{{
+                                reversalTarget?.receipt_number
+                            }}</DialogTitle
+                        >
+                        <DialogDescription>
+                            Every allocation in this receipt will be excluded
+                            from balances. The receipt itself is retained.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div class="grid gap-2">
+                        <Label for="receipt-reversal-reason">Reason</Label>
+                        <textarea
+                            id="receipt-reversal-reason"
+                            v-model="reversalReason"
+                            rows="4"
+                            maxlength="1000"
+                            class="rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+                        />
+                        <InputError :message="reversalError" />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" @click="reversalTarget = null"
+                            >Cancel</Button
+                        >
+                        <Button
+                            variant="destructive"
+                            :disabled="reversing"
+                            @click="reverseReceipt"
+                        >
+                            {{ reversing ? 'Reversing…' : 'Reverse receipt' }}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     </AppLayout>
 </template>

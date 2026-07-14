@@ -52,10 +52,15 @@ describe('Record Full Payment', function () {
             'family_id' => $family->id,
             'name' => 'Non Paying',
         ]);
-        User::factory()->member()->employed()->archived()->create([
+        $archivedMember = User::factory()->member()->employed()->create([
             'family_id' => $family->id,
             'name' => 'Archived Paying',
         ]);
+        $archivedMember->membershipForFamily($family)?->forceFill([
+            'archived_at' => now(),
+            'archived_by' => $financialSecretary->id,
+            'archive_reason' => 'No longer active.',
+        ])->save();
 
         $this->actingAs($financialSecretary)
             ->get("/{$family->slug}/payments")
@@ -124,7 +129,7 @@ describe('Record Full Payment', function () {
                 ->where('member.category_label', 'Monthly Dues')
                 ->where('category_amount', 100)
                 ->where('formatted_amount', 'QAR 100.00')
-                ->where('categories.0.label', 'Employed (QAR 4,000/month)')
+                ->where('categories.0.label', 'Monthly Dues (QAR 100/month)')
             );
     });
 
@@ -184,7 +189,7 @@ describe('Record Full Payment', function () {
                 'paid_at' => now()->toDateString(),
             ])
             ->assertRedirect(route('dashboard'))
-            ->assertSessionHas('success', "Payment of QAR 100.00 recorded for {$member->name}.");
+            ->assertSessionHas('success', "Receipt #1: QAR 100.00 recorded for {$member->name}.");
     });
 
     it('super admin can record a full payment', function () {
@@ -308,22 +313,28 @@ describe('Record Full Payment', function () {
             ->and($secondaryContribution->refresh()->total_paid)->toBe(0);
     });
 
-    it('allows admins to delete recent payments', function () {
+    it('allows admins to reverse recent payment receipts without deleting allocations', function () {
         $family = Family::factory()->create();
         $admin = User::factory()->admin()->create(['family_id' => $family->id]);
         $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
-        $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
-        $payment = Payment::factory()
-            ->forContribution($contribution)
-            ->recordedBy($admin)
-            ->create();
+        $batch = app(PaymentAllocationService::class)->createBatch(
+            member: $member,
+            amount: 4000,
+            paidAt: now(),
+            recordedBy: $admin,
+            family: $family,
+            idempotencyKey: 'test:reverse-receipt',
+        );
+        $payment = $batch->allocations->firstOrFail();
 
         $this->actingAs($admin)
-            ->delete(route('payments.destroy', $payment))
+            ->post(route('payment-batches.reverse', $batch), ['reason' => 'Duplicate receipt'])
             ->assertRedirect()
-            ->assertSessionHas('success', 'Payment has been deleted.');
+            ->assertSessionHas('success');
 
-        expect(Payment::whereKey($payment->id)->exists())->toBeFalse();
+        expect(Payment::whereKey($payment->id)->exists())->toBeTrue()
+            ->and($batch->reversal()->exists())->toBeTrue()
+            ->and(Contribution::query()->findOrFail($payment->contribution_id)->refresh()->total_paid)->toBe(0);
     });
 
     it('skips contributions that become paid after allocation candidates are loaded', function () {

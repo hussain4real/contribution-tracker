@@ -11,10 +11,12 @@ use App\Models\Family;
 use App\Models\FamilyInvitation;
 use App\Models\User;
 use App\Services\WhatsAppService;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -37,7 +39,7 @@ class InvitationController extends Controller
 
         $invitations = FamilyInvitation::query()
             ->where('family_id', $family->id)
-            ->with('inviter')
+            ->with(['inviter', 'familyCategory'])
             ->latest()
             ->get()
             ->map(fn (FamilyInvitation $invitation) => [
@@ -49,6 +51,8 @@ class InvitationController extends Controller
                 'contact' => $invitation->contact(),
                 'role' => $invitation->role->value,
                 'role_label' => $invitation->role->label(),
+                'family_category_id' => $invitation->family_category_id,
+                'category_label' => $invitation->familyCategory?->name,
                 'invited_by' => $invitation->inviter?->name,
                 'is_accepted' => $invitation->isAccepted(),
                 'is_expired' => $invitation->isExpired(),
@@ -62,6 +66,9 @@ class InvitationController extends Controller
             'invitations' => $invitations,
             'family_name' => $family->name,
             'roles' => $this->getRoleOptions($user),
+            'categories' => $family->categories()
+                ->orderBy('sort_order')
+                ->get(['id', 'name', 'monthly_amount']),
         ]);
     }
 
@@ -84,6 +91,15 @@ class InvitationController extends Controller
             'email' => ['required_if:delivery_method,email', 'nullable', 'string', 'email', 'max:255'],
             'whatsapp_phone' => ['required_if:delivery_method,whatsapp', 'nullable', 'string', 'regex:/^\+[1-9]\d{6,14}$/'],
             'role' => ['required', new Enum(Role::class)],
+            'family_category_id' => [
+                'required',
+                'integer',
+                Rule::exists('family_categories', 'id')->where(
+                    function (QueryBuilder $query) use ($family): void {
+                        $query->where('family_id', $family->id);
+                    },
+                ),
+            ],
         ], [
             'email.required_if' => 'Enter an email address for email invitations.',
             'whatsapp_phone.required_if' => 'Enter a WhatsApp number for WhatsApp invitations.',
@@ -145,6 +161,7 @@ class InvitationController extends Controller
             'delivery_method' => $deliveryMethod,
             'whatsapp_phone' => $whatsappPhone,
             'role' => $attributes['role'],
+            'family_category_id' => $request->integer('family_category_id'),
             'token' => Str::random(64),
             'invited_by' => $user->id,
             'expires_at' => now()->addDays(7),
@@ -210,7 +227,11 @@ class InvitationController extends Controller
             $family = $invitation->family;
 
             if ($family instanceof Family) {
-                $user->ensureFamilyMembership($family, $invitation->role);
+                $user->ensureFamilyMembership(
+                    $family,
+                    $invitation->role,
+                    familyCategoryId: $invitation->family_category_id,
+                );
                 $user->switchFamily($family);
                 $invitation->update(['accepted_at' => now()]);
 

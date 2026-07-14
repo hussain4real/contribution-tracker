@@ -4,17 +4,45 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
-use App\Enums\MemberCategory;
 use App\Enums\Role;
+use App\Models\Family;
 use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum;
-use Illuminate\Validation\Rules\Password;
 
 class UpdateMemberRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $values = [];
+
+        if (! $this->filled('display_name') && $this->filled('name')) {
+            $values['display_name'] = $this->string('name')->toString();
+        }
+
+        if (! $this->filled('family_category_id') && $this->filled('category')) {
+            $user = $this->user();
+            $family = $user instanceof User ? ($user->currentFamily ?? $user->family) : null;
+
+            if ($family instanceof Family) {
+                $categoryId = $family->categories()
+                    ->where('slug', $this->string('category')->toString())
+                    ->value('id');
+
+                if ($categoryId !== null) {
+                    $values['family_category_id'] = $categoryId;
+                }
+            }
+        }
+
+        if ($values !== []) {
+            $this->merge($values);
+        }
+    }
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -30,15 +58,19 @@ class UpdateMemberRequest extends FormRequest
      */
     public function rules(): array
     {
-        $member = $this->route('member');
-        $memberId = $member instanceof User ? $member->id : null;
-
         return [
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($memberId)],
-            'password' => ['nullable', 'confirmed', Password::defaults()],
-            'category' => ['required', new Enum(MemberCategory::class)],
+            'display_name' => ['required', 'string', 'max:255'],
+            'family_category_id' => [
+                'required',
+                'integer',
+                Rule::exists('family_categories', 'id')->where(
+                    function (QueryBuilder $query): void {
+                        $query->where('family_id', $this->familyId());
+                    },
+                ),
+            ],
             'role' => ['required', new Enum(Role::class)],
+            'effective_immediately' => ['sometimes', 'boolean'],
         ];
     }
 
@@ -50,13 +82,17 @@ class UpdateMemberRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'name.required' => 'The member name is required.',
-            'email.required' => 'The email address is required.',
-            'email.email' => 'Please provide a valid email address.',
-            'email.unique' => 'This email address is already registered.',
-            'password.confirmed' => 'The password confirmation does not match.',
-            'category.required' => 'Please select a member category.',
+            'display_name.required' => 'The member display name is required.',
+            'family_category_id.required' => 'Please select a member category.',
             'role.required' => 'Please select a role for the member.',
         ];
+    }
+
+    private function familyId(): int
+    {
+        $user = $this->user();
+        $family = $user instanceof User ? ($user->currentFamily ?? $user->family) : null;
+
+        return $family instanceof Family ? $family->id : 0;
     }
 }

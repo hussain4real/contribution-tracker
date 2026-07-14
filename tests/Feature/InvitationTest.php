@@ -5,11 +5,24 @@ declare(strict_types=1);
 use App\Enums\InvitationDeliveryMethod;
 use App\Enums\Role;
 use App\Models\Family;
+use App\Models\FamilyCategory;
 use App\Models\FamilyInvitation;
 use App\Models\User;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
+
+function invitationCategoryId(Family $family): int
+{
+    return FamilyCategory::query()->firstOrCreate([
+        'family_id' => $family->id,
+        'slug' => 'employed',
+    ], [
+        'name' => 'Employed',
+        'monthly_amount' => 4000,
+        'sort_order' => 0,
+    ])->id;
+}
 
 describe('Invitation Store', function () {
     it('prevents inviting a user who is already a family member', function () {
@@ -24,6 +37,7 @@ describe('Invitation Store', function () {
             ->post('/family/invitations', [
                 'email' => 'member@example.com',
                 'role' => Role::Member->value,
+                'family_category_id' => invitationCategoryId($family),
             ])
             ->assertRedirect()
             ->assertSessionHas('error', 'This user is already a member of your family.');
@@ -43,6 +57,7 @@ describe('Invitation Store', function () {
                 'delivery_method' => InvitationDeliveryMethod::WhatsApp->value,
                 'whatsapp_phone' => '+2348012345678',
                 'role' => Role::Member->value,
+                'family_category_id' => invitationCategoryId($family),
             ])
             ->assertRedirect()
             ->assertSessionHas('error', 'This WhatsApp number already belongs to a member of your family.');
@@ -64,6 +79,7 @@ describe('Invitation Store', function () {
             ->post('/family/invitations', [
                 'email' => 'new@example.com',
                 'role' => Role::Member->value,
+                'family_category_id' => invitationCategoryId($family),
             ])
             ->assertRedirect()
             ->assertSessionHas('error', 'An invitation is already pending for this email.');
@@ -83,6 +99,7 @@ describe('Invitation Store', function () {
                 'delivery_method' => InvitationDeliveryMethod::WhatsApp->value,
                 'whatsapp_phone' => '+2348012345678',
                 'role' => Role::Member->value,
+                'family_category_id' => invitationCategoryId($family),
             ])
             ->assertRedirect()
             ->assertSessionHas('error', 'An invitation is already pending for this WhatsApp number.');
@@ -96,6 +113,7 @@ describe('Invitation Store', function () {
             ->post('/family/invitations', [
                 'email' => 'new@example.com',
                 'role' => Role::Member->value,
+                'family_category_id' => invitationCategoryId($family),
             ])
             ->assertRedirect()
             ->assertSessionHas('success');
@@ -111,6 +129,7 @@ describe('Invitation Store', function () {
             ->post('/family/invitations', [
                 'email' => 'new@example.com',
                 'role' => Role::Member->value,
+                'family_category_id' => invitationCategoryId($family),
             ])
             ->assertRedirect()
             ->assertSessionHas('success');
@@ -131,6 +150,7 @@ describe('Invitation Store', function () {
             ->post('/family/invitations', [
                 'email' => 'new-admin@example.com',
                 'role' => Role::Admin->value,
+                'family_category_id' => invitationCategoryId($family),
             ])
             ->assertRedirect()
             ->assertSessionHasErrors('role');
@@ -171,6 +191,7 @@ describe('Invitation Store', function () {
                 'delivery_method' => InvitationDeliveryMethod::WhatsApp->value,
                 'whatsapp_phone' => '+2348012345678',
                 'role' => Role::Member->value,
+                'family_category_id' => invitationCategoryId($family),
             ])
             ->assertRedirect()
             ->assertSessionHas('success', 'Invitation sent to +2348012345678 via WhatsApp.');
@@ -226,6 +247,7 @@ describe('Invitation Store', function () {
                 'delivery_method' => InvitationDeliveryMethod::WhatsApp->value,
                 'whatsapp_phone' => '+2348012345678',
                 'role' => Role::Member->value,
+                'family_category_id' => invitationCategoryId($family),
             ])
             ->assertRedirect()
             ->assertSessionHasErrors('whatsapp_phone');
@@ -264,6 +286,7 @@ describe('Invitation Store', function () {
                 'delivery_method' => InvitationDeliveryMethod::WhatsApp->value,
                 'whatsapp_phone' => '+2348012345678',
                 'role' => Role::Member->value,
+                'family_category_id' => invitationCategoryId($family),
             ])
             ->assertRedirect()
             ->assertSessionHasErrors('whatsapp_phone');
@@ -279,6 +302,7 @@ describe('Invitation Store', function () {
             ->post('/family/invitations', [
                 'email' => 'new@example.com',
                 'role' => Role::Member->value,
+                'family_category_id' => invitationCategoryId($family),
             ])
             ->assertForbidden();
     });

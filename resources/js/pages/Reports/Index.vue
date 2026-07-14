@@ -1,217 +1,408 @@
 <script setup lang="ts">
+import { index } from '@/actions/App/Http/Controllers/ReportController';
 import {
-    annual,
-    index,
-    monthly,
-} from '@/actions/App/Http/Controllers/ReportController';
+    destroy,
+    store,
+} from '@/actions/App/Http/Controllers/ReportScheduleController';
+import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { exportMethod } from '@/routes/reports';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link } from '@inertiajs/vue3';
-import { Calendar, CalendarDays, FileBarChart2 } from '@lucide/vue';
+import { Head, router, useForm } from '@inertiajs/vue3';
+import { CalendarClock, Download, FileBarChart2, Trash2 } from '@lucide/vue';
 
-interface Props {
-    years?: number[];
-    current_year?: number;
-    current_month?: number;
+interface Option {
+    value: string;
+    label: string;
+}
+interface Schedule {
+    id: number;
+    name: string;
+    report_type: string;
+    format: string;
+    frequency: string;
+    next_run_at: string;
+    deliveries_count: number;
+    is_active: boolean;
 }
 
-withDefaults(defineProps<Props>(), {
-    years: () => [],
-    current_year: () => new Date().getFullYear(),
-    current_month: () => new Date().getMonth() + 1,
+interface Props {
+    report_types: Option[];
+    formats: Option[];
+    frequencies: Option[];
+    members: Array<{ id: number; name: string }>;
+    schedules: Schedule[];
+}
+
+const props = defineProps<Props>();
+const today = new Date();
+const yearStart = `${today.getFullYear()}-01-01`;
+const yearEnd = `${today.getFullYear()}-12-31`;
+const defaultRun = new Date(today.getTime() + 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 16);
+const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+const exportFilters = useForm({
+    type: props.report_types[0]?.value ?? 'contribution_register',
+    format: 'pdf',
+    date_from: yearStart,
+    date_to: yearEnd,
+    member_id: '',
+    category: '',
+    status: '',
+    min_outstanding: '',
+    search: '',
 });
 
-const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Reports',
-        href: index().url,
-    },
-];
+const scheduleForm = useForm({
+    name: '',
+    report_type: props.report_types[0]?.value ?? 'contribution_register',
+    format: 'pdf',
+    filters: { date_from: yearStart, date_to: yearEnd, member_id: '' },
+    channels: ['email'] as string[],
+    recipients_text: '',
+    recipients: [] as string[],
+    frequency: 'monthly',
+    timezone,
+    next_run_at: defaultRun,
+});
 
-const monthNames = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
-];
+const breadcrumbs: BreadcrumbItem[] = [{ title: 'Reports', href: index().url }];
+
+function submitSchedule(): void {
+    scheduleForm
+        .transform((data) => ({
+            ...data,
+            recipients: data.recipients_text
+                .split(',')
+                .map((value) => value.trim())
+                .filter(Boolean),
+        }))
+        .post(store().url, {
+            preserveScroll: true,
+            onSuccess: () => scheduleForm.reset('name', 'recipients_text'),
+        });
+}
+
+function removeSchedule(id: number): void {
+    router.delete(destroy({ reportSchedule: id }).url, {
+        preserveScroll: true,
+    });
+}
 </script>
 
 <template>
-    <Head title="Reports" />
-
+    <Head title="Reports & Exports" />
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
-            <!-- Header -->
             <div class="flex items-center gap-3">
                 <FileBarChart2 class="h-6 w-6 text-neutral-500" />
-                <h1
-                    class="text-2xl font-semibold text-neutral-900 dark:text-neutral-100"
-                >
-                    Contribution Reports
-                </h1>
-            </div>
-
-            <!-- Report Type Cards -->
-            <div class="grid gap-6 md:grid-cols-2">
-                <!-- Monthly Report Card -->
-                <div
-                    class="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border dark:bg-neutral-900"
-                >
-                    <div class="mb-4 flex items-center gap-3">
-                        <div
-                            class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900"
-                        >
-                            <Calendar
-                                class="h-5 w-5 text-blue-600 dark:text-blue-400"
-                            />
-                        </div>
-                        <div>
-                            <h2
-                                class="text-lg font-semibold text-neutral-900 dark:text-neutral-100"
-                            >
-                                Monthly Report
-                            </h2>
-                            <p
-                                class="text-sm text-neutral-600 dark:text-neutral-400"
-                            >
-                                View contribution summary for a specific month
-                            </p>
-                        </div>
-                    </div>
-                    <p
-                        class="mb-4 text-sm text-neutral-600 dark:text-neutral-400"
+                <div>
+                    <h1
+                        class="text-xl font-semibold text-foreground sm:text-2xl"
                     >
-                        Get detailed insights into member contributions, payment
-                        statuses, and collection rates for any month.
+                        Reports & exports
+                    </h1>
+                    <p class="text-sm text-muted-foreground">
+                        Generate reconciled files or schedule recurring
+                        delivery.
                     </p>
-                    <Link
-                        :href="
-                            monthly(undefined, {
-                                query: {
-                                    year: current_year,
-                                    month: current_month,
-                                },
-                            }).url
-                        "
-                    >
-                        <Button class="w-full">
-                            <Calendar class="mr-2 h-4 w-4" />
-                            View {{ monthNames[current_month - 1] }}
-                            {{ current_year }} Report
-                        </Button>
-                    </Link>
                 </div>
+            </div>
 
-                <!-- Annual Report Card -->
-                <div
-                    class="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border dark:bg-neutral-900"
+            <section class="rounded-xl border bg-card p-5">
+                <div class="mb-4 flex items-center gap-2">
+                    <Download class="h-5 w-5" />
+                    <div>
+                        <h2 class="font-semibold">Generate report</h2>
+                        <p class="text-sm text-muted-foreground">
+                            PDFs and CSVs use the same filtered ledger dataset.
+                        </p>
+                    </div>
+                </div>
+                <form
+                    :action="exportMethod().url"
+                    method="get"
+                    target="_blank"
+                    class="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
                 >
-                    <div class="mb-4 flex items-center gap-3">
+                    <label class="grid gap-1 text-xs text-muted-foreground"
+                        >Report type<select
+                            v-model="exportFilters.type"
+                            name="type"
+                            class="rounded-md border bg-background px-3 py-2 text-sm text-foreground"
+                        >
+                            <option
+                                v-for="option in report_types"
+                                :key="option.value"
+                                :value="option.value"
+                            >
+                                {{ option.label }}
+                            </option>
+                        </select></label
+                    >
+                    <label class="grid gap-1 text-xs text-muted-foreground"
+                        >Format<select
+                            v-model="exportFilters.format"
+                            name="format"
+                            class="rounded-md border bg-background px-3 py-2 text-sm text-foreground"
+                        >
+                            <option
+                                v-for="option in formats"
+                                :key="option.value"
+                                :value="option.value"
+                            >
+                                {{ option.label }}
+                            </option>
+                        </select></label
+                    >
+                    <label class="grid gap-1 text-xs text-muted-foreground"
+                        >From<input
+                            v-model="exportFilters.date_from"
+                            name="date_from"
+                            type="date"
+                            required
+                            class="rounded-md border bg-background px-3 py-2 text-sm text-foreground"
+                    /></label>
+                    <label class="grid gap-1 text-xs text-muted-foreground"
+                        >To<input
+                            v-model="exportFilters.date_to"
+                            name="date_to"
+                            type="date"
+                            required
+                            class="rounded-md border bg-background px-3 py-2 text-sm text-foreground"
+                    /></label>
+                    <label class="grid gap-1 text-xs text-muted-foreground"
+                        >Member<select
+                            v-model="exportFilters.member_id"
+                            name="member_id"
+                            class="rounded-md border bg-background px-3 py-2 text-sm text-foreground"
+                        >
+                            <option value="">All members</option>
+                            <option
+                                v-for="member in members"
+                                :key="member.id"
+                                :value="member.id"
+                            >
+                                {{ member.name }}
+                            </option>
+                        </select></label
+                    >
+                    <label class="grid gap-1 text-xs text-muted-foreground"
+                        >Status<select
+                            v-model="exportFilters.status"
+                            name="status"
+                            class="rounded-md border bg-background px-3 py-2 text-sm text-foreground"
+                        >
+                            <option value="">All statuses</option>
+                            <option value="paid">Paid</option>
+                            <option value="partial">Partial</option>
+                            <option value="unpaid">Unpaid</option>
+                            <option value="overdue">Overdue</option>
+                        </select></label
+                    >
+                    <label class="grid gap-1 text-xs text-muted-foreground"
+                        >Minimum outstanding<input
+                            v-model="exportFilters.min_outstanding"
+                            name="min_outstanding"
+                            min="0"
+                            type="number"
+                            class="rounded-md border bg-background px-3 py-2 text-sm text-foreground"
+                    /></label>
+                    <label class="grid gap-1 text-xs text-muted-foreground"
+                        >Search<input
+                            v-model="exportFilters.search"
+                            name="search"
+                            type="search"
+                            class="rounded-md border bg-background px-3 py-2 text-sm text-foreground"
+                    /></label>
+                    <div class="md:col-span-2 xl:col-span-4">
+                        <Button type="submit"
+                            ><Download class="h-4 w-4" /> Generate &
+                            download</Button
+                        >
+                    </div>
+                </form>
+            </section>
+
+            <section class="rounded-xl border bg-card p-5">
+                <div class="mb-4 flex items-center gap-2">
+                    <CalendarClock class="h-5 w-5" />
+                    <div>
+                        <h2 class="font-semibold">Schedule delivery</h2>
+                        <p class="text-sm text-muted-foreground">
+                            Email receives an attachment; WhatsApp receives a
+                            seven-day signed link.
+                        </p>
+                    </div>
+                </div>
+                <form
+                    class="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+                    @submit.prevent="submitSchedule"
+                >
+                    <label class="grid gap-1 text-xs text-muted-foreground"
+                        >Schedule name<input
+                            v-model="scheduleForm.name"
+                            required
+                            class="rounded-md border bg-background px-3 py-2 text-sm text-foreground" /><InputError
+                            :message="scheduleForm.errors.name"
+                    /></label>
+                    <label class="grid gap-1 text-xs text-muted-foreground"
+                        >Report type<select
+                            v-model="scheduleForm.report_type"
+                            class="rounded-md border bg-background px-3 py-2 text-sm text-foreground"
+                        >
+                            <option
+                                v-for="option in report_types"
+                                :key="option.value"
+                                :value="option.value"
+                            >
+                                {{ option.label }}
+                            </option>
+                        </select></label
+                    >
+                    <label class="grid gap-1 text-xs text-muted-foreground"
+                        >Format<select
+                            v-model="scheduleForm.format"
+                            class="rounded-md border bg-background px-3 py-2 text-sm text-foreground"
+                        >
+                            <option
+                                v-for="option in formats"
+                                :key="option.value"
+                                :value="option.value"
+                            >
+                                {{ option.label }}
+                            </option>
+                        </select></label
+                    >
+                    <label class="grid gap-1 text-xs text-muted-foreground"
+                        >Frequency<select
+                            v-model="scheduleForm.frequency"
+                            class="rounded-md border bg-background px-3 py-2 text-sm text-foreground"
+                        >
+                            <option
+                                v-for="option in frequencies"
+                                :key="option.value"
+                                :value="option.value"
+                            >
+                                {{ option.label }}
+                            </option>
+                        </select></label
+                    >
+                    <label class="grid gap-1 text-xs text-muted-foreground"
+                        >Run first at<input
+                            v-model="scheduleForm.next_run_at"
+                            required
+                            type="datetime-local"
+                            class="rounded-md border bg-background px-3 py-2 text-sm text-foreground"
+                    /></label>
+                    <label class="grid gap-1 text-xs text-muted-foreground"
+                        >Recipients<input
+                            v-model="scheduleForm.recipients_text"
+                            required
+                            placeholder="email@example.com, 974..."
+                            class="rounded-md border bg-background px-3 py-2 text-sm text-foreground" /><InputError
+                            :message="scheduleForm.errors.recipients"
+                    /></label>
+                    <fieldset class="grid gap-1 text-xs text-muted-foreground">
+                        <legend>Channels</legend>
                         <div
-                            class="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900"
+                            class="flex h-10 items-center gap-4 rounded-md border px-3 text-sm text-foreground"
                         >
-                            <CalendarDays
-                                class="h-5 w-5 text-green-600 dark:text-green-400"
-                            />
-                        </div>
-                        <div>
-                            <h2
-                                class="text-lg font-semibold text-neutral-900 dark:text-neutral-100"
+                            <label class="flex items-center gap-2"
+                                ><input
+                                    v-model="scheduleForm.channels"
+                                    value="email"
+                                    type="checkbox"
+                                />
+                                Email</label
+                            ><label class="flex items-center gap-2"
+                                ><input
+                                    v-model="scheduleForm.channels"
+                                    value="whatsapp"
+                                    type="checkbox"
+                                />
+                                WhatsApp</label
                             >
-                                Annual Report
-                            </h2>
-                            <p
-                                class="text-sm text-neutral-600 dark:text-neutral-400"
-                            >
-                                View contribution summary for an entire year
-                            </p>
                         </div>
+                    </fieldset>
+                    <div class="flex items-end">
+                        <Button
+                            :disabled="scheduleForm.processing"
+                            type="submit"
+                            >Create schedule</Button
+                        >
                     </div>
-                    <p
-                        class="mb-4 text-sm text-neutral-600 dark:text-neutral-400"
-                    >
-                        See yearly trends, monthly breakdowns, and category-wise
-                        contribution analysis for any year.
-                    </p>
-                    <Link
-                        :href="
-                            annual(undefined, {
-                                query: { year: current_year },
-                            }).url
-                        "
-                    >
-                        <Button variant="outline" class="w-full">
-                            <CalendarDays class="mr-2 h-4 w-4" />
-                            View {{ current_year }} Annual Report
-                        </Button>
-                    </Link>
-                </div>
-            </div>
+                </form>
+            </section>
 
-            <!-- Quick Links by Year -->
-            <div
-                class="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border dark:bg-neutral-900"
-            >
-                <h2
-                    class="mb-4 text-lg font-semibold text-neutral-900 dark:text-neutral-100"
-                >
-                    Historical Reports
-                </h2>
-                <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    <div
-                        v-for="year in years"
-                        :key="year"
-                        class="rounded-lg border border-neutral-200 p-4 dark:border-neutral-700"
-                    >
-                        <h3
-                            class="mb-3 font-medium text-neutral-900 dark:text-neutral-100"
-                        >
-                            {{ year }}
-                        </h3>
-                        <div class="flex gap-2">
-                            <Link
-                                :href="
-                                    annual(undefined, { query: { year } }).url
-                                "
-                                class="flex-1"
-                            >
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    class="w-full"
-                                >
-                                    Annual
-                                </Button>
-                            </Link>
-                            <Link
-                                :href="
-                                    monthly(undefined, {
-                                        query: { year, month: current_month },
-                                    }).url
-                                "
-                                class="flex-1"
-                            >
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    class="w-full"
-                                >
-                                    Monthly
-                                </Button>
-                            </Link>
-                        </div>
-                    </div>
+            <section class="overflow-hidden rounded-xl border bg-card">
+                <div class="border-b px-5 py-4">
+                    <h2 class="font-semibold">Delivery schedules</h2>
                 </div>
-            </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full min-w-[720px] text-sm">
+                        <thead
+                            class="bg-muted/60 text-left text-xs text-muted-foreground"
+                        >
+                            <tr>
+                                <th class="px-4 py-3">Name</th>
+                                <th class="px-4 py-3">Report</th>
+                                <th class="px-4 py-3">Cadence</th>
+                                <th class="px-4 py-3">Next run</th>
+                                <th class="px-4 py-3">Deliveries</th>
+                                <th class="px-4 py-3"></th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y">
+                            <tr
+                                v-for="schedule in schedules"
+                                :key="schedule.id"
+                            >
+                                <td class="px-4 py-3 font-medium">
+                                    {{ schedule.name }}
+                                </td>
+                                <td class="px-4 py-3">
+                                    {{ schedule.report_type }} ·
+                                    {{ schedule.format }}
+                                </td>
+                                <td class="px-4 py-3">
+                                    {{ schedule.frequency }}
+                                </td>
+                                <td class="px-4 py-3">
+                                    {{
+                                        new Date(
+                                            schedule.next_run_at,
+                                        ).toLocaleString()
+                                    }}
+                                </td>
+                                <td class="px-4 py-3">
+                                    {{ schedule.deliveries_count }}
+                                </td>
+                                <td class="px-4 py-3 text-right">
+                                    <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        aria-label="Delete schedule"
+                                        @click="removeSchedule(schedule.id)"
+                                        ><Trash2 class="h-4 w-4"
+                                    /></Button>
+                                </td>
+                            </tr>
+                            <tr v-if="schedules.length === 0">
+                                <td
+                                    colspan="6"
+                                    class="px-4 py-10 text-center text-muted-foreground"
+                                >
+                                    No report schedules yet.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
         </div>
     </AppLayout>
 </template>

@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use LogicException;
 
 /**
  * @property int $id
@@ -25,6 +26,13 @@ use Illuminate\Support\Carbon;
  * @property string|null $account_number
  * @property string|null $bank_code
  * @property Carbon|null $suspended_at
+ * @property Carbon|null $archived_at
+ * @property int|null $archived_by
+ * @property string|null $archive_reason
+ * @property Carbon|null $purge_after
+ * @property Carbon|null $legal_hold_at
+ * @property int|null $legal_hold_by
+ * @property string|null $legal_hold_reason
  * @property string|null $paystack_subaccount_code
  * @property string|null $paystack_customer_code
  * @property string|null $paystack_subscription_code
@@ -62,6 +70,13 @@ class Family extends Model
         'trial_ends_at',
         'max_members',
         'suspended_at',
+        'archived_at',
+        'archived_by',
+        'archive_reason',
+        'purge_after',
+        'legal_hold_at',
+        'legal_hold_by',
+        'legal_hold_reason',
         'paystack_subaccount_code',
         'paystack_customer_code',
         'paystack_subscription_code',
@@ -83,6 +98,9 @@ class Family extends Model
             'trial_ends_at' => 'datetime',
             'max_members' => 'integer',
             'suspended_at' => 'datetime',
+            'archived_at' => 'datetime',
+            'purge_after' => 'datetime',
+            'legal_hold_at' => 'datetime',
             'current_period_end' => 'datetime',
         ];
     }
@@ -102,6 +120,16 @@ class Family extends Model
     public function isSuspended(): bool
     {
         return $this->suspended_at !== null;
+    }
+
+    public function isArchived(): bool
+    {
+        return $this->archived_at !== null;
+    }
+
+    public function isOnLegalHold(): bool
+    {
+        return $this->legal_hold_at !== null;
     }
 
     /**
@@ -161,7 +189,16 @@ class Family extends Model
     {
         return $this->belongsToMany(User::class, 'family_members')
             ->using(FamilyMembership::class)
-            ->withPivot(['id', 'role', 'category', 'family_category_id'])
+            ->withPivot([
+                'id',
+                'display_name',
+                'role',
+                'category',
+                'family_category_id',
+                'archived_at',
+                'archived_by',
+                'archive_reason',
+            ])
             ->withTimestamps();
     }
 
@@ -195,6 +232,12 @@ class Family extends Model
         return $this->hasMany(Contribution::class);
     }
 
+    /** @return HasMany<PaymentBatch, $this> */
+    public function paymentBatches(): HasMany
+    {
+        return $this->hasMany(PaymentBatch::class);
+    }
+
     /**
      * Expenses belonging to this family.
      *
@@ -223,5 +266,31 @@ class Family extends Model
     public function invitations(): HasMany
     {
         return $this->hasMany(FamilyInvitation::class);
+    }
+
+    /** @return HasMany<ReportArtifact, $this> */
+    public function reportArtifacts(): HasMany
+    {
+        return $this->hasMany(ReportArtifact::class);
+    }
+
+    /** @return HasMany<ReportSchedule, $this> */
+    public function reportSchedules(): HasMany
+    {
+        return $this->hasMany(ReportSchedule::class);
+    }
+
+    protected static function booted(): void
+    {
+        static::deleting(function (Family $family): void {
+            if (
+                $family->contributions()->exists()
+                || $family->paymentBatches()->exists()
+                || $family->expenses()->exists()
+                || $family->fundAdjustments()->exists()
+            ) {
+                throw new LogicException('A family with financial history cannot be deleted.');
+            }
+        });
     }
 }

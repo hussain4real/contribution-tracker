@@ -9,6 +9,7 @@ use App\Enums\Role;
 use App\Models\Family;
 use App\Models\FamilyCategory;
 use App\Models\FamilyMembership;
+use App\Models\FamilyMembershipCategoryAssignment;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -24,7 +25,16 @@ trait HasFamilies
     {
         return $this->belongsToMany(Family::class, 'family_members')
             ->using(FamilyMembership::class)
-            ->withPivot(['id', 'role', 'category', 'family_category_id'])
+            ->withPivot([
+                'id',
+                'display_name',
+                'role',
+                'category',
+                'family_category_id',
+                'archived_at',
+                'archived_by',
+                'archive_reason',
+            ])
             ->withTimestamps();
     }
 
@@ -54,7 +64,8 @@ trait HasFamilies
 
         if ($this->relationLoaded('familyMemberships')) {
             $membership = $this->familyMemberships->first(
-                fn (FamilyMembership $membership): bool => $membership->family_id === $familyId,
+                fn (FamilyMembership $membership): bool => $membership->family_id === $familyId
+                    && ! $membership->isArchived(),
             );
 
             if ($membership instanceof FamilyMembership) {
@@ -77,6 +88,15 @@ trait HasFamilies
         return $this->familyMemberships()
             ->with('familyCategory')
             ->where('family_id', $familyId)
+            ->active()
+            ->first();
+    }
+
+    public function membershipForFamilyIncludingArchived(Family $family): ?FamilyMembership
+    {
+        return $this->familyMemberships()
+            ->with('familyCategory')
+            ->where('family_id', $family->id)
             ->first();
     }
 
@@ -84,10 +104,19 @@ trait HasFamilies
     {
         if ($this->relationLoaded('familyMemberships')) {
             return $this->familyMemberships->contains(
-                fn (FamilyMembership $membership): bool => $membership->family_id === $family->id,
+                fn (FamilyMembership $membership): bool => $membership->family_id === $family->id
+                    && ! $membership->isArchived(),
             );
         }
 
+        return $this->familyMemberships()
+            ->where('family_id', $family->id)
+            ->active()
+            ->exists();
+    }
+
+    public function belongsToFamilyIncludingArchived(Family $family): bool
+    {
         return $this->familyMemberships()
             ->where('family_id', $family->id)
             ->exists();
@@ -97,7 +126,7 @@ trait HasFamilies
     {
         $membership ??= $this->membershipForFamily($family);
 
-        if (! $membership instanceof FamilyMembership) {
+        if (! $membership instanceof FamilyMembership || $membership->isArchived()) {
             return false;
         }
 
@@ -136,6 +165,28 @@ trait HasFamilies
             ],
         );
 
+        if ($membership->display_name === null) {
+            $membership->forceFill(['display_name' => $this->name])->save();
+        }
+
+        if ($familyCategoryId !== null && ! $membership->categoryAssignments()->exists()) {
+            $familyCategory = FamilyCategory::query()
+                ->where('family_id', $family->id)
+                ->find($familyCategoryId);
+
+            if ($familyCategory instanceof FamilyCategory) {
+                FamilyMembershipCategoryAssignment::query()->create([
+                    'family_membership_id' => $membership->id,
+                    'family_category_id' => $familyCategory->id,
+                    'assigned_by' => null,
+                    'category_name' => $familyCategory->name,
+                    'category_slug' => $familyCategory->slug,
+                    'monthly_amount' => $familyCategory->monthly_amount,
+                    'effective_from' => ($membership->created_at ?? now())->startOfMonth()->toDateString(),
+                ]);
+            }
+        }
+
         return $membership;
     }
 
@@ -147,9 +198,10 @@ trait HasFamilies
         $currentFamilyId = $this->current_family_id ?? $this->family_id;
 
         $memberships = $this->relationLoaded('familyMemberships')
-            ? $this->familyMemberships
+            ? $this->familyMemberships->whereNull('archived_at')
             : $this->familyMemberships()
                 ->with(['family:id,name,slug', 'familyCategory:id,name'])
+                ->active()
                 ->get();
 
         return $memberships

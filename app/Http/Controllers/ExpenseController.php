@@ -20,10 +20,13 @@ class ExpenseController extends Controller
         $this->authorize('viewAny', Expense::class);
 
         $user = $this->authUser();
+        $family = $user->currentFamily ?? $user->family;
+
+        abort_unless($family !== null, 403);
 
         $expenses = Expense::query()
-            ->where('family_id', $user->family_id)
-            ->with('recorder')
+            ->where('family_id', $family->id)
+            ->with(['recorder', 'reversal'])
             ->latestFirst()
             ->latest('id')
             ->paginate(20)
@@ -34,6 +37,9 @@ class ExpenseController extends Controller
                 'spent_at' => $expense->spent_at->toDateString(),
                 'recorded_by' => $expense->recorder?->name,
                 'created_at' => $expense->created_at?->toDateString(),
+                'is_reversed' => $expense->isReversed(),
+                'reversal_reason' => $expense->reversal?->reason,
+                'can_reverse' => $user->can('delete', $expense) && ! $expense->isReversed(),
             ]);
 
         return Inertia::render('Expenses/Index', [
@@ -58,9 +64,12 @@ class ExpenseController extends Controller
     public function store(StoreExpenseRequest $request): RedirectResponse
     {
         $user = $this->user($request);
+        $family = $user->currentFamily ?? $user->family;
+
+        abort_unless($family !== null, 403);
 
         Expense::create([
-            'family_id' => $user->family_id,
+            'family_id' => $family->id,
             'amount' => $request->integer('amount'),
             'description' => $request->string('description')->toString(),
             'spent_at' => $request->string('spent_at')->toString(),
@@ -69,18 +78,5 @@ class ExpenseController extends Controller
 
         return redirect()->route('expenses.index')
             ->with('success', 'Expense recorded successfully.');
-    }
-
-    /**
-     * Remove the specified expense.
-     */
-    public function destroy(Expense $expense): RedirectResponse
-    {
-        $this->authorize('delete', $expense);
-
-        $expense->delete();
-
-        return redirect()->route('expenses.index')
-            ->with('success', 'Expense has been deleted.');
     }
 }

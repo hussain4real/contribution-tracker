@@ -98,10 +98,11 @@ class AiChatController extends Controller
 
         $family = $user->currentFamily ?? $user->family;
         $memberNames = $family instanceof Family
-            ? $family->members()
-                ->whereNull('users.archived_at')
-                ->orderBy('users.name')
-                ->pluck('users.name')
+            ? $family->memberships()
+                ->active()
+                ->orderByRaw('LOWER(COALESCE(display_name, (SELECT name FROM users WHERE users.id = family_members.user_id)))')
+                ->get()
+                ->map(fn ($membership): string => $membership->displayName())
                 ->toArray()
             : [];
 

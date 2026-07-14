@@ -8,6 +8,7 @@ use App\Models\Family;
 use App\Models\FamilyCategory;
 use App\Models\FamilyInvitation;
 use App\Models\FundAdjustment;
+use App\Models\PaymentBatch;
 use App\Models\PlatformPlan;
 use App\Models\User;
 use Carbon\Carbon;
@@ -62,10 +63,14 @@ it('exposes family ownership, plan, and child relationships', function () {
         'platform_plan_id' => $plan->id,
     ]);
     $member = User::factory()->member()->create(['family_id' => $family->id]);
-    $category = FamilyCategory::factory()->create(['family_id' => $family->id]);
+    $category = FamilyCategory::query()
+        ->where('family_id', $family->id)
+        ->where('slug', 'employed')
+        ->firstOrFail();
     $contribution = Contribution::factory()->create(['family_id' => $family->id, 'user_id' => $member->id]);
     $expense = Expense::factory()->create(['family_id' => $family->id]);
     $fundAdjustment = FundAdjustment::factory()->create(['family_id' => $family->id]);
+    $paymentBatch = PaymentBatch::factory()->create(['family_id' => $family->id]);
     $invitation = FamilyInvitation::factory()->create(['family_id' => $family->id]);
 
     expect($family->owner()->firstOrFail()->is($owner))->toBeTrue()
@@ -75,5 +80,26 @@ it('exposes family ownership, plan, and child relationships', function () {
         ->and($family->contributions()->firstOrFail()->is($contribution))->toBeTrue()
         ->and($family->expenses()->firstOrFail()->is($expense))->toBeTrue()
         ->and($family->fundAdjustments()->firstOrFail()->is($fundAdjustment))->toBeTrue()
+        ->and($family->paymentBatches()->firstOrFail()->is($paymentBatch))->toBeTrue()
         ->and($family->invitations()->firstOrFail()->is($invitation))->toBeTrue();
+});
+
+it('prevents deleting families with any kind of financial history', function () {
+    $contributionFamily = Family::factory()->create();
+    $contributionMember = User::factory()->member()->create(['family_id' => $contributionFamily->id]);
+    Contribution::factory()->forUser($contributionMember)->create(['family_id' => $contributionFamily->id]);
+
+    $receiptFamily = Family::factory()->create();
+    PaymentBatch::factory()->create(['family_id' => $receiptFamily->id]);
+
+    $expenseFamily = Family::factory()->create();
+    Expense::factory()->create(['family_id' => $expenseFamily->id]);
+
+    $adjustmentFamily = Family::factory()->create();
+    FundAdjustment::factory()->create(['family_id' => $adjustmentFamily->id]);
+
+    expect(fn () => $contributionFamily->delete())->toThrow(LogicException::class)
+        ->and(fn () => $receiptFamily->delete())->toThrow(LogicException::class)
+        ->and(fn () => $expenseFamily->delete())->toThrow(LogicException::class)
+        ->and(fn () => $adjustmentFamily->delete())->toThrow(LogicException::class);
 });
