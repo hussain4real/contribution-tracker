@@ -21,12 +21,11 @@ echo "Deploying $(git rev-parse --short HEAD) to staging"
 composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
 npm ci
 
+php artisan migrate --force
 php artisan optimize:clear
 rm -rf resources/js/actions resources/js/routes resources/js/wayfinder
 php artisan wayfinder:generate
 npm run build
-
-php artisan migrate --force
 
 php artisan config:cache
 php artisan route:cache
