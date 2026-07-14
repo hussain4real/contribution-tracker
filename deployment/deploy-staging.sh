@@ -32,12 +32,12 @@ php artisan route:cache
 php artisan view:cache
 php artisan event:cache
 
-sudo cp deployment/nginx/staging.familyfunds.app.conf /etc/nginx/sites-available/staging.familyfunds.app.conf
-sudo nginx -t
-sudo systemctl reload nginx
+sudo -n cp "$APP_DIR/deployment/nginx/staging.familyfunds.app.conf" /etc/nginx/sites-available/staging.familyfunds.app.conf
+sudo -n nginx -t
+sudo -n systemctl reload nginx
 
-sudo supervisorctl restart queue-worker-staging
-sudo supervisorctl restart ssr-staging
-sudo systemctl reload php8.4-fpm
+sudo -n supervisorctl restart queue-worker-staging
+sudo -n supervisorctl restart ssr-staging
+sudo -n systemctl reload php8.4-fpm
 
 echo "Staging deployment complete."
