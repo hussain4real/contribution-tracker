@@ -2,7 +2,7 @@
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-/var/www/contribution-tracker-staging}"
-STAGING_BRANCH="${STAGING_BRANCH:-codex/staging}"
+STAGING_BRANCH="${STAGING_BRANCH:-staging}"
 
 cd "$APP_DIR"
 

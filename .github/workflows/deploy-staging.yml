@@ -65,6 +65,6 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /var/www/contribution-tracker-staging
-            git fetch origin codex/staging
-            git checkout -B codex/staging origin/codex/staging
+            git fetch origin staging
+            git checkout -B staging origin/staging
             /var/www/contribution-tracker-staging/deployment/deploy-staging.sh
