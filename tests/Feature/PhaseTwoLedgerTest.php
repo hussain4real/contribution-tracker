@@ -344,12 +344,15 @@ it('uses the receipt family role for viewing and reversing multi-family batches'
     ]);
     $batchFamilyAdmin = User::factory()->member()->create(['family_id' => $currentFamily->id]);
     $batchFamilyAdmin->ensureFamilyMembership($batchFamily, Role::Admin);
+    $userWithoutMembership = User::factory()->member()->create(['family_id' => $currentFamily->id]);
+    $userWithoutMembership->forceFill(['current_family_id' => $batchFamily->id])->save();
     $policy = app(PaymentBatchPolicy::class);
 
     expect($policy->view($currentAdmin, $batch))->toBeFalse()
+        ->and($policy->view($userWithoutMembership, $batch))->toBeFalse()
         ->and($policy->reverse($currentAdmin, $batch))->toBeFalse()
-        ->and($policy->view($batchFamilyAdmin, $batch))->toBeTrue()
-        ->and($policy->reverse($batchFamilyAdmin, $batch))->toBeTrue();
+        ->and($policy->view($batchFamilyAdmin, $batch))->toBeFalse()
+        ->and($policy->reverse($batchFamilyAdmin, $batch))->toBeFalse();
 
     $this->actingAs($currentAdmin)
         ->post(route('payment-batches.reverse', [
@@ -359,4 +362,9 @@ it('uses the receipt family role for viewing and reversing multi-family batches'
         ->assertForbidden();
 
     expect($batch->reversal()->exists())->toBeFalse();
+
+    $batchFamilyAdmin->switchFamily($batchFamily);
+
+    expect($policy->view($batchFamilyAdmin, $batch))->toBeTrue()
+        ->and($policy->reverse($batchFamilyAdmin, $batch))->toBeTrue();
 });

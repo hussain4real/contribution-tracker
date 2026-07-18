@@ -12,6 +12,10 @@ class PaymentBatchPolicy
 {
     public function view(User $user, PaymentBatch $batch): bool
     {
+        if (($user->current_family_id ?? $user->family_id) !== $batch->family_id) {
+            return false;
+        }
+
         $membership = $user->membershipForFamilyId($batch->family_id);
 
         if ($membership === null) {
@@ -24,7 +28,8 @@ class PaymentBatchPolicy
 
     public function reverse(User $user, PaymentBatch $batch): bool
     {
-        return $user->membershipForFamilyId($batch->family_id)?->role === Role::Admin
+        return ($user->current_family_id ?? $user->family_id) === $batch->family_id
+            && $user->membershipForFamilyId($batch->family_id)?->role === Role::Admin
             && ! $batch->isReversed();
     }
 }

@@ -184,7 +184,7 @@ it('uses the schedule family role when deleting across memberships', function ()
     $policy = app(ReportSchedulePolicy::class);
 
     expect($policy->delete($currentOfficer, $schedule))->toBeFalse()
-        ->and($policy->delete($scheduleFamilyOfficer, $schedule))->toBeTrue();
+        ->and($policy->delete($scheduleFamilyOfficer, $schedule))->toBeFalse();
 
     $this->actingAs($currentOfficer)
         ->delete(route('reports.schedules.destroy', [
@@ -194,6 +194,10 @@ it('uses the schedule family role when deleting across memberships', function ()
         ->assertForbidden();
 
     expect($schedule->fresh())->not->toBeNull();
+
+    $scheduleFamilyOfficer->switchFamily($scheduleFamily);
+
+    expect($policy->delete($scheduleFamilyOfficer, $schedule))->toBeTrue();
 });
 
 it('skips unavailable and completed jobs and records whatsapp success and failure', function () {

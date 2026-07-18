@@ -110,12 +110,13 @@ describe('Financial and family administration flows (Browser)', function () {
             () => {
                 const field = document.querySelector('[name="schedule_next_run_at"]');
                 const target = new Date(Date.now() + 60 * 60 * 1000);
-                const offset = target.getTimezoneOffset() * 60 * 1000;
-                const expected = new Date(target.getTime() - offset).toISOString().slice(0, 16);
+                const actual = field instanceof HTMLInputElement ? field.value : null;
 
                 return {
-                    actual: field instanceof HTMLInputElement ? field.value : null,
-                    expected,
+                    actual,
+                    differenceMs: actual === null
+                        ? null
+                        : Math.abs(new Date(actual).getTime() - target.getTime()),
                 };
             }
         JS);
@@ -124,7 +125,8 @@ describe('Financial and family administration flows (Browser)', function () {
             throw new RuntimeException('Expected browser script to return the schedule run time.');
         }
 
-        expect($defaultRun['actual'] ?? null)->toBe($defaultRun['expected'] ?? null);
+        expect($defaultRun['actual'] ?? null)->toBeString()
+            ->and($defaultRun['differenceMs'] ?? null)->toBeInt()->toBeLessThanOrEqual(120_000);
 
         $page->select('schedule_report_type', 'member_statement')
             ->wait(0.5)

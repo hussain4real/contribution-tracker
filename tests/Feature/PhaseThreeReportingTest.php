@@ -266,11 +266,14 @@ it('uses the artifact family role when a user belongs to multiple families', fun
     $currentOfficer->ensureFamilyMembership($artifactFamily, Role::Member);
     $artifactFamilyOfficer = User::factory()->member()->create(['family_id' => $currentFamily->id]);
     $artifactFamilyOfficer->ensureFamilyMembership($artifactFamily, Role::FinancialSecretary);
+    $userWithoutMembership = User::factory()->member()->create(['family_id' => $currentFamily->id]);
+    $userWithoutMembership->forceFill(['current_family_id' => $artifactFamily->id])->save();
     $artifact = ReportArtifact::factory()->create(['family_id' => $artifactFamily->id]);
     $policy = app(ReportArtifactPolicy::class);
 
     expect($policy->view($currentOfficer, $artifact))->toBeFalse()
-        ->and($policy->view($artifactFamilyOfficer, $artifact))->toBeTrue();
+        ->and($policy->view($userWithoutMembership, $artifact))->toBeFalse()
+        ->and($policy->view($artifactFamilyOfficer, $artifact))->toBeFalse();
 
     $this->actingAs($currentOfficer)
         ->get(route('reports.artifacts.show', [
@@ -278,6 +281,10 @@ it('uses the artifact family role when a user belongs to multiple families', fun
             'reportArtifact' => $artifact,
         ]))
         ->assertForbidden();
+
+    $artifactFamilyOfficer->switchFamily($artifactFamily);
+
+    expect($policy->view($artifactFamilyOfficer, $artifact))->toBeTrue();
 });
 
 it('includes reversal and audit events throughout the report end date', function () {

@@ -50,7 +50,7 @@ it('uses the expense family role when a user belongs to multiple families', func
     $otherFamilyAdmin->ensureFamilyMembership($this->otherFamily, Role::Admin);
 
     expect($this->policy->delete($this->admin, $otherExpense))->toBeFalse()
-        ->and($this->policy->delete($otherFamilyAdmin, $otherExpense))->toBeTrue();
+        ->and($this->policy->delete($otherFamilyAdmin, $otherExpense))->toBeFalse();
 
     $this->actingAs($this->admin)
         ->post(route('expenses.reverse', [
@@ -60,6 +60,10 @@ it('uses the expense family role when a user belongs to multiple families', func
         ->assertForbidden();
 
     expect($otherExpense->reversal()->exists())->toBeFalse();
+
+    $otherFamilyAdmin->switchFamily($this->otherFamily);
+
+    expect($this->policy->delete($otherFamilyAdmin, $otherExpense))->toBeTrue();
 });
 
 it('denies direct mutation of immutable expenses', function (string $ability) {

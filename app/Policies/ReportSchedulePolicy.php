@@ -21,6 +21,7 @@ class ReportSchedulePolicy
 
     public function delete(User $user, ReportSchedule $schedule): bool
     {
-        return $user->membershipForFamilyId($schedule->family_id)?->role->canGenerateReports() === true;
+        return ($user->current_family_id ?? $user->family_id) === $schedule->family_id
+            && $user->membershipForFamilyId($schedule->family_id)?->role->canGenerateReports() === true;
     }
 }

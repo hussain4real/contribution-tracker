@@ -12,6 +12,10 @@ class ReportArtifactPolicy
 {
     public function view(User $user, ReportArtifact $artifact): bool
     {
+        if (($user->current_family_id ?? $user->family_id) !== $artifact->family_id) {
+            return false;
+        }
+
         $membership = $user->membershipForFamilyId($artifact->family_id);
 
         if ($membership === null) {

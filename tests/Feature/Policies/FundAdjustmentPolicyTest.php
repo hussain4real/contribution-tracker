@@ -50,7 +50,7 @@ it('uses the adjustment family role when a user belongs to multiple families', f
     $otherFamilyOfficer->ensureFamilyMembership($this->otherFamily, Role::FinancialSecretary);
 
     expect($this->policy->delete($this->admin, $otherAdjustment))->toBeFalse()
-        ->and($this->policy->delete($otherFamilyOfficer, $otherAdjustment))->toBeTrue();
+        ->and($this->policy->delete($otherFamilyOfficer, $otherAdjustment))->toBeFalse();
 
     $this->actingAs($this->admin)
         ->post(route('fund-adjustments.reverse', [
@@ -60,6 +60,10 @@ it('uses the adjustment family role when a user belongs to multiple families', f
         ->assertForbidden();
 
     expect($otherAdjustment->reversal()->exists())->toBeFalse();
+
+    $otherFamilyOfficer->switchFamily($this->otherFamily);
+
+    expect($this->policy->delete($otherFamilyOfficer, $otherAdjustment))->toBeTrue();
 });
 
 it('denies direct mutation of immutable fund adjustments', function (string $ability) {
