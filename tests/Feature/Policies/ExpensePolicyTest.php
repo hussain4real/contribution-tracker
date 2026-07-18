@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\Role;
 use App\Models\Expense;
 use App\Models\Family;
 use App\Models\User;
@@ -38,6 +39,27 @@ it('allows only same-family admins to reverse expenses', function () {
         ->and($this->policy->delete($this->financialSecretary, $this->expense))->toBeFalse()
         ->and($this->policy->delete($this->member, $this->expense))->toBeFalse()
         ->and($this->policy->delete($this->outsider, $this->expense))->toBeFalse();
+});
+
+it('uses the expense family role when a user belongs to multiple families', function () {
+    $this->admin->ensureFamilyMembership($this->otherFamily, Role::Member);
+    $otherExpense = Expense::factory()->recordedBy($this->outsider)->create([
+        'family_id' => $this->otherFamily->id,
+    ]);
+    $otherFamilyAdmin = User::factory()->member()->create(['family_id' => $this->family->id]);
+    $otherFamilyAdmin->ensureFamilyMembership($this->otherFamily, Role::Admin);
+
+    expect($this->policy->delete($this->admin, $otherExpense))->toBeFalse()
+        ->and($this->policy->delete($otherFamilyAdmin, $otherExpense))->toBeTrue();
+
+    $this->actingAs($this->admin)
+        ->post(route('expenses.reverse', [
+            'current_family' => $this->family->slug,
+            'expense' => $otherExpense,
+        ]), ['reason' => 'Must not cross families'])
+        ->assertForbidden();
+
+    expect($otherExpense->reversal()->exists())->toBeFalse();
 });
 
 it('denies direct mutation of immutable expenses', function (string $ability) {

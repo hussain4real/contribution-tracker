@@ -57,6 +57,24 @@ it('executes queued Paystack webhooks with a bounded retry schedule', function (
     expect($job->backoff())->toBe([10, 30, 120, 300]);
 });
 
+it('uniquely identifies failed subscription webhooks by nested subscription code', function () {
+    $first = new ProcessPaystackWebhook([
+        'event' => 'invoice.payment_failed',
+        'data' => ['subscription' => ['subscription_code' => 'SUB_first']],
+    ]);
+    $same = new ProcessPaystackWebhook([
+        'event' => 'invoice.payment_failed',
+        'data' => ['subscription' => ['subscription_code' => 'SUB_first']],
+    ]);
+    $second = new ProcessPaystackWebhook([
+        'event' => 'invoice.payment_failed',
+        'data' => ['subscription' => ['subscription_code' => 'SUB_second']],
+    ]);
+
+    expect($first->uniqueId())->toBe($same->uniqueId())
+        ->and($first->uniqueId())->not->toBe($second->uniqueId());
+});
+
 it('does not audit Paystack updates that leave ledger state unchanged', function () {
     $family = Family::factory()->create();
     $member = User::factory()->create(['family_id' => $family->id]);

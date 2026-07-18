@@ -31,7 +31,7 @@ class FundAdjustmentPolicy
 
     public function delete(User $user, FundAdjustment $fundAdjustment): bool
     {
-        return $user->canRecordPayments() && $user->membershipForFamilyId($fundAdjustment->family_id) !== null;
+        return $user->membershipForFamilyId($fundAdjustment->family_id)?->role->canRecordPayments() === true;
     }
 
     public function restore(User $user, FundAdjustment $fundAdjustment): bool

@@ -12,11 +12,13 @@ class ReportArtifactPolicy
 {
     public function view(User $user, ReportArtifact $artifact): bool
     {
-        if ($user->membershipForFamilyId($artifact->family_id) === null) {
+        $membership = $user->membershipForFamilyId($artifact->family_id);
+
+        if ($membership === null) {
             return false;
         }
 
-        if ($user->activeRole()->canGenerateReports()) {
+        if ($membership->role->canGenerateReports()) {
             return true;
         }
 

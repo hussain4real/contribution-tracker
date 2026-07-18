@@ -6,6 +6,7 @@ use App\Enums\ReportDeliveryStatus;
 use App\Enums\ReportFormat;
 use App\Enums\ReportScheduleFrequency;
 use App\Enums\ReportType;
+use App\Enums\Role;
 use App\Jobs\GenerateScheduledReport;
 use App\Mail\ScheduledReportMail;
 use App\Models\Contribution;
@@ -18,6 +19,7 @@ use App\Policies\ReportSchedulePolicy;
 use App\Services\ReportArtifactService;
 use App\Services\WhatsAppService;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 
@@ -49,7 +51,7 @@ it('creates validated schedules and dispatches one unique job per due period', f
         'recipients' => ['treasurer@example.test'],
         'frequency' => ReportScheduleFrequency::Monthly->value,
         'timezone' => 'Asia/Qatar',
-        'next_run_at' => now()->addMinute()->toDateTimeString(),
+        'next_run_at' => now('Asia/Qatar')->addMinute()->toDateTimeString(),
     ])->assertRedirect();
 
     $schedule = ReportSchedule::query()->firstOrFail();
@@ -116,7 +118,7 @@ it('validates channels recipients and schedule ownership', function () {
         'frequency' => 'hourly',
         'timezone' => 'not-a-timezone',
         'next_run_at' => now()->subDay(),
-    ])->assertSessionHasErrors(['name', 'report_type', 'format', 'filters.date_from', 'channels', 'recipients', 'frequency', 'timezone', 'next_run_at']);
+    ])->assertSessionHasErrors(['name', 'report_type', 'format', 'filters.date_from', 'channels', 'recipients', 'frequency', 'timezone']);
 
     $this->actingAs($member)->post(route('reports.schedules.store', ['current_family' => $family->slug]), [])->assertForbidden();
 
@@ -133,6 +135,65 @@ it('validates channels recipients and schedule ownership', function () {
         ->delete(route('reports.schedules.destroy', ['current_family' => $family->slug, 'reportSchedule' => $schedule]))
         ->assertRedirect();
     expect(ReportSchedule::query()->find($schedule->id))->toBeNull();
+});
+
+it('requires a same-family member for scheduled member statements', function () {
+    Date::setTestNow('2026-07-31 00:00:00 UTC');
+    [$family, $admin] = phaseThreeScheduleFixture();
+    $member = User::factory()->member()->create(['family_id' => $family->id]);
+    $foreignMember = User::factory()->member()->create();
+    $payload = [
+        'name' => 'Member statement',
+        'report_type' => ReportType::MemberStatement->value,
+        'format' => ReportFormat::Pdf->value,
+        'filters' => ['date_from' => '2026-06-01', 'date_to' => '2026-06-30'],
+        'channels' => ['email'],
+        'recipients' => ['member@example.test'],
+        'frequency' => ReportScheduleFrequency::Monthly->value,
+        'timezone' => 'Asia/Qatar',
+        'next_run_at' => '2026-08-01T09:00',
+    ];
+    $route = route('reports.schedules.store', ['current_family' => $family->slug]);
+
+    $this->actingAs($admin)->post($route, [...$payload, 'next_run_at' => '2026-07-30T09:00'])
+        ->assertSessionHasErrors(['next_run_at']);
+    $this->actingAs($admin)->post($route, $payload)
+        ->assertSessionHasErrors(['filters.member_id']);
+    $this->post($route, [...$payload, 'filters' => [...$payload['filters'], 'member_id' => $foreignMember->id]])
+        ->assertSessionHasErrors(['filters.member_id']);
+    $this->post($route, [...$payload, 'filters' => [...$payload['filters'], 'member_id' => $member->id]])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    $schedule = ReportSchedule::query()->firstOrFail();
+    expect($schedule->filters['member_id'])->toBe($member->id)
+        ->and($schedule->timezone)->toBe('Asia/Qatar')
+        ->and($schedule->next_run_at->utc()->format('Y-m-d H:i:s'))->toBe('2026-08-01 06:00:00');
+
+    Date::setTestNow();
+});
+
+it('uses the schedule family role when deleting across memberships', function () {
+    $currentFamily = Family::factory()->create();
+    $scheduleFamily = Family::factory()->create();
+    $currentOfficer = User::factory()->financialSecretary()->create(['family_id' => $currentFamily->id]);
+    $currentOfficer->ensureFamilyMembership($scheduleFamily, Role::Member);
+    $scheduleFamilyOfficer = User::factory()->member()->create(['family_id' => $currentFamily->id]);
+    $scheduleFamilyOfficer->ensureFamilyMembership($scheduleFamily, Role::FinancialSecretary);
+    $schedule = ReportSchedule::factory()->create(['family_id' => $scheduleFamily->id]);
+    $policy = app(ReportSchedulePolicy::class);
+
+    expect($policy->delete($currentOfficer, $schedule))->toBeFalse()
+        ->and($policy->delete($scheduleFamilyOfficer, $schedule))->toBeTrue();
+
+    $this->actingAs($currentOfficer)
+        ->delete(route('reports.schedules.destroy', [
+            'current_family' => $currentFamily->slug,
+            'reportSchedule' => $schedule,
+        ]))
+        ->assertForbidden();
+
+    expect($schedule->fresh())->not->toBeNull();
 });
 
 it('skips unavailable and completed jobs and records whatsapp success and failure', function () {

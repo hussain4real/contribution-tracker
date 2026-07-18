@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 use App\Enums\ReportFormat;
 use App\Enums\ReportType;
+use App\Enums\Role;
+use App\Models\AuditEvent;
 use App\Models\Contribution;
 use App\Models\Expense;
 use App\Models\Family;
 use App\Models\FamilyCategory;
+use App\Models\FinancialReversal;
 use App\Models\FundAdjustment;
 use App\Models\Payment;
 use App\Models\PaymentBatch;
@@ -254,6 +257,51 @@ it('enforces artifact policy boundaries and exposes report relationships', funct
         ->and($register->requester?->is($admin))->toBeTrue()
         ->and($register->deliveries->first()?->is($delivery))->toBeTrue()
         ->and($delivery->schedule->is($schedule))->toBeTrue();
+});
+
+it('uses the artifact family role when a user belongs to multiple families', function () {
+    $currentFamily = Family::factory()->create();
+    $artifactFamily = Family::factory()->create();
+    $currentOfficer = User::factory()->financialSecretary()->create(['family_id' => $currentFamily->id]);
+    $currentOfficer->ensureFamilyMembership($artifactFamily, Role::Member);
+    $artifactFamilyOfficer = User::factory()->member()->create(['family_id' => $currentFamily->id]);
+    $artifactFamilyOfficer->ensureFamilyMembership($artifactFamily, Role::FinancialSecretary);
+    $artifact = ReportArtifact::factory()->create(['family_id' => $artifactFamily->id]);
+    $policy = app(ReportArtifactPolicy::class);
+
+    expect($policy->view($currentOfficer, $artifact))->toBeFalse()
+        ->and($policy->view($artifactFamilyOfficer, $artifact))->toBeTrue();
+
+    $this->actingAs($currentOfficer)
+        ->get(route('reports.artifacts.show', [
+            'current_family' => $currentFamily->slug,
+            'reportArtifact' => $artifact,
+        ]))
+        ->assertForbidden();
+});
+
+it('includes reversal and audit events throughout the report end date', function () {
+    [$family, $admin] = phaseThreeReportingFixture();
+    $expense = Expense::factory()->recordedBy($admin)->create(['family_id' => $family->id]);
+    FinancialReversal::factory()->create([
+        'family_id' => $family->id,
+        'reversible_type' => Expense::MORPH_TYPE,
+        'reversible_id' => $expense->id,
+        'reversed_by' => $admin->id,
+        'created_at' => '2026-06-30 18:30:00',
+    ]);
+    AuditEvent::factory()->create([
+        'family_id' => $family->id,
+        'actor_id' => $admin->id,
+        'auditable_type' => Expense::MORPH_TYPE,
+        'auditable_id' => $expense->id,
+        'created_at' => '2026-06-30 23:59:59',
+    ]);
+    $filters = ['date_from' => '2026-06-30', 'date_to' => '2026-06-30'];
+    $service = app(FamilyContributionReviewService::class);
+
+    expect($service->report($family, ReportType::Reversals, $filters)['rows'])->toHaveCount(1)
+        ->and($service->report($family, ReportType::AuditActivity, $filters)['rows'])->toHaveCount(1);
 });
 
 it('sanitizes null boolean structured and formula csv cells', function () {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use App\Enums\Role;
 use App\Models\Expense;
 use App\Models\User;
 
@@ -31,7 +32,7 @@ class ExpensePolicy
 
     public function delete(User $user, Expense $expense): bool
     {
-        return $user->isAdmin() && $user->membershipForFamilyId($expense->family_id) !== null;
+        return $user->membershipForFamilyId($expense->family_id)?->role === Role::Admin;
     }
 
     public function restore(User $user, Expense $expense): bool
