@@ -23,6 +23,8 @@ describe('Settings password flow', function () {
             ->click('Log in')
             ->navigate(route('security.edit'))
             ->assertPathIs($passwordConfirmPath)
+            ->assertAttribute('label[for]', 'for', 'password')
+            ->assertNoJavaScriptErrors()
             ->fill('password', 'password')
             ->click('@confirm-password-button')
             ->assertPathIs($securitySettingsPath)

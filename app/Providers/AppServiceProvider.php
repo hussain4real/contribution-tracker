@@ -10,10 +10,25 @@ use App\Http\Responses\RedirectAsIntendedToCurrentFamily;
 use App\Http\Responses\RegisterResponse;
 use App\Http\Responses\TwoFactorLoginResponse;
 use App\Http\Responses\VerifyEmailResponse;
+use App\Models\Expense;
+use App\Models\FamilyMembership;
+use App\Models\FamilyMembershipCategoryAssignment;
+use App\Models\FinancialReversal;
+use App\Models\FundAdjustment;
+use App\Models\PaymentBatch;
+use App\Models\PaystackTransaction;
 use App\Models\User;
+use App\Observers\ExpenseObserver;
+use App\Observers\FamilyMembershipCategoryAssignmentObserver;
+use App\Observers\FamilyMembershipObserver;
+use App\Observers\FinancialReversalObserver;
+use App\Observers\FundAdjustmentObserver;
+use App\Observers\PaymentBatchObserver;
+use App\Observers\PaystackTransactionObserver;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\LazyLoadingViolationException;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
@@ -51,6 +66,24 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->requireEncryptedProductionBackups();
+
+        Relation::morphMap([
+            'expense' => Expense::class,
+            'family_membership' => FamilyMembership::class,
+            'family_category_assignment' => FamilyMembershipCategoryAssignment::class,
+            'financial_reversal' => FinancialReversal::class,
+            'fund_adjustment' => FundAdjustment::class,
+            'payment_batch' => PaymentBatch::class,
+            'paystack_transaction' => PaystackTransaction::class,
+        ]);
+
+        FamilyMembership::observe(FamilyMembershipObserver::class);
+        FamilyMembershipCategoryAssignment::observe(FamilyMembershipCategoryAssignmentObserver::class);
+        PaymentBatch::observe(PaymentBatchObserver::class);
+        Expense::observe(ExpenseObserver::class);
+        FundAdjustment::observe(FundAdjustmentObserver::class);
+        FinancialReversal::observe(FinancialReversalObserver::class);
+        PaystackTransaction::observe(PaystackTransactionObserver::class);
 
         // Gate for generating reports
         Gate::define('generate-reports', function (User $user) {

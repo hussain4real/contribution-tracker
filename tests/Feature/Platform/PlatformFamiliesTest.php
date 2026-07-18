@@ -131,6 +131,29 @@ describe('Platform Families', function () {
         expect($family->refresh()->isSuspended())->toBeFalse();
     });
 
+    it('places and releases a legal hold on an archived family', function () {
+        $family = Family::factory()->archived()->create(['name' => 'Retained Family']);
+        $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
+
+        $this->actingAs($superAdmin);
+
+        Livewire::test(ViewFamily::class, ['record' => $family->getRouteKey()])
+            ->callAction('placeLegalHold', ['reason' => 'Regulatory preservation request.'])
+            ->assertNotified('Legal hold placed on "Retained Family".');
+
+        expect($family->refresh()->isOnLegalHold())->toBeTrue()
+            ->and($family->legal_hold_by)->toBe($superAdmin->id)
+            ->and($family->legal_hold_reason)->toBe('Regulatory preservation request.');
+
+        Livewire::test(ViewFamily::class, ['record' => $family->getRouteKey()])
+            ->callAction('releaseLegalHold')
+            ->assertNotified('Legal hold released from "Retained Family".');
+
+        expect($family->refresh()->isOnLegalHold())->toBeFalse()
+            ->and($family->legal_hold_by)->toBeNull()
+            ->and($family->legal_hold_reason)->toBeNull();
+    });
+
     it('shows suspended families in the table', function () {
         $family = Family::factory()->suspended()->create();
         $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);

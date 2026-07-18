@@ -33,9 +33,16 @@ it('allows admins and financial secretaries to create expenses', function () {
         ->and($this->policy->create($this->member))->toBeFalse();
 });
 
-it('allows only same-family admins to mutate expenses', function (string $ability) {
-    expect($this->policy->{$ability}($this->admin, $this->expense))->toBeTrue()
+it('allows only same-family admins to reverse expenses', function () {
+    expect($this->policy->delete($this->admin, $this->expense))->toBeTrue()
+        ->and($this->policy->delete($this->financialSecretary, $this->expense))->toBeFalse()
+        ->and($this->policy->delete($this->member, $this->expense))->toBeFalse()
+        ->and($this->policy->delete($this->outsider, $this->expense))->toBeFalse();
+});
+
+it('denies direct mutation of immutable expenses', function (string $ability) {
+    expect($this->policy->{$ability}($this->admin, $this->expense))->toBeFalse()
         ->and($this->policy->{$ability}($this->financialSecretary, $this->expense))->toBeFalse()
         ->and($this->policy->{$ability}($this->member, $this->expense))->toBeFalse()
         ->and($this->policy->{$ability}($this->outsider, $this->expense))->toBeFalse();
-})->with(['update', 'delete', 'restore', 'forceDelete']);
+})->with(['update', 'restore', 'forceDelete']);

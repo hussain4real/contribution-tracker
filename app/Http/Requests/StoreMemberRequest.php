@@ -4,17 +4,41 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
-use App\Enums\MemberCategory;
 use App\Enums\Role;
+use App\Models\Family;
 use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\Validator;
 
 class StoreMemberRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        if ($this->filled('family_category_id') || ! $this->filled('category')) {
+            return;
+        }
+
+        $user = $this->user();
+        $family = $user instanceof User ? ($user->currentFamily ?? $user->family) : null;
+
+        if (! $family instanceof Family) {
+            return;
+        }
+
+        $categoryId = $family->categories()
+            ->where('slug', $this->string('category')->toString())
+            ->value('id');
+
+        if ($categoryId !== null) {
+            $this->merge(['family_category_id' => $categoryId]);
+        }
+    }
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -36,7 +60,15 @@ class StoreMemberRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'confirmed', Password::defaults()],
-            'category' => ['required', new Enum(MemberCategory::class)],
+            'family_category_id' => [
+                'required',
+                'integer',
+                Rule::exists('family_categories', 'id')->where(
+                    function (QueryBuilder $query): void {
+                        $query->where('family_id', $this->familyId());
+                    },
+                ),
+            ],
             'role' => ['required', new Enum(Role::class)],
         ];
     }
@@ -73,8 +105,16 @@ class StoreMemberRequest extends FormRequest
             'email.unique' => 'This email address is already registered.',
             'password.required' => 'A password is required for new members.',
             'password.confirmed' => 'The password confirmation does not match.',
-            'category.required' => 'Please select a member category.',
+            'family_category_id.required' => 'Please select a member category.',
             'role.required' => 'Please select a role for the member.',
         ];
+    }
+
+    private function familyId(): int
+    {
+        $user = $this->user();
+        $family = $user instanceof User ? ($user->currentFamily ?? $user->family) : null;
+
+        return $family instanceof Family ? $family->id : 0;
     }
 }

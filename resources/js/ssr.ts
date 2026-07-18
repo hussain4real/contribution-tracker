@@ -8,6 +8,11 @@ import { renderToString } from 'vue/server-renderer';
 import { setUrlDefaults } from './wayfinder';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+const ssrPort = Number.parseInt(
+    import.meta.env.VITE_INERTIA_SSR_PORT || '13714',
+    10,
+);
+const ssrCluster = import.meta.env.VITE_INERTIA_SSR_CLUSTER !== 'false';
 
 type SsrSetupOptions = {
     el: null;
@@ -51,5 +56,5 @@ createServer(
                 );
             },
         }),
-    { cluster: true },
+    { cluster: ssrCluster, port: ssrPort },
 );

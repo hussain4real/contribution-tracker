@@ -59,4 +59,13 @@ class FamilyFactory extends Factory
             'suspended_at' => now(),
         ]);
     }
+
+    public function archived(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'archived_at' => now(),
+            'archive_reason' => 'The family requested account closure.',
+            'purge_after' => now()->addDays(30),
+        ]);
+    }
 }

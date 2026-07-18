@@ -52,6 +52,7 @@ class SendInvitation implements Tool
         $email = $this->nullableStringFromRequest($request['email'] ?? null);
         $whatsappPhone = $this->nullableStringFromRequest($request['whatsapp_phone'] ?? null);
         $roleValue = $this->nullableStringFromRequest($request['role'] ?? null);
+        $categorySlug = $this->nullableStringFromRequest($request['category'] ?? null);
         $confirmed = ($request['confirmed'] ?? false) === true;
 
         if (! $deliveryMethod) {
@@ -88,6 +89,17 @@ class SendInvitation implements Tool
 
         if (! $this->user->canManageRoles() && $role !== Role::Member) {
             return json_encode(['error' => 'Only family admins can invite admin or financial secretary roles.'], JSON_THROW_ON_ERROR);
+        }
+
+        $category = $categorySlug !== null
+            ? $family->categories()->where('slug', $categorySlug)->first()
+            : null;
+
+        if ($category === null) {
+            return json_encode([
+                'error' => 'A valid family contribution category is required.',
+                'available_categories' => $family->categories()->orderBy('sort_order')->pluck('name', 'slug')->toArray(),
+            ], JSON_THROW_ON_ERROR);
         }
 
         $existingMemberQuery = $family->members();
@@ -133,12 +145,13 @@ class SendInvitation implements Tool
         if (! $confirmed) {
             return json_encode([
                 'status' => 'confirmation_required',
-                'message' => "I'll send an invitation to {$contact} via {$deliveryMethod->label()} to join {$familyName} as a {$role->value}. The invitation will expire in 7 days. Please confirm to proceed.",
+                'message' => "I'll send an invitation to {$contact} via {$deliveryMethod->label()} to join {$familyName} as a {$role->value} in the {$category->name} category. The invitation will expire in 7 days. Please confirm to proceed.",
                 'details' => [
                     'email' => $deliveryMethod === InvitationDeliveryMethod::Email ? $contact : null,
                     'delivery_method' => $deliveryMethod->value,
                     'whatsapp_phone' => $deliveryMethod === InvitationDeliveryMethod::WhatsApp ? $contact : null,
                     'role' => $role->value,
+                    'category' => $category->slug,
                     'family' => $familyName,
                 ],
             ], JSON_THROW_ON_ERROR);
@@ -150,6 +163,7 @@ class SendInvitation implements Tool
             'delivery_method' => $deliveryMethod,
             'whatsapp_phone' => $deliveryMethod === InvitationDeliveryMethod::WhatsApp ? $contact : null,
             'role' => $role,
+            'family_category_id' => $category->id,
             'token' => Str::random(64),
             'invited_by' => $this->user->id,
             'expires_at' => now()->addDays(7),
@@ -191,6 +205,7 @@ class SendInvitation implements Tool
             'email' => $schema->string(),
             'whatsapp_phone' => $schema->string(),
             'role' => $schema->string()->required(),
+            'category' => $schema->string()->required(),
             'confirmed' => $schema->boolean(),
         ];
     }

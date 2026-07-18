@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Http\Middleware\AssignRequestId;
+use App\Http\Middleware\EnsureFamilyIsActive;
 use App\Http\Middleware\EnsureFamilyIsNotSuspended;
 use App\Http\Middleware\EnsureFamilyMembership;
 use App\Http\Middleware\EnsureFamilySubscription;
@@ -11,10 +13,12 @@ use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\SetFamilyContext;
 use App\Http\Middleware\SetFamilyUrlDefaults;
+use App\Models\User;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -25,6 +29,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->redirectUsersTo(fn (Request $request): string => $request->user() instanceof User && $request->user()->isSuperAdmin()
+            ? route('filament.platform.pages.dashboard', absolute: false)
+            : route('dashboard', absolute: false));
+
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
         $middleware->validateCsrfTokens(except: [
@@ -33,6 +41,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->web(append: [
+            AssignRequestId::class,
             EnsureUserIsNotArchived::class,
             EnsureFamilyIsNotSuspended::class,
             SetFamilyUrlDefaults::class,
@@ -45,6 +54,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'family.member' => EnsureFamilyMembership::class,
+            'family.active' => EnsureFamilyIsActive::class,
             'subscription' => EnsureFamilySubscription::class,
         ]);
 

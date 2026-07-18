@@ -1,19 +1,27 @@
 <script setup lang="ts">
 import {
-    destroy as destroyFundAdjustment,
     index,
     store,
 } from '@/actions/App/Http/Controllers/FundAdjustmentController';
+import FundAdjustmentReversalController from '@/actions/App/Http/Controllers/FundAdjustmentReversalController';
 import HeadingSmall from '@/components/HeadingSmall.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useCurrencyFormatter } from '@/lib/currency';
 import { type BreadcrumbItem } from '@/types';
 import { Form, Head, Link, router } from '@inertiajs/vue3';
-import { Landmark, Plus, Trash2 } from '@lucide/vue';
+import { Landmark, Plus, RotateCcw } from '@lucide/vue';
 import { ref } from 'vue';
 
 interface AdjustmentItem {
@@ -23,6 +31,9 @@ interface AdjustmentItem {
     recorded_at: string;
     recorded_by: string | null;
     created_at: string;
+    is_reversed: boolean;
+    reversal_reason: string | null;
+    can_reverse: boolean;
 }
 
 interface PaginatedAdjustments {
@@ -60,10 +71,39 @@ function formatDate(date: string): string {
     });
 }
 
-function deleteAdjustment(id: number): void {
-    if (confirm('Are you sure you want to delete this fund adjustment?')) {
-        router.delete(destroyFundAdjustment({ fund_adjustment: id }).url);
+const reversalTarget = ref<AdjustmentItem | null>(null);
+const reversalReason = ref('');
+const reversalError = ref('');
+const reversing = ref(false);
+
+function openReversal(adjustment: AdjustmentItem): void {
+    reversalTarget.value = adjustment;
+    reversalReason.value = '';
+    reversalError.value = '';
+}
+
+function reverseAdjustment(): void {
+    if (!reversalTarget.value || reversalReason.value.trim().length < 5) {
+        reversalError.value = 'Enter a reason of at least 5 characters.';
+        return;
     }
+
+    reversing.value = true;
+    router.post(
+        FundAdjustmentReversalController({
+            fund_adjustment: reversalTarget.value.id,
+        }).url,
+        { reason: reversalReason.value },
+        {
+            preserveScroll: true,
+            onSuccess: () => (reversalTarget.value = null),
+            onError: (errors) => {
+                reversalError.value =
+                    errors.reason ?? 'Unable to reverse this adjustment.';
+            },
+            onFinish: () => (reversing.value = false),
+        },
+    );
 }
 
 function resetForm(): void {
@@ -238,6 +278,9 @@ function resetForm(): void {
                                 v-for="adjustment in adjustments.data"
                                 :key="adjustment.id"
                                 class="hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
+                                :class="{
+                                    'opacity-60': adjustment.is_reversed,
+                                }"
                             >
                                 <td
                                     class="px-4 py-4 text-neutral-900 sm:px-6 dark:text-neutral-100"
@@ -248,6 +291,11 @@ function resetForm(): void {
                                     class="max-w-[120px] truncate px-4 py-4 text-neutral-700 sm:max-w-xs sm:px-6 dark:text-neutral-300"
                                 >
                                     {{ adjustment.description }}
+                                    <span
+                                        v-if="adjustment.is_reversed"
+                                        class="ml-2 text-xs font-medium text-amber-600"
+                                        >Reversed</span
+                                    >
                                 </td>
                                 <td
                                     class="px-4 py-4 text-right font-medium text-green-600 sm:px-6 dark:text-green-400"
@@ -261,13 +309,13 @@ function resetForm(): void {
                                 </td>
                                 <td class="px-4 py-4 text-right sm:px-6">
                                     <Button
-                                        v-if="can_create"
+                                        v-if="adjustment.can_reverse"
                                         variant="ghost"
                                         size="sm"
-                                        @click="deleteAdjustment(adjustment.id)"
+                                        @click="openReversal(adjustment)"
                                         class="text-red-500 hover:text-red-700"
                                     >
-                                        <Trash2 class="h-4 w-4" />
+                                        <RotateCcw class="h-4 w-4" />
                                     </Button>
                                 </td>
                             </tr>
@@ -304,6 +352,46 @@ function resetForm(): void {
                     </template>
                 </div>
             </div>
+
+            <Dialog
+                :open="reversalTarget !== null"
+                @update:open="(open) => !open && (reversalTarget = null)"
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Reverse fund adjustment</DialogTitle>
+                        <DialogDescription>
+                            This keeps the original entry in the audit trail and
+                            removes it from the effective family balance.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div class="grid gap-2">
+                        <Label for="adjustment-reversal-reason">Reason</Label>
+                        <textarea
+                            id="adjustment-reversal-reason"
+                            v-model="reversalReason"
+                            rows="4"
+                            maxlength="1000"
+                            class="rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+                        />
+                        <InputError :message="reversalError" />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" @click="reversalTarget = null"
+                            >Cancel</Button
+                        >
+                        <Button
+                            variant="destructive"
+                            :disabled="reversing"
+                            @click="reverseAdjustment"
+                        >
+                            {{
+                                reversing ? 'Reversing…' : 'Reverse adjustment'
+                            }}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     </AppLayout>
 </template>

@@ -45,7 +45,7 @@ describe('Member Management Flow (Browser)', function () {
             ->fill('email', 'student@test.com')
             ->fill('password', 'password123')
             ->fill('password_confirmation', 'password123')
-            ->select('category', 'student')
+            ->select('family_category_id', browserFamilyCategoryId($this->family, 'student'))
             ->select('role', 'member')
             ->click('Create Member')
             ->assertSee('Family Members')
@@ -93,13 +93,13 @@ describe('Member Management Flow (Browser)', function () {
             'member' => $member,
         ]))
             ->assertSee('Edit Member')
-            ->select('category', 'employed')
+            ->select('family_category_id', browserFamilyCategoryId($this->family, 'employed'))
             ->click('Save Changes')
             ->assertNoJavaScriptErrors();
 
         $member->refresh();
 
-        expect(memberCategoryValue($member))->toBe('employed');
+        expect($member->membershipForFamily($this->family)?->familyCategory?->slug)->toBe('employed');
     });
 
     it('can archive a member', function () {
@@ -126,7 +126,7 @@ describe('Member Management Flow (Browser)', function () {
 
         $member->refresh();
 
-        expect($member->isArchived())->toBeTrue();
+        expect($member->membershipForFamilyIncludingArchived($this->family)?->isArchived())->toBeTrue();
     });
 
     it('can view archived members and restore them', function () {
@@ -156,7 +156,7 @@ describe('Member Management Flow (Browser)', function () {
 
         $member->refresh();
 
-        expect($member->isArchived())->toBeFalse();
+        expect($member->membershipForFamilyIncludingArchived($this->family)?->isArchived())->toBeFalse();
     });
 
     it('shows member details on show page', function () {

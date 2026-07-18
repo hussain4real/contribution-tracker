@@ -49,10 +49,8 @@ class GenerateMonthlyContributions extends Command
 
         foreach ($families as $family) {
             $memberships = $family->memberships()
-                ->with(['familyCategory', 'user'])
-                ->whereHas('user', function (Builder $query): void {
-                    $query->whereNull('archived_at');
-                })
+                ->with(['familyCategory', 'categoryAssignments.category', 'user'])
+                ->active()
                 ->where(function (Builder $query): void {
                     $query->whereNotNull('family_members.family_category_id')
                         ->orWhereNotNull('family_members.category');
@@ -61,7 +59,14 @@ class GenerateMonthlyContributions extends Command
 
             foreach ($memberships as $membership) {
                 $member = $membership->user;
-                $expectedAmount = (int) $membership->monthlyAmount();
+                $snapshot = $membership->contributionCategorySnapshot($year, $month);
+                $expectedAmount = $snapshot['category_amount'];
+
+                if ($expectedAmount === null || $expectedAmount < 1) {
+                    $totalSkipped++;
+
+                    continue;
+                }
 
                 $dueDay = $family->due_day ?? Contribution::DUE_DAY;
 
@@ -73,6 +78,7 @@ class GenerateMonthlyContributions extends Command
                 ], [
                     'expected_amount' => $expectedAmount,
                     'due_date' => Contribution::dueDateForMonth($year, $month, $dueDay),
+                    ...$snapshot,
                 ]);
 
                 if ($contribution->wasRecentlyCreated) {

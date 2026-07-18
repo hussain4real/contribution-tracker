@@ -140,34 +140,36 @@ it('validates amount must be a positive integer', function () {
 });
 
 // =========================================================================
-// Destroy
+// Reverse
 // =========================================================================
 
-it('allows super admin to delete a fund adjustment', function () {
+it('allows super admin to reverse a fund adjustment without deleting it', function () {
     $adjustment = FundAdjustment::factory()->recordedBy($this->admin)->create();
 
     $this->actingAs($this->admin)
-        ->delete(route('fund-adjustments.destroy', $adjustment))
-        ->assertRedirect(route('fund-adjustments.index'));
+        ->post(route('fund-adjustments.reverse', $adjustment), ['reason' => 'Incorrect opening balance'])
+        ->assertRedirect();
 
-    expect(FundAdjustment::count())->toBe(0);
+    expect(FundAdjustment::count())->toBe(1)
+        ->and($adjustment->reversal()->exists())->toBeTrue();
 });
 
-it('allows financial secretary to delete a fund adjustment', function () {
+it('allows financial secretary to reverse a fund adjustment', function () {
     $adjustment = FundAdjustment::factory()->recordedBy($this->financialSecretary)->create();
 
     $this->actingAs($this->financialSecretary)
-        ->delete(route('fund-adjustments.destroy', $adjustment))
-        ->assertRedirect(route('fund-adjustments.index'));
+        ->post(route('fund-adjustments.reverse', $adjustment), ['reason' => 'Incorrect opening balance'])
+        ->assertRedirect();
 
-    expect(FundAdjustment::count())->toBe(0);
+    expect(FundAdjustment::count())->toBe(1)
+        ->and($adjustment->reversal()->exists())->toBeTrue();
 });
 
-it('denies regular member from deleting a fund adjustment', function () {
+it('denies regular member from reversing a fund adjustment', function () {
     $adjustment = FundAdjustment::factory()->recordedBy($this->admin)->create();
 
     $this->actingAs($this->member)
-        ->delete(route('fund-adjustments.destroy', $adjustment))
+        ->post(route('fund-adjustments.reverse', $adjustment), ['reason' => 'Incorrect opening balance'])
         ->assertForbidden();
 
     expect(FundAdjustment::count())->toBe(1);

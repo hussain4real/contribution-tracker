@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { store as archiveFamily } from '@/actions/App/Http/Controllers/FamilyArchiveController';
 import {
     banks as banksRoute,
     destroyCategory,
@@ -488,6 +489,52 @@ function cancelEdit(): void {
                         >
                     </Form>
                 </div>
+            </section>
+
+            <section class="rounded-xl border border-destructive/40 p-5">
+                <HeadingSmall
+                    title="Archive family"
+                    description="Immediately disables the family workspace. Admins can restore or export it for 30 days before permanent purge."
+                />
+                <Form
+                    :action="archiveFamily().url"
+                    method="post"
+                    #default="{ errors, processing }"
+                    class="mt-4 grid gap-4"
+                >
+                    <div class="grid gap-2">
+                        <Label for="archive_reason">Reason</Label>
+                        <textarea
+                            id="archive_reason"
+                            name="reason"
+                            minlength="10"
+                            maxlength="1000"
+                            required
+                            class="min-h-24 rounded-md border bg-background px-3 py-2 text-sm"
+                        />
+                        <InputError :message="errors.reason" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="archive_confirmation"
+                            >Type ARCHIVE to confirm</Label
+                        >
+                        <Input
+                            id="archive_confirmation"
+                            name="confirmation"
+                            required
+                            autocomplete="off"
+                        />
+                        <InputError :message="errors.confirmation" />
+                    </div>
+                    <div>
+                        <Button
+                            type="submit"
+                            variant="destructive"
+                            :disabled="processing"
+                            >Archive family</Button
+                        >
+                    </div>
+                </Form>
             </section>
         </div>
     </AppLayout>

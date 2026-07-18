@@ -21,6 +21,9 @@ describe('Dashboard Flow (Browser)', function () {
             'name' => 'John Doe',
             'email' => 'member@test.com',
         ]);
+        $this->financialSecretary = createBrowserFinancialSecretary($this->family, [
+            'email' => 'financial-secretary@test.com',
+        ]);
 
         // Create contribution for current month
         Contribution::factory()
@@ -48,6 +51,24 @@ describe('Dashboard Flow (Browser)', function () {
         loginBrowserAs($this->member)
             ->assertSee('Dashboard')
             ->assertSee('Your Contribution')
+            ->assertNoJavaScriptErrors();
+    });
+
+    it('financial secretary login lands on the family dashboard', function () {
+        loginBrowserAs($this->financialSecretary)
+            ->assertSee('Dashboard')
+            ->assertNoJavaScriptErrors();
+    });
+
+    it('platform administrator login lands on the platform dashboard', function () {
+        $platformAdmin = createBrowserSuperAdmin(null, [
+            'email' => 'platform-admin@test.com',
+            'family_id' => null,
+            'current_family_id' => null,
+        ]);
+
+        loginBrowserAs($platformAdmin)
+            ->assertSee('Platform Overview')
             ->assertNoJavaScriptErrors();
     });
 });

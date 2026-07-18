@@ -51,19 +51,19 @@ it('allows admins and financial secretaries to create payments', function () {
         ->and($this->policy->create($this->member))->toBeFalse();
 });
 
-it('allows only same-family admins to update payments', function () {
-    expect($this->policy->update($this->admin, $this->payment))->toBeTrue()
+it('denies direct payment allocation updates', function () {
+    expect($this->policy->update($this->admin, $this->payment))->toBeFalse()
         ->and($this->policy->update($this->financialSecretary, $this->payment))->toBeFalse()
         ->and($this->policy->update($this->outsider, $this->payment))->toBeFalse();
 });
 
-it('allows same-family admins to delete recent payments only', function () {
+it('denies direct payment allocation deletion', function () {
     $oldPayment = Payment::factory()
         ->forContribution($this->contribution)
         ->recordedBy($this->admin)
         ->create(['created_at' => now()->subHours(25)]);
 
-    expect($this->policy->delete($this->admin, $this->payment))->toBeTrue()
+    expect($this->policy->delete($this->admin, $this->payment))->toBeFalse()
         ->and($this->policy->delete($this->admin, $oldPayment))->toBeFalse()
         ->and($this->policy->delete($this->financialSecretary, $this->payment))->toBeFalse()
         ->and($this->policy->delete($this->outsider, $this->payment))->toBeFalse();
@@ -73,9 +73,9 @@ it('denies deleting payments without a creation timestamp', function () {
     expect($this->policy->delete($this->admin, new Payment))->toBeFalse();
 });
 
-it('allows only same-family admins to restore or force delete payments', function () {
-    expect($this->policy->restore($this->admin, $this->payment))->toBeTrue()
-        ->and($this->policy->forceDelete($this->admin, $this->payment))->toBeTrue()
+it('denies restoring or force deleting payment allocations', function () {
+    expect($this->policy->restore($this->admin, $this->payment))->toBeFalse()
+        ->and($this->policy->forceDelete($this->admin, $this->payment))->toBeFalse()
         ->and($this->policy->restore($this->financialSecretary, $this->payment))->toBeFalse()
         ->and($this->policy->forceDelete($this->outsider, $this->payment))->toBeFalse();
 });

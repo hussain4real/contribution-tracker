@@ -51,7 +51,7 @@ class SubscriptionController extends Controller
             'current_plan' => $currentPlan?->only(['id', 'name', 'slug', 'price']),
             'subscription_status' => $family instanceof Family ? ($family->subscription_status ?? 'free') : 'free',
             'current_period_end' => $family?->current_period_end?->toDateString(),
-            'member_count' => $family?->members()->count() ?? 0,
+            'member_count' => $family?->memberships()->active()->count() ?? 0,
             'is_admin' => $user->isAdmin(),
             'paystack_public_key' => $this->stringConfig('services.paystack.public_key'),
             'available_features' => PlatformPlanCatalog::featureLabels(),

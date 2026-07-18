@@ -4,17 +4,20 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Enums\MemberCategory;
+use App\Enums\PaymentMethod;
+use App\Enums\PaymentSource;
 use App\Http\Requests\StorePaymentRequest;
 use App\Models\Family;
 use App\Models\FamilyMembership;
 use App\Models\Payment;
+use App\Models\PaymentBatch;
 use App\Models\User;
 use App\Services\PaymentAllocationService;
 use App\Support\CurrencyFormatter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -40,7 +43,7 @@ class PaymentController extends Controller
 
                 return [
                     'id' => $member->id,
-                    'name' => $member->name,
+                    'name' => $membership->displayName(),
                     'email' => $member->email,
                     'category' => $membership->category?->value,
                     'category_label' => $membership->categoryLabel(),
@@ -48,8 +51,33 @@ class PaymentController extends Controller
                 ];
             });
 
+        $receipts = PaymentBatch::query()
+            ->where('family_id', $family->id)
+            ->with(['recorder:id,name', 'reversal:id,reversible_type,reversible_id,reason'])
+            ->withCount('allocations')
+            ->latest('paid_at')
+            ->latest('id')
+            ->limit(50)
+            ->get()
+            ->map(fn (PaymentBatch $batch): array => [
+                'id' => $batch->id,
+                'receipt_number' => $batch->receipt_number,
+                'member_name' => $batch->member_name,
+                'total_amount' => $batch->total_amount,
+                'paid_at' => $batch->paid_at->toDateString(),
+                'method' => $batch->method->label(),
+                'source' => $batch->source->label(),
+                'reference' => $batch->reference,
+                'recorded_by' => $batch->recorder?->name,
+                'allocations_count' => $batch->allocations_count,
+                'is_reversed' => $batch->isReversed(),
+                'reversal_reason' => $batch->reversal?->reason,
+                'can_reverse' => $currentUser->can('reverse', $batch),
+            ]);
+
         return Inertia::render('Payments/Index', [
             'members' => $members,
+            'receipts' => $receipts,
         ]);
     }
 
@@ -83,7 +111,7 @@ class PaymentController extends Controller
         return Inertia::render('Payments/Create', [
             'member' => [
                 'id' => $member->id,
-                'name' => $member->name,
+                'name' => $membership->displayName(),
                 'email' => $member->email,
                 'category' => $membership->category?->value,
                 'category_label' => $membership->categoryLabel(),
@@ -91,10 +119,18 @@ class PaymentController extends Controller
             'pending_contributions' => $pendingContributions,
             'category_amount' => $membership->monthlyAmount() ?? 0,
             'formatted_amount' => CurrencyFormatter::format($membership->monthlyAmount() ?? 0, $currency),
-            'categories' => collect(MemberCategory::cases())->map(fn ($cat) => [
-                'value' => $cat->value,
-                'label' => "{$cat->label()} (".CurrencyFormatter::format($cat->monthlyAmount(), $currency, 0).'/month)',
+            'categories' => $family->categories()
+                ->orderBy('sort_order')
+                ->get(['id', 'name', 'monthly_amount'])
+                ->map(fn ($category): array => [
+                    'value' => $category->id,
+                    'label' => "{$category->name} (".CurrencyFormatter::format($category->monthly_amount, $currency, 0).'/month)',
+                ]),
+            'paymentMethods' => collect(PaymentMethod::cases())->map(fn (PaymentMethod $method): array => [
+                'value' => $method->value,
+                'label' => $method->label(),
             ]),
+            'idempotencyKey' => (string) Str::uuid(),
         ]);
     }
 
@@ -110,7 +146,7 @@ class PaymentController extends Controller
             ->firstOrFail();
         $this->membershipForMember($member, $family);
 
-        $payments = $this->allocationService->allocate(
+        $batch = $this->allocationService->createBatch(
             member: $member,
             amount: $request->integer('amount'),
             paidAt: $request->string('paid_at')->toString(),
@@ -119,27 +155,19 @@ class PaymentController extends Controller
             targetYear: $request->filled('target_year') ? $request->integer('target_year') : null,
             targetMonth: $request->filled('target_month') ? $request->integer('target_month') : null,
             family: $family,
+            method: PaymentMethod::from($request->string('method', PaymentMethod::Cash->value)->toString()),
+            source: PaymentSource::Manual,
+            reference: $request->filled('reference') ? $request->string('reference')->toString() : null,
+            idempotencyKey: $request->filled('idempotency_key')
+                ? $request->string('idempotency_key')->toString()
+                : (string) Str::uuid(),
         );
 
-        $totalAllocated = (int) $payments->sum(fn (Payment $payment): int => $payment->amount);
         $currency = $family->currency;
-        $formattedAmount = CurrencyFormatter::format($totalAllocated, $currency);
+        $formattedAmount = CurrencyFormatter::format($batch->total_amount, $currency);
 
         return redirect()->route('dashboard')
-            ->with('success', "Payment of {$formattedAmount} recorded for {$member->name}.");
-    }
-
-    /**
-     * Remove the specified payment (within 24 hours).
-     */
-    public function destroy(Payment $payment): RedirectResponse
-    {
-        $this->authorize('delete', $payment);
-
-        $payment->delete();
-
-        return redirect()->back()
-            ->with('success', 'Payment has been deleted.');
+            ->with('success', "Receipt #{$batch->receipt_number}: {$formattedAmount} recorded for {$batch->member_name}.");
     }
 
     private function currentFamilyFor(User $user): Family
@@ -167,9 +195,7 @@ class PaymentController extends Controller
     {
         return $family->memberships()
             ->with(['familyCategory:id,name,monthly_amount', 'user'])
-            ->whereHas('user', function (Builder $query): void {
-                $query->whereNull('archived_at');
-            })
+            ->active()
             ->where(function (Builder $query): void {
                 $query->whereNotNull('family_members.family_category_id')
                     ->orWhereNotNull('family_members.category');

@@ -25,6 +25,16 @@ Schedule::command('contributions:remind --day=28')
     ->withoutOverlapping()
     ->onOneServer();
 
+Schedule::command('reports:dispatch-scheduled')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->onOneServer();
+
+Schedule::command('families:purge-archived')
+    ->dailyAt('01:30')
+    ->withoutOverlapping()
+    ->onOneServer();
+
 $backupEvents = [
     Schedule::command('backup:run --only-to-disk=local')
         ->name('backup-run-local')

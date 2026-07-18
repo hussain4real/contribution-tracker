@@ -15,7 +15,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             PlatformPlanSeeder::class,
-            FamilyMemberSeeder::class,
+            DevelopmentSeeder::class,
         ]);
     }
 }

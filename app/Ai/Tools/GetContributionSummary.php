@@ -9,7 +9,6 @@ use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Illuminate\Database\Eloquent\Builder;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 
@@ -43,7 +42,10 @@ class GetContributionSummary implements Tool
             ->where('family_id', $family->id)
             ->where('year', $year)
             ->with(['user:id,name', 'payments:id,contribution_id,amount'])
-            ->whereHas('user', fn (Builder $query): Builder => $query->whereNull('archived_at'));
+            ->whereHas('user.familyMemberships', function ($query) use ($family): void {
+                $query->where('family_members.family_id', $family->id)
+                    ->whereNull('family_members.archived_at');
+            });
 
         if ($month !== null) {
             $query->where('month', $month);
@@ -66,7 +68,9 @@ class GetContributionSummary implements Tool
             );
 
             return [
-                'name' => $user instanceof User ? $user->name : 'Unknown',
+                'name' => $user instanceof User
+                    ? ($user->membershipForFamilyId($firstContribution->family_id)?->displayName() ?? $user->name)
+                    : 'Unknown',
                 'expected' => $expected,
                 'paid' => $paid,
                 'outstanding' => $expected - $paid,

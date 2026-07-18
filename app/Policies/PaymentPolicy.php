@@ -16,7 +16,15 @@ class PaymentPolicy
 
     public function view(User $user, Payment $payment): bool
     {
-        if ($user->family_id !== $payment->contribution?->family_id) {
+        $contribution = $payment->contribution;
+
+        if ($contribution === null) {
+            return false;
+        }
+
+        $familyId = $contribution->family_id;
+
+        if ($user->membershipForFamilyId($familyId) === null) {
             return false;
         }
 
@@ -24,7 +32,7 @@ class PaymentPolicy
             return true;
         }
 
-        return $user->id === $payment->contribution?->user_id;
+        return $user->id === $contribution->user_id;
     }
 
     public function create(User $user): bool
@@ -34,27 +42,21 @@ class PaymentPolicy
 
     public function update(User $user, Payment $payment): bool
     {
-        return $user->isAdmin() && $user->family_id === $payment->contribution?->family_id;
+        return false;
     }
 
     public function delete(User $user, Payment $payment): bool
     {
-        if ($payment->created_at === null) {
-            return false;
-        }
-
-        return $user->isAdmin()
-            && $user->family_id === $payment->contribution?->family_id
-            && $payment->created_at->diffInHours(now()) <= 24;
+        return false;
     }
 
     public function restore(User $user, Payment $payment): bool
     {
-        return $user->isAdmin() && $user->family_id === $payment->contribution?->family_id;
+        return false;
     }
 
     public function forceDelete(User $user, Payment $payment): bool
     {
-        return $user->isAdmin() && $user->family_id === $payment->contribution?->family_id;
+        return false;
     }
 }

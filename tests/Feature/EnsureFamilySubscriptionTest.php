@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Http\Middleware\EnsureFamilySubscription;
 use App\Models\Family;
+use App\Models\FamilyCategory;
 use App\Models\PlatformPlan;
 use App\Models\User;
 use App\Support\PlatformPlanCatalog;
@@ -489,6 +490,12 @@ it('blocks adding members when at the plan limit', function () {
 
     $family = Family::factory()->create(['platform_plan_id' => $plan->id]);
     $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+    $category = FamilyCategory::factory()->create([
+        'family_id' => $family->id,
+        'name' => 'Employed',
+        'slug' => 'employed',
+        'monthly_amount' => 4000,
+    ]);
     User::factory()->create(['family_id' => $family->id]);
 
     // 2 members now — at the limit
@@ -499,7 +506,7 @@ it('blocks adding members when at the plan limit', function () {
             'password' => 'password123',
             'password_confirmation' => 'password123',
             'role' => 'member',
-            'category' => 'employed',
+            'family_category_id' => $category->id,
         ])
         ->assertRedirect(route('subscription.index'));
 });
@@ -538,6 +545,12 @@ it('allows adding members when under the plan limit', function () {
 
     $family = Family::factory()->create(['platform_plan_id' => $plan->id]);
     $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+    $category = FamilyCategory::factory()->create([
+        'family_id' => $family->id,
+        'name' => 'Employed',
+        'slug' => 'employed',
+        'monthly_amount' => 4000,
+    ]);
 
     // 1 member — well under the limit
     $this->actingAs($admin)
@@ -547,7 +560,7 @@ it('allows adding members when under the plan limit', function () {
             'password' => 'password123',
             'password_confirmation' => 'password123',
             'role' => 'member',
-            'category' => 'employed',
+            'family_category_id' => $category->id,
         ])
         ->assertRedirect(route('members.index'));
 

@@ -45,7 +45,10 @@ class SendContributionReminders extends Command
         Contribution::query()
             ->whereNull($sentAtColumn)
             ->whereHas('family', fn (Builder $query): Builder => $query->has('members'))
-            ->whereHas('user', fn (Builder $query): Builder => $query->whereNull('archived_at'))
+            ->whereHas('user.familyMemberships', function ($query): void {
+                $query->whereColumn('family_members.family_id', 'contributions.family_id')
+                    ->whereNull('family_members.archived_at');
+            })
             ->forMonth($year, $month)
             ->incomplete()
             ->with(['user', 'family', 'payments'])

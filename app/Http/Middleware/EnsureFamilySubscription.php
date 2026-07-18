@@ -46,7 +46,7 @@ class EnsureFamilySubscription
         // Check member limit on member-adding routes
         if (! $plan->hasUnlimitedMembers()) {
             if ($request->routeIs('members.store', 'members.create', 'invitations.store', 'family.invitations.store')) {
-                $memberCount = $family->members()->count();
+                $memberCount = $family->memberships()->active()->count();
 
                 if ($memberCount >= $plan->max_members) {
                     if ($request->expectsJson()) {

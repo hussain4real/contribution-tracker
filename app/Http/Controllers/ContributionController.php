@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Enums\PaymentStatus;
+use App\Http\Requests\ContributionRegisterRequest;
 use App\Models\Contribution;
 use App\Models\Family;
+use App\Models\FamilyMembership;
 use App\Models\Payment;
 use App\Models\User;
+use App\Services\FamilyContributionReviewService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -20,10 +24,32 @@ class ContributionController extends Controller
     /**
      * Display a listing of all contributions (for admins).
      */
-    public function index(): Response
-    {
-        // TODO: Implement with pagination and filters
-        return Inertia::render('Contributions/Index');
+    public function index(
+        ContributionRegisterRequest $request,
+        FamilyContributionReviewService $reviewService,
+    ): Response {
+        $user = $this->user($request);
+        $family = $user->currentFamily ?? $user->family;
+
+        abort_unless($family instanceof Family, 403);
+
+        $filters = $request->filters();
+
+        return Inertia::render('Contributions/Index', [
+            'contributions' => $reviewService->register($family, $filters),
+            'filters' => $filters,
+            'summary' => Inertia::defer(fn (): array => $reviewService->registerSummary($family, $filters)),
+            'members' => $family->memberships()->active()->with('user:id,name')->get()
+                ->map(fn (FamilyMembership $membership): array => [
+                    'id' => $membership->user_id,
+                    'name' => $membership->displayName(),
+                ])->sortBy('name')->values(),
+            'categories' => $family->categories()->orderBy('name')->get(['slug', 'name']),
+            'statuses' => collect(PaymentStatus::cases())->map(fn (PaymentStatus $status): array => [
+                'value' => $status->value,
+                'label' => $status->label(),
+            ]),
+        ]);
     }
 
     /**
@@ -84,6 +110,11 @@ class ContributionController extends Controller
             : 0;
 
         return Inertia::render('Contributions/My', [
+            'member_id' => $user->id,
+            'statement_period' => [
+                'date_from' => now()->startOfYear()->toDateString(),
+                'date_to' => now()->endOfYear()->toDateString(),
+            ],
             'contributions' => $contributions,
             'personal_stats' => [
                 'total_expected' => $personalTotalExpected,

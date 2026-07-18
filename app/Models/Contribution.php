@@ -19,6 +19,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /**
  * @property int $id
  * @property int $family_id
+ * @property int|null $family_category_id
+ * @property string|null $category_name
+ * @property string|null $category_slug
+ * @property int|null $category_amount
  * @property int $user_id
  * @property int $expected_amount
  * @property int $month
@@ -28,6 +32,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property PaymentStatus $status
  * @property string $period_label
  * @property Family|null $family
+ * @property FamilyCategory|null $familyCategory
  * @property User|null $user
  * @property Collection<int, Payment> $payments
  * @property-read int $total_paid
@@ -60,6 +65,10 @@ class Contribution extends Model
      */
     protected $fillable = [
         'family_id',
+        'family_category_id',
+        'category_name',
+        'category_slug',
+        'category_amount',
         'user_id',
         'year',
         'month',
@@ -80,6 +89,7 @@ class Contribution extends Model
             'year' => 'integer',
             'month' => 'integer',
             'expected_amount' => 'integer',
+            'category_amount' => 'integer',
             'due_date' => 'date',
             'reminder_sent_at' => 'datetime',
             'follow_up_sent_at' => 'datetime',
@@ -110,12 +120,24 @@ class Contribution extends Model
         return $this->belongsTo(User::class);
     }
 
+    /** @return BelongsTo<FamilyCategory, $this> */
+    public function familyCategory(): BelongsTo
+    {
+        return $this->belongsTo(FamilyCategory::class);
+    }
+
     /**
      * Payments made toward this contribution.
      *
      * @return HasMany<Payment, $this>
      */
     public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class)->effective();
+    }
+
+    /** @return HasMany<Payment, $this> */
+    public function allPayments(): HasMany
     {
         return $this->hasMany(Payment::class);
     }
@@ -179,8 +201,20 @@ class Contribution extends Model
     public function scopeIncomplete(Builder $query): Builder
     {
         return $query->whereRaw('(
-            SELECT COALESCE(SUM(amount), 0) FROM payments WHERE payments.contribution_id = contributions.id
-        ) < expected_amount');
+            SELECT COALESCE(SUM(payments.amount), 0)
+            FROM payments
+            LEFT JOIN payment_batches ON payment_batches.id = payments.payment_batch_id
+            WHERE payments.contribution_id = contributions.id
+              AND (
+                payments.payment_batch_id IS NULL
+                OR NOT EXISTS (
+                    SELECT 1
+                    FROM financial_reversals
+                    WHERE financial_reversals.reversible_type = ?
+                      AND financial_reversals.reversible_id = payment_batches.id
+                )
+              )
+        ) < expected_amount', [PaymentBatch::MORPH_TYPE]);
     }
 
     /**

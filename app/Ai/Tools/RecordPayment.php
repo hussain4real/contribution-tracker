@@ -60,9 +60,12 @@ class RecordPayment implements Tool
         // Find member by name within the family
         $memberships = $family->memberships()
             ->with(['familyCategory:id,name,monthly_amount', 'user'])
+            ->active()
             ->join('users', 'users.id', '=', 'family_members.user_id')
-            ->whereNull('users.archived_at')
-            ->where('users.name', 'like', "%{$memberName}%")
+            ->where(function ($query) use ($memberName): void {
+                $query->where('family_members.display_name', 'like', "%{$memberName}%")
+                    ->orWhere('users.name', 'like', "%{$memberName}%");
+            })
             ->select('family_members.*')
             ->get();
 
@@ -72,7 +75,7 @@ class RecordPayment implements Tool
 
         if ($memberships->count() > 1) {
             $names = $memberships
-                ->map(fn (FamilyMembership $membership): string => $membership->user->name)
+                ->map(fn (FamilyMembership $membership): string => $membership->displayName())
                 ->toArray();
 
             return json_encode([

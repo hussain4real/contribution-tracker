@@ -31,7 +31,7 @@ class ContributionWebPushReminderController extends Controller
 
         $contribution->loadMissing(['user', 'family']);
 
-        if ($contribution->family_id !== $user->family_id) {
+        if ($user->membershipForFamilyId($contribution->family_id) === null) {
             abort(403);
         }
 

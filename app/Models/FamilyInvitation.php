@@ -21,6 +21,8 @@ use Illuminate\Support\Carbon;
  * @property Carbon $expires_at
  * @property Family|null $family
  * @property int $family_id
+ * @property int|null $family_category_id
+ * @property FamilyCategory|null $familyCategory
  * @property Role $role
  * @property string $token
  * @property User|null $inviter
@@ -42,6 +44,7 @@ class FamilyInvitation extends Model
         'delivery_method',
         'whatsapp_phone',
         'role',
+        'family_category_id',
         'token',
         'invited_by',
         'accepted_at',
@@ -85,6 +88,12 @@ class FamilyInvitation extends Model
     public function inviter(): BelongsTo
     {
         return $this->belongsTo(User::class, 'invited_by');
+    }
+
+    /** @return BelongsTo<FamilyCategory, $this> */
+    public function familyCategory(): BelongsTo
+    {
+        return $this->belongsTo(FamilyCategory::class);
     }
 
     // =========================================================================

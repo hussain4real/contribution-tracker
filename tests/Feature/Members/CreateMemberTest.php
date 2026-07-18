@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Enums\MemberCategory;
 use App\Enums\Role;
+use App\Models\FamilyCategory;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -13,6 +14,18 @@ use Inertia\Testing\AssertableInertia as Assert;
 describe('Create Member', function () {
     beforeEach(function () {
         $this->admin = User::factory()->admin()->create();
+        $this->employed = FamilyCategory::factory()->create([
+            'family_id' => $this->admin->family_id,
+            'name' => 'Employed',
+            'slug' => 'employed',
+            'monthly_amount' => 4000,
+        ]);
+        $this->student = FamilyCategory::factory()->create([
+            'family_id' => $this->admin->family_id,
+            'name' => 'Student',
+            'slug' => 'student',
+            'monthly_amount' => 1000,
+        ]);
     });
 
     it('super admin can access member creation form', function () {
@@ -33,7 +46,7 @@ describe('Create Member', function () {
                 'email' => 'john@example.com',
                 'password' => 'password123',
                 'password_confirmation' => 'password123',
-                'category' => 'employed',
+                'family_category_id' => $this->employed->id,
                 'role' => 'member',
             ])
             ->assertRedirect();
@@ -42,6 +55,12 @@ describe('Create Member', function () {
             'name' => 'John Doe',
             'email' => 'john@example.com',
             'category' => MemberCategory::Employed->value,
+            'role' => Role::Member->value,
+        ]);
+        $this->assertDatabaseHas('family_members', [
+            'family_id' => $this->admin->family_id,
+            'display_name' => 'John Doe',
+            'family_category_id' => $this->employed->id,
             'role' => Role::Member->value,
         ]);
     });
@@ -53,7 +72,7 @@ describe('Create Member', function () {
                 'email' => 'jane@example.com',
                 'password' => 'password123',
                 'password_confirmation' => 'password123',
-                'category' => 'student',
+                'family_category_id' => $this->student->id,
                 'role' => 'member',
             ])
             ->assertRedirect();
@@ -66,7 +85,7 @@ describe('Create Member', function () {
     it('validates required fields', function () {
         $this->actingAs($this->admin)
             ->post('/members', [])
-            ->assertSessionHasErrors(['name', 'email', 'password', 'category']);
+            ->assertSessionHasErrors(['name', 'email', 'password', 'family_category_id']);
     });
 
     it('validates unique email', function () {
@@ -78,7 +97,7 @@ describe('Create Member', function () {
                 'email' => 'existing@example.com',
                 'password' => 'password123',
                 'password_confirmation' => 'password123',
-                'category' => 'employed',
+                'family_category_id' => $this->employed->id,
                 'role' => 'member',
             ])
             ->assertSessionHasErrors(['email']);
@@ -91,7 +110,7 @@ describe('Create Member', function () {
                 'email' => 'new@example.com',
                 'password' => 'password123',
                 'password_confirmation' => 'different',
-                'category' => 'employed',
+                'family_category_id' => $this->employed->id,
                 'role' => 'member',
             ])
             ->assertSessionHasErrors(['password']);

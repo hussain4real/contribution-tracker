@@ -20,6 +20,6 @@ class PasskeyLoginResponse implements PasskeyLoginResponseContract
 
         return $request->wantsJson()
             ? new JsonResponse(['redirect' => $redirect], 200)
-            : redirect()->intended($redirect);
+            : $this->redirectToIntendedOrDefault($request, $redirect);
     }
 }

@@ -12,17 +12,25 @@ use App\Http\Controllers\ContributionWebPushReminderController;
 use App\Http\Controllers\ContributionWhatsAppReminderController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExpenseController;
+use App\Http\Controllers\ExpenseReversalController;
+use App\Http\Controllers\FamilyArchiveController;
 use App\Http\Controllers\FamilySettingsController;
 use App\Http\Controllers\FundAdjustmentController;
+use App\Http\Controllers\FundAdjustmentReversalController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\MemberController;
 use App\Http\Controllers\MemberPaymentController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PaymentBatchReversalController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\PaymentReceiptController;
 use App\Http\Controllers\PaystackWebhookController;
 use App\Http\Controllers\PlatformAdminController;
 use App\Http\Controllers\PricingController;
+use App\Http\Controllers\ReportArtifactController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\ReportExportController;
+use App\Http\Controllers\ReportScheduleController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\WhatsAppInboxController;
 use App\Http\Controllers\WhatsAppWebhookController;
@@ -68,6 +76,9 @@ Route::post('webhooks/paystack', [PaystackWebhookController::class, 'handle'])->
 Route::get('webhooks/whatsapp', [WhatsAppWebhookController::class, 'verify'])->name('webhooks.whatsapp.verify');
 Route::post('webhooks/whatsapp', [WhatsAppWebhookController::class, 'handle'])->name('webhooks.whatsapp');
 
+Route::get('report-deliveries/{reportDelivery}', [ReportArtifactController::class, 'delivery'])
+    ->name('reports.deliveries.download');
+
 // =========================================================================
 // Platform Super Admin Routes
 // =========================================================================
@@ -112,7 +123,7 @@ Route::prefix('{current_family}')
     ->where([
         'current_family' => '^(?!settings$|platform$|pricing$|privacy$|terms$|data-deletion$|webhooks$|invitations$|login$|logout$|register$|forgot-password$|reset-password$|email$|passkeys$|user$|oauth$|mcp$|up$)[A-Za-z0-9-]+$',
     ])
-    ->middleware(['auth', 'verified', 'family.member'])
+    ->middleware(['auth', 'verified', 'family.member', 'family.active'])
     ->group(function () {
         // Dashboard
         Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
@@ -157,6 +168,7 @@ Route::prefix('{current_family}')
         // Contributions
         Route::get('contributions', [ContributionController::class, 'index'])->name('contributions.index');
         Route::get('contributions/my', [ContributionController::class, 'my'])->name('contributions.my');
+        Route::get('contributions/my/statement', ReportExportController::class)->name('contributions.my-statement');
         Route::post('contributions/generate', [ContributionController::class, 'generate'])->name('contributions.generate');
         Route::get('contributions/{contribution}', [ContributionController::class, 'show'])->name('contributions.show');
         Route::post('contributions/{contribution}/email-reminder', [ContributionEmailReminderController::class, 'send'])
@@ -174,7 +186,10 @@ Route::prefix('{current_family}')
         Route::get('members/{member}/payments/create', [PaymentController::class, 'create'])->name('payments.create');
         Route::post('payments', [PaymentController::class, 'store'])->name('payments.store')
             ->middleware([HandlePrecognitiveRequests::class]);
-        Route::delete('payments/{payment}', [PaymentController::class, 'destroy'])->name('payments.destroy');
+        Route::post('payment-batches/{payment_batch}/reverse', PaymentBatchReversalController::class)
+            ->name('payment-batches.reverse');
+        Route::get('payment-batches/{payment_batch}/receipt', PaymentReceiptController::class)
+            ->name('payment-batches.receipt');
 
         // Member Self-Pay (Paystack)
         Route::middleware('subscription:'.PlatformPlanCatalog::OnlinePayments)->group(function () {
@@ -194,19 +209,24 @@ Route::prefix('{current_family}')
         Route::get('expenses/create', [ExpenseController::class, 'create'])->name('expenses.create');
         Route::post('expenses', [ExpenseController::class, 'store'])->name('expenses.store')
             ->middleware([HandlePrecognitiveRequests::class]);
-        Route::delete('expenses/{expense}', [ExpenseController::class, 'destroy'])->name('expenses.destroy');
+        Route::post('expenses/{expense}/reverse', ExpenseReversalController::class)->name('expenses.reverse');
 
         // Fund Adjustments (Admin only for create/delete)
         Route::get('fund-adjustments', [FundAdjustmentController::class, 'index'])->name('fund-adjustments.index');
         Route::post('fund-adjustments', [FundAdjustmentController::class, 'store'])->name('fund-adjustments.store')
             ->middleware([HandlePrecognitiveRequests::class]);
-        Route::delete('fund-adjustments/{fund_adjustment}', [FundAdjustmentController::class, 'destroy'])->name('fund-adjustments.destroy');
+        Route::post('fund-adjustments/{fund_adjustment}/reverse', FundAdjustmentReversalController::class)
+            ->name('fund-adjustments.reverse');
 
         // Reports (Financial Secretary and Admin only)
         Route::prefix('reports')->name('reports.')->middleware(['can:generate-reports', 'subscription:'.PlatformPlanCatalog::Reports])->group(function () {
             Route::get('/', [ReportController::class, 'index'])->name('index');
             Route::get('monthly', [ReportController::class, 'monthly'])->name('monthly');
             Route::get('annual', [ReportController::class, 'annual'])->name('annual');
+            Route::get('export', ReportExportController::class)->name('export');
+            Route::get('artifacts/{reportArtifact}', [ReportArtifactController::class, 'show'])->name('artifacts.show');
+            Route::post('schedules', [ReportScheduleController::class, 'store'])->name('schedules.store');
+            Route::delete('schedules/{reportSchedule}', [ReportScheduleController::class, 'destroy'])->name('schedules.destroy');
         });
 
         // Family Settings (Admin only)
@@ -217,6 +237,10 @@ Route::prefix('{current_family}')
             Route::put('categories/{category}', [FamilySettingsController::class, 'updateCategory'])->name('categories.update');
             Route::delete('categories/{category}', [FamilySettingsController::class, 'destroyCategory'])->name('categories.destroy');
             Route::get('banks', [FamilySettingsController::class, 'banks'])->name('banks');
+            Route::get('archive', [FamilyArchiveController::class, 'show'])->name('archive.show');
+            Route::post('archive', [FamilyArchiveController::class, 'store'])->name('archive.store');
+            Route::post('archive/restore', [FamilyArchiveController::class, 'restore'])->name('archive.restore');
+            Route::get('archive/export', [FamilyArchiveController::class, 'export'])->name('archive.export');
 
             Route::get('invitations', [InvitationController::class, 'index'])->name('invitations');
             Route::post('invitations', [InvitationController::class, 'store'])->name('invitations.store')->middleware('subscription');

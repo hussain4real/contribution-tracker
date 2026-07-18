@@ -56,7 +56,7 @@ describe('Payment Recording Flow (Browser)', function () {
 
         $page
             ->assertSee('Dashboard')
-            ->assertSee('Payment of ₦4,000.00 recorded for John Doe.')
+            ->assertSee('Receipt #1: ₦4,000.00 recorded for John Doe.')
             ->assertNoJavaScriptErrors();
 
     });

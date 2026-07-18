@@ -15,11 +15,13 @@ use Illuminate\Support\Carbon;
 /**
  * @property int $id
  * @property int $contribution_id
+ * @property int|null $payment_batch_id
  * @property int $amount
  * @property Carbon|null $created_at
  * @property Carbon $paid_at
  * @property string|null $notes
  * @property Contribution|null $contribution
+ * @property PaymentBatch|null $batch
  * @property User|null $recorder
  * @property-read string $formatted_amount
  */
@@ -35,6 +37,7 @@ class Payment extends Model
      */
     protected $fillable = [
         'contribution_id',
+        'payment_batch_id',
         'amount',
         'paid_at',
         'recorded_by',
@@ -68,6 +71,12 @@ class Payment extends Model
         return $this->belongsTo(Contribution::class);
     }
 
+    /** @return BelongsTo<PaymentBatch, $this> */
+    public function batch(): BelongsTo
+    {
+        return $this->belongsTo(PaymentBatch::class, 'payment_batch_id');
+    }
+
     /**
      * The user who recorded this payment (Financial Secretary or Admin).
      *
@@ -96,6 +105,22 @@ class Payment extends Model
                 ->currentMonth()
                 ->select('id'),
         );
+    }
+
+    /**
+     * Include legacy unbatched rows and allocations whose batch has not been reversed.
+     *
+     * @param  Builder<Payment>  $query
+     * @return Builder<Payment>
+     */
+    public function scopeEffective(Builder $query): Builder
+    {
+        return $query->where(function (Builder $query): void {
+            $query->whereNull('payment_batch_id')
+                ->orWhereHas('batch', function ($query): void {
+                    $query->whereDoesntHave('reversal');
+                });
+        });
     }
 
     /**
@@ -176,5 +201,11 @@ class Payment extends Model
         $contribution = $this->contribution;
 
         return $contribution instanceof Contribution ? $contribution->period_label : '';
+    }
+
+    protected static function booted(): void
+    {
+        static::updating(fn (): never => throw new \LogicException('Payment allocations are immutable.'));
+        static::deleting(fn (): never => throw new \LogicException('Payment allocations cannot be deleted.'));
     }
 }

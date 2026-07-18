@@ -40,6 +40,11 @@ interface PendingContribution {
 }
 
 interface Category {
+    value: number;
+    label: string;
+}
+
+interface PaymentMethod {
     value: string;
     label: string;
 }
@@ -50,6 +55,8 @@ interface Props {
     category_amount: number;
     formatted_amount: string;
     categories: Category[];
+    paymentMethods: PaymentMethod[];
+    idempotencyKey: string;
 }
 
 const props = defineProps<Props>();
@@ -70,6 +77,8 @@ const amount = ref<string>('');
 const selectedMonth = ref<string>('');
 const paidAt = ref<string>(new Date().toISOString().split('T')[0]);
 const notes = ref<string>('');
+const method = ref<string>(props.paymentMethods[0]?.value ?? 'cash');
+const reference = ref<string>('');
 const { currency, formatCurrency: formatAmount } = useCurrencyFormatter();
 
 const quickAmounts = computed(() => [
@@ -156,6 +165,11 @@ const targetMonth = computed(() => {
                 }"
             >
                 <input type="hidden" name="member_id" :value="member.id" />
+                <input
+                    type="hidden"
+                    name="idempotency_key"
+                    :value="idempotencyKey"
+                />
                 <input
                     v-if="targetYear"
                     type="hidden"
@@ -245,6 +259,40 @@ const targetMonth = computed(() => {
                         required
                     />
                     <InputError :message="errors.paid_at" />
+                </div>
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div class="grid gap-2">
+                        <Label for="method">Payment Method</Label>
+                        <select
+                            id="method"
+                            v-model="method"
+                            name="method"
+                            required
+                            class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                        >
+                            <option
+                                v-for="paymentMethod in paymentMethods"
+                                :key="paymentMethod.value"
+                                :value="paymentMethod.value"
+                            >
+                                {{ paymentMethod.label }}
+                            </option>
+                        </select>
+                        <InputError :message="errors.method" />
+                    </div>
+
+                    <div class="grid gap-2">
+                        <Label for="reference">Reference (Optional)</Label>
+                        <Input
+                            id="reference"
+                            v-model="reference"
+                            name="reference"
+                            maxlength="255"
+                            placeholder="Bank or receipt reference"
+                        />
+                        <InputError :message="errors.reference" />
+                    </div>
                 </div>
 
                 <!-- Notes Field -->

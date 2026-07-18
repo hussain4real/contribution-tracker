@@ -33,6 +33,8 @@ interface Invitation {
     contact: string;
     role: string;
     role_label: string;
+    family_category_id: number | null;
+    category_label: string | null;
     invited_by: string | null;
     is_accepted: boolean;
     is_expired: boolean;
@@ -46,12 +48,14 @@ interface Props {
     invitations?: Invitation[];
     family_name?: string;
     roles?: Array<{ value: string; label: string }>;
+    categories?: Array<{ id: number; name: string; monthly_amount: number }>;
 }
 
 const props = withDefaults(defineProps<Props>(), {
     invitations: () => [],
     family_name: '',
     roles: () => [],
+    categories: () => [],
 });
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -245,6 +249,27 @@ function statusBadge(invitation: Invitation): { text: string; class: string } {
                         </select>
                         <InputError :message="errors.role" />
                     </div>
+                    <div class="grid gap-2 sm:col-span-2">
+                        <Label for="family_category_id"
+                            >Contribution Category</Label
+                        >
+                        <select
+                            id="family_category_id"
+                            name="family_category_id"
+                            class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                            required
+                        >
+                            <option
+                                v-for="category in props.categories"
+                                :key="category.id"
+                                :value="category.id"
+                            >
+                                {{ category.name }} —
+                                {{ category.monthly_amount }}/month
+                            </option>
+                        </select>
+                        <InputError :message="errors.family_category_id" />
+                    </div>
                 </div>
                 <div class="flex gap-2">
                     <Button type="submit" :disabled="processing">
@@ -285,7 +310,8 @@ function statusBadge(invitation: Invitation): { text: string; class: string } {
                             <p class="font-medium">{{ invitation.contact }}</p>
                             <p class="text-sm text-muted-foreground">
                                 {{ invitation.delivery_method_label }} &middot;
-                                {{ invitation.role_label }} &middot; Invited
+                                {{ invitation.role_label }} &middot;
+                                {{ invitation.category_label }} &middot; Invited
                                 {{ invitation.created_at }}
                                 <template v-if="invitation.invited_by">
                                     by {{ invitation.invited_by }}</template

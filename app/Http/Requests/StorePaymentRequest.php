@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Enums\PaymentMethod;
 use App\Models\Family;
 use App\Models\FamilyMembership;
 use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rules\Enum;
 use Illuminate\Validation\Validator;
 
 class StorePaymentRequest extends FormRequest
@@ -35,6 +37,9 @@ class StorePaymentRequest extends FormRequest
             'amount' => ['required', 'integer', 'min:1'],
             'paid_at' => ['required', 'date'],
             'notes' => ['nullable', 'string', 'max:500'],
+            'method' => ['sometimes', new Enum(PaymentMethod::class)],
+            'reference' => ['nullable', 'string', 'max:255'],
+            'idempotency_key' => ['nullable', 'uuid'],
             'target_year' => ['nullable', 'integer', 'min:2020', 'max:2100'],
             'target_month' => ['nullable', 'integer', 'min:1', 'max:12'],
         ];

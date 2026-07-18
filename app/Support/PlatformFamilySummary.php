@@ -6,7 +6,6 @@ namespace App\Support;
 
 use App\Models\Contribution;
 use App\Models\Family;
-use App\Models\Payment;
 
 final class PlatformFamilySummary
 {
@@ -15,30 +14,19 @@ final class PlatformFamilySummary
      */
     public static function for(Family $family): array
     {
-        $memberIds = $family->members()->pluck('users.id');
-
         $totalContributions = Contribution::query()
-            ->whereIn('user_id', $memberIds)
+            ->where('family_id', $family->id)
             ->count();
 
-        $totalCollected = (int) Payment::query()
-            ->whereIn(
-                'contribution_id',
-                Contribution::query()->whereIn('user_id', $memberIds)->select('id'),
-            )
-            ->sum('amount');
+        $totalCollected = app(EffectiveLedger::class)->paymentsTotal($family->id);
 
         $totalExpected = (int) Contribution::query()
-            ->whereIn('user_id', $memberIds)
+            ->where('family_id', $family->id)
             ->sum('expected_amount');
 
-        $activeMembers = $family->members()
-            ->whereNull('archived_at')
-            ->count();
+        $activeMembers = $family->memberships()->active()->count();
 
-        $archivedMembers = $family->members()
-            ->whereNotNull('archived_at')
-            ->count();
+        $archivedMembers = $family->memberships()->archived()->count();
 
         return [
             'total_contributions' => $totalContributions,

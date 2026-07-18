@@ -8,28 +8,26 @@ use App\Enums\TransactionStatus;
 use App\Enums\TransactionType;
 use App\Http\Requests\InitiatePaymentRequest;
 use App\Models\Contribution;
-use App\Models\Expense;
 use App\Models\Family;
 use App\Models\PaystackTransaction;
-use App\Models\User;
-use App\Services\PaymentAllocationService;
+use App\Services\PaystackContributionSettlementService;
 use App\Services\PaystackFeeCalculator;
 use App\Services\PaystackService;
 use App\Support\CurrencyFormatter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 use RuntimeException;
+use Throwable;
 
 class MemberPaymentController extends Controller
 {
     public function __construct(
         private PaystackService $paystack,
-        private PaymentAllocationService $allocationService,
+        private PaystackContributionSettlementService $settlementService,
         private PaystackFeeCalculator $feeCalculator
     ) {}
 
@@ -128,7 +126,7 @@ class MemberPaymentController extends Controller
             'estimated_fee_kobo' => $feeEstimate['estimated_fee_kobo'],
             'settled_amount_kobo' => $feeEstimate['settled_amount_kobo'],
             'fee_policy' => $feeEstimate['fee_policy'],
-            'status' => TransactionStatus::Pending,
+            'status' => TransactionStatus::Initiated,
             'metadata' => [
                 'contribution_ids' => $contributions->pluck('id')->toArray(),
                 'target_year' => $oldest->year,
@@ -186,7 +184,11 @@ class MemberPaymentController extends Controller
                 'estimated_fee_kobo' => $feeEstimate['estimated_fee_kobo'],
             ]);
         } catch (RuntimeException $e) {
-            $transaction->update(['status' => TransactionStatus::Failed]);
+            $transaction->update([
+                'status' => TransactionStatus::Failed,
+                'failed_at' => now(),
+                'failure_reason' => 'Paystack initialization failed.',
+            ]);
 
             return response()->json([
                 'message' => 'Failed to initialize payment. Please try again.',
@@ -211,74 +213,27 @@ class MemberPaymentController extends Controller
             return redirect()->route('pay.index')->with('error', 'Transaction not found.');
         }
 
-        // Verify with Paystack
+        if ($transaction->isSuccessful()) {
+            return redirect()->route('pay.index')->with('success', 'Payment already confirmed.');
+        }
+
         try {
             $response = $this->paystack->verifyTransaction($reference);
             $data = $this->responseData($response);
             $status = $this->stringValue($data['status'] ?? 'failed');
 
-            if ($status === 'success') {
-                $paystackAmountKobo = $this->nullableInt($data['amount'] ?? null) ?? 0;
-                $expectedAmountKobo = $transaction->expectedGrossAmountKobo();
+            if ($status !== 'success') {
+                return redirect()->route('pay.index')->with('error', 'Payment was not successful. Please try again.');
+            }
 
-                if ($paystackAmountKobo !== $expectedAmountKobo) {
-                    Log::warning('Paystack callback: amount mismatch', [
-                        'reference' => $reference,
-                        'expected_kobo' => $expectedAmountKobo,
-                        'received_kobo' => $paystackAmountKobo,
-                    ]);
+            $settledTransaction = $this->settlementService->settle($reference, $data);
 
-                    $transaction->update([
-                        'status' => TransactionStatus::Failed,
-                        'paystack_response' => $data,
-                    ]);
-
-                    return redirect()->route('pay.index')->with('error', 'Payment amount could not be verified. Please contact support if you were charged.');
-                }
-
-                // Atomic update to prevent race condition with webhook
-                $attributes = $this->paystackSettlementAttributes($transaction, $data, forQuery: true);
-                $attributes['status'] = TransactionStatus::Success;
-
-                $updated = PaystackTransaction::where('reference', $reference)
-                    ->where('status', TransactionStatus::Pending)
-                    ->update($attributes);
-
-                if ($updated > 0) {
-                    $transaction->refresh();
-
-                    // Use the transaction's user_id (not session user) to handle shared devices
-                    $member = User::query()->whereKey($transaction->user_id)->first();
-
-                    if ($member) {
-                        $metadata = $transaction->metadata ?? [];
-                        $targetYear = $this->nullableInt($metadata['target_year'] ?? null);
-                        $targetMonth = $this->nullableInt($metadata['target_month'] ?? null);
-                        $paidAt = $this->stringValue($data['paid_at'] ?? now()->toDateString());
-
-                        $this->allocationService->allocate(
-                            member: $member,
-                            amount: $transaction->amount,
-                            paidAt: $paidAt !== '' ? $paidAt : now()->toDateString(),
-                            recordedBy: $member,
-                            notes: "Online payment via Paystack (Ref: {$transaction->reference})",
-                            targetYear: $targetYear,
-                            targetMonth: $targetMonth,
-                        );
-
-                        $this->recordSettlementShortfallExpense($transaction, $member, $data);
-                    }
-                }
-
+            if ($settledTransaction->isSuccessful()) {
                 return redirect()->route('pay.index')->with('success', 'Payment successful! Your contributions have been updated.');
             }
 
-            if ($transaction->isSuccessful()) {
-                return redirect()->route('pay.index')->with('success', 'Payment already confirmed.');
-            }
-
-            return redirect()->route('pay.index')->with('error', 'Payment was not successful. Please try again.');
-        } catch (RuntimeException) {
+            return redirect()->route('pay.index')->with('error', 'Payment was verified but could not be posted. Support has been notified.');
+        } catch (Throwable) {
             return redirect()->route('pay.index')->with('error', 'Could not verify payment. Your payment will be confirmed shortly.');
         }
     }
@@ -361,58 +316,5 @@ class MemberPaymentController extends Controller
     private function stringValue(mixed $value): string
     {
         return is_scalar($value) ? (string) $value : '';
-    }
-
-    private function nullableInt(mixed $value): ?int
-    {
-        return is_numeric($value) ? (int) $value : null;
-    }
-
-    /**
-     * @param  array<string, mixed>  $data
-     * @return array<model-property<PaystackTransaction>, mixed>
-     */
-    private function paystackSettlementAttributes(PaystackTransaction $transaction, array $data, bool $forQuery = false): array
-    {
-        $grossAmountKobo = $this->nullableInt($data['amount'] ?? null) ?? $transaction->expectedGrossAmountKobo();
-        $actualFeeKobo = $this->nullableInt($data['fees'] ?? null);
-        $effectiveFeeKobo = $actualFeeKobo
-            ?? $transaction->estimated_fee_kobo
-            ?? max(0, $grossAmountKobo - $transaction->contributionAmountKobo());
-
-        $attributes = [
-            'paystack_response' => $forQuery ? json_encode($data) : $data,
-            'gross_amount_kobo' => $grossAmountKobo,
-            'settled_amount_kobo' => max(0, $grossAmountKobo - $effectiveFeeKobo),
-        ];
-
-        if ($actualFeeKobo !== null) {
-            $attributes['actual_fee_kobo'] = $actualFeeKobo;
-        }
-
-        return $attributes;
-    }
-
-    /**
-     * @param  array<string, mixed>  $data
-     */
-    private function recordSettlementShortfallExpense(PaystackTransaction $transaction, User $member, array $data): void
-    {
-        $settledAmountKobo = $transaction->settled_amount_kobo ?? $transaction->expectedGrossAmountKobo();
-        $shortfallKobo = $transaction->contributionAmountKobo() - $settledAmountKobo;
-
-        if ($shortfallKobo <= 0) {
-            return;
-        }
-
-        $spentAt = $this->stringValue($data['paid_at'] ?? now()->toDateString());
-
-        Expense::create([
-            'family_id' => $transaction->family_id,
-            'amount' => intdiv($shortfallKobo + 99, 100),
-            'description' => "Paystack processing fee shortfall for transaction {$transaction->reference}",
-            'spent_at' => $spentAt !== '' ? $spentAt : now()->toDateString(),
-            'recorded_by' => $member->id,
-        ]);
     }
 }

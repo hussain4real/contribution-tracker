@@ -4,18 +4,22 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Actions\AssignFamilyCategory;
 use App\Enums\MemberCategory;
 use App\Enums\Role;
 use App\Http\Requests\StoreMemberRequest;
 use App\Http\Requests\UpdateMemberRequest;
 use App\Models\Contribution;
 use App\Models\Family;
+use App\Models\FamilyCategory;
 use App\Models\FamilyMembership;
 use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -60,7 +64,7 @@ class MemberController extends Controller
         }
 
         return Inertia::render('Members/Create', [
-            'categories' => $this->getCategoryOptions(),
+            'categories' => $this->getCategoryOptions($this->currentFamilyFor($user)),
             'roles' => $this->getRoleOptions($user),
         ]);
     }
@@ -69,27 +73,47 @@ class MemberController extends Controller
      * Store a newly created family member.
      * Admin and Financial Secretary can create ordinary members.
      */
-    public function store(StoreMemberRequest $request): RedirectResponse
+    public function store(StoreMemberRequest $request, AssignFamilyCategory $assignFamilyCategory): RedirectResponse
     {
-        $validated = $request->validated();
-        $attributes = $this->memberAttributes($validated);
+        $request->validated();
         $currentUser = $this->user($request);
+        $family = $this->currentFamilyFor($currentUser);
+        $category = $family->categories()->findOrFail($request->integer('family_category_id'));
+        $role = Role::from($request->string('role')->toString());
+        $name = $request->string('name')->toString();
+        $email = $request->string('email')->toString();
+        $password = $request->string('password')->toString();
 
-        $family = $currentUser->currentFamily ?? $currentUser->family;
+        DB::transaction(function () use (
+            $family,
+            $category,
+            $role,
+            $name,
+            $email,
+            $password,
+            $currentUser,
+            $assignFamilyCategory,
+        ): void {
+            $member = User::query()->create([
+                'name' => $name,
+                'email' => $email,
+                'password' => Hash::make($password),
+                'must_change_password_at' => now(),
+                'category' => MemberCategory::tryFrom($category->slug),
+                'role' => $role,
+                'family_id' => $family->id,
+                'current_family_id' => $family->id,
+                'family_category_id' => $category->id,
+            ]);
 
-        abort_unless($family instanceof Family, 403);
-
-        $member = User::create([
-            'name' => $attributes['name'],
-            'email' => $attributes['email'],
-            'password' => Hash::make($attributes['password'] ?? ''),
-            'category' => $attributes['category'],
-            'role' => $attributes['role'],
-            'family_id' => $family->id,
-            'current_family_id' => $family->id,
-        ]);
-
-        $member->ensureFamilyMembership($family, $attributes['role'], $attributes['category']);
+            $membership = $member->ensureFamilyMembership(
+                family: $family,
+                role: $role,
+                familyCategoryId: $category->id,
+            );
+            $membership->forceFill(['display_name' => $name])->save();
+            $assignFamilyCategory->handle($membership, $category, $currentUser, effectiveImmediately: true);
+        });
 
         return redirect()
             ->route('members.index')
@@ -105,8 +129,8 @@ class MemberController extends Controller
     public function show(User $member): Response
     {
         $currentUser = $this->authUser();
-        $family = $this->authorizeMemberInCurrentFamily($currentUser, $member);
-        $membership = $this->membershipForMember($member, $family);
+        $family = $this->authorizeMemberInCurrentFamily($currentUser, $member, includeArchived: true);
+        $membership = $this->membershipForMember($member, $family, includeArchived: true);
 
         // Determine if user can view contribution history
         // (own profile OR has elevated permissions)
@@ -157,15 +181,16 @@ class MemberController extends Controller
         return Inertia::render('Members/Show', [
             'member' => [
                 'id' => $member->id,
-                'name' => $member->name,
+                'name' => $membership->displayName(),
                 'email' => $member->email,
                 'role' => $membership->role->value,
                 'role_label' => $membership->role->label(),
-                'category' => $membership->category?->value,
+                'category' => $membership->family_category_id,
                 'category_label' => $membership->categoryLabel(),
                 'monthly_amount' => $membership->monthlyAmount(),
-                'is_archived' => $member->isArchived(),
-                'archived_at' => $member->archived_at?->toDateString(),
+                'is_archived' => $membership->isArchived(),
+                'archived_at' => $membership->archived_at?->toDateString(),
+                'archive_reason' => $membership->archive_reason,
                 'created_at' => $member->created_at?->toDateString(),
                 'whatsapp_verified' => $member->whatsapp_verified_at !== null,
                 'web_push_subscribed' => $member->pushSubscriptions()->exists(),
@@ -202,12 +227,13 @@ class MemberController extends Controller
         return Inertia::render('Members/Edit', [
             'member' => [
                 'id' => $member->id,
-                'name' => $member->name,
+                'name' => $membership->displayName(),
                 'email' => $member->email,
                 'role' => $membership->role->value,
-                'category' => $membership->category?->value,
+                'category' => $this->categorySlug($membership),
+                'family_category_id' => $membership->family_category_id,
             ],
-            'categories' => $this->getCategoryOptions(),
+            'categories' => $this->getCategoryOptions($family),
             'roles' => $this->getRoleOptions(),
         ]);
     }
@@ -217,15 +243,17 @@ class MemberController extends Controller
      * Only Admin can update members.
      * Includes role change handling and last Financial Secretary warning (FR-019).
      */
-    public function update(UpdateMemberRequest $request, User $member): RedirectResponse
-    {
-        $validated = $request->validated();
-        $attributes = $this->memberAttributes($validated, includePassword: false);
-
+    public function update(
+        UpdateMemberRequest $request,
+        User $member,
+        AssignFamilyCategory $assignFamilyCategory,
+    ): RedirectResponse {
+        $request->validated();
         $currentUser = $this->authUser();
         $family = $this->authorizeMemberInCurrentFamily($currentUser, $member);
         $membership = $this->membershipForMember($member, $family);
-        $newRole = $attributes['role'];
+        $newRole = Role::from($request->string('role')->toString());
+        $newCategory = $family->categories()->findOrFail($request->integer('family_category_id'));
         $oldRole = $membership->role;
         $roleChanged = $oldRole !== $newRole;
 
@@ -242,9 +270,7 @@ class MemberController extends Controller
                 ->where('family_id', $family->id)
                 ->where('role', Role::FinancialSecretary)
                 ->where('user_id', '!=', $member->id)
-                ->whereHas('user', function (Builder $query): void {
-                    $query->whereNull('archived_at');
-                })
+                ->active()
                 ->count();
 
             if ($activeFinancialSecretaryCount === 0) {
@@ -252,26 +278,27 @@ class MemberController extends Controller
             }
         }
 
-        $data = [
-            'name' => $attributes['name'],
-            'email' => $attributes['email'],
-        ];
+        $membership->forceFill([
+            'display_name' => $request->string('display_name')->toString(),
+            'role' => $newRole,
+        ])->save();
 
-        if ($attributes['password'] !== null) {
-            $data['password'] = Hash::make($attributes['password']);
+        if ($membership->family_category_id !== $newCategory->id) {
+            $membership = $assignFamilyCategory->handle(
+                $membership,
+                $newCategory,
+                $currentUser,
+                effectiveImmediately: $request->boolean('effective_immediately'),
+            );
         }
 
         if ($member->current_family_id === $family->id || $member->family_id === $family->id) {
-            $data['category'] = $attributes['category'];
-            $data['role'] = $newRole;
+            $member->forceFill([
+                'role' => $membership->role,
+                'category' => MemberCategory::tryFrom($newCategory->slug),
+                'family_category_id' => $newCategory->id,
+            ])->save();
         }
-
-        $member->update($data);
-        $membership->forceFill([
-            'role' => $newRole,
-            'category' => $attributes['category'],
-            'family_category_id' => $member->family_category_id,
-        ])->save();
 
         $redirect = redirect()->route('members.show', $member)
             ->with('success', 'Member updated successfully.');
@@ -288,10 +315,11 @@ class MemberController extends Controller
      * Only Admin can archive members.
      * Cannot archive self or other Admins.
      */
-    public function destroy(User $member): RedirectResponse
+    public function destroy(Request $request, User $member): RedirectResponse
     {
         $user = $this->authUser();
-        $this->authorizeMemberInCurrentFamily($user, $member);
+        $family = $this->authorizeMemberInCurrentFamily($user, $member);
+        $membership = $this->membershipForMember($member, $family);
 
         if (! $user->canManageMembers()) {
             abort(403);
@@ -303,11 +331,17 @@ class MemberController extends Controller
         }
 
         // Cannot archive other Admins
-        if ($member->isAdmin()) {
-            abort(403, 'You cannot archive a Admin.');
+        if ($membership->role === Role::Admin) {
+            abort(403, 'You cannot archive an administrator.');
         }
 
-        $member->update(['archived_at' => now()]);
+        $membership->forceFill([
+            'archived_at' => now(),
+            'archived_by' => $user->id,
+            'archive_reason' => $request->filled('reason')
+                ? $request->string('reason')->toString()
+                : 'Archived by family administrator.',
+        ])->save();
 
         return redirect()
             ->route('members.index')
@@ -321,13 +355,18 @@ class MemberController extends Controller
     public function restore(User $member): RedirectResponse
     {
         $user = $this->authUser();
-        $this->authorizeMemberInCurrentFamily($user, $member);
+        $family = $this->authorizeMemberInCurrentFamily($user, $member, includeArchived: true);
+        $membership = $this->membershipForMember($member, $family, includeArchived: true);
 
         if (! $user->canManageMembers()) {
             abort(403);
         }
 
-        $member->update(['archived_at' => null]);
+        $membership->forceFill([
+            'archived_at' => null,
+            'archived_by' => null,
+            'archive_reason' => null,
+        ])->save();
 
         return redirect()
             ->route('members.show', $member)
@@ -341,15 +380,8 @@ class MemberController extends Controller
     {
         return $family->memberships()
             ->with(['user', 'familyCategory'])
-            ->whereHas('user', function (Builder $query) use ($archived): void {
-                if ($archived) {
-                    $query->whereNotNull('archived_at');
-
-                    return;
-                }
-
-                $query->whereNull('archived_at');
-            })
+            ->when($archived, fn (Builder $query): Builder => $query->archived())
+            ->when(! $archived, fn (Builder $query): Builder => $query->active())
             ->join('users', 'users.id', '=', 'family_members.user_id')
             ->orderBy('users.name')
             ->select('family_members.*')
@@ -365,27 +397,31 @@ class MemberController extends Controller
 
         $payload = [
             'id' => $member->id,
-            'name' => $member->name,
+            'name' => $membership->displayName(),
             'email' => $member->email,
             'role' => $membership->role->value,
             'role_label' => $membership->role->label(),
-            'category' => $membership->category?->value,
+            'category' => $this->categorySlug($membership),
+            'family_category_id' => $membership->family_category_id,
             'category_label' => $membership->categoryLabel(),
             'monthly_amount' => $membership->monthlyAmount(),
-            'is_archived' => $member->isArchived(),
+            'is_archived' => $membership->isArchived(),
         ];
 
         if ($archived) {
-            $payload['archived_at'] = $member->archived_at?->toDateString();
+            $payload['archived_at'] = $membership->archived_at?->toDateString();
+            $payload['archive_reason'] = $membership->archive_reason;
             $payload['is_archived'] = true;
         }
 
         return $payload;
     }
 
-    private function membershipForMember(User $member, Family $family): FamilyMembership
+    private function membershipForMember(User $member, Family $family, bool $includeArchived = false): FamilyMembership
     {
-        $membership = $member->membershipForFamily($family);
+        $membership = $includeArchived
+            ? $member->membershipForFamilyIncludingArchived($family)
+            : $member->membershipForFamily($family);
 
         abort_unless($membership instanceof FamilyMembership, 404);
 
@@ -395,18 +431,28 @@ class MemberController extends Controller
     /**
      * Get category options for forms.
      *
-     * @return array<int, array{value: string, label: string, amount: int}>
+     * @return array<int, array{value: int, label: string, amount: int}>
      */
-    private function getCategoryOptions(): array
+    private function getCategoryOptions(Family $family): array
     {
-        return array_map(
-            fn (MemberCategory $category): array => [
-                'value' => $category->value,
-                'label' => $category->label(),
-                'amount' => $category->monthlyAmount(),
-            ],
-            MemberCategory::cases(),
-        );
+        return $family->categories()
+            ->orderBy('sort_order')
+            ->get()
+            ->map(fn (FamilyCategory $category): array => [
+                'value' => $category->id,
+                'label' => $category->name,
+                'amount' => $category->monthly_amount,
+            ])
+            ->all();
+    }
+
+    private function categorySlug(FamilyMembership $membership): ?string
+    {
+        if ($membership->familyCategory instanceof FamilyCategory) {
+            return $membership->familyCategory->slug;
+        }
+
+        return $membership->category?->value;
     }
 
     /**
@@ -429,38 +475,26 @@ class MemberController extends Controller
         );
     }
 
-    /**
-     * @return array{name: string, email: string, password: string|null, category: MemberCategory, role: Role}
-     */
-    private function memberAttributes(mixed $validated, bool $includePassword = true): array
-    {
-        $validated = is_array($validated) ? $validated : [];
-        $password = $this->nullableString($validated['password'] ?? null);
+    private function authorizeMemberInCurrentFamily(
+        User $user,
+        User $member,
+        bool $includeArchived = false,
+    ): Family {
+        $family = $this->currentFamilyFor($user);
+        $belongsToFamily = $includeArchived
+            ? $member->belongsToFamilyIncludingArchived($family)
+            : $member->belongsToFamily($family);
 
-        return [
-            'name' => $this->stringValue($validated['name'] ?? null),
-            'email' => $this->stringValue($validated['email'] ?? null),
-            'password' => $includePassword ? $this->stringValue($validated['password'] ?? null) : $password,
-            'category' => MemberCategory::from($this->stringValue($validated['category'] ?? MemberCategory::Employed->value)),
-            'role' => Role::from($this->stringValue($validated['role'] ?? Role::Member->value)),
-        ];
+        abort_unless($belongsToFamily, 404);
+
+        return $family;
     }
 
-    private function stringValue(mixed $value): string
-    {
-        return is_scalar($value) ? (string) $value : '';
-    }
-
-    private function nullableString(mixed $value): ?string
-    {
-        return is_string($value) && $value !== '' ? $value : null;
-    }
-
-    private function authorizeMemberInCurrentFamily(User $user, User $member): Family
+    private function currentFamilyFor(User $user): Family
     {
         $family = $user->currentFamily ?? $user->family;
 
-        abort_unless($family instanceof Family && $member->belongsToFamily($family), 404);
+        abort_unless($family instanceof Family && $user->belongsToFamily($family), 403);
 
         return $family;
     }

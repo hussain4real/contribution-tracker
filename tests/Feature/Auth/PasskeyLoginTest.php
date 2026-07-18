@@ -65,6 +65,27 @@ test('official passkey login succeeds with a verified passkey', function () {
     $response->assertCookie(auth()->guard('web')->getRecallerName());
 });
 
+test('official passkey login redirects platform administrators to the platform dashboard', function () {
+    $user = User::factory()->superAdmin()->withoutTwoFactor()->create([
+        'family_id' => null,
+        'current_family_id' => null,
+    ]);
+    $passkey = createTestPasskeyFor($user);
+
+    $this->mock(VerifyPasskey::class, function (MockInterface $mock) use ($passkey) {
+        $mock->shouldReceive('__invoke')->once()->andReturn($passkey);
+    });
+
+    $this->getJson(route('passkey.login-options'))->assertOk();
+
+    $this->postJson(route('passkey.login'), [
+        'credential' => fakePasskeyAssertionPayload(),
+    ])->assertOk()
+        ->assertJsonPath('redirect', route('filament.platform.pages.dashboard', absolute: false));
+
+    $this->assertAuthenticatedAs($user);
+});
+
 test('official passkey login rejects archived users', function () {
     $user = User::factory()->withoutTwoFactor()->state([
         'archived_at' => now(),

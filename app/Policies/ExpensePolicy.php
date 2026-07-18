@@ -16,7 +16,7 @@ class ExpensePolicy
 
     public function view(User $user, Expense $expense): bool
     {
-        return $user->family_id === $expense->family_id;
+        return $user->membershipForFamilyId($expense->family_id) !== null;
     }
 
     public function create(User $user): bool
@@ -26,21 +26,21 @@ class ExpensePolicy
 
     public function update(User $user, Expense $expense): bool
     {
-        return $user->isAdmin() && $user->family_id === $expense->family_id;
+        return false;
     }
 
     public function delete(User $user, Expense $expense): bool
     {
-        return $user->isAdmin() && $user->family_id === $expense->family_id;
+        return $user->isAdmin() && $user->membershipForFamilyId($expense->family_id) !== null;
     }
 
     public function restore(User $user, Expense $expense): bool
     {
-        return $user->isAdmin() && $user->family_id === $expense->family_id;
+        return false;
     }
 
     public function forceDelete(User $user, Expense $expense): bool
     {
-        return $user->isAdmin() && $user->family_id === $expense->family_id;
+        return false;
     }
 }
