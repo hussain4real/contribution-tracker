@@ -1,17 +1,23 @@
 name: Deploy to Staging
 
 on:
+  push:
+    branches:
+      - staging
   workflow_dispatch:
 
 concurrency:
   group: staging-deploy
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   test:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Validate Staging Ref
+        run: test "$GITHUB_REF" = "refs/heads/staging"
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -64,7 +70,17 @@ jobs:
           username: deployer
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            set -euo pipefail
             cd /var/www/contribution-tracker-staging
+            if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+              echo "Staging checkout has local tracked changes. Refusing to deploy over them."
+              git status --short
+              exit 1
+            fi
             git fetch origin staging
-            git checkout -B staging origin/staging
-            /var/www/contribution-tracker-staging/deployment/deploy-staging.sh
+            if [ "$(git rev-parse origin/staging)" != '${{ github.sha }}' ]; then
+              echo "Refusing to deploy a commit that is not the current origin/staging tip."
+              exit 1
+            fi
+            git checkout -B staging '${{ github.sha }}'
+            STAGING_COMMIT='${{ github.sha }}' /var/www/contribution-tracker-staging/deployment/deploy-staging.sh
