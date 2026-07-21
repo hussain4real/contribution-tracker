@@ -3,6 +3,12 @@ set -euo pipefail
 
 APP_DIR="${APP_DIR:-/var/www/contribution-tracker-staging}"
 STAGING_BRANCH="${STAGING_BRANCH:-staging}"
+STAGING_COMMIT="${STAGING_COMMIT:-}"
+
+if [[ ! "$STAGING_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "STAGING_COMMIT must be the full commit SHA validated by the staging workflow."
+    exit 1
+fi
 
 cd "$APP_DIR"
 
@@ -15,7 +21,19 @@ if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
 fi
 
 git fetch origin "$STAGING_BRANCH"
-git merge --ff-only "origin/$STAGING_BRANCH"
+if ! git merge-base --is-ancestor "$STAGING_COMMIT" "origin/$STAGING_BRANCH"; then
+    echo "Refusing to deploy a commit that is not contained in origin/$STAGING_BRANCH."
+    exit 1
+fi
+
+git cat-file -e "${STAGING_COMMIT}^{commit}"
+git checkout -B "$STAGING_BRANCH" "$STAGING_COMMIT"
+
+if [ "$(git rev-parse HEAD)" != "$STAGING_COMMIT" ]; then
+    echo "Staging checkout did not resolve to the requested commit."
+    exit 1
+fi
+
 echo "Deploying $(git rev-parse --short HEAD) to staging"
 
 composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
