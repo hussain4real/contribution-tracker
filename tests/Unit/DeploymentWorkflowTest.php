@@ -4,6 +4,48 @@ declare(strict_types=1);
 
 use Symfony\Component\Yaml\Yaml;
 
+it('uses Node 24-compatible GitHub actions in active workflows', function () {
+    $expectedActions = [
+        'deploy-staging.yml' => [
+            'actions/checkout@v7',
+            'actions/setup-node@v7',
+        ],
+        'deploy.yml' => [
+            'actions/checkout@v7',
+            'actions/setup-node@v7',
+        ],
+        'lint.yml' => [
+            'actions/checkout@v7',
+        ],
+        'tests.yml' => [
+            'actions/checkout@v7',
+            'actions/setup-node@v7',
+        ],
+        'copilot-setup-steps.yml' => [
+            'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1',
+            'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0',
+            'node-version: "22"',
+        ],
+    ];
+
+    foreach ($expectedActions as $workflowName => $expectedWorkflowActions) {
+        $workflow = file_get_contents(__DIR__.'/../../.github/workflows/'.$workflowName);
+
+        if ($workflow === false) {
+            throw new RuntimeException("Unable to read the {$workflowName} workflow.");
+        }
+
+        expect($workflow)
+            ->not->toContain('actions/checkout@v4')
+            ->not->toContain('actions/setup-node@v4')
+            ->not->toContain('actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020');
+
+        foreach ($expectedWorkflowActions as $expectedWorkflowAction) {
+            expect($workflow)->toContain($expectedWorkflowAction);
+        }
+    }
+});
+
 it('deploys staging automatically and supports manual dispatch', function () {
     $workflow = Yaml::parseFile(__DIR__.'/../../.github/workflows/deploy-staging.yml');
 
