@@ -85,6 +85,7 @@ it('deploys staging automatically and supports manual dispatch', function () {
         ->and($stagingRefValidationStep['run'] ?? null)->toBe('test "$GITHUB_REF" = "refs/heads/staging"')
         ->and($remoteScript)->toBeString()
         ->toStartWith("set -euo pipefail\n")
+        ->toContain('if [ "$(git rev-parse origin/staging)" != \'${{ github.sha }}\' ]; then')
         ->toContain('git checkout -B staging \'${{ github.sha }}\'')
         ->toContain('${{ github.sha }}')
         ->not->toContain('git checkout -B staging origin/staging');
@@ -99,27 +100,29 @@ it('checks out the exact staging commit validated by the workflow', function () 
 
     expect($deploymentScript)
         ->toContain('STAGING_COMMIT="${STAGING_COMMIT:-}"')
-        ->toContain('git merge-base --is-ancestor "$STAGING_COMMIT" "origin/$STAGING_BRANCH"')
+        ->toContain('REMOTE_STAGING_COMMIT="$(git rev-parse "origin/$STAGING_BRANCH")"')
+        ->toContain('if [ "$REMOTE_STAGING_COMMIT" != "$STAGING_COMMIT" ]; then')
         ->toContain('git cat-file -e "${STAGING_COMMIT}^{commit}"')
         ->toContain('git checkout -B "$STAGING_BRANCH" "$STAGING_COMMIT"')
         ->toContain('if [ "$(git rev-parse HEAD)" != "$STAGING_COMMIT" ]; then')
-        ->not->toContain('git merge --ff-only');
+        ->not->toContain('git merge --ff-only')
+        ->not->toContain('git merge-base --is-ancestor');
 
     $fetchPosition = strpos($deploymentScript, 'git fetch origin "$STAGING_BRANCH"');
-    $ancestorCheckPosition = strpos($deploymentScript, 'git merge-base --is-ancestor');
+    $tipCheckPosition = strpos($deploymentScript, 'if [ "$REMOTE_STAGING_COMMIT" != "$STAGING_COMMIT" ]; then');
     $checkoutPosition = strpos($deploymentScript, 'git checkout -B');
     $installPosition = strpos($deploymentScript, 'composer install');
 
     if (
         $fetchPosition === false
-        || $ancestorCheckPosition === false
+        || $tipCheckPosition === false
         || $checkoutPosition === false
         || $installPosition === false
     ) {
         throw new RuntimeException('Expected the staging deployment script to contain its guarded checkout sequence.');
     }
 
-    expect($fetchPosition)->toBeLessThan($ancestorCheckPosition)
-        ->and($ancestorCheckPosition)->toBeLessThan($checkoutPosition)
+    expect($fetchPosition)->toBeLessThan($tipCheckPosition)
+        ->and($tipCheckPosition)->toBeLessThan($checkoutPosition)
         ->and($checkoutPosition)->toBeLessThan($installPosition);
 });

@@ -21,8 +21,9 @@ if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
 fi
 
 git fetch origin "$STAGING_BRANCH"
-if ! git merge-base --is-ancestor "$STAGING_COMMIT" "origin/$STAGING_BRANCH"; then
-    echo "Refusing to deploy a commit that is not contained in origin/$STAGING_BRANCH."
+REMOTE_STAGING_COMMIT="$(git rev-parse "origin/$STAGING_BRANCH")"
+if [ "$REMOTE_STAGING_COMMIT" != "$STAGING_COMMIT" ]; then
+    echo "Refusing to deploy a commit that is not the current origin/$STAGING_BRANCH tip."
     exit 1
 fi
 

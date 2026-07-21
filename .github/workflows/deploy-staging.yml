@@ -78,6 +78,9 @@ jobs:
               exit 1
             fi
             git fetch origin staging
-            git merge-base --is-ancestor '${{ github.sha }}' origin/staging
+            if [ "$(git rev-parse origin/staging)" != '${{ github.sha }}' ]; then
+              echo "Refusing to deploy a commit that is not the current origin/staging tip."
+              exit 1
+            fi
             git checkout -B staging '${{ github.sha }}'
             STAGING_COMMIT='${{ github.sha }}' /var/www/contribution-tracker-staging/deployment/deploy-staging.sh
