@@ -1,11 +1,14 @@
 name: Deploy to Staging
 
 on:
+  push:
+    branches:
+      - staging
   workflow_dispatch:
 
 concurrency:
   group: staging-deploy
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   test:
