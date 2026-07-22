@@ -6,6 +6,11 @@ use App\Actions\ArchiveFamily;
 use App\Actions\RestoreFamily;
 use App\Jobs\PurgeArchivedFamily;
 use App\Models\Family;
+use App\Models\PaymentBatch;
+use App\Models\PaystackTransaction;
+use App\Models\ProviderSettlementGroup;
+use App\Models\ProviderSettlementItem;
+use App\Models\ReconciliationImport;
 use App\Models\ReportArtifact;
 use App\Models\User;
 use Illuminate\Support\Facades\Bus;
@@ -15,6 +20,7 @@ use Illuminate\Validation\ValidationException;
 it('archives immediately and permits only restore and export during retention', function () {
     $family = Family::factory()->create();
     $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+    ReconciliationImport::factory()->create(['family_id' => $family->id, 'uploaded_by' => $admin->id]);
 
     $this->actingAs($admin)
         ->post(route('family.archive.store', ['current_family' => $family->slug]), [
@@ -32,7 +38,7 @@ it('archives immediately and permits only restore and export during retention', 
     $exportResponse
         ->assertOk()
         ->assertHeader('content-type', 'application/json');
-    expect($exportResponse->streamedContent())->toContain('"family"', $family->name);
+    expect($exportResponse->streamedContent())->toContain('"family"', $family->name, '"reconciliation_imports"');
 
     $this->post(route('family.archive.restore', ['current_family' => $family->slug]))
         ->assertRedirect(route('dashboard', ['current_family' => $family->slug]));
@@ -67,7 +73,25 @@ it('purges expired database records and private artifacts without deleting peopl
         'requested_by' => $admin->id,
         'path' => "reports/{$family->id}/test.csv",
     ]);
+    $import = ReconciliationImport::factory()->create([
+        'family_id' => $family->id,
+        'uploaded_by' => $admin->id,
+        'path' => "reconciliation/{$family->id}/statement.csv",
+    ]);
+    $batch = PaymentBatch::factory()->create(['family_id' => $family->id, 'recorded_by' => $admin->id]);
+    $transaction = PaystackTransaction::factory()->create([
+        'family_id' => $family->id,
+        'user_id' => $admin->id,
+        'payment_batch_id' => $batch->id,
+    ]);
+    $settlement = ProviderSettlementGroup::factory()->create(['family_id' => $family->id, 'created_by' => $admin->id]);
+    ProviderSettlementItem::factory()->create([
+        'provider_settlement_group_id' => $settlement->id,
+        'paystack_transaction_id' => $transaction->id,
+        'payment_batch_id' => $batch->id,
+    ]);
     Storage::disk('local')->put($artifact->path, 'private report');
+    Storage::disk('local')->put($import->path, 'private statement');
 
     $job = new PurgeArchivedFamily($family->id);
     $job->handle();
@@ -77,7 +101,10 @@ it('purges expired database records and private artifacts without deleting peopl
         ->and(User::query()->find($admin->id))->not->toBeNull()
         ->and(User::query()->find($admin->id)?->family_id)->toBeNull()
         ->and(ReportArtifact::query()->where('family_id', $family->id)->count())->toBe(0)
+        ->and(ReconciliationImport::query()->where('family_id', $family->id)->count())->toBe(0)
+        ->and(ProviderSettlementGroup::query()->where('family_id', $family->id)->count())->toBe(0)
         ->and(Storage::disk('local')->exists($artifact->path))->toBeFalse()
+        ->and(Storage::disk('local')->exists($import->path))->toBeFalse()
         ->and($job->uniqueId())->toBe((string) $family->id);
 });
 

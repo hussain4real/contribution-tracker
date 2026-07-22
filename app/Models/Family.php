@@ -280,6 +280,30 @@ class Family extends Model
         return $this->hasMany(ReportSchedule::class);
     }
 
+    /** @return HasMany<ReconciliationImport, $this> */
+    public function reconciliationImports(): HasMany
+    {
+        return $this->hasMany(ReconciliationImport::class);
+    }
+
+    /** @return HasMany<BankTransaction, $this> */
+    public function bankTransactions(): HasMany
+    {
+        return $this->hasMany(BankTransaction::class);
+    }
+
+    /** @return HasMany<ReconciliationPeriod, $this> */
+    public function reconciliationPeriods(): HasMany
+    {
+        return $this->hasMany(ReconciliationPeriod::class);
+    }
+
+    /** @return HasMany<ProviderSettlementGroup, $this> */
+    public function providerSettlementGroups(): HasMany
+    {
+        return $this->hasMany(ProviderSettlementGroup::class);
+    }
+
     protected static function booted(): void
     {
         static::deleting(function (Family $family): void {
@@ -288,6 +312,9 @@ class Family extends Model
                 || $family->paymentBatches()->exists()
                 || $family->expenses()->exists()
                 || $family->fundAdjustments()->exists()
+                || $family->reconciliationImports()->exists()
+                || $family->reconciliationPeriods()->exists()
+                || $family->providerSettlementGroups()->exists()
             ) {
                 throw new LogicException('A family with financial history cannot be deleted.');
             }

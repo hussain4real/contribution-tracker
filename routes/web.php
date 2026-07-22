@@ -27,6 +27,12 @@ use App\Http\Controllers\PaymentReceiptController;
 use App\Http\Controllers\PaystackWebhookController;
 use App\Http\Controllers\PlatformAdminController;
 use App\Http\Controllers\PricingController;
+use App\Http\Controllers\ProviderSettlementGroupController;
+use App\Http\Controllers\ReconciliationController;
+use App\Http\Controllers\ReconciliationImportController;
+use App\Http\Controllers\ReconciliationLinkController;
+use App\Http\Controllers\ReconciliationPeriodController;
+use App\Http\Controllers\ReconciliationTransactionStatusController;
 use App\Http\Controllers\ReportArtifactController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ReportExportController;
@@ -217,6 +223,26 @@ Route::prefix('{current_family}')
             ->middleware([HandlePrecognitiveRequests::class]);
         Route::post('fund-adjustments/{fund_adjustment}/reverse', FundAdjustmentReversalController::class)
             ->name('fund-adjustments.reverse');
+
+        // Money-in and money-out reconciliation (family officers only)
+        Route::prefix('reconciliation')->name('reconciliation.')->middleware('can:reconcile-family-funds')->group(function () {
+            Route::get('/', [ReconciliationController::class, 'index'])->name('index');
+            Route::post('imports', [ReconciliationImportController::class, 'store'])->name('imports.store');
+            Route::post('imports/{reconciliation_import}/commit', [ReconciliationImportController::class, 'commit'])
+                ->name('imports.commit');
+            Route::post('transactions/{bank_transaction}/links', [ReconciliationLinkController::class, 'store'])
+                ->name('links.store');
+            Route::delete('links/{reconciliation_link}', [ReconciliationLinkController::class, 'destroy'])
+                ->name('links.destroy');
+            Route::patch('transactions/{bank_transaction}/status', [ReconciliationTransactionStatusController::class, 'update'])
+                ->name('transactions.status');
+            Route::post('periods', [ReconciliationPeriodController::class, 'store'])->name('periods.store');
+            Route::post('periods/{reconciliation_period}/close', [ReconciliationPeriodController::class, 'close'])
+                ->name('periods.close');
+            Route::post('periods/{reconciliation_period}/reopen', [ReconciliationPeriodController::class, 'reopen'])
+                ->name('periods.reopen');
+            Route::post('settlements', [ProviderSettlementGroupController::class, 'store'])->name('settlements.store');
+        });
 
         // Reports (Financial Secretary and Admin only)
         Route::prefix('reports')->name('reports.')->middleware(['can:generate-reports', 'subscription:'.PlatformPlanCatalog::Reports])->group(function () {

@@ -146,8 +146,9 @@ function resetForm(): void {
                 class="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20"
             >
                 <p class="text-sm text-blue-800 dark:text-blue-200">
-                    Fund adjustments represent lump sums added to the family
-                    fund (e.g., opening balance from previous contributions).
+                    Fund adjustments record signed corrections to the family
+                    fund. Use a positive amount for money in and a negative
+                    amount for money out.
                 </p>
             </div>
 
@@ -177,7 +178,6 @@ function resetForm(): void {
                                 v-model="amount"
                                 :placeholder="`Enter amount in ${currency}`"
                                 required
-                                min="1"
                                 step="1"
                                 @change="validate('amount')"
                             />
@@ -203,7 +203,7 @@ function resetForm(): void {
                             type="text"
                             name="description"
                             v-model="description"
-                            placeholder="e.g., Opening balance from 2+ years of contributions"
+                            placeholder="e.g., Opening balance or bank correction"
                             required
                             maxlength="1000"
                             @change="validate('description')"
