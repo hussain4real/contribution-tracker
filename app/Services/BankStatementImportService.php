@@ -115,6 +115,11 @@ class BankStatementImportService
 
         try {
             DB::transaction(function () use ($stream, $import, $actor, $mapping, &$rows, &$imported, &$duplicates, &$fingerprintOccurrences): void {
+                rewind($stream);
+                $rows = 0;
+                $imported = 0;
+                $duplicates = 0;
+                $fingerprintOccurrences = [];
                 $headers = $this->readCsvRow($stream, $import->delimiter);
 
                 if ($headers === null) {

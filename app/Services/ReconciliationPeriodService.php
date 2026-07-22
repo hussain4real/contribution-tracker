@@ -114,21 +114,24 @@ class ReconciliationPeriodService
 
     public function create(Family $family, string $startsAt, string $endsAt): ReconciliationPeriod
     {
-        $overlaps = ReconciliationPeriod::query()
-            ->where('family_id', $family->id)
-            ->whereDate('starts_at', '<=', $endsAt)
-            ->whereDate('ends_at', '>=', $startsAt)
-            ->exists();
+        return DB::transaction(function () use ($family, $startsAt, $endsAt): ReconciliationPeriod {
+            Family::query()->lockForUpdate()->findOrFail($family->id);
+            $overlaps = ReconciliationPeriod::query()
+                ->where('family_id', $family->id)
+                ->whereDate('starts_at', '<=', $endsAt)
+                ->whereDate('ends_at', '>=', $startsAt)
+                ->exists();
 
-        if ($overlaps) {
-            throw new InvalidArgumentException('A reconciliation period already overlaps these dates.');
-        }
+            if ($overlaps) {
+                throw new InvalidArgumentException('A reconciliation period already overlaps these dates.');
+            }
 
-        return ReconciliationPeriod::query()->create([
-            'family_id' => $family->id,
-            'starts_at' => $startsAt,
-            'ends_at' => $endsAt,
-            'status' => ReconciliationPeriodStatus::Open,
-        ]);
+            return ReconciliationPeriod::query()->create([
+                'family_id' => $family->id,
+                'starts_at' => $startsAt,
+                'ends_at' => $endsAt,
+                'status' => ReconciliationPeriodStatus::Open,
+            ]);
+        }, attempts: 3);
     }
 }

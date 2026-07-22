@@ -71,6 +71,12 @@ function formatDate(date: string): string {
     });
 }
 
+function formatAdjustmentAmount(amount: number): string {
+    const sign = amount < 0 ? '-' : '+';
+
+    return `${sign}${formatCurrency(Math.abs(amount))}`;
+}
+
 const reversalTarget = ref<AdjustmentItem | null>(null);
 const reversalReason = ref('');
 const reversalError = ref('');
@@ -298,9 +304,18 @@ function resetForm(): void {
                                     >
                                 </td>
                                 <td
-                                    class="px-4 py-4 text-right font-medium text-green-600 sm:px-6 dark:text-green-400"
+                                    class="px-4 py-4 text-right font-medium sm:px-6"
+                                    :class="
+                                        adjustment.amount < 0
+                                            ? 'text-red-600 dark:text-red-400'
+                                            : 'text-green-600 dark:text-green-400'
+                                    "
                                 >
-                                    +{{ formatCurrency(adjustment.amount) }}
+                                    {{
+                                        formatAdjustmentAmount(
+                                            adjustment.amount,
+                                        )
+                                    }}
                                 </td>
                                 <td
                                     class="hidden px-6 py-4 text-neutral-500 md:table-cell dark:text-neutral-400"
