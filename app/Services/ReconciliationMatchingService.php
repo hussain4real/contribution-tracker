@@ -61,6 +61,7 @@ class ReconciliationMatchingService
                 ->where('total_amount', $transaction->amount)
                 ->whereRaw('LOWER(reference) = ?', [$reference])
                 ->whereDoesntHave('reconciliationLinks')
+                ->whereDoesntHave('paystackTransaction.settlementItem')
                 ->get();
             $settlements = ProviderSettlementGroup::query()
                 ->where('family_id', $transaction->family_id)
@@ -89,6 +90,7 @@ class ReconciliationMatchingService
                 ->where('family_id', $transaction->family_id)
                 ->where('total_amount', $transaction->amount)
                 ->whereBetween('paid_at', [$from, $to])
+                ->whereDoesntHave('paystackTransaction.settlementItem')
                 ->limit(5)
                 ->get()
                 ->map(fn (PaymentBatch $batch): array => [

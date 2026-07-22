@@ -225,7 +225,10 @@ Route::prefix('{current_family}')
             ->name('fund-adjustments.reverse');
 
         // Money-in and money-out reconciliation (family officers only)
-        Route::prefix('reconciliation')->name('reconciliation.')->middleware('can:reconcile-family-funds')->group(function () {
+        Route::prefix('reconciliation')->name('reconciliation.')->middleware([
+            'can:reconcile-family-funds',
+            'subscription:'.PlatformPlanCatalog::Reports,
+        ])->group(function () {
             Route::get('/', [ReconciliationController::class, 'index'])->name('index');
             Route::post('imports', [ReconciliationImportController::class, 'store'])->name('imports.store');
             Route::post('imports/{reconciliation_import}/commit', [ReconciliationImportController::class, 'commit'])

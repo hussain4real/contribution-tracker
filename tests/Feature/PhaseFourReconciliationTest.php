@@ -18,6 +18,7 @@ use App\Models\Family;
 use App\Models\FundAdjustment;
 use App\Models\PaymentBatch;
 use App\Models\PaystackTransaction;
+use App\Models\PlatformPlan;
 use App\Models\ProviderSettlementGroup;
 use App\Models\ProviderSettlementItem;
 use App\Models\ReconciliationImport;
@@ -27,8 +28,10 @@ use App\Models\User;
 use App\Services\BankStatementImportService;
 use App\Services\ProviderSettlementService;
 use App\Services\ReconciliationLinkService;
+use App\Services\ReconciliationMatchingService;
 use App\Services\ReconciliationPeriodService;
 use App\Services\ReconciliationWorkspaceService;
+use App\Support\PlatformPlanCatalog;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -51,6 +54,25 @@ function reconciliationImport(Family $family, ?User $actor = null): Reconciliati
         'uploaded_by' => $actor?->id,
     ]);
 }
+
+it('requires the reports subscription feature for reconciliation routes', function () {
+    $plan = PlatformPlan::query()->create([
+        'name' => 'Reconciliation Restricted',
+        'slug' => 'reconciliation-restricted',
+        'price' => 0,
+        'max_members' => 10,
+        'features' => [PlatformPlanCatalog::BasicContributions, PlatformPlanCatalog::ManualPayments],
+        'is_active' => true,
+        'sort_order' => 99,
+    ]);
+    [$family, $admin] = phaseFourFixture();
+    $family->forceFill(['platform_plan_id' => $plan->id])->save();
+
+    $this->actingAs($admin)
+        ->getJson(route('reconciliation.index', ['current_family' => $family->slug]))
+        ->assertForbidden()
+        ->assertJsonPath('message', 'This feature is not available on your current plan. Please upgrade.');
+});
 
 it('previews private statements and imports duplicate rows harmlessly with exact-only auto matching', function () {
     Storage::fake('local');
@@ -197,6 +219,8 @@ it('requires reconciled ledger entries to be unlinked before reversal', function
         'family_id' => $family->id,
         'recorded_by' => $admin->id,
         'total_amount' => 1000,
+        'paid_at' => '2026-07-10',
+        'reference' => 'SETTLED-DIRECT',
     ]);
     $expense = Expense::factory()->recordedBy($admin)->create([
         'family_id' => $family->id,
@@ -360,7 +384,10 @@ it('keeps settled Paystack receipts exclusive to their settlement groups', funct
         'family_id' => $family->id,
         'reconciliation_import_id' => $import->id,
         'amount' => 1000,
+        'transacted_at' => '2026-07-10',
+        'reference' => 'SETTLED-DIRECT',
     ]);
+    $matching = app(ReconciliationMatchingService::class);
 
     expect(fn () => app(ReversePaymentBatch::class)->handle($batch, $admin, 'Settled reversal'))
         ->toThrow(InvalidArgumentException::class, 'settled Paystack receipt')
@@ -370,7 +397,9 @@ it('keeps settled Paystack receipts exclusive to their settlement groups', funct
             $batch->id,
             1000,
             $admin,
-        ))->toThrow(InvalidArgumentException::class, 'settled Paystack receipt');
+        ))->toThrow(InvalidArgumentException::class, 'settled Paystack receipt')
+        ->and($matching->exactCandidates($bank))->toBeEmpty()
+        ->and($matching->suggestions($bank)->pluck('id'))->not->toContain($batch->id);
 });
 
 it('requires direct receipt links to be removed before Paystack settlement grouping', function () {
