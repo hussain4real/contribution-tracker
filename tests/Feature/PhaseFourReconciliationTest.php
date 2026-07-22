@@ -6,6 +6,7 @@ use App\Enums\BankTransactionDirection;
 use App\Enums\PaymentSource;
 use App\Enums\ReconciliationPeriodStatus;
 use App\Enums\ReconciliationStatus;
+use App\Enums\Role;
 use App\Models\AuditEvent;
 use App\Models\BankTransaction;
 use App\Models\Expense;
@@ -14,6 +15,8 @@ use App\Models\FundAdjustment;
 use App\Models\PaymentBatch;
 use App\Models\PaystackTransaction;
 use App\Models\ReconciliationImport;
+use App\Models\ReconciliationLink;
+use App\Models\ReconciliationPeriod;
 use App\Models\User;
 use App\Services\BankStatementImportService;
 use App\Services\ProviderSettlementService;
@@ -290,6 +293,54 @@ it('closes reproducible period snapshots and requires an audited admin reason to
     expect($reopened->status)->toBe(ReconciliationPeriodStatus::Reopened)
         ->and($reopened->only(array_keys($snapshot)))->toBe($snapshot)
         ->and(AuditEvent::query()->where('action', 'reconciliation.period.reopened')->exists())->toBeTrue();
+});
+
+it('scopes reconciliation mutations to the family in the route', function () {
+    [$routeFamily, $admin] = phaseFourFixture();
+    $otherFamily = Family::factory()->create();
+    $admin->ensureFamilyMembership($otherFamily, Role::Member);
+    $import = reconciliationImport($otherFamily, $admin);
+    $bank = BankTransaction::factory()->create([
+        'family_id' => $otherFamily->id,
+        'reconciliation_import_id' => $import->id,
+    ]);
+    $link = ReconciliationLink::factory()->create([
+        'family_id' => $otherFamily->id,
+        'bank_transaction_id' => $bank->id,
+    ]);
+    $period = ReconciliationPeriod::factory()->create(['family_id' => $otherFamily->id]);
+
+    $this->actingAs($admin)
+        ->post(route('reconciliation.imports.commit', [
+            'current_family' => $routeFamily->slug,
+            'reconciliation_import' => $import,
+        ]), ['mapping' => []])
+        ->assertForbidden();
+
+    $this->post(route('reconciliation.links.store', [
+        'current_family' => $routeFamily->slug,
+        'bank_transaction' => $bank,
+    ]), [])->assertForbidden();
+
+    $this->delete(route('reconciliation.links.destroy', [
+        'current_family' => $routeFamily->slug,
+        'reconciliation_link' => $link,
+    ]))->assertForbidden();
+
+    $this->patch(route('reconciliation.transactions.status', [
+        'current_family' => $routeFamily->slug,
+        'bank_transaction' => $bank,
+    ]), [])->assertForbidden();
+
+    $this->post(route('reconciliation.periods.close', [
+        'current_family' => $routeFamily->slug,
+        'reconciliation_period' => $period,
+    ]))->assertForbidden();
+
+    $this->post(route('reconciliation.periods.reopen', [
+        'current_family' => $routeFamily->slug,
+        'reconciliation_period' => $period,
+    ]), [])->assertForbidden();
 });
 
 it('renders every reconciliation queue for officers and blocks members and outsiders', function () {

@@ -6,6 +6,7 @@ namespace App\Http\Requests;
 
 use App\Enums\ReconciliationStatus;
 use App\Models\BankTransaction;
+use App\Models\Family;
 use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -16,9 +17,11 @@ class UpdateReconciliationTransactionStatusRequest extends FormRequest
     {
         $user = $this->user();
         $transaction = $this->route('bank_transaction');
+        $family = app(Family::class);
 
         return $user instanceof User
             && $transaction instanceof BankTransaction
+            && $transaction->family_id === $family->id
             && $user->can('reconcile-family-funds')
             && $user->membershipForFamilyId($transaction->family_id) !== null;
     }

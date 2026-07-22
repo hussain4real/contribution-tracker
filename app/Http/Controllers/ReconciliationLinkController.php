@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreReconciliationLinkRequest;
 use App\Models\BankTransaction;
+use App\Models\Family;
 use App\Models\ReconciliationLink;
 use App\Services\ReconciliationLinkService;
 use Illuminate\Http\RedirectResponse;
@@ -33,7 +34,8 @@ class ReconciliationLinkController extends Controller
     {
         $this->authorize('reconcile-family-funds');
         $user = $this->user($request);
-        abort_unless($user->membershipForFamilyId($reconciliationLink->family_id) !== null, 403);
+        $family = app(Family::class);
+        abort_unless($reconciliationLink->family_id === $family->id, 403);
         $this->links->unlink($reconciliationLink, $user);
 
         return back()->with('success', 'Reconciliation link removed.');

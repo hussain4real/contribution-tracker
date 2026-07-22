@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Models\Family;
 use App\Models\ReconciliationImport;
 use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
@@ -16,9 +17,11 @@ class CommitReconciliationImportRequest extends FormRequest
     {
         $user = $this->user();
         $import = $this->route('reconciliation_import');
+        $family = app(Family::class);
 
         return $user instanceof User
             && $import instanceof ReconciliationImport
+            && $import->family_id === $family->id
             && $user->can('reconcile-family-funds')
             && $user->membershipForFamilyId($import->family_id) !== null;
     }

@@ -30,7 +30,8 @@ class ReconciliationPeriodController extends Controller
     {
         $this->authorize('reconcile-family-funds');
         $user = $this->user($request);
-        abort_unless($user->membershipForFamilyId($reconciliationPeriod->family_id) !== null, 403);
+        $family = app(Family::class);
+        abort_unless($reconciliationPeriod->family_id === $family->id, 403);
         $this->periods->close($reconciliationPeriod, $user);
 
         return back()->with('success', 'Reconciliation period closed with an immutable snapshot.');
