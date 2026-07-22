@@ -9,6 +9,7 @@ use App\Models\FundAdjustment;
 use App\Models\User;
 use App\Support\CurrencyFormatter;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Support\Facades\DB;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 
@@ -67,13 +68,13 @@ class RecordFundAdjustment implements Tool
             ], JSON_THROW_ON_ERROR);
         }
 
-        $adjustment = FundAdjustment::create([
+        $adjustment = DB::transaction(fn (): FundAdjustment => FundAdjustment::create([
             'family_id' => $family->id,
             'amount' => $amount,
             'description' => $description,
             'recorded_at' => $recordedAt,
             'recorded_by' => $this->user->id,
-        ]);
+        ]), attempts: 3);
 
         return json_encode([
             'status' => 'success',

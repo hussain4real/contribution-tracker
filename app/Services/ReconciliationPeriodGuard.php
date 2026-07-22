@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Enums\ReconciliationPeriodStatus;
+use App\Models\Family;
 use App\Models\ReconciliationPeriod;
 use DateTimeInterface;
 use Illuminate\Support\Carbon;
@@ -15,6 +16,7 @@ class ReconciliationPeriodGuard
     public function ensureLedgerDateIsWritable(int $familyId, DateTimeInterface|string $date): void
     {
         $ledgerDate = Carbon::parse($date)->toDateString();
+        Family::query()->lockForUpdate()->findOrFail($familyId);
         $isClosed = ReconciliationPeriod::query()
             ->where('family_id', $familyId)
             ->where('status', ReconciliationPeriodStatus::Closed)

@@ -26,6 +26,7 @@ use App\Services\BankStatementImportService;
 use App\Services\ProviderSettlementService;
 use App\Services\ReconciliationLinkService;
 use App\Services\ReconciliationPeriodService;
+use App\Services\ReconciliationWorkspaceService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -271,13 +272,16 @@ it('rejects reversed Paystack transactions from settlement groups', function () 
         'status' => TransactionStatus::Reversed,
     ]);
 
-    expect(fn () => app(ProviderSettlementService::class)->create(
-        $family->id,
-        [$transaction->id],
-        'REVERSED-SETTLEMENT',
-        '2026-07-10',
-        $admin,
-    ))->toThrow(InvalidArgumentException::class, 'Every Paystack transaction must be allocated in this family.');
+    $workspace = app(ReconciliationWorkspaceService::class)->data($family, $admin, []);
+
+    expect($workspace['paystack_transactions'])->toBeEmpty()
+        ->and(fn () => app(ProviderSettlementService::class)->create(
+            $family->id,
+            [$transaction->id],
+            'REVERSED-SETTLEMENT',
+            '2026-07-10',
+            $admin,
+        ))->toThrow(InvalidArgumentException::class, 'Every Paystack transaction must be allocated in this family.');
 });
 
 it('blocks ledger postings and reversals in closed reconciliation periods', function () {

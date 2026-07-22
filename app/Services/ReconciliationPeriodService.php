@@ -26,6 +26,7 @@ class ReconciliationPeriodService
     public function close(ReconciliationPeriod $period, User $actor): ReconciliationPeriod
     {
         return DB::transaction(function () use ($period, $actor): ReconciliationPeriod {
+            Family::query()->lockForUpdate()->findOrFail($period->family_id);
             $locked = ReconciliationPeriod::query()->lockForUpdate()->findOrFail($period->id);
 
             if (! in_array($locked->status, [

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Enums\ReconciliationStatus;
+use App\Enums\TransactionStatus;
 use App\Models\BankTransaction;
 use App\Models\Expense;
 use App\Models\Family;
@@ -124,6 +125,7 @@ class ReconciliationWorkspaceService
             'paystack_transactions' => PaystackTransaction::query()
                 ->where('family_id', $family->id)
                 ->whereNotNull('payment_batch_id')
+                ->whereIn('status', [TransactionStatus::Allocated, TransactionStatus::Success])
                 ->whereDoesntHave('settlementItem')
                 ->latest('id')
                 ->limit(100)
