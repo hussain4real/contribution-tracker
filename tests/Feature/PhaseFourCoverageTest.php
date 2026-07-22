@@ -317,6 +317,23 @@ it('marks failed imports and covers delimiter duplicate and normalization errors
         'reference' => 'Reference', 'amount' => null, 'direction' => null,
     ]))->toBe(['rows' => 2, 'imported' => 1, 'duplicates' => 1]);
 
+    ReconciliationPeriod::factory()->create([
+        'family_id' => $family->id,
+        'starts_at' => '2026-11-01',
+        'ends_at' => '2026-11-30',
+        'status' => ReconciliationPeriodStatus::Closed,
+    ]);
+    $closedPeriodStatement = UploadedFile::fake()->createWithContent(
+        'closed-period.csv',
+        "Date;Credit;Debit;Reference\n2026-11-15;3000;;REF-CLOSED\n",
+    );
+    $closedPeriodPreview = $service->preview($family, $admin, $closedPeriodStatement);
+    expect(fn () => $service->import($closedPeriodPreview, $admin, [
+        'date' => 'Date', 'credit' => 'Credit', 'debit' => 'Debit',
+        'reference' => 'Reference', 'amount' => null, 'direction' => null,
+    ]))->toThrow(InvalidArgumentException::class)
+        ->and(BankTransaction::query()->where('reference', 'REF-CLOSED')->exists())->toBeFalse();
+
     foreach ([
         ['Date,Credit,Debit', '2026-10-01,10,20'],
         ['Date,Amount,Direction', '2026-10-01,10,sideways'],

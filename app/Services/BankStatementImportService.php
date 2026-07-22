@@ -6,10 +6,12 @@ namespace App\Services;
 
 use App\Enums\BankTransactionDirection;
 use App\Enums\ReconciliationImportStatus;
+use App\Enums\ReconciliationPeriodStatus;
 use App\Enums\ReconciliationStatus;
 use App\Models\BankTransaction;
 use App\Models\Family;
 use App\Models\ReconciliationImport;
+use App\Models\ReconciliationPeriod;
 use App\Models\User;
 use App\Support\AuditEventRecorder;
 use Carbon\CarbonImmutable;
@@ -136,6 +138,7 @@ class BankStatementImportService
                     $occurrence = ($fingerprintOccurrences[$baseFingerprint] ?? 0) + 1;
                     $fingerprintOccurrences[$baseFingerprint] = $occurrence;
                     $normalized['row_fingerprint'] = hash('sha256', "{$baseFingerprint}|{$occurrence}");
+                    $this->assertDateIsImportable($import->family_id, $normalized['transacted_at']);
                     $transaction = BankTransaction::query()->firstOrCreate(
                         [
                             'family_id' => $import->family_id,
@@ -190,6 +193,20 @@ class BankStatementImportService
         }
 
         return ['rows' => $rows, 'imported' => $imported, 'duplicates' => $duplicates];
+    }
+
+    private function assertDateIsImportable(int $familyId, string $date): void
+    {
+        $period = ReconciliationPeriod::query()
+            ->where('family_id', $familyId)
+            ->whereDate('starts_at', '<=', $date)
+            ->whereDate('ends_at', '>=', $date)
+            ->lockForUpdate()
+            ->first();
+
+        if ($period?->status === ReconciliationPeriodStatus::Closed) {
+            throw new InvalidArgumentException('Statement rows cannot be imported into a closed reconciliation period. Reopen the period first.');
+        }
     }
 
     private function detectDelimiter(string $path): string
