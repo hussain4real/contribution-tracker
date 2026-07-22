@@ -2,11 +2,15 @@
 
 declare(strict_types=1);
 
+use App\Actions\ReverseExpense;
+use App\Actions\ReverseFundAdjustment;
+use App\Actions\ReversePaymentBatch;
 use App\Enums\BankTransactionDirection;
 use App\Enums\PaymentSource;
 use App\Enums\ReconciliationPeriodStatus;
 use App\Enums\ReconciliationStatus;
 use App\Enums\Role;
+use App\Enums\TransactionStatus;
 use App\Models\AuditEvent;
 use App\Models\BankTransaction;
 use App\Models\Expense;
@@ -252,6 +256,67 @@ it('groups Paystack gross fees and net settlements while reporting bank differen
         ->and(fn () => app(ProviderSettlementService::class)->create(
             $family->id, $transactionIds, 'SETTLEMENT-2', '2026-07-11', $admin,
         ))->toThrow(InvalidArgumentException::class);
+});
+
+it('rejects reversed Paystack transactions from settlement groups', function () {
+    [$family, $admin] = phaseFourFixture();
+    $batch = PaymentBatch::factory()->create([
+        'family_id' => $family->id,
+        'recorded_by' => $admin->id,
+    ]);
+    $transaction = PaystackTransaction::factory()->create([
+        'family_id' => $family->id,
+        'user_id' => $admin->id,
+        'payment_batch_id' => $batch->id,
+        'status' => TransactionStatus::Reversed,
+    ]);
+
+    expect(fn () => app(ProviderSettlementService::class)->create(
+        $family->id,
+        [$transaction->id],
+        'REVERSED-SETTLEMENT',
+        '2026-07-10',
+        $admin,
+    ))->toThrow(InvalidArgumentException::class, 'Every Paystack transaction must be allocated in this family.');
+});
+
+it('blocks ledger postings and reversals in closed reconciliation periods', function () {
+    [$family, $admin] = phaseFourFixture();
+    $batch = PaymentBatch::factory()->create([
+        'family_id' => $family->id,
+        'recorded_by' => $admin->id,
+        'paid_at' => '2026-07-10',
+    ]);
+    $expense = Expense::factory()->recordedBy($admin)->create([
+        'family_id' => $family->id,
+        'spent_at' => '2026-07-11',
+    ]);
+    $adjustment = FundAdjustment::factory()->recordedBy($admin)->create([
+        'family_id' => $family->id,
+        'recorded_at' => '2026-07-12',
+    ]);
+    $period = app(ReconciliationPeriodService::class)->create($family, '2026-07-01', '2026-07-31');
+    app(ReconciliationPeriodService::class)->close($period, $admin);
+
+    expect(fn () => PaymentBatch::factory()->create([
+        'family_id' => $family->id,
+        'recorded_by' => $admin->id,
+        'paid_at' => '2026-07-20',
+    ]))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => Expense::factory()->recordedBy($admin)->create([
+            'family_id' => $family->id,
+            'spent_at' => '2026-07-20',
+        ]))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => FundAdjustment::factory()->recordedBy($admin)->create([
+            'family_id' => $family->id,
+            'recorded_at' => '2026-07-20',
+        ]))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => app(ReversePaymentBatch::class)->handle($batch, $admin, 'Closed period reversal'))
+        ->toThrow(InvalidArgumentException::class)
+        ->and(fn () => app(ReverseExpense::class)->handle($expense, $admin, 'Closed period reversal'))
+        ->toThrow(InvalidArgumentException::class)
+        ->and(fn () => app(ReverseFundAdjustment::class)->handle($adjustment, $admin, 'Closed period reversal'))
+        ->toThrow(InvalidArgumentException::class);
 });
 
 it('closes reproducible period snapshots and requires an audited admin reason to reopen', function () {

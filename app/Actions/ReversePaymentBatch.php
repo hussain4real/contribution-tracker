@@ -9,12 +9,15 @@ use App\Models\FinancialReversal;
 use App\Models\PaymentBatch;
 use App\Models\PaystackTransaction;
 use App\Models\User;
+use App\Services\ReconciliationPeriodGuard;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 class ReversePaymentBatch
 {
+    public function __construct(private readonly ReconciliationPeriodGuard $periodGuard) {}
+
     public function handle(
         PaymentBatch $batch,
         User $actor,
@@ -32,6 +35,8 @@ class ReversePaymentBatch
             if (trim($reason) === '') {
                 throw new InvalidArgumentException('A reversal reason is required.');
             }
+
+            $this->periodGuard->ensureLedgerDateIsWritable($lockedBatch->family_id, $lockedBatch->paid_at);
 
             if ($replacement instanceof PaymentBatch && $replacement->family_id !== $lockedBatch->family_id) {
                 throw new InvalidArgumentException('A replacement receipt must belong to the same family.');

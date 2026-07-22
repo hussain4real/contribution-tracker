@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Enums\BankTransactionDirection;
+use App\Enums\TransactionStatus;
 use App\Models\BankTransaction;
 use App\Models\PaystackTransaction;
 use App\Models\ProviderSettlementGroup;
@@ -40,6 +41,7 @@ class ProviderSettlementService
                 ->where('family_id', $familyId)
                 ->whereIn('id', $transactionIds)
                 ->whereNotNull('payment_batch_id')
+                ->whereIn('status', [TransactionStatus::Allocated, TransactionStatus::Success])
                 ->lockForUpdate()
                 ->get();
 
