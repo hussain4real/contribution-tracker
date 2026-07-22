@@ -69,8 +69,17 @@ class ProviderSettlementService
             }
 
             if ($bankTransaction instanceof BankTransaction) {
-                if ($bankTransaction->family_id !== $familyId || $bankTransaction->direction !== BankTransactionDirection::Credit) {
+                $bankTransaction = BankTransaction::query()
+                    ->where('family_id', $familyId)
+                    ->lockForUpdate()
+                    ->find($bankTransaction->id);
+
+                if (! $bankTransaction instanceof BankTransaction || $bankTransaction->direction !== BankTransactionDirection::Credit) {
                     throw new InvalidArgumentException('The settlement bank transaction must be a credit for this family.');
+                }
+
+                if ($bankTransaction->remainingAmount() < 1) {
+                    throw new InvalidArgumentException('The settlement bank transaction is already fully reconciled.');
                 }
             }
 
@@ -114,7 +123,7 @@ class ProviderSettlementService
 
             $group->items()->createMany($items->all());
 
-            if ($bankTransaction instanceof BankTransaction && $bankTransaction->remainingAmount() > 0) {
+            if ($bankTransaction instanceof BankTransaction) {
                 $this->linkService->link(
                     $bankTransaction,
                     ProviderSettlementGroup::MORPH_TYPE,

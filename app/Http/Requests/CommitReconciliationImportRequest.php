@@ -58,7 +58,7 @@ class CommitReconciliationImportRequest extends FormRequest
                 }
 
                 $hasAmountDirection = filled($mapping['amount'] ?? null) && filled($mapping['direction'] ?? null);
-                $hasCreditDebit = filled($mapping['credit'] ?? null) || filled($mapping['debit'] ?? null);
+                $hasCreditDebit = filled($mapping['credit'] ?? null) && filled($mapping['debit'] ?? null);
 
                 if (! $hasAmountDirection && ! $hasCreditDebit) {
                     $validator->errors()->add('mapping.amount', 'Map amount and direction columns, or map separate credit/debit columns.');

@@ -140,6 +140,13 @@ it('validates uploads and column mappings through officer-only endpoints', funct
         'current_family' => $family->slug,
         'reconciliation_import' => $import,
     ]), [
+        'mapping' => ['date' => 'Date', 'credit' => 'Credit', 'debit' => null],
+    ])->assertSessionHasErrors('mapping.amount');
+
+    $this->post(route('reconciliation.imports.commit', [
+        'current_family' => $family->slug,
+        'reconciliation_import' => $import,
+    ]), [
         'mapping' => ['date' => 'Date', 'credit' => 'Credit', 'debit' => 'Debit', 'reference' => 'Reference'],
     ])->assertRedirect(route('reconciliation.index', ['current_family' => $family->slug]));
 
@@ -393,6 +400,47 @@ it('requires direct receipt links to be removed before Paystack settlement group
         '2026-07-10',
         $admin,
     ))->toThrow(InvalidArgumentException::class, 'Remove direct receipt reconciliation links');
+});
+
+it('rejects a fully reconciled bank transaction selected for a settlement group', function () {
+    [$family, $admin] = phaseFourFixture();
+    $import = reconciliationImport($family, $admin);
+    $bank = BankTransaction::factory()->create([
+        'family_id' => $family->id,
+        'reconciliation_import_id' => $import->id,
+        'amount' => 1000,
+    ]);
+    $alreadyLinkedBatch = PaymentBatch::factory()->create([
+        'family_id' => $family->id,
+        'recorded_by' => $admin->id,
+        'total_amount' => 1000,
+    ]);
+    app(ReconciliationLinkService::class)->link($bank, PaymentBatch::MORPH_TYPE, $alreadyLinkedBatch->id, 1000, $admin);
+    $settlementBatch = PaymentBatch::factory()->create([
+        'family_id' => $family->id,
+        'recorded_by' => $admin->id,
+        'total_amount' => 1000,
+        'receipt_number' => 2,
+    ]);
+    $transaction = PaystackTransaction::factory()->create([
+        'family_id' => $family->id,
+        'user_id' => $admin->id,
+        'payment_batch_id' => $settlementBatch->id,
+    ]);
+
+    expect(fn () => app(ProviderSettlementService::class)->create(
+        $family->id,
+        [$transaction->id],
+        'EXHAUSTED-BANK',
+        '2026-07-10',
+        $admin,
+        $bank,
+    ))->toThrow(InvalidArgumentException::class, 'already fully reconciled');
+
+    $this->assertDatabaseMissing('provider_settlement_groups', [
+        'family_id' => $family->id,
+        'reference' => 'EXHAUSTED-BANK',
+    ]);
 });
 
 it('blocks ledger postings and reversals in closed reconciliation periods', function () {
