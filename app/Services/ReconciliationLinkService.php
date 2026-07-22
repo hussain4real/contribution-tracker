@@ -10,6 +10,7 @@ use App\Models\BankTransaction;
 use App\Models\Expense;
 use App\Models\FundAdjustment;
 use App\Models\PaymentBatch;
+use App\Models\PaystackTransaction;
 use App\Models\ProviderSettlementGroup;
 use App\Models\ReconciliationLink;
 use App\Models\User;
@@ -122,6 +123,17 @@ class ReconciliationLinkService
 
         if (! $target instanceof Model) {
             throw new InvalidArgumentException('The reconciliation target is unavailable for this family.');
+        }
+
+        if ($target instanceof PaymentBatch) {
+            $paystackTransaction = PaystackTransaction::query()
+                ->where('payment_batch_id', $target->id)
+                ->when($lock, fn ($query) => $query->lockForUpdate())
+                ->first();
+
+            if ($paystackTransaction?->settlementItem()->exists()) {
+                throw new InvalidArgumentException('A settled Paystack receipt must be reconciled through its settlement group.');
+            }
         }
 
         return $target;

@@ -7,9 +7,11 @@ namespace App\Services;
 use App\Enums\BankTransactionDirection;
 use App\Enums\TransactionStatus;
 use App\Models\BankTransaction;
+use App\Models\PaymentBatch;
 use App\Models\PaystackTransaction;
 use App\Models\ProviderSettlementGroup;
 use App\Models\ProviderSettlementItem;
+use App\Models\ReconciliationLink;
 use App\Models\User;
 use App\Support\AuditEventRecorder;
 use Illuminate\Support\Facades\DB;
@@ -55,6 +57,15 @@ class ProviderSettlementService
 
             if ($alreadyGrouped) {
                 throw new InvalidArgumentException('A selected Paystack transaction already belongs to a settlement group.');
+            }
+
+            $directlyReconciled = ReconciliationLink::query()
+                ->where('reconcilable_type', PaymentBatch::MORPH_TYPE)
+                ->whereIn('reconcilable_id', $transactions->pluck('payment_batch_id'))
+                ->exists();
+
+            if ($directlyReconciled) {
+                throw new InvalidArgumentException('Remove direct receipt reconciliation links before creating a settlement group.');
             }
 
             if ($bankTransaction instanceof BankTransaction) {

@@ -18,6 +18,8 @@ use App\Models\Family;
 use App\Models\FundAdjustment;
 use App\Models\PaymentBatch;
 use App\Models\PaystackTransaction;
+use App\Models\ProviderSettlementGroup;
+use App\Models\ProviderSettlementItem;
 use App\Models\ReconciliationImport;
 use App\Models\ReconciliationLink;
 use App\Models\ReconciliationPeriod;
@@ -323,6 +325,74 @@ it('rejects reversed Paystack transactions from settlement groups', function () 
             '2026-07-10',
             $admin,
         ))->toThrow(InvalidArgumentException::class, 'Every Paystack transaction must be allocated in this family.');
+});
+
+it('keeps settled Paystack receipts exclusive to their settlement groups', function () {
+    [$family, $admin] = phaseFourFixture();
+    $import = reconciliationImport($family, $admin);
+    $batch = PaymentBatch::factory()->create([
+        'family_id' => $family->id,
+        'recorded_by' => $admin->id,
+        'total_amount' => 1000,
+    ]);
+    $transaction = PaystackTransaction::factory()->create([
+        'family_id' => $family->id,
+        'user_id' => $admin->id,
+        'payment_batch_id' => $batch->id,
+    ]);
+    $group = ProviderSettlementGroup::factory()->create([
+        'family_id' => $family->id,
+        'created_by' => $admin->id,
+    ]);
+    ProviderSettlementItem::factory()->create([
+        'provider_settlement_group_id' => $group->id,
+        'paystack_transaction_id' => $transaction->id,
+        'payment_batch_id' => $batch->id,
+    ]);
+    $bank = BankTransaction::factory()->create([
+        'family_id' => $family->id,
+        'reconciliation_import_id' => $import->id,
+        'amount' => 1000,
+    ]);
+
+    expect(fn () => app(ReversePaymentBatch::class)->handle($batch, $admin, 'Settled reversal'))
+        ->toThrow(InvalidArgumentException::class, 'settled Paystack receipt')
+        ->and(fn () => app(ReconciliationLinkService::class)->link(
+            $bank,
+            PaymentBatch::MORPH_TYPE,
+            $batch->id,
+            1000,
+            $admin,
+        ))->toThrow(InvalidArgumentException::class, 'settled Paystack receipt');
+});
+
+it('requires direct receipt links to be removed before Paystack settlement grouping', function () {
+    [$family, $admin] = phaseFourFixture();
+    $import = reconciliationImport($family, $admin);
+    $batch = PaymentBatch::factory()->create([
+        'family_id' => $family->id,
+        'recorded_by' => $admin->id,
+        'total_amount' => 1000,
+    ]);
+    $transaction = PaystackTransaction::factory()->create([
+        'family_id' => $family->id,
+        'user_id' => $admin->id,
+        'payment_batch_id' => $batch->id,
+    ]);
+    $bank = BankTransaction::factory()->create([
+        'family_id' => $family->id,
+        'reconciliation_import_id' => $import->id,
+        'amount' => 1000,
+    ]);
+    app(ReconciliationLinkService::class)->link($bank, PaymentBatch::MORPH_TYPE, $batch->id, 1000, $admin);
+
+    expect(fn () => app(ProviderSettlementService::class)->create(
+        $family->id,
+        [$transaction->id],
+        'DIRECT-LINK',
+        '2026-07-10',
+        $admin,
+    ))->toThrow(InvalidArgumentException::class, 'Remove direct receipt reconciliation links');
 });
 
 it('blocks ledger postings and reversals in closed reconciliation periods', function () {
