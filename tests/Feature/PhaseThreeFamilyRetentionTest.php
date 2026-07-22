@@ -11,6 +11,7 @@ use App\Models\PaystackTransaction;
 use App\Models\ProviderSettlementGroup;
 use App\Models\ProviderSettlementItem;
 use App\Models\ReconciliationImport;
+use App\Models\ReconciliationPeriod;
 use App\Models\ReportArtifact;
 use App\Models\User;
 use Illuminate\Support\Facades\Bus;
@@ -62,6 +63,24 @@ it('enforces the restoration deadline and makes archive actions idempotent', fun
 
     $activeFamily = Family::factory()->create();
     expect(app(RestoreFamily::class)->handle($activeFamily)->is($activeFamily))->toBeTrue();
+});
+
+it('prevents deleting families with reconciliation history', function () {
+    $familyWithImport = Family::factory()->create();
+    $admin = User::factory()->admin()->create(['family_id' => $familyWithImport->id]);
+    ReconciliationImport::factory()->create([
+        'family_id' => $familyWithImport->id,
+        'uploaded_by' => $admin->id,
+    ]);
+
+    expect(fn () => $familyWithImport->delete())
+        ->toThrow(LogicException::class, 'financial history');
+
+    $familyWithPeriod = Family::factory()->create();
+    ReconciliationPeriod::factory()->create(['family_id' => $familyWithPeriod->id]);
+
+    expect(fn () => $familyWithPeriod->delete())
+        ->toThrow(LogicException::class, 'financial history');
 });
 
 it('purges expired database records and private artifacts without deleting people', function () {
