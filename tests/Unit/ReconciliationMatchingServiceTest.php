@@ -54,4 +54,34 @@ it('auto links only a unique exact reference and leaves ambiguous exact matches 
         ->and($service->autoMatch($unique, $admin)?->is($uniqueBatch))->toBeTrue()
         ->and($unique->refresh()->status)->toBe(ReconciliationStatus::Matched)
         ->and($unique->links()->count())->toBe(1);
+
+    $exhaustedBatch = PaymentBatch::factory()->create([
+        'family_id' => $family->id,
+        'total_amount' => 2000,
+        'paid_at' => '2026-07-15',
+        'reference' => 'EXHAUSTED-REF',
+        'recorded_by' => $admin->id,
+        'receipt_number' => 4,
+    ]);
+    $matchedBank = BankTransaction::factory()->create([
+        'family_id' => $family->id,
+        'reconciliation_import_id' => $import->id,
+        'amount' => 2000,
+        'transacted_at' => '2026-07-15',
+        'reference' => 'exhausted-ref',
+        'row_fingerprint' => hash('sha256', 'matched-exhausted'),
+    ]);
+    $duplicateBank = BankTransaction::factory()->create([
+        'family_id' => $family->id,
+        'reconciliation_import_id' => $import->id,
+        'amount' => 2000,
+        'transacted_at' => '2026-07-15',
+        'reference' => 'exhausted-ref',
+        'row_fingerprint' => hash('sha256', 'duplicate-exhausted'),
+    ]);
+
+    expect($service->autoMatch($matchedBank, $admin)?->is($exhaustedBatch))->toBeTrue()
+        ->and($service->autoMatch($duplicateBank, $admin))->toBeNull()
+        ->and($duplicateBank->refresh()->status)->toBe(ReconciliationStatus::Suggested)
+        ->and($duplicateBank->links()->count())->toBe(0);
 });

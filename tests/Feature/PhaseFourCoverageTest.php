@@ -75,6 +75,10 @@ it('exercises reconciliation mutation endpoints and their validated requests', f
     ])->assertRedirect()->assertSessionHas('success');
 
     $link = ReconciliationLink::query()->firstOrFail();
+    $this->delete(route('reconciliation.links.destroy', [
+        'current_family' => $family->slug,
+        'reconciliation_link' => $link,
+    ]))->assertRedirect()->assertSessionHas('success');
     $this->patch(route('reconciliation.transactions.status', [
         'current_family' => $family->slug,
         'bank_transaction' => $bank,
@@ -83,10 +87,6 @@ it('exercises reconciliation mutation endpoints and their validated requests', f
         'current_family' => $family->slug,
         'bank_transaction' => $bank,
     ]), ['status' => 'disputed', 'reason' => 'Bank investigation opened'])->assertRedirect();
-    $this->delete(route('reconciliation.links.destroy', [
-        'current_family' => $family->slug,
-        'reconciliation_link' => $link,
-    ]))->assertRedirect()->assertSessionHas('success');
     $this->patch(route('reconciliation.transactions.status', [
         'current_family' => $family->slug,
         'bank_transaction' => $bank,
@@ -199,6 +199,10 @@ it('covers reconciliation domain rejection and closed-period status paths', func
 
     $links->link($bank, PaymentBatch::MORPH_TYPE, $batch->id, 500, $admin);
     expect(fn () => app(ReconciliationStatusService::class)->update($bank, ReconciliationStatus::Unmatched, $admin, null))
+        ->toThrow(InvalidArgumentException::class)
+        ->and(fn () => app(ReconciliationStatusService::class)->update($bank, ReconciliationStatus::Ignored, $admin, 'Ignore linked'))
+        ->toThrow(InvalidArgumentException::class)
+        ->and(fn () => app(ReconciliationStatusService::class)->update($bank, ReconciliationStatus::Disputed, $admin, 'Dispute linked'))
         ->toThrow(InvalidArgumentException::class);
 
     $allocatedTarget = PaymentBatch::factory()->create([
@@ -233,7 +237,12 @@ it('covers reconciliation domain rejection and closed-period status paths', func
         ->toThrow(InvalidArgumentException::class)
         ->and(fn () => $period->delete())->toThrow(LogicException::class)
         ->and(fn () => app(ReconciliationPeriodService::class)->close($period, $admin))->toThrow(InvalidArgumentException::class)
-        ->and(fn () => app(ReconciliationPeriodService::class)->reopen($period, $admin, ''))->toThrow(InvalidArgumentException::class);
+        ->and(fn () => app(ReconciliationPeriodService::class)->reopen($period, $admin, ''))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => app(ReconciliationPeriodService::class)->create(
+            $family,
+            $period->starts_at->toDateString(),
+            $period->ends_at->toDateString(),
+        ))->toThrow(InvalidArgumentException::class);
 
     $open = ReconciliationPeriod::factory()->create([
         'family_id' => $family->id,

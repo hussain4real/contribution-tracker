@@ -32,8 +32,8 @@ class ReconciliationStatusService
                 throw new InvalidArgumentException('This transaction belongs to a closed reconciliation period.');
             }
 
-            if ($status === ReconciliationStatus::Unmatched && $locked->links()->exists()) {
-                throw new InvalidArgumentException('Remove existing links before marking this transaction unmatched.');
+            if ($status !== ReconciliationStatus::Matched && $locked->links()->exists()) {
+                throw new InvalidArgumentException('Remove existing links before changing this transaction status.');
             }
 
             $before = ['status' => $locked->status->value, 'ignored_reason' => $locked->ignored_reason, 'disputed_reason' => $locked->disputed_reason];

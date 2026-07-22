@@ -110,13 +110,12 @@ class ReconciliationPeriodService
     {
         $overlaps = ReconciliationPeriod::query()
             ->where('family_id', $family->id)
-            ->where('status', ReconciliationPeriodStatus::Open)
             ->whereDate('starts_at', '<=', $endsAt)
             ->whereDate('ends_at', '>=', $startsAt)
             ->exists();
 
         if ($overlaps) {
-            throw new InvalidArgumentException('An open reconciliation period already overlaps these dates.');
+            throw new InvalidArgumentException('A reconciliation period already overlaps these dates.');
         }
 
         return ReconciliationPeriod::query()->create([

@@ -60,11 +60,13 @@ class ReconciliationMatchingService
                 ->where('family_id', $transaction->family_id)
                 ->where('total_amount', $transaction->amount)
                 ->whereRaw('LOWER(reference) = ?', [$reference])
+                ->whereDoesntHave('reconciliationLinks')
                 ->get();
             $settlements = ProviderSettlementGroup::query()
                 ->where('family_id', $transaction->family_id)
                 ->where('net_amount', $transaction->amount)
                 ->whereRaw('LOWER(reference) = ?', [$reference])
+                ->whereDoesntHave('reconciliationLinks')
                 ->get();
 
             return [...$batches->all(), ...$settlements->all()];
