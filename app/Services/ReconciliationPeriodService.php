@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Enums\BankTransactionDirection;
 use App\Enums\ReconciliationPeriodStatus;
+use App\Enums\ReconciliationStatus;
 use App\Models\BankTransaction;
 use App\Models\Family;
 use App\Models\ReconciliationPeriod;
@@ -27,8 +28,11 @@ class ReconciliationPeriodService
         return DB::transaction(function () use ($period, $actor): ReconciliationPeriod {
             $locked = ReconciliationPeriod::query()->lockForUpdate()->findOrFail($period->id);
 
-            if ($locked->status !== ReconciliationPeriodStatus::Open) {
-                throw new InvalidArgumentException('Only an open reconciliation period can be closed.');
+            if (! in_array($locked->status, [
+                ReconciliationPeriodStatus::Open,
+                ReconciliationPeriodStatus::Reopened,
+            ], true)) {
+                throw new InvalidArgumentException('Only an open or reopened reconciliation period can be closed.');
             }
 
             $familyId = $locked->family_id;
@@ -45,11 +49,13 @@ class ReconciliationPeriodService
             $bankCredits = (int) BankTransaction::query()
                 ->where('family_id', $familyId)
                 ->where('direction', BankTransactionDirection::Credit)
+                ->where('status', '!=', ReconciliationStatus::Ignored)
                 ->whereBetween('transacted_at', [$startsAt, $endsAt])
                 ->sum('amount');
             $bankDebits = (int) BankTransaction::query()
                 ->where('family_id', $familyId)
                 ->where('direction', BankTransactionDirection::Debit)
+                ->where('status', '!=', ReconciliationStatus::Ignored)
                 ->whereBetween('transacted_at', [$startsAt, $endsAt])
                 ->sum('amount');
             $bankNet = $bankCredits - $bankDebits;

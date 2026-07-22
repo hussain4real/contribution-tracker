@@ -832,7 +832,11 @@ function paginationLabel(label: string): string {
                                     >
                                 </div>
                                 <Button
-                                    v-if="period.status === 'open'"
+                                    v-if="
+                                        ['open', 'reopened'].includes(
+                                            period.status,
+                                        )
+                                    "
                                     size="sm"
                                     @click="closePeriod(period)"
                                     >Close and snapshot</Button

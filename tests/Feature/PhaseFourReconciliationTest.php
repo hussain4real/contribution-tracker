@@ -261,6 +261,16 @@ it('closes reproducible period snapshots and requires an audited admin reason to
         'family_id' => $family->id, 'reconciliation_import_id' => $import->id,
         'transacted_at' => '2026-07-12', 'amount' => 1000,
     ]);
+    BankTransaction::factory()->create([
+        'family_id' => $family->id, 'reconciliation_import_id' => $import->id,
+        'transacted_at' => '2026-07-13', 'amount' => 900,
+        'direction' => BankTransactionDirection::Credit, 'status' => ReconciliationStatus::Ignored,
+    ]);
+    BankTransaction::factory()->create([
+        'family_id' => $family->id, 'reconciliation_import_id' => $import->id,
+        'transacted_at' => '2026-07-14', 'amount' => 400,
+        'direction' => BankTransactionDirection::Debit, 'status' => ReconciliationStatus::Ignored,
+    ]);
     $batch = PaymentBatch::factory()->create([
         'family_id' => $family->id, 'total_amount' => 1000, 'paid_at' => '2026-07-12', 'recorded_by' => $admin->id,
     ]);
@@ -293,6 +303,10 @@ it('closes reproducible period snapshots and requires an audited admin reason to
     expect($reopened->status)->toBe(ReconciliationPeriodStatus::Reopened)
         ->and($reopened->only(array_keys($snapshot)))->toBe($snapshot)
         ->and(AuditEvent::query()->where('action', 'reconciliation.period.reopened')->exists())->toBeTrue();
+
+    $reclosed = app(ReconciliationPeriodService::class)->close($reopened, $secretary);
+    expect($reclosed->status)->toBe(ReconciliationPeriodStatus::Closed)
+        ->and($reclosed->only(array_keys($snapshot)))->toBe($snapshot);
 });
 
 it('scopes reconciliation mutations to the family in the route', function () {
