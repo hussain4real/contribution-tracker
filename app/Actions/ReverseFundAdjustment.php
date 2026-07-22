@@ -34,7 +34,11 @@ class ReverseFundAdjustment
                 throw new InvalidArgumentException('A reversal reason is required.');
             }
 
-            $this->periodGuard->ensureLedgerDateIsWritable($lockedAdjustment->family_id, $lockedAdjustment->recorded_at);
+            $this->periodGuard->ensureDateIsWritable($lockedAdjustment->family_id, $lockedAdjustment->recorded_at);
+
+            if ($lockedAdjustment->reconciliationLinks()->exists()) {
+                throw new InvalidArgumentException('Remove reconciliation links before reversing this fund adjustment.');
+            }
 
             if ($replacement instanceof FundAdjustment && $replacement->family_id !== $lockedAdjustment->family_id) {
                 throw new InvalidArgumentException('A replacement adjustment must belong to the same family.');

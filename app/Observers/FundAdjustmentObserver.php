@@ -17,7 +17,7 @@ class FundAdjustmentObserver
 
     public function creating(FundAdjustment $adjustment): void
     {
-        $this->periodGuard->ensureLedgerDateIsWritable($adjustment->family_id, $adjustment->recorded_at);
+        $this->periodGuard->ensureDateIsWritable($adjustment->family_id, $adjustment->recorded_at);
     }
 
     public function created(FundAdjustment $adjustment): void

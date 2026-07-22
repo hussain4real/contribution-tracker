@@ -181,6 +181,47 @@ it('supports one-to-one many-to-one and split links without over-allocation', fu
         ->toThrow(InvalidArgumentException::class);
 });
 
+it('requires reconciled ledger entries to be unlinked before reversal', function () {
+    [$family, $admin] = phaseFourFixture();
+    $import = reconciliationImport($family, $admin);
+    $batch = PaymentBatch::factory()->create([
+        'family_id' => $family->id,
+        'recorded_by' => $admin->id,
+        'total_amount' => 1000,
+    ]);
+    $expense = Expense::factory()->recordedBy($admin)->create([
+        'family_id' => $family->id,
+        'amount' => 600,
+    ]);
+    $adjustment = FundAdjustment::factory()->recordedBy($admin)->create([
+        'family_id' => $family->id,
+        'amount' => -400,
+    ]);
+    $credit = BankTransaction::factory()->create([
+        'family_id' => $family->id,
+        'reconciliation_import_id' => $import->id,
+        'amount' => 1000,
+    ]);
+    $debit = BankTransaction::factory()->create([
+        'family_id' => $family->id,
+        'reconciliation_import_id' => $import->id,
+        'direction' => BankTransactionDirection::Debit,
+        'amount' => 1000,
+        'row_fingerprint' => hash('sha256', 'reversal-debit'),
+    ]);
+    $links = app(ReconciliationLinkService::class);
+    $links->link($credit, PaymentBatch::MORPH_TYPE, $batch->id, 1000, $admin);
+    $links->link($debit, Expense::MORPH_TYPE, $expense->id, 600, $admin);
+    $links->link($debit, FundAdjustment::MORPH_TYPE, $adjustment->id, 400, $admin);
+
+    expect(fn () => app(ReversePaymentBatch::class)->handle($batch, $admin, 'Linked reversal'))
+        ->toThrow(InvalidArgumentException::class, 'Remove reconciliation links')
+        ->and(fn () => app(ReverseExpense::class)->handle($expense, $admin, 'Linked reversal'))
+        ->toThrow(InvalidArgumentException::class, 'Remove reconciliation links')
+        ->and(fn () => app(ReverseFundAdjustment::class)->handle($adjustment, $admin, 'Linked reversal'))
+        ->toThrow(InvalidArgumentException::class, 'Remove reconciliation links');
+});
+
 it('matches debits to expenses and negative adjustments while enforcing direction and family isolation', function () {
     [$family, $admin] = phaseFourFixture();
     $otherFamily = Family::factory()->create();

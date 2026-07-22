@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Enums\BankTransactionDirection;
-use App\Enums\ReconciliationPeriodStatus;
 use App\Enums\ReconciliationStatus;
 use App\Models\BankTransaction;
 use App\Models\Expense;
@@ -13,7 +12,6 @@ use App\Models\FundAdjustment;
 use App\Models\PaymentBatch;
 use App\Models\ProviderSettlementGroup;
 use App\Models\ReconciliationLink;
-use App\Models\ReconciliationPeriod;
 use App\Models\User;
 use App\Support\AuditEventRecorder;
 use Illuminate\Database\Eloquent\Model;
@@ -30,7 +28,10 @@ class ReconciliationLinkService
         ProviderSettlementGroup::MORPH_TYPE => ProviderSettlementGroup::class,
     ];
 
-    public function __construct(private readonly AuditEventRecorder $audit) {}
+    public function __construct(
+        private readonly AuditEventRecorder $audit,
+        private readonly ReconciliationPeriodGuard $periodGuard,
+    ) {}
 
     public function link(
         BankTransaction $bankTransaction,
@@ -152,16 +153,7 @@ class ReconciliationLinkService
 
     private function ensurePeriodIsOpen(BankTransaction $transaction): void
     {
-        $closed = ReconciliationPeriod::query()
-            ->where('family_id', $transaction->family_id)
-            ->where('status', ReconciliationPeriodStatus::Closed)
-            ->whereDate('starts_at', '<=', $transaction->transacted_at)
-            ->whereDate('ends_at', '>=', $transaction->transacted_at)
-            ->exists();
-
-        if ($closed) {
-            throw new InvalidArgumentException('This transaction belongs to a closed reconciliation period.');
-        }
+        $this->periodGuard->ensureDateIsWritable($transaction->family_id, $transaction->transacted_at);
     }
 
     private function refreshStatus(BankTransaction $transaction): void

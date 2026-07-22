@@ -17,7 +17,7 @@ class PaymentBatchObserver
 
     public function creating(PaymentBatch $batch): void
     {
-        $this->periodGuard->ensureLedgerDateIsWritable($batch->family_id, $batch->paid_at);
+        $this->periodGuard->ensureDateIsWritable($batch->family_id, $batch->paid_at);
     }
 
     public function created(PaymentBatch $batch): void

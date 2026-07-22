@@ -17,7 +17,7 @@ class ExpenseObserver
 
     public function creating(Expense $expense): void
     {
-        $this->periodGuard->ensureLedgerDateIsWritable($expense->family_id, $expense->spent_at);
+        $this->periodGuard->ensureDateIsWritable($expense->family_id, $expense->spent_at);
     }
 
     public function created(Expense $expense): void

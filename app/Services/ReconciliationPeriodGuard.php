@@ -13,7 +13,7 @@ use InvalidArgumentException;
 
 class ReconciliationPeriodGuard
 {
-    public function ensureLedgerDateIsWritable(int $familyId, DateTimeInterface|string $date): void
+    public function ensureDateIsWritable(int $familyId, DateTimeInterface|string $date): void
     {
         $ledgerDate = Carbon::parse($date)->toDateString();
         Family::query()->lockForUpdate()->findOrFail($familyId);
@@ -25,7 +25,7 @@ class ReconciliationPeriodGuard
             ->exists();
 
         if ($isClosed) {
-            throw new InvalidArgumentException('This ledger date belongs to a closed reconciliation period. Reopen the period before changing its ledger.');
+            throw new InvalidArgumentException('This date belongs to a closed reconciliation period. Reopen the period before making changes.');
         }
     }
 }

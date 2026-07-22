@@ -30,7 +30,11 @@ class ReverseExpense
                 throw new InvalidArgumentException('A reversal reason is required.');
             }
 
-            $this->periodGuard->ensureLedgerDateIsWritable($lockedExpense->family_id, $lockedExpense->spent_at);
+            $this->periodGuard->ensureDateIsWritable($lockedExpense->family_id, $lockedExpense->spent_at);
+
+            if ($lockedExpense->reconciliationLinks()->exists()) {
+                throw new InvalidArgumentException('Remove reconciliation links before reversing this expense.');
+            }
 
             if ($replacement instanceof Expense && $replacement->family_id !== $lockedExpense->family_id) {
                 throw new InvalidArgumentException('A replacement expense must belong to the same family.');
