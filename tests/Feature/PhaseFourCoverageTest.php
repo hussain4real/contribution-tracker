@@ -308,7 +308,14 @@ it('marks failed imports and covers delimiter duplicate and normalization errors
         'date' => 'Date', 'credit' => 'Credit', 'debit' => 'Debit',
         'reference' => 'Reference', 'amount' => null, 'direction' => null,
     ]);
-    expect($result)->toBe(['rows' => 2, 'imported' => 1, 'duplicates' => 1]);
+    expect($result)->toBe(['rows' => 2, 'imported' => 2, 'duplicates' => 0]);
+
+    $overlap = UploadedFile::fake()->createWithContent('overlap.csv', "Date;Credit;Debit;Reference\n2026-10-01;1000;;REF-S\n2026-10-02;2000;;REF-T\n");
+    $overlapPreview = $service->preview($family, $admin, $overlap);
+    expect($service->import($overlapPreview, $admin, [
+        'date' => 'Date', 'credit' => 'Credit', 'debit' => 'Debit',
+        'reference' => 'Reference', 'amount' => null, 'direction' => null,
+    ]))->toBe(['rows' => 2, 'imported' => 1, 'duplicates' => 1]);
 
     foreach ([
         ['Date,Credit,Debit', '2026-10-01,10,20'],
@@ -349,18 +356,24 @@ it('covers provider settlement and workspace edge paths', function () {
     expect(fn () => $provider->create($family->id, [], 'NONE', '2026-10-01', $admin))->toThrow(InvalidArgumentException::class)
         ->and(fn () => $provider->create($family->id, [999999], 'MISSING', '2026-10-01', $admin))->toThrow(InvalidArgumentException::class);
 
-    $batch = PaymentBatch::factory()->create(['family_id' => $family->id, 'recorded_by' => $admin->id]);
+    $batch = PaymentBatch::factory()->create([
+        'family_id' => $family->id, 'recorded_by' => $admin->id, 'total_amount' => 4000,
+    ]);
     $transaction = PaystackTransaction::factory()->create([
         'family_id' => $family->id, 'user_id' => $admin->id, 'payment_batch_id' => $batch->id,
-        'gross_amount_kobo' => 100001,
+        'amount' => 4000, 'gross_amount_kobo' => 416244,
+        'actual_fee_kobo' => 16244, 'settled_amount_kobo' => 400000,
     ]);
     $debit = BankTransaction::factory()->create([
         'family_id' => $family->id, 'reconciliation_import_id' => $import->id,
         'direction' => BankTransactionDirection::Debit,
         'reference' => 'DEBIT-REF',
     ]);
-    expect(fn () => $provider->create($family->id, [$transaction->id], 'DEBIT', '2026-10-01', $admin, $debit))->toThrow(InvalidArgumentException::class)
-        ->and(fn () => $provider->create($family->id, [$transaction->id], 'KOBO', '2026-10-01', $admin))->toThrow(InvalidArgumentException::class);
+    expect(fn () => $provider->create($family->id, [$transaction->id], 'DEBIT', '2026-10-01', $admin, $debit))->toThrow(InvalidArgumentException::class);
+    $koboSettlement = $provider->create($family->id, [$transaction->id], 'KOBO', '2026-10-01', $admin);
+    expect($koboSettlement->gross_amount)->toBe(4162)
+        ->and($koboSettlement->fee_amount)->toBe(162)
+        ->and($koboSettlement->net_amount)->toBe(4000);
 
     Expense::factory()->recordedBy($admin)->create(['family_id' => $family->id, 'description' => 'Workspace expense']);
     FundAdjustment::factory()->recordedBy($admin)->create(['family_id' => $family->id, 'description' => 'Workspace adjustment']);

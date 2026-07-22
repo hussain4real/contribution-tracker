@@ -109,9 +109,10 @@ class BankStatementImportService
         $rows = 0;
         $imported = 0;
         $duplicates = 0;
+        $fingerprintOccurrences = [];
 
         try {
-            DB::transaction(function () use ($stream, $import, $actor, $mapping, &$rows, &$imported, &$duplicates): void {
+            DB::transaction(function () use ($stream, $import, $actor, $mapping, &$rows, &$imported, &$duplicates, &$fingerprintOccurrences): void {
                 $headers = $this->readCsvRow($stream, $import->delimiter);
 
                 if ($headers === null) {
@@ -131,6 +132,10 @@ class BankStatementImportService
                     $rows++;
                     $raw = $this->combineRow($headers, $values);
                     $normalized = $this->normalizeRow($import->family_id, $raw, $mapping);
+                    $baseFingerprint = $normalized['row_fingerprint'];
+                    $occurrence = ($fingerprintOccurrences[$baseFingerprint] ?? 0) + 1;
+                    $fingerprintOccurrences[$baseFingerprint] = $occurrence;
+                    $normalized['row_fingerprint'] = hash('sha256', "{$baseFingerprint}|{$occurrence}");
                     $transaction = BankTransaction::query()->firstOrCreate(
                         [
                             'family_id' => $import->family_id,

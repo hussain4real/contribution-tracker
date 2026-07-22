@@ -62,16 +62,16 @@ class ProviderSettlementService
             }
 
             $items = $transactions->map(function (PaystackTransaction $transaction): array {
-                $gross = $this->fromKobo($transaction->expectedGrossAmountKobo());
-                $fee = $this->fromKobo($transaction->actual_fee_kobo ?? $transaction->estimated_fee_kobo ?? 0);
-                $net = $this->fromKobo($transaction->settled_amount_kobo ?? max(0, ($gross * 100) - ($fee * 100)));
+                $grossKobo = $transaction->expectedGrossAmountKobo();
+                $feeKobo = $transaction->actual_fee_kobo ?? $transaction->estimated_fee_kobo ?? 0;
+                $netKobo = $transaction->settled_amount_kobo ?? max(0, $grossKobo - $feeKobo);
 
                 return [
                     'paystack_transaction_id' => $transaction->id,
                     'payment_batch_id' => (int) $transaction->payment_batch_id,
-                    'gross_amount' => $gross,
-                    'fee_amount' => $fee,
-                    'net_amount' => $net,
+                    'gross_amount' => $this->roundedNairaAmount($grossKobo),
+                    'fee_amount' => $this->roundedNairaAmount($feeKobo),
+                    'net_amount' => $this->roundedNairaAmount($netKobo),
                 ];
             });
             $gross = 0;
@@ -126,12 +126,8 @@ class ProviderSettlementService
         }, attempts: 3);
     }
 
-    private function fromKobo(int $amount): int
+    private function roundedNairaAmount(int $amount): int
     {
-        if ($amount % 100 !== 0) {
-            throw new InvalidArgumentException('Paystack settlement values must resolve to whole Naira amounts.');
-        }
-
-        return intdiv($amount, 100);
+        return intdiv($amount + 50, 100);
     }
 }
