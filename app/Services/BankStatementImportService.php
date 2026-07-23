@@ -50,6 +50,21 @@ class BankStatementImportService
             ->first();
 
         if ($existing instanceof ReconciliationImport) {
+            if ($existing->status === ReconciliationImportStatus::Failed) {
+                $existing->forceFill([
+                    'status' => ReconciliationImportStatus::Previewed,
+                    'mapping' => null,
+                    'row_count' => 0,
+                    'imported_count' => 0,
+                    'duplicate_count' => 0,
+                    'imported_at' => null,
+                    'failed_at' => null,
+                    'error' => null,
+                ])->save();
+
+                $this->audit->record($existing, 'reconciliation.import.retried', $family->id, $actor->id);
+            }
+
             return $existing;
         }
 

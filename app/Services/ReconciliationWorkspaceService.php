@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Enums\BankTransactionDirection;
 use App\Enums\ReconciliationStatus;
 use App\Enums\TransactionStatus;
 use App\Models\BankTransaction;
@@ -122,6 +123,23 @@ class ReconciliationWorkspaceService
                 'difference' => $group->difference,
             ]),
             'targets' => $this->targets($family),
+            'settlement_bank_credits' => BankTransaction::query()
+                ->where('family_id', $family->id)
+                ->where('direction', BankTransactionDirection::Credit)
+                ->withSum('links as reconciled_amount', 'amount')
+                ->latest('transacted_at')
+                ->latest('id')
+                ->get()
+                ->map(fn (BankTransaction $transaction): array => [
+                    'id' => $transaction->id,
+                    'date' => $transaction->transacted_at->toDateString(),
+                    'reference' => $transaction->reference,
+                    'description' => $transaction->description,
+                    'remaining_amount' => max(0, $transaction->amount - $this->numericAttribute($transaction, 'reconciled_amount')),
+                ])
+                ->filter(fn (array $transaction): bool => $transaction['remaining_amount'] > 0)
+                ->values()
+                ->all(),
             'paystack_transactions' => PaystackTransaction::query()
                 ->where('family_id', $family->id)
                 ->whereNotNull('payment_batch_id')

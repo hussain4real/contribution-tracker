@@ -7,6 +7,7 @@ use App\Enums\PaymentSource;
 use App\Enums\ReconciliationImportStatus;
 use App\Enums\ReconciliationPeriodStatus;
 use App\Enums\ReconciliationStatus;
+use App\Models\AuditEvent;
 use App\Models\BankTransaction;
 use App\Models\Expense;
 use App\Models\Family;
@@ -27,6 +28,7 @@ use App\Services\ReconciliationPeriodService;
 use App\Services\ReconciliationStatusService;
 use App\Services\ReconciliationWorkspaceService;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Storage;
 use Mockery\MockInterface;
 
@@ -359,6 +361,26 @@ it('marks failed imports and covers delimiter duplicate and normalization errors
         expect($failed->refresh()->status->value)->toBe('failed');
     }
 
+    $retryContent = "Date,Amount,Direction\n2026-10-01,10,credit\n";
+    $retryImport = ReconciliationImport::factory()->create([
+        'family_id' => $family->id,
+        'uploaded_by' => $admin->id,
+        'path' => "reconciliation/{$family->id}/retry.csv",
+        'file_fingerprint' => hash('sha256', $retryContent),
+        'status' => ReconciliationImportStatus::Failed,
+        'error' => 'Correct the mapping.',
+    ]);
+    Storage::disk('local')->put($retryImport->path, $retryContent);
+    $retried = $service->preview(
+        $family,
+        $admin,
+        UploadedFile::fake()->createWithContent('retry.csv', $retryContent),
+    );
+    expect($retried->is($retryImport))->toBeTrue()
+        ->and($retried->status)->toBe(ReconciliationImportStatus::Previewed)
+        ->and($retried->error)->toBeNull()
+        ->and(AuditEvent::query()->where('action', 'reconciliation.import.retried')->exists())->toBeTrue();
+
     $alreadyFailed = ReconciliationImport::factory()->create([
         'family_id' => $family->id,
         'uploaded_by' => $admin->id,
@@ -407,9 +429,16 @@ it('covers provider settlement and workspace edge paths', function () {
 
     Expense::factory()->recordedBy($admin)->create(['family_id' => $family->id, 'description' => 'Workspace expense']);
     FundAdjustment::factory()->recordedBy($admin)->create(['family_id' => $family->id, 'description' => 'Workspace adjustment']);
+    $settlementCredit = BankTransaction::factory()->create([
+        'family_id' => $family->id,
+        'reconciliation_import_id' => $import->id,
+        'direction' => BankTransactionDirection::Credit,
+        'reference' => 'OFF-PAGE-CREDIT',
+    ]);
     $workspace = app(ReconciliationWorkspaceService::class);
     $data = $workspace->data($family, $admin, ['status' => 'unmatched', 'direction' => 'debit', 'search' => 'missing']);
-    expect($data['preview_import'])->toBeNull();
+    expect($data['preview_import'])->toBeNull()
+        ->and(collect(Arr::wrap($data['settlement_bank_credits']))->pluck('id'))->toContain($settlementCredit->id);
 
     $label = new ReflectionMethod($workspace, 'targetLabel');
     $numeric = new ReflectionMethod($workspace, 'numericAttribute');

@@ -135,6 +135,13 @@ interface Props {
         adjustments: TargetItem[];
         settlements: TargetItem[];
     };
+    settlement_bank_credits: Array<{
+        id: number;
+        date: string;
+        reference: string | null;
+        description: string | null;
+        remaining_amount: number;
+    }>;
     paystack_transactions: Array<{
         id: number;
         reference: string;
@@ -201,9 +208,16 @@ function linkTarget(
         : selectedTargets[transaction.id];
     if (!selected) return;
     const [type, id] = selected.split(':');
+    const target = allTargets.value.find(
+        (candidate) => candidate.type === type && candidate.id === Number(id),
+    );
+    const defaultAmount = Math.min(
+        transaction.remaining_amount,
+        target?.remaining ?? transaction.remaining_amount,
+    );
     const amount = suggestion
         ? Math.min(transaction.remaining_amount, suggestion.amount)
-        : selectedAmounts[transaction.id] || transaction.remaining_amount;
+        : selectedAmounts[transaction.id] || defaultAmount;
     linking[transaction.id] = true;
     router.post(
         ReconciliationLinkController.store({ bank_transaction: transaction.id })
@@ -721,6 +735,7 @@ function paginationLabel(label: string): string {
                             <div class="mt-3 grid gap-2">
                                 <select
                                     v-model="selectedTargets[transaction.id]"
+                                    :data-test="`link-target-${transaction.id}`"
                                     class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                                 >
                                     <option value="">
@@ -741,11 +756,13 @@ function paginationLabel(label: string): string {
                                     v-model.number="
                                         selectedAmounts[transaction.id]
                                     "
+                                    :data-test="`link-amount-${transaction.id}`"
                                     type="number"
                                     min="1"
                                     :max="transaction.remaining_amount"
                                     :placeholder="`Amount up to ${formatCurrency(transaction.remaining_amount)}`"
                                 /><Button
+                                    :data-test="`link-submit-${transaction.id}`"
                                     size="sm"
                                     :disabled="
                                         !selectedTargets[transaction.id] ||
@@ -965,11 +982,7 @@ function paginationLabel(label: string): string {
                                     Record difference without linking
                                 </option>
                                 <option
-                                    v-for="transaction in transactions.data.filter(
-                                        (item) =>
-                                            item.direction === 'credit' &&
-                                            item.remaining_amount > 0,
-                                    )"
+                                    v-for="transaction in settlement_bank_credits"
                                     :key="transaction.id"
                                     :value="transaction.id"
                                 >
