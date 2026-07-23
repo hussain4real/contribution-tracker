@@ -7,12 +7,15 @@ namespace App\Actions;
 use App\Models\FinancialReversal;
 use App\Models\FundAdjustment;
 use App\Models\User;
+use App\Services\ReconciliationPeriodGuard;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 class ReverseFundAdjustment
 {
+    public function __construct(private readonly ReconciliationPeriodGuard $periodGuard) {}
+
     public function handle(
         FundAdjustment $adjustment,
         User $actor,
@@ -29,6 +32,12 @@ class ReverseFundAdjustment
 
             if (trim($reason) === '') {
                 throw new InvalidArgumentException('A reversal reason is required.');
+            }
+
+            $this->periodGuard->ensureDateIsWritable($lockedAdjustment->family_id, $lockedAdjustment->recorded_at);
+
+            if ($lockedAdjustment->reconciliationLinks()->exists()) {
+                throw new InvalidArgumentException('Remove reconciliation links before reversing this fund adjustment.');
             }
 
             if ($replacement instanceof FundAdjustment && $replacement->family_id !== $lockedAdjustment->family_id) {

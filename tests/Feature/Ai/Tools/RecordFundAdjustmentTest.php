@@ -68,6 +68,40 @@ test('financial secretary can record fund adjustments', function () {
     ]);
 });
 
+test('admin can record a negative fund adjustment', function () {
+    $tool = new RecordFundAdjustment($this->admin);
+
+    $preview = decodeToolResult($tool->handle(new Request([
+        'amount' => -750,
+        'description' => 'Bank charge correction',
+        'recorded_at' => '2026-04-01',
+    ])));
+    $result = decodeToolResult($tool->handle(new Request([
+        'amount' => -750,
+        'description' => 'Bank charge correction',
+        'recorded_at' => '2026-04-01',
+        'confirmed' => true,
+    ])));
+
+    $details = $preview['details'];
+
+    expect($details)->toBeArray();
+
+    if (! is_array($details)) {
+        throw new RuntimeException('The adjustment preview details must be an array.');
+    }
+
+    expect($preview['status'])->toBe('confirmation_required')
+        ->and($details['amount'])->toBe(-750)
+        ->and($result['status'])->toBe('success');
+
+    $this->assertDatabaseHas('fund_adjustments', [
+        'family_id' => $this->family->id,
+        'amount' => -750,
+        'description' => 'Bank charge correction',
+    ]);
+});
+
 test('member cannot record fund adjustments', function () {
     $tool = new RecordFundAdjustment($this->member);
 
@@ -93,6 +127,12 @@ test('fund adjustment validates required fields', function () {
         'amount' => 5000,
     ])));
 
+    $zeroAmount = decodeToolResult($tool->handle(new Request([
+        'amount' => 0,
+        'description' => 'No-op correction',
+    ])));
+
     expect($noAmount['error'])->toContain('Amount is required')
-        ->and($noDescription['error'])->toContain('description is required');
+        ->and($noDescription['error'])->toContain('description is required')
+        ->and($zeroAmount['error'])->toContain('non-zero');
 });

@@ -28,7 +28,7 @@ class StoreFundAdjustmentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'amount' => ['required', 'integer', 'min:1'],
+            'amount' => ['required', 'integer', 'not_in:0'],
             'description' => ['required', 'string', 'max:1000'],
             'recorded_at' => ['required', 'date'],
         ];
@@ -44,7 +44,7 @@ class StoreFundAdjustmentRequest extends FormRequest
         return [
             'amount.required' => 'Please enter the adjustment amount.',
             'amount.integer' => 'The amount must be a whole number.',
-            'amount.min' => 'The amount must be at least 1.',
+            'amount.not_in' => 'The amount cannot be zero.',
             'description.required' => 'Please enter a description for the adjustment.',
             'description.max' => 'The description must not exceed 1000 characters.',
             'recorded_at.required' => 'Please enter the date.',
