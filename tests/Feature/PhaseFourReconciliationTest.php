@@ -33,6 +33,7 @@ use App\Services\ReconciliationPeriodService;
 use App\Services\ReconciliationWorkspaceService;
 use App\Support\PlatformPlanCatalog;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -412,6 +413,7 @@ it('keeps settled Paystack receipts exclusive to their settlement groups', funct
         'reference' => 'SETTLED-DIRECT',
     ]);
     $matching = app(ReconciliationMatchingService::class);
+    $workspace = app(ReconciliationWorkspaceService::class)->data($family, $admin, []);
 
     expect(fn () => app(ReversePaymentBatch::class)->handle($batch, $admin, 'Settled reversal'))
         ->toThrow(InvalidArgumentException::class, 'settled Paystack receipt')
@@ -423,7 +425,9 @@ it('keeps settled Paystack receipts exclusive to their settlement groups', funct
             $admin,
         ))->toThrow(InvalidArgumentException::class, 'settled Paystack receipt')
         ->and($matching->exactCandidates($bank))->toBeEmpty()
-        ->and($matching->suggestions($bank)->pluck('id'))->not->toContain($batch->id);
+        ->and($matching->suggestions($bank)->pluck('id'))->not->toContain($batch->id)
+        ->and(collect(Arr::wrap(Arr::get($workspace, 'targets.payments')))->pluck('id'))->not->toContain($batch->id)
+        ->and(collect(Arr::wrap(Arr::get($workspace, 'targets.settlements')))->pluck('id'))->toContain($group->id);
 });
 
 it('requires direct receipt links to be removed before Paystack settlement grouping', function () {

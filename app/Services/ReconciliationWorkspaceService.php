@@ -184,6 +184,7 @@ class ReconciliationWorkspaceService
     private function targets(Family $family): array
     {
         $payments = array_values(PaymentBatch::query()->effective()->where('family_id', $family->id)
+            ->whereDoesntHave('paystackTransaction.settlementItem')
             ->withSum('reconciliationLinks as reconciled_amount', 'amount')->latest('paid_at')->limit(100)->get()
             ->map(fn (PaymentBatch $batch): array => [
                 'type' => PaymentBatch::MORPH_TYPE, 'id' => $batch->id,
