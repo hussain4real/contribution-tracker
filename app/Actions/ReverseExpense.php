@@ -7,12 +7,15 @@ namespace App\Actions;
 use App\Models\Expense;
 use App\Models\FinancialReversal;
 use App\Models\User;
+use App\Services\ReconciliationPeriodGuard;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 class ReverseExpense
 {
+    public function __construct(private readonly ReconciliationPeriodGuard $periodGuard) {}
+
     public function handle(Expense $expense, User $actor, string $reason, ?Expense $replacement = null): FinancialReversal
     {
         return DB::transaction(function () use ($expense, $actor, $reason, $replacement): FinancialReversal {
@@ -25,6 +28,12 @@ class ReverseExpense
 
             if (trim($reason) === '') {
                 throw new InvalidArgumentException('A reversal reason is required.');
+            }
+
+            $this->periodGuard->ensureDateIsWritable($lockedExpense->family_id, $lockedExpense->spent_at);
+
+            if ($lockedExpense->reconciliationLinks()->exists()) {
+                throw new InvalidArgumentException('Remove reconciliation links before reversing this expense.');
             }
 
             if ($replacement instanceof Expense && $replacement->family_id !== $lockedExpense->family_id) {

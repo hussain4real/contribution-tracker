@@ -17,6 +17,7 @@ use App\Models\FinancialReversal;
 use App\Models\FundAdjustment;
 use App\Models\PaymentBatch;
 use App\Models\PaystackTransaction;
+use App\Models\ProviderSettlementGroup;
 use App\Models\User;
 use App\Observers\ExpenseObserver;
 use App\Observers\FamilyMembershipCategoryAssignmentObserver;
@@ -25,6 +26,7 @@ use App\Observers\FinancialReversalObserver;
 use App\Observers\FundAdjustmentObserver;
 use App\Observers\PaymentBatchObserver;
 use App\Observers\PaystackTransactionObserver;
+use App\Policies\ReconciliationPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Database\Eloquent\Model;
@@ -75,6 +77,7 @@ class AppServiceProvider extends ServiceProvider
             'fund_adjustment' => FundAdjustment::class,
             'payment_batch' => PaymentBatch::class,
             'paystack_transaction' => PaystackTransaction::class,
+            'provider_settlement_group' => ProviderSettlementGroup::class,
         ]);
 
         FamilyMembership::observe(FamilyMembershipObserver::class);
@@ -89,6 +92,8 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('generate-reports', function (User $user) {
             return $user->activeRole()->canGenerateReports();
         });
+        Gate::define('reconcile-family-funds', [ReconciliationPolicy::class, 'manage']);
+        Gate::define('reopen-reconciliation', [ReconciliationPolicy::class, 'reopen']);
 
         RateLimiter::for('whatsapp-notifications', function (object $job): Limit {
             $rateLimit = config('services.whatsapp.rate_limit_per_minute', 60);

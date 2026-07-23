@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Illuminate\Support\Carbon;
 use LogicException;
@@ -86,6 +87,12 @@ class FundAdjustment extends Model
     public function reversal(): MorphOne
     {
         return $this->morphOne(FinancialReversal::class, 'reversible');
+    }
+
+    /** @return MorphMany<ReconciliationLink, $this> */
+    public function reconciliationLinks(): MorphMany
+    {
+        return $this->morphMany(ReconciliationLink::class, 'reconcilable');
     }
 
     // =========================================================================

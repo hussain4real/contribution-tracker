@@ -71,6 +71,12 @@ function formatDate(date: string): string {
     });
 }
 
+function formatAdjustmentAmount(amount: number): string {
+    const sign = amount < 0 ? '-' : '+';
+
+    return `${sign}${formatCurrency(Math.abs(amount))}`;
+}
+
 const reversalTarget = ref<AdjustmentItem | null>(null);
 const reversalReason = ref('');
 const reversalError = ref('');
@@ -146,8 +152,9 @@ function resetForm(): void {
                 class="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20"
             >
                 <p class="text-sm text-blue-800 dark:text-blue-200">
-                    Fund adjustments represent lump sums added to the family
-                    fund (e.g., opening balance from previous contributions).
+                    Fund adjustments record signed corrections to the family
+                    fund. Use a positive amount for money in and a negative
+                    amount for money out.
                 </p>
             </div>
 
@@ -177,7 +184,6 @@ function resetForm(): void {
                                 v-model="amount"
                                 :placeholder="`Enter amount in ${currency}`"
                                 required
-                                min="1"
                                 step="1"
                                 @change="validate('amount')"
                             />
@@ -203,7 +209,7 @@ function resetForm(): void {
                             type="text"
                             name="description"
                             v-model="description"
-                            placeholder="e.g., Opening balance from 2+ years of contributions"
+                            placeholder="e.g., Opening balance or bank correction"
                             required
                             maxlength="1000"
                             @change="validate('description')"
@@ -298,9 +304,18 @@ function resetForm(): void {
                                     >
                                 </td>
                                 <td
-                                    class="px-4 py-4 text-right font-medium text-green-600 sm:px-6 dark:text-green-400"
+                                    class="px-4 py-4 text-right font-medium sm:px-6"
+                                    :class="
+                                        adjustment.amount < 0
+                                            ? 'text-red-600 dark:text-red-400'
+                                            : 'text-green-600 dark:text-green-400'
+                                    "
                                 >
-                                    +{{ formatCurrency(adjustment.amount) }}
+                                    {{
+                                        formatAdjustmentAmount(
+                                            adjustment.amount,
+                                        )
+                                    }}
                                 </td>
                                 <td
                                     class="hidden px-6 py-4 text-neutral-500 md:table-cell dark:text-neutral-400"

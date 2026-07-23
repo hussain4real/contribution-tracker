@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreExpenseRequest;
 use App\Models\Expense;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -68,13 +69,15 @@ class ExpenseController extends Controller
 
         abort_unless($family !== null, 403);
 
-        Expense::create([
-            'family_id' => $family->id,
-            'amount' => $request->integer('amount'),
-            'description' => $request->string('description')->toString(),
-            'spent_at' => $request->string('spent_at')->toString(),
-            'recorded_by' => $user->id,
-        ]);
+        DB::transaction(function () use ($family, $request, $user): void {
+            Expense::create([
+                'family_id' => $family->id,
+                'amount' => $request->integer('amount'),
+                'description' => $request->string('description')->toString(),
+                'spent_at' => $request->string('spent_at')->toString(),
+                'recorded_by' => $user->id,
+            ]);
+        }, attempts: 3);
 
         return redirect()->route('expenses.index')
             ->with('success', 'Expense recorded successfully.');

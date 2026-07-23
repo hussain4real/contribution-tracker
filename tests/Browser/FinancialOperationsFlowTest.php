@@ -74,10 +74,16 @@ describe('Financial and family administration flows (Browser)', function () {
     });
 
     it('records a fund adjustment through the UI', function () {
+        FundAdjustment::factory()->recordedBy($this->admin)->create([
+            'family_id' => $this->family->id,
+            'amount' => -750,
+            'description' => 'Browser workflow correction',
+        ]);
         $page = loginBrowserAs($this->admin);
 
         $page->navigate(route('fund-adjustments.index'))
             ->assertSee('Fund Adjustments')
+            ->assertSee('-₦750.00')
             ->click('Record Adjustment')
             ->assertSee('Record Fund Adjustment');
 
