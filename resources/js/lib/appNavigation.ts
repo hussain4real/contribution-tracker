@@ -8,6 +8,7 @@ import { index as membersIndex } from '@/actions/App/Http/Controllers/MemberCont
 import { show as payContributions } from '@/actions/App/Http/Controllers/MemberPaymentController';
 import { index as notificationsIndex } from '@/actions/App/Http/Controllers/NotificationController';
 import { index as paymentsIndex } from '@/actions/App/Http/Controllers/PaymentController';
+import { index as reconciliationIndex } from '@/actions/App/Http/Controllers/ReconciliationController';
 import { index as reportsIndex } from '@/actions/App/Http/Controllers/ReportController';
 import { index as subscriptionIndex } from '@/actions/App/Http/Controllers/SubscriptionController';
 import { index as whatsappInboxIndex } from '@/actions/App/Http/Controllers/WhatsAppInboxController';
@@ -29,6 +30,7 @@ import {
     MessageSquare,
     Receipt,
     Rocket,
+    Scale,
     Settings,
     Shield,
     Sparkles,
@@ -164,6 +166,13 @@ export function useAppNavigation() {
             page.props.auth?.can?.generate_reports &&
             hasSubscriptionFeature('reports')
         ) {
+            items.push({
+                title: 'Reconciliation',
+                href: reconciliationIndex(),
+                icon: Scale,
+                component: 'Reconciliation/Index',
+                section: 'main',
+            });
             items.push({
                 title: 'Reports',
                 href: reportsIndex(),

@@ -13,6 +13,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Illuminate\Support\Carbon;
 use LogicException;
@@ -35,6 +37,7 @@ use LogicException;
  * @property-read FamilyMembership|null $membership
  * @property-read User|null $recorder
  * @property-read Collection<int, Payment> $allocations
+ * @property-read PaystackTransaction|null $paystackTransaction
  * @property-read FinancialReversal|null $reversal
  */
 class PaymentBatch extends Model
@@ -96,10 +99,22 @@ class PaymentBatch extends Model
         return $this->hasMany(Payment::class);
     }
 
+    /** @return HasOne<PaystackTransaction, $this> */
+    public function paystackTransaction(): HasOne
+    {
+        return $this->hasOne(PaystackTransaction::class);
+    }
+
     /** @return MorphOne<FinancialReversal, $this> */
     public function reversal(): MorphOne
     {
         return $this->morphOne(FinancialReversal::class, 'reversible');
+    }
+
+    /** @return MorphMany<ReconciliationLink, $this> */
+    public function reconciliationLinks(): MorphMany
+    {
+        return $this->morphMany(ReconciliationLink::class, 'reconcilable');
     }
 
     /**

@@ -5,11 +5,20 @@ declare(strict_types=1);
 namespace App\Observers;
 
 use App\Models\PaymentBatch;
+use App\Services\ReconciliationPeriodGuard;
 use App\Support\AuditEventRecorder;
 
 class PaymentBatchObserver
 {
-    public function __construct(private AuditEventRecorder $audit) {}
+    public function __construct(
+        private AuditEventRecorder $audit,
+        private ReconciliationPeriodGuard $periodGuard,
+    ) {}
+
+    public function creating(PaymentBatch $batch): void
+    {
+        $this->periodGuard->ensureDateIsWritable($batch->family_id, $batch->paid_at);
+    }
 
     public function created(PaymentBatch $batch): void
     {

@@ -63,6 +63,9 @@ class FamilyArchiveController extends Controller
             'expenses',
             'fundAdjustments',
             'reportSchedules.deliveries',
+            'reconciliationImports.transactions.links',
+            'reconciliationPeriods',
+            'providerSettlementGroups.items',
         ]);
 
         return response()->streamDownload(function () use ($family): void {

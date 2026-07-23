@@ -8,6 +8,7 @@ use App\Http\Requests\StoreFundAdjustmentRequest;
 use App\Models\FundAdjustment;
 use App\Support\CurrencyFormatter;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -60,13 +61,15 @@ class FundAdjustmentController extends Controller
         abort_unless($family !== null, 403);
         $amount = $request->integer('amount');
 
-        FundAdjustment::create([
-            'family_id' => $family->id,
-            'amount' => $amount,
-            'description' => $request->string('description')->toString(),
-            'recorded_at' => $request->string('recorded_at')->toString(),
-            'recorded_by' => $user->id,
-        ]);
+        DB::transaction(function () use ($amount, $family, $request, $user): void {
+            FundAdjustment::create([
+                'family_id' => $family->id,
+                'amount' => $amount,
+                'description' => $request->string('description')->toString(),
+                'recorded_at' => $request->string('recorded_at')->toString(),
+                'recorded_by' => $user->id,
+            ]);
+        }, attempts: 3);
 
         $formattedAmount = CurrencyFormatter::format($amount, $family->currency);
 

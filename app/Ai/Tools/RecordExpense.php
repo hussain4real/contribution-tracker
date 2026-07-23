@@ -9,6 +9,7 @@ use App\Models\Family;
 use App\Models\User;
 use App\Support\CurrencyFormatter;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Support\Facades\DB;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 
@@ -67,13 +68,13 @@ class RecordExpense implements Tool
             ], JSON_THROW_ON_ERROR);
         }
 
-        $expense = Expense::create([
+        $expense = DB::transaction(fn (): Expense => Expense::create([
             'family_id' => $family->id,
             'amount' => $amount,
             'description' => $description,
             'spent_at' => $spentAt,
             'recorded_by' => $this->user->id,
-        ]);
+        ]), attempts: 3);
 
         return json_encode([
             'status' => 'success',

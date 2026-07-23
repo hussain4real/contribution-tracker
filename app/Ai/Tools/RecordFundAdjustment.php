@@ -9,6 +9,7 @@ use App\Models\FundAdjustment;
 use App\Models\User;
 use App\Support\CurrencyFormatter;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Support\Facades\DB;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 
@@ -38,8 +39,8 @@ class RecordFundAdjustment implements Tool
         $recordedAt = $this->stringFromRequest($request['recorded_at'] ?? null, now()->toDateString());
         $confirmed = ($request['confirmed'] ?? false) === true;
 
-        if (! $amount || $amount < 1) {
-            return json_encode(['error' => 'Amount is required and must be at least 1.'], JSON_THROW_ON_ERROR);
+        if ($amount === null || $amount === 0) {
+            return json_encode(['error' => 'Amount is required and must be a non-zero whole number.'], JSON_THROW_ON_ERROR);
         }
 
         if (! $description) {
@@ -67,13 +68,13 @@ class RecordFundAdjustment implements Tool
             ], JSON_THROW_ON_ERROR);
         }
 
-        $adjustment = FundAdjustment::create([
+        $adjustment = DB::transaction(fn (): FundAdjustment => FundAdjustment::create([
             'family_id' => $family->id,
             'amount' => $amount,
             'description' => $description,
             'recorded_at' => $recordedAt,
             'recorded_by' => $this->user->id,
-        ]);
+        ]), attempts: 3);
 
         return json_encode([
             'status' => 'success',
@@ -88,7 +89,10 @@ class RecordFundAdjustment implements Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'amount' => $schema->integer()->min(1)->required(),
+            'amount' => $schema->anyOf([
+                $schema->integer()->max(-1),
+                $schema->integer()->min(1),
+            ])->required(),
             'description' => $schema->string()->required(),
             'recorded_at' => $schema->string(),
             'confirmed' => $schema->boolean(),

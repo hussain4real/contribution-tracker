@@ -6,8 +6,11 @@ namespace App\Models;
 
 use App\Enums\TransactionStatus;
 use App\Enums\TransactionType;
+use Database\Factories\PaystackTransactionFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
@@ -34,6 +37,9 @@ use Illuminate\Support\Carbon;
  */
 class PaystackTransaction extends Model
 {
+    /** @use HasFactory<PaystackTransactionFactory> */
+    use HasFactory;
+
     /**
      * @var list<string>
      */
@@ -110,6 +116,12 @@ class PaystackTransaction extends Model
     public function feeExpense(): BelongsTo
     {
         return $this->belongsTo(Expense::class);
+    }
+
+    /** @return HasOne<ProviderSettlementItem, $this> */
+    public function settlementItem(): HasOne
+    {
+        return $this->hasOne(ProviderSettlementItem::class);
     }
 
     // =========================================================================
