@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\Role;
 use App\Models\Family;
 use App\Models\FundAdjustment;
 use App\Models\User;
@@ -38,6 +39,31 @@ it('allows only same-family payment recorders to reverse fund adjustments', func
         ->and($this->policy->delete($this->financialSecretary, $this->fundAdjustment))->toBeTrue()
         ->and($this->policy->delete($this->member, $this->fundAdjustment))->toBeFalse()
         ->and($this->policy->delete($this->outsider, $this->fundAdjustment))->toBeFalse();
+});
+
+it('uses the adjustment family role when a user belongs to multiple families', function () {
+    $this->admin->ensureFamilyMembership($this->otherFamily, Role::Member);
+    $otherAdjustment = FundAdjustment::factory()->recordedBy($this->outsider)->create([
+        'family_id' => $this->otherFamily->id,
+    ]);
+    $otherFamilyOfficer = User::factory()->member()->create(['family_id' => $this->family->id]);
+    $otherFamilyOfficer->ensureFamilyMembership($this->otherFamily, Role::FinancialSecretary);
+
+    expect($this->policy->delete($this->admin, $otherAdjustment))->toBeFalse()
+        ->and($this->policy->delete($otherFamilyOfficer, $otherAdjustment))->toBeFalse();
+
+    $this->actingAs($this->admin)
+        ->post(route('fund-adjustments.reverse', [
+            'current_family' => $this->family->slug,
+            'fund_adjustment' => $otherAdjustment,
+        ]), ['reason' => 'Must not cross families'])
+        ->assertForbidden();
+
+    expect($otherAdjustment->reversal()->exists())->toBeFalse();
+
+    $otherFamilyOfficer->switchFamily($this->otherFamily);
+
+    expect($this->policy->delete($otherFamilyOfficer, $otherAdjustment))->toBeTrue();
 });
 
 it('denies direct mutation of immutable fund adjustments', function (string $ability) {

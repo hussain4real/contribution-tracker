@@ -10,6 +10,7 @@ use App\Actions\ReverseFundAdjustment;
 use App\Actions\ReversePaymentBatch;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentSource;
+use App\Enums\Role;
 use App\Models\AuditEvent;
 use App\Models\Contribution;
 use App\Models\Expense;
@@ -328,4 +329,42 @@ it('exposes ledger model relationships, scopes, labels, and policy boundaries', 
     $orphanPayment = new Payment;
 
     expect(app(PaymentPolicy::class)->view($admin, $orphanPayment))->toBeFalse();
+});
+
+it('uses the receipt family role for viewing and reversing multi-family batches', function () {
+    $currentFamily = Family::factory()->create();
+    $batchFamily = Family::factory()->create();
+    $currentAdmin = User::factory()->admin()->create(['family_id' => $currentFamily->id]);
+    $currentAdmin->ensureFamilyMembership($batchFamily, Role::Member);
+    $batchFamilyMember = User::factory()->member()->create(['family_id' => $batchFamily->id]);
+    $batch = PaymentBatch::factory()->create([
+        'family_id' => $batchFamily->id,
+        'family_membership_id' => $batchFamilyMember->membershipForFamily($batchFamily)?->id,
+        'recorded_by' => $batchFamilyMember->id,
+    ]);
+    $batchFamilyAdmin = User::factory()->member()->create(['family_id' => $currentFamily->id]);
+    $batchFamilyAdmin->ensureFamilyMembership($batchFamily, Role::Admin);
+    $userWithoutMembership = User::factory()->member()->create(['family_id' => $currentFamily->id]);
+    $userWithoutMembership->forceFill(['current_family_id' => $batchFamily->id])->save();
+    $policy = app(PaymentBatchPolicy::class);
+
+    expect($policy->view($currentAdmin, $batch))->toBeFalse()
+        ->and($policy->view($userWithoutMembership, $batch))->toBeFalse()
+        ->and($policy->reverse($currentAdmin, $batch))->toBeFalse()
+        ->and($policy->view($batchFamilyAdmin, $batch))->toBeFalse()
+        ->and($policy->reverse($batchFamilyAdmin, $batch))->toBeFalse();
+
+    $this->actingAs($currentAdmin)
+        ->post(route('payment-batches.reverse', [
+            'current_family' => $currentFamily->slug,
+            'payment_batch' => $batch,
+        ]), ['reason' => 'Must not cross families'])
+        ->assertForbidden();
+
+    expect($batch->reversal()->exists())->toBeFalse();
+
+    $batchFamilyAdmin->switchFamily($batchFamily);
+
+    expect($policy->view($batchFamilyAdmin, $batch))->toBeTrue()
+        ->and($policy->reverse($batchFamilyAdmin, $batch))->toBeTrue();
 });

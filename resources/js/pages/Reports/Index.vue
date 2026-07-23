@@ -11,6 +11,7 @@ import { exportMethod } from '@/routes/reports';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { CalendarClock, Download, FileBarChart2, Trash2 } from '@lucide/vue';
+import { watch } from 'vue';
 
 interface Option {
     value: string;
@@ -39,9 +40,16 @@ const props = defineProps<Props>();
 const today = new Date();
 const yearStart = `${today.getFullYear()}-01-01`;
 const yearEnd = `${today.getFullYear()}-12-31`;
-const defaultRun = new Date(today.getTime() + 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 16);
+
+function toDatetimeLocalValue(date: Date): string {
+    const timezoneOffset = date.getTimezoneOffset() * 60 * 1000;
+
+    return new Date(date.getTime() - timezoneOffset).toISOString().slice(0, 16);
+}
+
+const defaultRun = toDatetimeLocalValue(
+    new Date(today.getTime() + 60 * 60 * 1000),
+);
 const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 const exportFilters = useForm({
@@ -70,6 +78,15 @@ const scheduleForm = useForm({
 });
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Reports', href: index().url }];
+
+watch(
+    () => scheduleForm.report_type,
+    (reportType) => {
+        if (reportType !== 'member_statement') {
+            scheduleForm.filters.member_id = '';
+        }
+    },
+);
 
 function submitSchedule(): void {
     scheduleForm
@@ -245,6 +262,7 @@ function removeSchedule(id: number): void {
                     <label class="grid gap-1 text-xs text-muted-foreground"
                         >Schedule name<input
                             v-model="scheduleForm.name"
+                            name="schedule_name"
                             required
                             class="rounded-md border bg-background px-3 py-2 text-sm text-foreground" /><InputError
                             :message="scheduleForm.errors.name"
@@ -252,6 +270,7 @@ function removeSchedule(id: number): void {
                     <label class="grid gap-1 text-xs text-muted-foreground"
                         >Report type<select
                             v-model="scheduleForm.report_type"
+                            name="schedule_report_type"
                             class="rounded-md border bg-background px-3 py-2 text-sm text-foreground"
                         >
                             <option
@@ -263,6 +282,28 @@ function removeSchedule(id: number): void {
                             </option>
                         </select></label
                     >
+                    <label
+                        v-if="scheduleForm.report_type === 'member_statement'"
+                        class="grid gap-1 text-xs text-muted-foreground"
+                        >Statement member<select
+                            v-model="scheduleForm.filters.member_id"
+                            name="schedule_member_id"
+                            required
+                            class="rounded-md border bg-background px-3 py-2 text-sm text-foreground"
+                        >
+                            <option disabled value="">Select a member</option>
+                            <option
+                                v-for="member in members"
+                                :key="member.id"
+                                :value="member.id"
+                            >
+                                {{ member.name }}
+                            </option>
+                        </select>
+                        <InputError
+                            :message="scheduleForm.errors['filters.member_id']"
+                        />
+                    </label>
                     <label class="grid gap-1 text-xs text-muted-foreground"
                         >Format<select
                             v-model="scheduleForm.format"
@@ -294,13 +335,16 @@ function removeSchedule(id: number): void {
                     <label class="grid gap-1 text-xs text-muted-foreground"
                         >Run first at<input
                             v-model="scheduleForm.next_run_at"
+                            name="schedule_next_run_at"
                             required
                             type="datetime-local"
-                            class="rounded-md border bg-background px-3 py-2 text-sm text-foreground"
+                            class="rounded-md border bg-background px-3 py-2 text-sm text-foreground" /><InputError
+                            :message="scheduleForm.errors.next_run_at"
                     /></label>
                     <label class="grid gap-1 text-xs text-muted-foreground"
                         >Recipients<input
                             v-model="scheduleForm.recipients_text"
+                            name="schedule_recipients"
                             required
                             placeholder="email@example.com, 974..."
                             class="rounded-md border bg-background px-3 py-2 text-sm text-foreground" /><InputError

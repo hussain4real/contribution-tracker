@@ -10,6 +10,7 @@ use App\Enums\ReportType;
 use App\Http\Requests\StoreReportScheduleRequest;
 use App\Models\Family;
 use App\Models\ReportSchedule;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -22,6 +23,9 @@ class ReportScheduleController extends Controller
         abort_unless($family instanceof Family, 403);
 
         $validated = $request->validated();
+        $timezone = $request->string('timezone')->toString();
+        $nextRunAt = CarbonImmutable::parse($request->string('next_run_at')->toString(), $timezone)->utc();
+
         $family->reportSchedules()->create([
             'created_by' => $user->id,
             'name' => is_string($validated['name']) ? $validated['name'] : '',
@@ -31,8 +35,8 @@ class ReportScheduleController extends Controller
             'channels' => is_array($validated['channels']) ? array_values(array_filter($validated['channels'], 'is_string')) : [],
             'recipients' => is_array($validated['recipients']) ? array_values(array_filter($validated['recipients'], 'is_string')) : [],
             'frequency' => ReportScheduleFrequency::from(is_string($validated['frequency']) ? $validated['frequency'] : ''),
-            'timezone' => is_string($validated['timezone']) ? $validated['timezone'] : 'UTC',
-            'next_run_at' => is_string($validated['next_run_at']) ? $validated['next_run_at'] : now(),
+            'timezone' => $timezone,
+            'next_run_at' => $nextRunAt,
             'is_active' => true,
         ]);
 
