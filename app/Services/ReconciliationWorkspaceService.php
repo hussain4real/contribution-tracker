@@ -46,33 +46,36 @@ class ReconciliationWorkspaceService
             ->latest('transacted_at')
             ->latest('id')
             ->paginate(25)
-            ->withQueryString()
-            ->through(fn (BankTransaction $transaction): array => [
-                'id' => $transaction->id,
-                'date' => $transaction->transacted_at->toDateString(),
-                'direction' => $transaction->direction->value,
-                'direction_label' => $transaction->direction->label(),
-                'amount' => $transaction->amount,
-                'reference' => $transaction->reference,
-                'description' => $transaction->description,
-                'source_account' => $transaction->source_account,
-                'status' => $transaction->status->value,
-                'status_label' => $transaction->status->label(),
-                'linked_amount' => $transaction->linkedAmount(),
-                'remaining_amount' => $transaction->remainingAmount(),
-                'ignored_reason' => $transaction->ignored_reason,
-                'disputed_reason' => $transaction->disputed_reason,
-                'suggestions' => $transaction->status === ReconciliationStatus::Matched
-                    ? []
-                    : $this->matchingService->suggestions($transaction)->all(),
-                'links' => $transaction->links->map(fn (ReconciliationLink $link): array => [
-                    'id' => $link->id,
-                    'type' => $link->reconcilable_type,
-                    'target_id' => $link->reconcilable_id,
-                    'label' => $this->targetLabel($link->reconcilable),
-                    'amount' => $link->amount,
-                ])->all(),
-            ]);
+            ->withQueryString();
+        $suggestions = $this->matchingService->suggestionsFor(
+            $transactions->getCollection()->where('status', '!=', ReconciliationStatus::Matched),
+        );
+        $transactions->through(fn (BankTransaction $transaction): array => [
+            'id' => $transaction->id,
+            'date' => $transaction->transacted_at->toDateString(),
+            'direction' => $transaction->direction->value,
+            'direction_label' => $transaction->direction->label(),
+            'amount' => $transaction->amount,
+            'reference' => $transaction->reference,
+            'description' => $transaction->description,
+            'source_account' => $transaction->source_account,
+            'status' => $transaction->status->value,
+            'status_label' => $transaction->status->label(),
+            'linked_amount' => $transaction->linkedAmount(),
+            'remaining_amount' => $transaction->remainingAmount(),
+            'ignored_reason' => $transaction->ignored_reason,
+            'disputed_reason' => $transaction->disputed_reason,
+            'suggestions' => $transaction->status === ReconciliationStatus::Matched
+                ? []
+                : $suggestions[$transaction->id] ?? [],
+            'links' => $transaction->links->map(fn (ReconciliationLink $link): array => [
+                'id' => $link->id,
+                'type' => $link->reconcilable_type,
+                'target_id' => $link->reconcilable_id,
+                'label' => $this->targetLabel($link->reconcilable),
+                'amount' => $link->amount,
+            ])->all(),
+        ]);
 
         $summary = collect(ReconciliationStatus::cases())->mapWithKeys(fn (ReconciliationStatus $status): array => [
             $status->value => BankTransaction::query()
@@ -126,9 +129,11 @@ class ReconciliationWorkspaceService
             'settlement_bank_credits' => BankTransaction::query()
                 ->where('family_id', $family->id)
                 ->where('direction', BankTransactionDirection::Credit)
+                ->whereIn('status', [ReconciliationStatus::Unmatched, ReconciliationStatus::Suggested])
                 ->withSum('links as reconciled_amount', 'amount')
                 ->latest('transacted_at')
                 ->latest('id')
+                ->limit(100)
                 ->get()
                 ->map(fn (BankTransaction $transaction): array => [
                     'id' => $transaction->id,

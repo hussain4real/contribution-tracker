@@ -2,9 +2,12 @@
 
 declare(strict_types=1);
 
+use App\Enums\BankTransactionDirection;
 use App\Enums\ReconciliationStatus;
 use App\Models\BankTransaction;
+use App\Models\Expense;
 use App\Models\Family;
+use App\Models\FundAdjustment;
 use App\Models\PaymentBatch;
 use App\Models\ReconciliationImport;
 use App\Models\User;
@@ -84,4 +87,51 @@ it('auto links only a unique exact reference and leaves ambiguous exact matches 
         ->and($service->autoMatch($duplicateBank, $admin))->toBeNull()
         ->and($duplicateBank->refresh()->status)->toBe(ReconciliationStatus::Suggested)
         ->and($duplicateBank->links()->count())->toBe(0);
+});
+
+it('batches suggestions for mixed reconciliation queues', function () {
+    $family = Family::factory()->create();
+    $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+    $import = ReconciliationImport::factory()->create(['family_id' => $family->id]);
+    $credit = BankTransaction::factory()->create([
+        'family_id' => $family->id,
+        'reconciliation_import_id' => $import->id,
+        'direction' => BankTransactionDirection::Credit,
+        'amount' => 1200,
+        'transacted_at' => '2026-07-15',
+    ]);
+    $debit = BankTransaction::factory()->create([
+        'family_id' => $family->id,
+        'reconciliation_import_id' => $import->id,
+        'direction' => BankTransactionDirection::Debit,
+        'amount' => 700,
+        'transacted_at' => '2026-07-16',
+    ]);
+    $batch = PaymentBatch::factory()->create([
+        'family_id' => $family->id,
+        'recorded_by' => $admin->id,
+        'total_amount' => 1200,
+        'paid_at' => '2026-07-14',
+    ]);
+    $expense = Expense::factory()->recordedBy($admin)->create([
+        'family_id' => $family->id,
+        'amount' => 700,
+        'spent_at' => '2026-07-17',
+    ]);
+    $positiveAdjustment = FundAdjustment::factory()->recordedBy($admin)->create([
+        'family_id' => $family->id,
+        'amount' => 1200,
+        'recorded_at' => '2026-07-15',
+    ]);
+    $negativeAdjustment = FundAdjustment::factory()->recordedBy($admin)->create([
+        'family_id' => $family->id,
+        'amount' => -700,
+        'recorded_at' => '2026-07-16',
+    ]);
+    $service = app(ReconciliationMatchingService::class);
+    $suggestions = $service->suggestionsFor(collect([$credit, $debit]));
+
+    expect($service->suggestionsFor(BankTransaction::query()->whereRaw('1 = 0')->get()))->toBe([])
+        ->and(collect($suggestions[$credit->id])->pluck('id'))->toContain($batch->id, $positiveAdjustment->id)
+        ->and(collect($suggestions[$debit->id])->pluck('id'))->toContain($expense->id, $negativeAdjustment->id);
 });
