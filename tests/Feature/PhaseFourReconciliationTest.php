@@ -312,6 +312,19 @@ it('groups Paystack gross fees and net settlements while reporting bank differen
     $transactionIds = array_values($transactions
         ->map(fn (PaystackTransaction $transaction): int => $transaction->id)
         ->all());
+    $previouslyLinkedBatch = PaymentBatch::factory()->create([
+        'family_id' => $family->id,
+        'total_amount' => 50,
+        'recorded_by' => $admin->id,
+        'receipt_number' => 3,
+    ]);
+    app(ReconciliationLinkService::class)->link(
+        $bank,
+        PaymentBatch::MORPH_TYPE,
+        $previouslyLinkedBatch->id,
+        50,
+        $admin,
+    );
     $group = app(ProviderSettlementService::class)->create(
         $family->id,
         $transactionIds,
@@ -324,8 +337,8 @@ it('groups Paystack gross fees and net settlements while reporting bank differen
     expect($group->gross_amount)->toBe(2000)
         ->and($group->fee_amount)->toBe(40)
         ->and($group->net_amount)->toBe(1960)
-        ->and($group->bank_amount)->toBe(1950)
-        ->and($group->difference)->toBe(-10)
+        ->and($group->bank_amount)->toBe(1900)
+        ->and($group->difference)->toBe(-60)
         ->and($group->items)->toHaveCount(2)
         ->and($bank->refresh()->status)->toBe(ReconciliationStatus::Matched)
         ->and(fn () => app(ProviderSettlementService::class)->create(

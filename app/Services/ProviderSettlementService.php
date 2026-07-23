@@ -105,7 +105,7 @@ class ProviderSettlementService
                 $fee += $item['fee_amount'];
                 $net += $item['net_amount'];
             }
-            $bankAmount = $bankTransaction?->amount;
+            $bankAmount = $bankTransaction?->remainingAmount();
             $group = ProviderSettlementGroup::query()->create([
                 'family_id' => $familyId,
                 'bank_transaction_id' => $bankTransaction?->id,
