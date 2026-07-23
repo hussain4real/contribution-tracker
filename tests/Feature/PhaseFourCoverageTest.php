@@ -320,12 +320,35 @@ it('marks failed imports and covers delimiter duplicate and normalization errors
         'reference' => 'Reference', 'amount' => null, 'direction' => null,
     ]))->toBe(['rows' => 2, 'imported' => 1, 'duplicates' => 1]);
 
+    $closedDuplicateContent = "Date;Credit;Debit;Reference\n2026-11-10;2500;;REF-CLOSED-DUPLICATE\n";
+    $closedDuplicatePreview = $service->preview(
+        $family,
+        $admin,
+        UploadedFile::fake()->createWithContent('closed-duplicate-original.csv', $closedDuplicateContent),
+    );
+    $separateColumns = [
+        'date' => 'Date', 'credit' => 'Credit', 'debit' => 'Debit',
+        'reference' => 'Reference', 'amount' => null, 'direction' => null,
+    ];
+    expect($service->import($closedDuplicatePreview, $admin, $separateColumns))
+        ->toBe(['rows' => 1, 'imported' => 1, 'duplicates' => 0]);
+
     ReconciliationPeriod::factory()->create([
         'family_id' => $family->id,
         'starts_at' => '2026-11-01',
         'ends_at' => '2026-11-30',
         'status' => ReconciliationPeriodStatus::Closed,
     ]);
+    $closedDuplicateImport = ReconciliationImport::factory()->create([
+        'family_id' => $family->id,
+        'uploaded_by' => $admin->id,
+        'path' => "reconciliation/{$family->id}/closed-duplicate.csv",
+        'delimiter' => ';',
+    ]);
+    Storage::disk('local')->put($closedDuplicateImport->path, $closedDuplicateContent);
+    expect($service->import($closedDuplicateImport, $admin, $separateColumns))
+        ->toBe(['rows' => 1, 'imported' => 0, 'duplicates' => 1]);
+
     $closedPeriodStatement = UploadedFile::fake()->createWithContent(
         'closed-period.csv',
         "Date;Credit;Debit;Reference\n2026-11-15;3000;;REF-CLOSED\n",

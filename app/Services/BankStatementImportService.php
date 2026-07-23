@@ -166,7 +166,6 @@ class BankStatementImportService
                     $occurrence = ($fingerprintOccurrences[$baseFingerprint] ?? 0) + 1;
                     $fingerprintOccurrences[$baseFingerprint] = $occurrence;
                     $normalized['row_fingerprint'] = hash('sha256', "{$baseFingerprint}|{$occurrence}");
-                    $this->assertDateIsImportable($lockedImport->family_id, $normalized['transacted_at']);
                     $transaction = BankTransaction::query()->firstOrCreate(
                         [
                             'family_id' => $lockedImport->family_id,
@@ -187,6 +186,7 @@ class BankStatementImportService
                         continue;
                     }
 
+                    $this->assertDateIsImportable($lockedImport->family_id, $normalized['transacted_at']);
                     $imported++;
                     $this->matchingService->autoMatch($transaction, $actor);
                 }
