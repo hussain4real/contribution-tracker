@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Enums\BankTransactionDirection;
 use App\Enums\PaymentSource;
+use App\Enums\ReconciliationImportStatus;
 use App\Enums\ReconciliationPeriodStatus;
 use App\Enums\ReconciliationStatus;
 use App\Models\BankTransaction;
@@ -357,6 +358,18 @@ it('marks failed imports and covers delimiter duplicate and normalization errors
         expect(fn () => $service->import($failed, $admin, $mapping))->toThrow(InvalidArgumentException::class);
         expect($failed->refresh()->status->value)->toBe('failed');
     }
+
+    $alreadyFailed = ReconciliationImport::factory()->create([
+        'family_id' => $family->id,
+        'uploaded_by' => $admin->id,
+        'path' => "reconciliation/{$family->id}/already-failed.csv",
+        'status' => ReconciliationImportStatus::Failed,
+    ]);
+    Storage::disk('local')->put($alreadyFailed->path, "Date,Amount,Direction\n2026-10-01,10,credit\n");
+    expect(fn () => $service->import($alreadyFailed, $admin, [
+        'date' => 'Date', 'amount' => 'Amount', 'direction' => 'Direction',
+    ]))->toThrow(InvalidArgumentException::class, 'Only previewed bank statement imports can be committed.')
+        ->and($alreadyFailed->refresh()->status)->toBe(ReconciliationImportStatus::Failed);
 
     $missing = ReconciliationImport::factory()->create(['family_id' => $family->id, 'path' => 'missing.csv']);
     expect(fn () => $service->import($missing, $admin, ['date' => 'Date']))->toThrow(RuntimeException::class);

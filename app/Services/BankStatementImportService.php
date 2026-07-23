@@ -94,14 +94,6 @@ class BankStatementImportService
      */
     public function import(ReconciliationImport $import, User $actor, array $mapping): array
     {
-        if ($import->status === ReconciliationImportStatus::Imported) {
-            return [
-                'rows' => $import->row_count,
-                'imported' => $import->imported_count,
-                'duplicates' => $import->duplicate_count,
-            ];
-        }
-
         $stream = Storage::disk($import->disk)->readStream($import->path);
 
         if (! is_resource($stream)) {
@@ -115,12 +107,28 @@ class BankStatementImportService
 
         try {
             DB::transaction(function () use ($stream, $import, $actor, $mapping, &$rows, &$imported, &$duplicates, &$fingerprintOccurrences): void {
+                $lockedImport = ReconciliationImport::query()
+                    ->lockForUpdate()
+                    ->findOrFail($import->id);
+
+                if ($lockedImport->status === ReconciliationImportStatus::Imported) {
+                    $rows = $lockedImport->row_count;
+                    $imported = $lockedImport->imported_count;
+                    $duplicates = $lockedImport->duplicate_count;
+
+                    return;
+                }
+
+                if ($lockedImport->status !== ReconciliationImportStatus::Previewed) {
+                    throw new InvalidArgumentException('Only previewed bank statement imports can be committed.');
+                }
+
                 rewind($stream);
                 $rows = 0;
                 $imported = 0;
                 $duplicates = 0;
                 $fingerprintOccurrences = [];
-                $headers = $this->readCsvRow($stream, $import->delimiter);
+                $headers = $this->readCsvRow($stream, $lockedImport->delimiter);
 
                 if ($headers === null) {
                     throw new InvalidArgumentException('The bank statement is empty.');
@@ -129,7 +137,7 @@ class BankStatementImportService
                 $headers = $this->normalizeHeaders($headers);
                 $rowNumber = 1;
 
-                while (($values = $this->readCsvRow($stream, $import->delimiter)) !== null) {
+                while (($values = $this->readCsvRow($stream, $lockedImport->delimiter)) !== null) {
                     $rowNumber++;
 
                     if ($this->rowIsEmpty($values)) {
@@ -138,20 +146,20 @@ class BankStatementImportService
 
                     $rows++;
                     $raw = $this->combineRow($headers, $values);
-                    $normalized = $this->normalizeRow($import->family_id, $raw, $mapping);
+                    $normalized = $this->normalizeRow($lockedImport->family_id, $raw, $mapping);
                     $baseFingerprint = $normalized['row_fingerprint'];
                     $occurrence = ($fingerprintOccurrences[$baseFingerprint] ?? 0) + 1;
                     $fingerprintOccurrences[$baseFingerprint] = $occurrence;
                     $normalized['row_fingerprint'] = hash('sha256', "{$baseFingerprint}|{$occurrence}");
-                    $this->assertDateIsImportable($import->family_id, $normalized['transacted_at']);
+                    $this->assertDateIsImportable($lockedImport->family_id, $normalized['transacted_at']);
                     $transaction = BankTransaction::query()->firstOrCreate(
                         [
-                            'family_id' => $import->family_id,
+                            'family_id' => $lockedImport->family_id,
                             'row_fingerprint' => $normalized['row_fingerprint'],
                         ],
                         [
                             ...$normalized,
-                            'reconciliation_import_id' => $import->id,
+                            'reconciliation_import_id' => $lockedImport->id,
                             'row_number' => $rowNumber,
                             'raw_data' => $raw,
                             'status' => ReconciliationStatus::Unmatched,
@@ -168,7 +176,7 @@ class BankStatementImportService
                     $this->matchingService->autoMatch($transaction, $actor);
                 }
 
-                $import->forceFill([
+                $lockedImport->forceFill([
                     'mapping' => $mapping,
                     'status' => ReconciliationImportStatus::Imported,
                     'row_count' => $rows,
@@ -179,18 +187,22 @@ class BankStatementImportService
                     'error' => null,
                 ])->save();
 
-                $this->audit->record($import, 'reconciliation.import.completed', $import->family_id, $actor->id, after: [
+                $this->audit->record($lockedImport, 'reconciliation.import.completed', $lockedImport->family_id, $actor->id, after: [
                     'rows' => $rows,
                     'imported' => $imported,
                     'duplicates' => $duplicates,
                 ]);
             }, attempts: 3);
         } catch (Throwable $exception) {
-            $import->forceFill([
-                'status' => ReconciliationImportStatus::Failed,
-                'failed_at' => now(),
-                'error' => Str::limit($exception->getMessage(), 1000),
-            ])->save();
+            $currentImport = $import->fresh();
+
+            if ($currentImport?->status === ReconciliationImportStatus::Previewed) {
+                $currentImport->forceFill([
+                    'status' => ReconciliationImportStatus::Failed,
+                    'failed_at' => now(),
+                    'error' => Str::limit($exception->getMessage(), 1000),
+                ])->save();
+            }
 
             throw $exception;
         } finally {

@@ -26,7 +26,14 @@ class StoreProviderSettlementGroupRequest extends FormRequest
         $familyId = $family instanceof Family ? $family->id : 0;
 
         return [
-            'reference' => ['required', 'string', 'max:255'],
+            'reference' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('provider_settlement_groups', 'reference')
+                    ->where('family_id', $familyId)
+                    ->where('provider', 'paystack'),
+            ],
             'settled_at' => ['required', 'date_format:Y-m-d'],
             'paystack_transaction_ids' => ['required', 'array', 'min:1'],
             'paystack_transaction_ids.*' => [

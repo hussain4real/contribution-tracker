@@ -331,6 +331,17 @@ it('groups Paystack gross fees and net settlements while reporting bank differen
         ->and(fn () => app(ProviderSettlementService::class)->create(
             $family->id, $transactionIds, 'SETTLEMENT-2', '2026-07-11', $admin,
         ))->toThrow(InvalidArgumentException::class);
+
+    $this->actingAs($admin)
+        ->from(route('reconciliation.index', ['current_family' => $family->slug]))
+        ->post(route('reconciliation.settlements.store', ['current_family' => $family->slug]), [
+            'reference' => 'SETTLEMENT-1',
+            'settled_at' => '2026-07-11',
+            'paystack_transaction_ids' => $transactionIds,
+        ])
+        ->assertSessionHasErrors('reference');
+
+    expect(ProviderSettlementGroup::query()->where('family_id', $family->id)->count())->toBe(1);
 });
 
 it('rejects reversed Paystack transactions from settlement groups', function () {
