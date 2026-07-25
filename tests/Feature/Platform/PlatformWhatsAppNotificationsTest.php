@@ -155,7 +155,21 @@ describe('Platform WhatsApp notifications', function () {
             'wa_message_id' => 'wamid.failed-message-1',
             'error_code' => '131026',
             'error_message' => 'Message undeliverable',
-            'payload' => ['messaging_product' => 'whatsapp', 'recipient_type' => 'individual'],
+            'payload' => [
+                'messaging_product' => 'whatsapp',
+                'recipient_type' => 'individual',
+                'preview_url' => true,
+                'disabled' => false,
+                'context' => null,
+                'template' => [
+                    'name' => 'contribution_reminder',
+                    'language' => ['code' => 'en_GB'],
+                    'components' => [[
+                        'type' => 'body',
+                        'parameters' => [['type' => 'text', 'text' => 'July 2026']],
+                    ]],
+                ],
+            ],
         ]);
 
         $this->actingAs($superAdmin)
@@ -167,6 +181,8 @@ describe('Platform WhatsApp notifications', function () {
             ->assertSee('2348012345678')
             ->assertSee('wamid.failed-message-1')
             ->assertSee('Hussain Family')
+            ->assertSee('contribution_reminder')
+            ->assertSee('July 2026')
             ->assertDontSee('Edit');
     });
 });

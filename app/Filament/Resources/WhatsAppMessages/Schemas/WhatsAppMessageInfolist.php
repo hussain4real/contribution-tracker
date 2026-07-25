@@ -76,11 +76,31 @@ class WhatsAppMessageInfolist
                     ->collapsed()
                     ->schema([
                         KeyValueEntry::make('payload')
+                            ->state(fn (WhatsAppMessage $record): array => collect($record->payload ?? [])
+                                ->map(fn (mixed $value): string => is_array($value)
+                                    ? self::encodePayloadValue($value)
+                                    : match (true) {
+                                        is_bool($value) => $value ? 'true' : 'false',
+                                        is_scalar($value) => (string) $value,
+                                        default => '',
+                                    })
+                                ->all())
                             ->hiddenLabel()
                             ->keyLabel('Field')
                             ->valueLabel('Value')
                             ->placeholder('No provider payload stored.'),
                     ]),
             ]);
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $value
+     */
+    private static function encodePayloadValue(array $value): string
+    {
+        return json_encode(
+            $value,
+            JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR,
+        );
     }
 }
