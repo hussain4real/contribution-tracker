@@ -7,6 +7,7 @@ use App\Models\Expense;
 use App\Models\FamilyCategory;
 use App\Models\FamilyInvitation;
 use App\Models\FundAdjustment;
+use App\Models\ReportSchedule;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Mail;
 
@@ -98,6 +99,57 @@ describe('Financial and family administration flows (Browser)', function () {
             ->where('recorded_by', $this->admin->id)
             ->where('description', 'Browser workflow opening balance')
             ->exists())->toBeTrue();
+    });
+
+    it('schedules a member statement with a browser-local first run', function () {
+        $member = createBrowserMember($this->family, [
+            'name' => 'Scheduled Statement Member',
+            'email' => 'scheduled-statement@example.com',
+        ]);
+        $page = loginBrowserAs($this->financialSecretary);
+
+        $page->navigate(route('reports.index'))
+            ->assertSee('Schedule delivery')
+            ->assertDontSee('Statement member');
+
+        $defaultRun = $page->script(<<<'JS'
+            () => {
+                const field = document.querySelector('[name="schedule_next_run_at"]');
+                const target = new Date(Date.now() + 60 * 60 * 1000);
+                const actual = field instanceof HTMLInputElement ? field.value : null;
+
+                return {
+                    actual,
+                    differenceMs: actual === null
+                        ? null
+                        : Math.abs(new Date(actual).getTime() - target.getTime()),
+                };
+            }
+        JS);
+
+        if (! is_array($defaultRun)) {
+            throw new RuntimeException('Expected browser script to return the schedule run time.');
+        }
+
+        expect($defaultRun['actual'] ?? null)->toBeString()
+            ->and($defaultRun['differenceMs'] ?? null)->toBeInt()->toBeLessThanOrEqual(120_000);
+
+        $page->select('schedule_report_type', 'member_statement')
+            ->wait(0.5)
+            ->select('schedule_member_id', (string) $member->id)
+            ->fill('schedule_name', 'Browser member statement')
+            ->fill('schedule_recipients', 'member@example.com')
+            ->click('Create schedule')
+            ->assertSee('Browser member statement')
+            ->assertNoJavaScriptErrors();
+
+        $schedule = ReportSchedule::query()
+            ->where('family_id', $this->family->id)
+            ->where('name', 'Browser member statement')
+            ->firstOrFail();
+
+        expect($schedule->filters['member_id'])->toBe($member->id)
+            ->and($schedule->timezone)->not->toBeEmpty();
     });
 
     it('sends a family invitation through the UI', function () {

@@ -28,7 +28,11 @@ class ProcessPaystackWebhook implements ShouldBeUnique, ShouldQueue
     public function uniqueId(): string
     {
         $data = is_array($this->payload['data'] ?? null) ? $this->payload['data'] : [];
-        $reference = $data['reference'] ?? $data['subscription_code'] ?? '';
+        $subscription = is_array($data['subscription'] ?? null) ? $data['subscription'] : [];
+        $reference = $data['reference']
+            ?? $data['subscription_code']
+            ?? $subscription['subscription_code']
+            ?? '';
         $event = $this->payload['event'] ?? '';
 
         return hash(

@@ -327,8 +327,10 @@ class FamilyContributionReviewService
      */
     private function reversalReport(Family $family, array $filters): array
     {
+        $from = CarbonImmutable::parse($this->filterString($filters, 'date_from'))->startOfDay();
+        $to = CarbonImmutable::parse($this->filterString($filters, 'date_to'))->endOfDay();
         $rows = FinancialReversal::query()->where('family_id', $family->id)
-            ->whereBetween('created_at', [$this->filterString($filters, 'date_from'), $this->filterString($filters, 'date_to')])
+            ->whereBetween('created_at', [$from, $to])
             ->with('reverser:id,name')->latest()->get()->map(fn (FinancialReversal $reversal): array => [
                 'date' => $reversal->created_at->toDateString(),
                 'type' => str($reversal->reversible_type)->headline()->toString(),
@@ -345,8 +347,10 @@ class FamilyContributionReviewService
      */
     private function auditReport(Family $family, array $filters): array
     {
+        $from = CarbonImmutable::parse($this->filterString($filters, 'date_from'))->startOfDay();
+        $to = CarbonImmutable::parse($this->filterString($filters, 'date_to'))->endOfDay();
         $rows = AuditEvent::query()->where('family_id', $family->id)
-            ->whereBetween('created_at', [$this->filterString($filters, 'date_from'), $this->filterString($filters, 'date_to')])
+            ->whereBetween('created_at', [$from, $to])
             ->with('actor:id,name')->latest()->get()->map(fn (AuditEvent $event): array => [
                 'date' => $event->created_at->toDateTimeString(),
                 'action' => $event->action,
