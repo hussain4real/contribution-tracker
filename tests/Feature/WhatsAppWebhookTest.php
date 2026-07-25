@@ -246,6 +246,36 @@ describe('ProcessWhatsAppWebhook job', function () {
         expect($message->status)->toBe('delivered');
     });
 
+    it('records the provider timestamp when an outbound message is read', function () {
+        $readAt = now()->subMinute()->startOfSecond();
+        $message = WhatsAppMessage::factory()->create([
+            'wa_message_id' => 'wamid.outbound-read',
+            'direction' => 'outbound',
+            'status' => 'delivered',
+            'read_at' => null,
+        ]);
+
+        (new ProcessWhatsAppWebhook([
+            'entry' => [[
+                'changes' => [[
+                    'field' => 'messages',
+                    'value' => [
+                        'statuses' => [[
+                            'id' => 'wamid.outbound-read',
+                            'status' => 'read',
+                            'timestamp' => (string) $readAt->timestamp,
+                        ]],
+                    ],
+                ]],
+            ]],
+        ]))->handle();
+
+        $message->refresh();
+
+        expect($message->status)->toBe('read')
+            ->and($message->read_at?->equalTo($readAt))->toBeTrue();
+    });
+
     it('updates outbound status errors when meta sends delivery errors', function () {
         $message = WhatsAppMessage::factory()->create([
             'wa_message_id' => 'wamid.failed',
