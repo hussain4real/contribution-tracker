@@ -97,11 +97,16 @@ class ProcessWhatsAppWebhook implements ShouldQueue
 
             $errorCode = $firstError['code'] ?? null;
             $errorMessage = $firstError['title'] ?? $firstError['message'] ?? null;
+            $timestamp = $status['timestamp'] ?? null;
+            $readAt = $newStatus === 'read' && is_numeric($timestamp)
+                ? now()->createFromTimestamp((int) $timestamp)
+                : $message->read_at;
 
             $message->update([
                 'status' => $newStatus,
                 'error_code' => is_scalar($errorCode) ? (string) $errorCode : $message->error_code,
                 'error_message' => is_scalar($errorMessage) ? (string) $errorMessage : $message->error_message,
+                'read_at' => $readAt,
             ]);
         } catch (Throwable $e) {
             Log::warning('Failed to update outbound WhatsApp status', [

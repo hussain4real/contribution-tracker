@@ -393,6 +393,10 @@ it('smokes platform administration pages', function () {
         'email' => 'platform-browser@example.com',
     ]);
     createBrowserMember($family, ['name' => 'Platform Smoke Member']);
+    $whatsAppMessage = WhatsAppMessage::factory()->failed()->create([
+        'family_id' => $family->id,
+        'user_id' => $superAdmin->id,
+    ]);
 
     $plan = PlatformPlan::create([
         'name' => 'Browser Premium',
@@ -417,5 +421,7 @@ it('smokes platform administration pages', function () {
     navigateAndAssertBrowserSmoke($page, "/platform/families/{$family->slug}/view", 'Platform Smoke Family');
     navigateAndAssertBrowserSmoke($page, '/platform/users', 'Platform Smoke Member');
     navigateAndAssertBrowserSmoke($page, "/platform/users/{$superAdmin->id}/view", 'platform-browser@example.com');
+    navigateAndAssertBrowserSmoke($page, '/platform/whats-app-messages', 'WhatsApp Notifications');
+    navigateAndAssertBrowserSmoke($page, "/platform/whats-app-messages/{$whatsAppMessage->id}", 'Failure details');
     navigateAndAssertBrowserSmoke($page, '/platform/feature-flags', 'AI Assistant');
 });
