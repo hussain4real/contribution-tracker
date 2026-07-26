@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -69,6 +70,9 @@ describe('Member Authorization', function () {
     });
 
     it('does not block member profiles on the github releases request', function () {
+        config()->set('services.github.releases.owner', 'test-owner');
+        config()->set('services.github.releases.repo', 'test-repo');
+        Cache::forget('github_releases');
         Http::fake();
 
         $this->actingAs($this->member)
