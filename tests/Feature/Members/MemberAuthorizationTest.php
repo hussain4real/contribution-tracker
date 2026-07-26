@@ -6,6 +6,8 @@ use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
 
 /**
@@ -83,6 +85,19 @@ describe('Member Authorization', function () {
                 ->component('Members/Show')
                 ->where('canViewContributions', true)
             );
+    });
+
+    it('does not block member profiles on the github releases request', function () {
+        config()->set('services.github.releases.owner', 'test-owner');
+        config()->set('services.github.releases.repo', 'test-repo');
+        Cache::forget('github_releases');
+        Http::fake();
+
+        $this->actingAs($this->member)
+            ->get("/members/{$this->member->id}")
+            ->assertOk();
+
+        Http::assertNothingSent();
     });
 
     it('member can view other member basic info but not contributions', function () {

@@ -14,6 +14,7 @@ use App\Services\GitHubReleaseService;
 use App\Support\PlatformPlanCatalog;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 use Inertia\Middleware;
 use Laravel\Pennant\Feature;
 
@@ -134,7 +135,11 @@ class HandleInertiaRequests extends Middleware
             'featureFlags' => $user ? [
                 'ai_assistant' => fn () => Feature::for($user)->active(AiAssistant::class),
             ] : null,
-            'changelogUpdate' => $user ? fn () => app(GitHubReleaseService::class)->updateDataFor($user) : null,
+            'changelogUpdate' => $user
+                ? ($request->routeIs('changelog')
+                    ? fn () => app(GitHubReleaseService::class)->updateDataFor($user)
+                    : Inertia::defer(fn () => app(GitHubReleaseService::class)->updateDataFor($user), 'changelog'))
+                : null,
             'webPush' => $user ? fn () => $this->webPushData($user) : null,
             'notifications' => $user ? [
                 'unread_count' => fn () => $user->unreadNotifications()->count(),
