@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
 
 /**
@@ -65,6 +66,16 @@ describe('Member Authorization', function () {
                 ->component('Members/Show')
                 ->where('canViewContributions', true)
             );
+    });
+
+    it('does not block member profiles on the github releases request', function () {
+        Http::fake();
+
+        $this->actingAs($this->member)
+            ->get("/members/{$this->member->id}")
+            ->assertOk();
+
+        Http::assertNothingSent();
     });
 
     it('member can view other member basic info but not contributions', function () {
