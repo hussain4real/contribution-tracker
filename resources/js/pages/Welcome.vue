@@ -1,182 +1,182 @@
 <script setup lang="ts">
+import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import ThemeToggle from '@/components/ThemeToggle.vue';
+import HeroGsapAnimation from '@/components/home/HeroGsapAnimation.vue';
 import { Button } from '@/components/ui/button';
-import { dashboard, login, register } from '@/routes';
+import { useGsapPublicPageAnimations } from '@/composables/useGsapPublicPageAnimations';
+import { dashboard, login, pricing, register } from '@/routes';
 import { Head, Link } from '@inertiajs/vue3';
-import { onMounted, onUnmounted, ref } from 'vue';
+import {
+    ArrowRight,
+    CheckCircle2,
+    ChevronDown,
+    ClipboardCheck,
+    Eye,
+    FileClock,
+    LockKeyhole,
+    ReceiptText,
+    ShieldCheck,
+} from '@lucide/vue';
+import { ref, type Component } from 'vue';
 
-withDefaults(
+interface Plan {
+    id: number;
+    name: string;
+    slug: string;
+    price: number;
+    formatted_price: string;
+    max_members: number | null;
+    features: string[];
+    is_current: boolean;
+    audience: string;
+    summary: string;
+    is_recommended: boolean;
+}
+
+interface LandingProof {
+    icon: Component;
+    title: string;
+    description: string;
+}
+
+const props = withDefaults(
     defineProps<{
         canRegister: boolean;
+        pricingPreviewPlans?: Plan[];
+        availableFeatures?: Record<string, string>;
     }>(),
     {
         canRegister: true,
+        pricingPreviewPlans: () => [],
+        availableFeatures: () => ({}),
     },
 );
 
-const features = [
+const heroProofs = [
     {
-        icon: 'wallet',
-        title: 'Track Contributions',
-        description:
-            'Monitor monthly contributions from all family members with real-time status updates.',
+        title: 'Who paid',
+        description: 'Recorded payments and paid-in-full members stay visible.',
     },
     {
-        icon: 'users',
-        title: 'Member Categories',
-        description:
-            'Define custom categories with flexible contribution amounts tailored to your family.',
+        title: 'Who partly paid',
+        description: 'Partial payments show the remaining balance immediately.',
     },
     {
-        icon: 'chart',
-        title: 'Financial Reports',
-        description:
-            'Generate monthly and yearly reports to keep everyone informed and accountable.',
-    },
-    {
-        icon: 'shield',
-        title: 'Role-Based Access',
-        description:
-            'Secure access control for Admins, Financial Secretaries, and Members.',
+        title: 'Who still owes',
+        description: 'Due and overdue contributions are clear without shaming.',
     },
 ];
 
-const stats = [
-    { value: 'Custom', label: 'Amounts' },
-    { value: 'Flexible', label: 'Due Dates' },
-    { value: 'Unlimited', label: 'Categories' },
-    { value: '100%', label: 'Transparent' },
+const trustProofs: LandingProof[] = [
+    {
+        icon: Eye,
+        title: 'Shared visibility',
+        description:
+            'Members can check their own status while admins and financial secretaries reconcile the full list.',
+    },
+    {
+        icon: ReceiptText,
+        title: 'Payment history',
+        description:
+            'Each contribution keeps expected amount, payments received, balance, recorder, and date.',
+    },
+    {
+        icon: LockKeyhole,
+        title: 'Privacy by role',
+        description:
+            'Sensitive member details stay limited to the people responsible for managing the fund.',
+    },
+    {
+        icon: FileClock,
+        title: 'Reports that match records',
+        description:
+            'Monthly and yearly reports are built from the same contribution records your group reviews.',
+    },
 ];
 
-const steps = [
+const workflowDetails: LandingProof[] = [
     {
-        number: '01',
-        title: 'Sign Up',
+        icon: ClipboardCheck,
+        title: 'Review this month',
         description:
-            'Create your family account and invite members to join the contribution pool.',
+            'Open the current contribution period and see paid, partial, due, and overdue members in one operational view.',
     },
     {
-        number: '02',
-        title: 'Track Contributions',
+        icon: CheckCircle2,
+        title: 'Record with confidence',
         description:
-            'Monthly contributions are automatically tracked with clear status updates for each member.',
+            'Add manual or online payments against the right balance so the list updates from the source record.',
     },
     {
-        number: '03',
-        title: 'Stay Accountable',
+        icon: ShieldCheck,
+        title: 'Share only what is needed',
         description:
-            'View reports, monitor balances, and ensure every payment is accounted for.',
-    },
-];
-
-const testimonials = [
-    // {
-    //     quote: 'FamilyFund has transformed how we manage our family contributions. Everything is transparent and everyone knows where they stand.',
-    //     name: 'Adebayo Family',
-    //     role: 'Lagos, Nigeria',
-    //     initials: 'AF',
-    // },
-    // {
-    //     quote: "No more arguments about who has paid and who hasn't. The reports make our monthly meetings so much smoother.",
-    //     name: 'Okonkwo Family',
-    //     role: 'Abuja, Nigeria',
-    //     initials: 'OF',
-    // },
-    {
-        quote: 'The different member categories are perfect for our family. Flexible amounts mean everyone can contribute fairly.',
-        name: 'The Hussains',
-        role: 'Financial Secretary',
-        initials: 'TH',
+            'Use role-based access to keep accountability transparent without exposing private details broadly.',
     },
 ];
 
 const faqs = [
     {
-        question: 'How are contribution amounts determined?',
-        answer: 'Each family admin defines contribution categories and amounts. Members are assigned to categories, and their monthly contribution is determined automatically.',
+        question: 'Can everyone see who has paid?',
+        answer: 'Admins and financial secretaries can review the full contribution list. Members can see the status and history available to their role.',
     },
     {
-        question: 'When are contributions due?',
-        answer: 'Each family sets their own due date. Members receive reminders as the due date approaches.',
+        question: 'How are partial payments handled?',
+        answer: 'Partial payments reduce the outstanding balance immediately, so the remaining amount is clear during review.',
     },
     {
-        question: 'Who can view the financial reports?',
-        answer: 'Admins and Financial Secretaries have full access to reports. Regular members can view their own contribution history and family-level summaries.',
+        question: 'Can contribution amounts differ by member?',
+        answer: 'Yes. Families can use contribution categories so different members can have different expected amounts.',
     },
     {
-        question: 'Can I make partial payments?',
-        answer: 'Yes! Partial payments are fully supported. Your balance is automatically updated and the system tracks exactly how much remains.',
-    },
-    {
-        question: 'Is my financial data secure?',
-        answer: 'Absolutely. We use role-based access control to ensure only authorized family members can view or manage financial data.',
+        question: 'What makes the records trustworthy?',
+        answer: 'Payments, balances, reports, and reminders all work from the same contribution records instead of separate spreadsheets.',
     },
 ];
 
 const openFaqIndex = ref<number | null>(null);
+const pageRoot = ref<HTMLElement | null>(null);
+const { animateDisclosureEnter, animateDisclosureLeave } =
+    useGsapPublicPageAnimations(pageRoot);
 
 function toggleFaq(index: number): void {
     openFaqIndex.value = openFaqIndex.value === index ? null : index;
 }
 
-const visibleSections = ref<Set<string>>(new Set());
-let observer: IntersectionObserver | null = null;
+function memberLimitLabel(plan: Plan): string {
+    if (plan.max_members) {
+        return `Up to ${plan.max_members} members`;
+    }
 
-onMounted(() => {
-    observer = new IntersectionObserver(
-        (entries) => {
-            entries.forEach((entry) => {
-                if (entry.isIntersecting) {
-                    visibleSections.value.add(entry.target.id);
-                }
-            });
-        },
-        { threshold: 0.1 },
-    );
+    return 'Custom member limit';
+}
 
-    document.querySelectorAll('[data-animate]').forEach((el) => {
-        observer?.observe(el);
-    });
-});
-
-onUnmounted(() => {
-    observer?.disconnect();
-});
+function featureLabel(feature: string): string {
+    return props.availableFeatures[feature] || feature;
+}
 </script>
 
 <template>
-    <Head title="Family Contribution Tracker">
+    <Head title="FamilyFund | Contribution Tracking">
         <link rel="preconnect" href="https://rsms.me/" />
         <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
     </Head>
 
     <div
-        class="min-h-screen bg-linear-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900"
+        ref="pageRoot"
+        class="min-h-screen bg-white text-slate-950 dark:bg-slate-950 dark:text-white"
     >
-        <!-- Header -->
         <header
-            class="fixed top-0 z-50 w-full border-b border-slate-200/80 bg-white/80 backdrop-blur-lg dark:border-slate-800 dark:bg-slate-950/80"
+            class="fixed top-0 z-50 w-full border-b border-slate-200 bg-white/90 backdrop-blur-md dark:border-slate-800 dark:bg-slate-950/90"
         >
             <div
                 class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8"
             >
                 <div class="flex items-center gap-2">
                     <div
-                        class="flex size-9 items-center justify-center rounded-lg bg-linear-to-br from-emerald-500 to-teal-600 shadow-lg shadow-emerald-500/25"
+                        class="flex size-9 items-center justify-center rounded-lg bg-emerald-700 text-white dark:bg-emerald-500 dark:text-emerald-950"
                     >
-                        <svg
-                            class="size-5 text-white"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                        >
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                            />
-                        </svg>
+                        <AppLogoIcon class-name="size-5" />
                     </div>
                     <span
                         class="text-lg font-bold text-slate-900 dark:text-white"
@@ -185,6 +185,12 @@ onUnmounted(() => {
                 </div>
 
                 <nav class="flex items-center gap-2 sm:gap-3">
+                    <Link
+                        :href="pricing()"
+                        class="hidden rounded-md px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:text-slate-900 md:inline-flex dark:text-slate-300 dark:hover:text-white"
+                    >
+                        Pricing
+                    </Link>
                     <ThemeToggle />
                     <Link v-if="$page.props.auth.user" :href="dashboard()">
                         <Button variant="default" size="sm"> Dashboard </Button>
@@ -193,444 +199,400 @@ onUnmounted(() => {
                         <Link :href="login()" class="hidden sm:inline-flex">
                             <Button variant="ghost" size="sm"> Log in </Button>
                         </Link>
-                        <Link v-if="canRegister" :href="register()">
-                            <Button size="sm"> Get Started </Button>
+                        <Link v-if="props.canRegister" :href="register()">
+                            <Button size="sm"> Get started </Button>
                         </Link>
                     </template>
                 </nav>
             </div>
         </header>
 
-        <!-- Hero Section -->
-        <section class="relative overflow-hidden pt-32 pb-16 sm:pt-40 sm:pb-24">
-            <!-- Background decoration -->
-            <div class="absolute inset-0 -z-10 overflow-hidden">
-                <div
-                    class="absolute -top-40 right-0 h-125 w-125 rounded-full bg-linear-to-br from-emerald-400/20 to-teal-500/20 blur-3xl dark:from-emerald-400/10 dark:to-teal-500/10"
-                />
-                <div
-                    class="absolute top-40 -left-20 h-100 w-100 rounded-full bg-linear-to-br from-blue-400/20 to-indigo-500/20 blur-3xl dark:from-blue-400/10 dark:to-indigo-500/10"
-                />
-            </div>
-
-            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                <div class="mx-auto max-w-3xl text-center">
-                    <div
-                        class="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-1.5 text-sm font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                    >
-                        <span class="relative flex size-2">
-                            <span
-                                class="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75"
-                            ></span>
-                            <span
-                                class="relative inline-flex size-2 rounded-full bg-emerald-500"
-                            ></span>
-                        </span>
-                        Now tracking contributions
-                    </div>
-
-                    <h1
-                        class="text-4xl font-bold tracking-tight text-slate-900 sm:text-6xl dark:text-white"
-                    >
-                        Keep Your Family
-                        <span
-                            class="bg-linear-to-r from-emerald-600 to-teal-500 bg-clip-text text-transparent"
-                        >
-                            Financially United
-                        </span>
-                    </h1>
-
-                    <p
-                        class="mt-6 text-lg leading-8 text-slate-600 dark:text-slate-400"
-                    >
-                        A simple, transparent way to manage monthly family
-                        contributions. Track payments, view balances, and keep
-                        everyone accountable — all in one place.
-                    </p>
-
-                    <div
-                        class="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row"
-                    >
-                        <Link
-                            v-if="!$page.props.auth.user && canRegister"
-                            :href="register()"
-                        >
-                            <Button
-                                size="lg"
-                                class="w-full bg-linear-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-500/25 hover:from-emerald-700 hover:to-teal-700 sm:w-auto"
-                            >
-                                Start Tracking Today
-                                <svg
-                                    class="ml-2 size-4"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M13 7l5 5m0 0l-5 5m5-5H6"
-                                    />
-                                </svg>
-                            </Button>
-                        </Link>
-                        <Link
-                            v-else-if="$page.props.auth.user"
-                            :href="dashboard()"
-                        >
-                            <Button
-                                size="lg"
-                                class="w-full bg-linear-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-500/25 hover:from-emerald-700 hover:to-teal-700 sm:w-auto"
-                            >
-                                Go to Dashboard
-                                <svg
-                                    class="ml-2 size-4"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M13 7l5 5m0 0l-5 5m5-5H6"
-                                    />
-                                </svg>
-                            </Button>
-                        </Link>
-                        <Link v-if="!$page.props.auth.user" :href="login()">
-                            <Button
-                                variant="outline"
-                                size="lg"
-                                class="w-full border-slate-300 sm:w-auto dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
-                            >
-                                Sign In
-                            </Button>
-                        </Link>
-                    </div>
-                </div>
-
-                <!-- Stats -->
-                <div class="mx-auto mt-16 max-w-4xl">
-                    <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                        <div
-                            v-for="stat in stats"
-                            :key="stat.label"
-                            class="rounded-2xl border border-slate-200 bg-white/60 p-6 text-center backdrop-blur-sm transition-all hover:border-emerald-300 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900/60 dark:hover:border-emerald-700"
-                        >
-                            <div
-                                class="text-2xl font-bold text-emerald-600 sm:text-3xl dark:text-emerald-400"
-                            >
-                                {{ stat.value }}
-                            </div>
-                            <div
-                                class="mt-1 text-sm text-slate-600 dark:text-slate-400"
-                            >
-                                {{ stat.label }}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Features Section -->
         <section
-            id="section-features"
-            data-animate
-            class="py-16 sm:py-24"
-            :class="
-                visibleSections.has('section-features')
-                    ? 'animate-fade-in-up'
-                    : 'opacity-0'
-            "
+            class="border-b border-slate-200 bg-slate-50 pt-28 pb-16 sm:pt-32 sm:pb-20 dark:border-slate-800 dark:bg-slate-950"
         >
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                <div class="mx-auto max-w-2xl text-center">
-                    <h2
-                        class="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl dark:text-white"
-                    >
-                        Everything you need to manage contributions
-                    </h2>
-                    <p class="mt-4 text-lg text-slate-600 dark:text-slate-400">
-                        Built for families who value transparency and
-                        accountability.
-                    </p>
-                </div>
-
-                <div class="mx-auto mt-16 grid max-w-5xl gap-8 sm:grid-cols-2">
-                    <div
-                        v-for="feature in features"
-                        :key="feature.title"
-                        class="group relative rounded-2xl border border-slate-200 bg-white p-8 transition-all hover:border-emerald-300 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900 dark:hover:border-emerald-700"
-                    >
+                <div
+                    class="grid items-center gap-12 lg:grid-cols-[0.92fr_1.08fr]"
+                >
+                    <div class="max-w-2xl">
                         <div
-                            class="mb-4 inline-flex size-12 items-center justify-center rounded-xl bg-linear-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/25 transition-transform group-hover:scale-110"
+                            class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
                         >
-                            <!-- Wallet Icon -->
-                            <svg
-                                v-if="feature.icon === 'wallet'"
-                                class="size-6"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
-                                />
-                            </svg>
-                            <!-- Users Icon -->
-                            <svg
-                                v-else-if="feature.icon === 'users'"
-                                class="size-6"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
-                                />
-                            </svg>
-                            <!-- Chart Icon -->
-                            <svg
-                                v-else-if="feature.icon === 'chart'"
-                                class="size-6"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                                />
-                            </svg>
-                            <!-- Shield Icon -->
-                            <svg
-                                v-else
-                                class="size-6"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-                                />
-                            </svg>
+                            <ClipboardCheck
+                                class="size-4 text-emerald-700 dark:text-emerald-400"
+                            />
+                            Monthly contribution clarity
                         </div>
-                        <h3
-                            class="text-xl font-semibold text-slate-900 dark:text-white"
-                        >
-                            {{ feature.title }}
-                        </h3>
-                        <p class="mt-2 text-slate-600 dark:text-slate-400">
-                            {{ feature.description }}
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </section>
 
-        <!-- How It Works Section -->
-        <section
-            id="section-how-it-works"
-            data-animate
-            class="border-t border-slate-200 bg-slate-50 py-16 sm:py-24 dark:border-slate-800 dark:bg-slate-900/50"
-            :class="
-                visibleSections.has('section-how-it-works')
-                    ? 'animate-fade-in-up'
-                    : 'opacity-0'
-            "
-        >
-            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                <div class="mx-auto max-w-2xl text-center">
-                    <h2
-                        class="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl dark:text-white"
-                    >
-                        How it works
-                    </h2>
-                    <p class="mt-4 text-lg text-slate-600 dark:text-slate-400">
-                        Get started in three simple steps.
-                    </p>
-                </div>
+                        <h1
+                            class="mt-6 text-4xl leading-tight font-bold tracking-tight text-balance text-slate-950 sm:text-6xl dark:text-white"
+                        >
+                            See who paid and who still owes.
+                        </h1>
 
-                <div class="mx-auto mt-16 grid max-w-5xl gap-8 sm:grid-cols-3">
-                    <div
-                        v-for="step in steps"
-                        :key="step.number"
-                        class="relative text-center"
-                    >
-                        <div
-                            class="mx-auto mb-6 flex size-16 items-center justify-center rounded-2xl bg-linear-to-br from-emerald-500 to-teal-600 text-2xl font-bold text-white shadow-lg shadow-emerald-500/25"
-                        >
-                            {{ step.number }}
-                        </div>
-                        <h3
-                            class="text-xl font-semibold text-slate-900 dark:text-white"
-                        >
-                            {{ step.title }}
-                        </h3>
                         <p
-                            class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400"
+                            class="mt-5 max-w-xl text-lg leading-8 text-pretty text-slate-700 dark:text-slate-300"
                         >
-                            {{ step.description }}
+                            FamilyFund gives families and contribution groups a
+                            shared monthly record: expected amounts, received
+                            payments, remaining balances, and reports everyone
+                            can trust.
                         </p>
+
+                        <div
+                            class="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center"
+                        >
+                            <Link
+                                v-if="
+                                    !$page.props.auth.user && props.canRegister
+                                "
+                                :href="register()"
+                            >
+                                <Button
+                                    size="lg"
+                                    class="w-full bg-emerald-700 text-white hover:bg-emerald-800 sm:w-auto dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400"
+                                >
+                                    Start tracking
+                                    <ArrowRight class="size-4" />
+                                </Button>
+                            </Link>
+                            <Link
+                                v-else-if="$page.props.auth.user"
+                                :href="dashboard()"
+                            >
+                                <Button
+                                    size="lg"
+                                    class="w-full bg-emerald-700 text-white hover:bg-emerald-800 sm:w-auto dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400"
+                                >
+                                    Go to Dashboard
+                                    <ArrowRight class="size-4" />
+                                </Button>
+                            </Link>
+                            <Link
+                                v-if="!$page.props.auth.user"
+                                :href="pricing()"
+                            >
+                                <Button
+                                    variant="outline"
+                                    size="lg"
+                                    class="w-full border-slate-300 bg-white sm:w-auto dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
+                                >
+                                    View pricing
+                                </Button>
+                            </Link>
+                        </div>
+
+                        <div
+                            class="mt-10 max-w-xl divide-y divide-slate-200 border-y border-slate-200 dark:divide-slate-800 dark:border-slate-800"
+                        >
+                            <div
+                                v-for="proof in heroProofs"
+                                :key="proof.title"
+                                class="py-4"
+                            >
+                                <p
+                                    class="text-sm font-semibold text-slate-950 dark:text-white"
+                                >
+                                    {{ proof.title }}
+                                </p>
+                                <p
+                                    class="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400"
+                                >
+                                    {{ proof.description }}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mx-auto w-full max-w-xl lg:mx-0 lg:max-w-none">
+                        <HeroGsapAnimation
+                            label="FamilyFund monthly contribution review showing paid, partial, and due members"
+                            variant="home"
+                        />
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- Testimonials Section -->
-        <section
-            id="section-testimonials"
-            data-animate
-            class="py-16 sm:py-24"
-            :class="
-                visibleSections.has('section-testimonials')
-                    ? 'animate-fade-in-up'
-                    : 'opacity-0'
-            "
-        >
-            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                <div class="mx-auto max-w-2xl text-center">
-                    <h2
-                        class="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl dark:text-white"
+        <section id="section-trust" data-gsap-section class="py-16 sm:py-24">
+            <div
+                class="mx-auto grid max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-[0.8fr_1.2fr] lg:px-8"
+            >
+                <div data-gsap-reveal>
+                    <p
+                        class="text-sm font-semibold text-emerald-700 dark:text-emerald-400"
                     >
-                        Trusted by families everywhere
+                        Trust before reminders
+                    </p>
+                    <h2
+                        class="mt-3 max-w-xl text-3xl leading-tight font-bold tracking-tight text-balance text-slate-950 sm:text-4xl dark:text-white"
+                    >
+                        The record should settle the question before the group
+                        chat starts.
                     </h2>
-                    <p class="mt-4 text-lg text-slate-600 dark:text-slate-400">
-                        See what families are saying about FamilyFund.
+                    <p
+                        class="mt-5 max-w-xl text-base leading-7 text-pretty text-slate-600 dark:text-slate-400"
+                    >
+                        FamilyFund keeps contribution status, payment history,
+                        and reports tied to one source of truth so
+                        accountability feels practical instead of personal.
                     </p>
                 </div>
 
                 <div
-                    class="mx-auto mt-16 grid max-w-5xl gap-8 sm:grid-cols-2 lg:grid-cols-3"
+                    class="divide-y divide-slate-200 border-y border-slate-200 dark:divide-slate-800 dark:border-slate-800"
                 >
                     <div
-                        v-for="testimonial in testimonials"
-                        :key="testimonial.name"
-                        class="rounded-2xl border border-slate-200 bg-white p-8 transition-all hover:shadow-lg dark:border-slate-800 dark:bg-slate-900"
+                        v-for="proof in trustProofs"
+                        :key="proof.title"
+                        class="grid gap-4 py-6 sm:grid-cols-[2.5rem_1fr]"
+                        data-gsap-row
                     >
-                        <div class="mb-4 flex gap-1">
-                            <svg
-                                v-for="n in 5"
-                                :key="n"
-                                class="size-5 text-amber-400"
-                                fill="currentColor"
-                                viewBox="0 0 20 20"
-                            >
-                                <path
-                                    d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"
-                                />
-                            </svg>
-                        </div>
-                        <p
-                            class="leading-relaxed text-slate-600 dark:text-slate-400"
+                        <div
+                            class="flex size-10 items-center justify-center rounded-lg bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-200"
                         >
-                            "{{ testimonial.quote }}"
-                        </p>
-                        <div class="mt-6 flex items-center gap-3">
-                            <div
-                                class="flex size-10 items-center justify-center rounded-full bg-linear-to-br from-emerald-500 to-teal-600 text-sm font-bold text-white"
+                            <component :is="proof.icon" class="size-5" />
+                        </div>
+                        <div>
+                            <h3
+                                class="text-lg font-semibold text-slate-950 dark:text-white"
                             >
-                                {{ testimonial.initials }}
-                            </div>
-                            <div>
-                                <p
-                                    class="font-semibold text-slate-900 dark:text-white"
-                                >
-                                    {{ testimonial.name }}
-                                </p>
-                                <p
-                                    class="text-sm text-slate-500 dark:text-slate-400"
-                                >
-                                    {{ testimonial.role }}
-                                </p>
-                            </div>
+                                {{ proof.title }}
+                            </h3>
+                            <p
+                                class="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400"
+                            >
+                                {{ proof.description }}
+                            </p>
                         </div>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- FAQ Section -->
+        <section
+            v-if="props.pricingPreviewPlans.length"
+            id="section-pricing"
+            data-gsap-section
+            data-testid="home-pricing-preview-animation"
+            class="border-y border-slate-200 bg-slate-50 py-16 dark:border-slate-800 dark:bg-slate-900/40"
+        >
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div
+                    class="flex flex-col justify-between gap-6 md:flex-row md:items-end"
+                    data-gsap-reveal
+                >
+                    <div class="max-w-2xl">
+                        <h2
+                            class="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl dark:text-white"
+                        >
+                            Plans that match your group size
+                        </h2>
+                        <p
+                            class="mt-4 max-w-xl text-base leading-7 text-slate-600 dark:text-slate-400"
+                        >
+                            Start with the member count and payment workflows
+                            your family needs now. Upgrade when reminders,
+                            reports, or online payments need more capacity.
+                        </p>
+                    </div>
+                    <Link :href="pricing()">
+                        <Button variant="outline" class="w-full sm:w-auto">
+                            Compare all plans
+                            <ArrowRight class="size-4" />
+                        </Button>
+                    </Link>
+                </div>
+
+                <div class="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div
+                        v-for="plan in props.pricingPreviewPlans"
+                        :key="plan.id"
+                        data-gsap-card
+                        data-gsap-hover
+                        :data-gsap-highlight="
+                            plan.is_recommended ? 'true' : undefined
+                        "
+                        :class="[
+                            'flex min-h-72 flex-col rounded-lg border p-5 transition-colors',
+                            plan.is_recommended
+                                ? 'border-emerald-500 bg-white dark:bg-slate-950'
+                                : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950',
+                        ]"
+                    >
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <h3
+                                    class="text-lg font-semibold text-slate-900 dark:text-white"
+                                >
+                                    {{ plan.name }}
+                                </h3>
+                                <p
+                                    class="mt-1 text-sm text-slate-600 dark:text-slate-400"
+                                >
+                                    {{ memberLimitLabel(plan) }}
+                                </p>
+                            </div>
+                            <span
+                                v-if="plan.is_recommended"
+                                class="rounded-full bg-emerald-700 px-2.5 py-1 text-xs font-medium text-white dark:bg-emerald-500 dark:text-emerald-950"
+                            >
+                                Recommended
+                            </span>
+                        </div>
+
+                        <div class="mt-5">
+                            <span
+                                class="text-2xl font-bold text-slate-900 dark:text-white"
+                            >
+                                {{ plan.formatted_price }}
+                            </span>
+                            <span
+                                v-if="plan.price > 0"
+                                class="text-sm text-slate-500 dark:text-slate-400"
+                            >
+                                /month
+                            </span>
+                        </div>
+
+                        <p
+                            class="mt-4 flex-1 text-sm leading-6 text-slate-600 dark:text-slate-400"
+                        >
+                            {{ plan.summary }}
+                        </p>
+
+                        <ul class="mt-5 space-y-2">
+                            <li
+                                v-for="feature in plan.features.slice(0, 3)"
+                                :key="feature"
+                                class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"
+                            >
+                                <CheckCircle2
+                                    class="size-4 shrink-0 text-emerald-700 dark:text-emerald-400"
+                                />
+                                {{ featureLabel(feature) }}
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="section-workflow" data-gsap-section class="py-16 sm:py-24">
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div
+                    class="flex flex-col justify-between gap-6 md:flex-row md:items-end"
+                    data-gsap-reveal
+                >
+                    <div class="max-w-2xl">
+                        <h2
+                            class="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl dark:text-white"
+                        >
+                            A monthly review without the spreadsheet arguments.
+                        </h2>
+                        <p
+                            class="mt-4 text-base leading-7 text-slate-600 dark:text-slate-400"
+                        >
+                            The page exists to answer one question quickly: who
+                            is settled, who is partly paid, and who needs a
+                            follow-up?
+                        </p>
+                    </div>
+                </div>
+
+                <div
+                    class="mt-10 overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950"
+                >
+                    <div
+                        class="grid divide-y divide-slate-200 md:grid-cols-3 md:divide-x md:divide-y-0 dark:divide-slate-800"
+                    >
+                        <div
+                            v-for="detail in workflowDetails"
+                            :key="detail.title"
+                            class="p-6"
+                            data-gsap-card
+                            data-gsap-hover
+                        >
+                            <div
+                                class="mb-5 flex size-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                            >
+                                <component :is="detail.icon" class="size-5" />
+                            </div>
+                            <h3
+                                class="text-lg font-semibold text-slate-950 dark:text-white"
+                            >
+                                {{ detail.title }}
+                            </h3>
+                            <p
+                                class="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-400"
+                            >
+                                {{ detail.description }}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <section
             id="section-faq"
-            data-animate
-            class="border-t border-slate-200 bg-slate-50 py-16 sm:py-24 dark:border-slate-800 dark:bg-slate-900/50"
-            :class="
-                visibleSections.has('section-faq')
-                    ? 'animate-fade-in-up'
-                    : 'opacity-0'
-            "
+            data-gsap-section
+            data-testid="home-faq-animation"
+            class="border-y border-slate-200 bg-slate-50 py-16 sm:py-24 dark:border-slate-800 dark:bg-slate-900/40"
         >
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                <div class="mx-auto max-w-2xl text-center">
+                <div class="mx-auto max-w-2xl text-center" data-gsap-reveal>
                     <h2
                         class="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl dark:text-white"
                     >
-                        Frequently asked questions
+                        Questions families ask before trusting the record.
                     </h2>
-                    <p class="mt-4 text-lg text-slate-600 dark:text-slate-400">
-                        Everything you need to know about FamilyFund.
+                    <p
+                        class="mt-4 text-base leading-7 text-slate-600 dark:text-slate-400"
+                    >
+                        Clear enough for members, detailed enough for financial
+                        secretaries.
                     </p>
                 </div>
 
                 <div
-                    class="mx-auto mt-12 max-w-3xl divide-y divide-slate-200 dark:divide-slate-700"
+                    class="mx-auto mt-12 max-w-3xl divide-y divide-slate-200 border-y border-slate-200 dark:divide-slate-800 dark:border-slate-800"
                 >
-                    <div v-for="(faq, index) in faqs" :key="index" class="py-5">
+                    <div
+                        v-for="(faq, index) in faqs"
+                        :key="index"
+                        class="py-5"
+                        data-gsap-row
+                    >
                         <button
+                            type="button"
                             @click="toggleFaq(index)"
-                            class="flex w-full items-center justify-between text-left"
+                            class="flex w-full items-center justify-between gap-4 text-left"
+                            :aria-expanded="openFaqIndex === index"
                         >
                             <span
-                                class="text-base font-medium text-slate-900 dark:text-white"
+                                class="text-base font-semibold text-slate-950 dark:text-white"
                             >
                                 {{ faq.question }}
                             </span>
-                            <svg
+                            <ChevronDown
                                 class="size-5 shrink-0 text-slate-500 transition-transform duration-200"
                                 :class="
                                     openFaqIndex === index ? 'rotate-180' : ''
                                 "
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M19 9l-7 7-7-7"
-                                />
-                            </svg>
+                            />
                         </button>
                         <Transition
-                            enter-active-class="transition duration-200 ease-out"
-                            enter-from-class="max-h-0 opacity-0"
-                            enter-to-class="max-h-40 opacity-100"
-                            leave-active-class="transition duration-150 ease-in"
-                            leave-from-class="max-h-40 opacity-100"
-                            leave-to-class="max-h-0 opacity-0"
+                            :css="false"
+                            @enter="animateDisclosureEnter"
+                            @leave="animateDisclosureLeave"
                         >
                             <div
                                 v-if="openFaqIndex === index"
                                 class="overflow-hidden"
                             >
                                 <p
-                                    class="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-400"
+                                    class="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-400"
                                 >
                                     {{ faq.answer }}
                                 </p>
@@ -641,48 +603,42 @@ onUnmounted(() => {
             </div>
         </section>
 
-        <!-- CTA Section -->
         <section
-            class="relative isolate overflow-hidden bg-linear-to-br from-emerald-600 to-teal-700 py-16 sm:py-24"
+            data-gsap-section
+            data-testid="home-final-cta-animation"
+            class="bg-slate-950 py-16 text-white sm:py-20"
         >
-            <div
-                class="absolute inset-0 -z-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PHBhdGggZD0iTTM2IDM0djItSDI0di0yaDEyek0zNiAyNHYySDI0di0yaDEyeiIvPjwvZz48L2c+PC9zdmc+')] opacity-30"
-            />
-
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                <div class="mx-auto max-w-2xl text-center">
-                    <h2
-                        class="text-3xl font-bold tracking-tight text-white sm:text-4xl"
-                    >
-                        Ready to bring your family together?
-                    </h2>
-                    <p class="mt-4 text-lg text-emerald-100">
-                        Join families who trust FamilyFund to manage their
-                        contributions with transparency and ease.
-                    </p>
-                    <div class="mt-10">
+                <div
+                    class="grid items-center gap-8 md:grid-cols-[1fr_auto]"
+                    data-gsap-reveal
+                >
+                    <div class="max-w-2xl">
+                        <p class="text-sm font-semibold text-emerald-300">
+                            Ready when the next contribution period opens
+                        </p>
+                        <h2
+                            class="mt-3 text-3xl font-bold tracking-tight text-balance sm:text-4xl"
+                        >
+                            Replace the reconciliation spreadsheet with one
+                            shared record.
+                        </h2>
+                        <p class="mt-4 text-base leading-7 text-slate-300">
+                            Start with a clear monthly list. Keep the proof,
+                            permissions, and reports in the same place.
+                        </p>
+                    </div>
+                    <div data-gsap-card data-gsap-hover>
                         <Link
-                            v-if="!$page.props.auth.user && canRegister"
+                            v-if="!$page.props.auth.user && props.canRegister"
                             :href="register()"
                         >
                             <Button
                                 size="lg"
-                                class="cursor-pointer bg-white text-emerald-700 shadow-xl hover:bg-emerald-500 hover:text-white hover:shadow-emerald-300/50"
+                                class="w-full bg-white text-emerald-950 hover:bg-emerald-100 sm:w-auto"
                             >
-                                Create Your Account
-                                <svg
-                                    class="ml-2 size-4"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M13 7l5 5m0 0l-5 5m5-5H6"
-                                    />
-                                </svg>
+                                Create your account
+                                <ArrowRight class="size-4" />
                             </Button>
                         </Link>
                         <Link
@@ -691,43 +647,19 @@ onUnmounted(() => {
                         >
                             <Button
                                 size="lg"
-                                class="bg-white text-emerald-700 shadow-xl hover:bg-slate-50"
+                                class="w-full bg-white text-emerald-950 hover:bg-emerald-100 sm:w-auto"
                             >
                                 Go to Dashboard
-                                <svg
-                                    class="ml-2 size-4"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M13 7l5 5m0 0l-5 5m5-5H6"
-                                    />
-                                </svg>
+                                <ArrowRight class="size-4" />
                             </Button>
                         </Link>
                         <Link v-else :href="login()">
                             <Button
                                 size="lg"
-                                class="bg-white text-emerald-700 shadow-xl hover:bg-slate-50"
+                                class="w-full bg-white text-emerald-950 hover:bg-emerald-100 sm:w-auto"
                             >
-                                Sign In to Continue
-                                <svg
-                                    class="ml-2 size-4"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M13 7l5 5m0 0l-5 5m5-5H6"
-                                    />
-                                </svg>
+                                Sign in to continue
+                                <ArrowRight class="size-4" />
                             </Button>
                         </Link>
                     </div>
@@ -735,9 +667,8 @@ onUnmounted(() => {
             </div>
         </section>
 
-        <!-- Footer -->
         <footer
-            class="border-t border-slate-200 bg-white py-12 dark:border-slate-800 dark:bg-slate-950"
+            class="border-t border-slate-200 bg-white py-10 dark:border-slate-800 dark:bg-slate-950"
         >
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div
@@ -745,21 +676,9 @@ onUnmounted(() => {
                 >
                     <div class="flex items-center gap-2">
                         <div
-                            class="flex size-8 items-center justify-center rounded-lg bg-linear-to-br from-emerald-500 to-teal-600"
+                            class="flex size-8 items-center justify-center rounded-lg bg-emerald-700 text-white dark:bg-emerald-500 dark:text-emerald-950"
                         >
-                            <svg
-                                class="size-4 text-white"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                                />
-                            </svg>
+                            <AppLogoIcon class-name="size-4" />
                         </div>
                         <span
                             class="font-semibold text-slate-900 dark:text-white"
@@ -767,8 +686,8 @@ onUnmounted(() => {
                         >
                     </div>
                     <p class="text-sm text-slate-500 dark:text-slate-400">
-                        © {{ new Date().getFullYear() }} FamilyFund. Built with
-                        ❤️ for families everywhere.
+                        © {{ new Date().getFullYear() }} FamilyFund.
+                        Contribution records made clear and accountable.
                     </p>
                     <div class="flex items-center gap-4">
                         <Link

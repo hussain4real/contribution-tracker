@@ -1,17 +1,37 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
+use App\Support\CurrencyFormatter;
 use Database\Factories\ExpenseFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
+use Illuminate\Support\Carbon;
+use LogicException;
 
+/**
+ * @property int $id
+ * @property int $family_id
+ * @property int $amount
+ * @property Carbon|null $created_at
+ * @property string $description
+ * @property Carbon $spent_at
+ * @property User|null $recorder
+ * @property-read FinancialReversal|null $reversal
+ * @property-read string $formatted_amount
+ */
 class Expense extends Model
 {
     /** @use HasFactory<ExpenseFactory> */
     use HasFactory;
+
+    public const MORPH_TYPE = 'expense';
 
     /**
      * The attributes that are mass assignable.
@@ -45,6 +65,8 @@ class Expense extends Model
 
     /**
      * The family this expense belongs to.
+     *
+     * @return BelongsTo<Family, $this>
      */
     public function family(): BelongsTo
     {
@@ -53,10 +75,24 @@ class Expense extends Model
 
     /**
      * The user who recorded this expense.
+     *
+     * @return BelongsTo<User, $this>
      */
     public function recorder(): BelongsTo
     {
         return $this->belongsTo(User::class, 'recorded_by');
+    }
+
+    /** @return MorphOne<FinancialReversal, $this> */
+    public function reversal(): MorphOne
+    {
+        return $this->morphOne(FinancialReversal::class, 'reversible');
+    }
+
+    /** @return MorphMany<ReconciliationLink, $this> */
+    public function reconciliationLinks(): MorphMany
+    {
+        return $this->morphMany(ReconciliationLink::class, 'reconcilable');
     }
 
     // =========================================================================
@@ -65,6 +101,9 @@ class Expense extends Model
 
     /**
      * Scope to order by most recent first.
+     *
+     * @param  Builder<Expense>  $query
+     * @return Builder<Expense>
      */
     public function scopeLatestFirst(Builder $query): Builder
     {
@@ -73,10 +112,29 @@ class Expense extends Model
 
     /**
      * Scope to expenses in a specific date range.
+     *
+     * @param  Builder<Expense>  $query
+     * @return Builder<Expense>
      */
-    public function scopeSpentBetween(Builder $query, $startDate, $endDate): Builder
+    public function scopeSpentBetween(Builder $query, mixed $startDate, mixed $endDate): Builder
     {
         return $query->whereBetween('spent_at', [$startDate, $endDate]);
+    }
+
+    /**
+     * @param  Builder<Expense>  $query
+     * @return Builder<Expense>
+     */
+    public function scopeEffective(Builder $query): Builder
+    {
+        return $query->whereDoesntHave('reversal');
+    }
+
+    public function isReversed(): bool
+    {
+        return $this->relationLoaded('reversal')
+            ? $this->reversal instanceof FinancialReversal
+            : $this->reversal()->exists();
     }
 
     // =========================================================================
@@ -88,6 +146,12 @@ class Expense extends Model
      */
     public function getFormattedAmountAttribute(): string
     {
-        return '₦'.number_format($this->amount, 2);
+        return CurrencyFormatter::format($this->amount, $this->family?->currency);
+    }
+
+    protected static function booted(): void
+    {
+        static::updating(fn (): never => throw new LogicException('Posted expenses are immutable.'));
+        static::deleting(fn (): never => throw new LogicException('Posted expenses cannot be deleted.'));
     }
 }

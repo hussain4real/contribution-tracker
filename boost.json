@@ -1,27 +1,33 @@
 {
     "agents": [
         "copilot",
-        "gemini",
-        "codex"
+        "codex",
+        "antigravity"
     ],
     "cloud": false,
     "guidelines": true,
     "mcp": true,
     "nightwatch": true,
     "packages": [
-        "barryvdh/laravel-debugbar"
+        "barryvdh/laravel-debugbar",
+        "spatie/laravel-backup",
+        "filament/filament"
     ],
     "sail": false,
     "skills": [
         "ai-sdk-development",
         "fortify-development",
         "laravel-best-practices",
+        "mcp-development",
         "configure-nightwatch",
+        "passport-development",
         "pennant-development",
         "wayfinder-development",
         "pest-testing",
         "inertia-vue-development",
         "tailwindcss-development",
-        "debug-using-debugbar"
+        "laravel-backup",
+        "debug-using-debugbar",
+        "starter-kit-upgrade"
     ]
 }

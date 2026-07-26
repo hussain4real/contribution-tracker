@@ -1,19 +1,47 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
 
+/**
+ * @param  array<string, mixed>  $overrides
+ * @return array{endpoint: string, keys: array{p256dh: string, auth: string}, contentEncoding: string}
+ */
 function webPushPayload(array $overrides = []): array
 {
-    return array_replace_recursive([
+    $payload = [
         'endpoint' => 'https://updates.push.services.mozilla.com/wpush/v2/test-endpoint',
         'keys' => [
             'p256dh' => 'test-public-key',
             'auth' => 'test-auth-token',
         ],
         'contentEncoding' => 'aes128gcm',
-    ], $overrides);
+    ];
+
+    if (isset($overrides['endpoint']) && is_string($overrides['endpoint'])) {
+        $payload['endpoint'] = $overrides['endpoint'];
+    }
+
+    if (isset($overrides['contentEncoding']) && is_string($overrides['contentEncoding'])) {
+        $payload['contentEncoding'] = $overrides['contentEncoding'];
+    }
+
+    $keys = $overrides['keys'] ?? null;
+
+    if (is_array($keys)) {
+        if (isset($keys['p256dh']) && is_string($keys['p256dh'])) {
+            $payload['keys']['p256dh'] = $keys['p256dh'];
+        }
+
+        if (isset($keys['auth']) && is_string($keys['auth'])) {
+            $payload['keys']['auth'] = $keys['auth'];
+        }
+    }
+
+    return $payload;
 }
 
 beforeEach(function () {
@@ -35,10 +63,9 @@ describe('web push subscriptions', function () {
 
         $response->assertRedirect();
 
-        $subscription = $user->pushSubscriptions()->first();
+        $subscription = $user->pushSubscriptions()->firstOrFail();
 
-        expect($subscription)->not->toBeNull()
-            ->and($subscription->endpoint)->toBe('https://updates.push.services.mozilla.com/wpush/v2/test-endpoint')
+        expect($subscription->endpoint)->toBe('https://updates.push.services.mozilla.com/wpush/v2/test-endpoint')
             ->and($subscription->public_key)->toBe('test-public-key')
             ->and($subscription->auth_token)->toBe('test-auth-token')
             ->and($subscription->content_encoding)->toBe('aes128gcm');
@@ -57,7 +84,7 @@ describe('web push subscriptions', function () {
 
         expect($user->pushSubscriptions()->count())->toBe(1);
 
-        $subscription = $user->pushSubscriptions()->first();
+        $subscription = $user->pushSubscriptions()->firstOrFail();
 
         expect($subscription->public_key)->toBe('updated-public-key')
             ->and($subscription->auth_token)->toBe('updated-auth-token');
@@ -196,6 +223,6 @@ describe('web push shared props', function () {
                 ->where('webPush.subscribed', false)
             );
 
-        expect($queries->filter(fn (string $query): bool => str_contains($query, 'push_subscriptions')))->toBeEmpty();
+        expect($queries->filter(fn (mixed $query): bool => is_string($query) && str_contains($query, 'push_subscriptions')))->toBeEmpty();
     });
 });

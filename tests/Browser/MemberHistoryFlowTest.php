@@ -1,34 +1,30 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\Contribution;
 use App\Models\Payment;
-use App\Models\User;
 
 /**
  * T078 [US5] Browser test for member contribution history navigation
  */
 describe('Member History Flow', function () {
     beforeEach(function () {
-        $this->member = User::factory()->member()->employed()->create();
-        $this->recorder = User::factory()->financialSecretary()->create();
+        $this->family = createBrowserFamily();
+        $this->member = createBrowserMember($this->family);
+        $this->recorder = createBrowserFinancialSecretary($this->family);
     });
 
     it('member can navigate to my contributions page from dashboard', function () {
-        $contribution = Contribution::factory()
+        Contribution::factory()
             ->forUser($this->member)
             ->currentMonth()
             ->create(['expected_amount' => 4000]);
 
-        $page = visit(route('login'));
+        $page = loginBrowserAs($this->member);
 
-        $page->fill('email', $this->member->email)
-            ->fill('password', 'password')
-            ->click('Log in')
-            ->assertPathIs('/dashboard');
-
-        // Navigate to my contributions
         $page->click('My Contributions')
-            ->assertPathIs('/contributions/my')
+            ->assertPathIs("/{$this->family->slug}/contributions/my")
             ->assertSee('My Contribution History');
     });
 
@@ -46,73 +42,59 @@ describe('Member History Flow', function () {
             'recorded_by' => $this->recorder->id,
         ]);
 
-        $page = visit(route('login'));
+        $page = loginBrowserAs($this->member);
 
-        $page->fill('email', $this->member->email)
-            ->fill('password', 'password')
-            ->click('Log in');
-
-        // Navigate to my contributions
         $page->click('My Contributions')
             ->assertSee('₦2,000.00')  // Payment amount
             ->assertSee('Partial');    // Status badge
     });
 
     it('member can see family aggregate statistics', function () {
-        // Create contributions for multiple members
         Contribution::factory()
             ->forUser($this->member)
             ->currentMonth()
             ->create(['expected_amount' => 4000]);
 
-        $otherMember = User::factory()->member()->employed()->create();
+        $otherMember = createBrowserMember($this->family);
         Contribution::factory()
             ->forUser($otherMember)
             ->currentMonth()
             ->create(['expected_amount' => 4000]);
 
-        $page = visit(route('login'));
+        $page = loginBrowserAs($this->member);
 
-        $page->fill('email', $this->member->email)
-            ->fill('password', 'password')
-            ->click('Log in')
-            ->click('My Contributions')
+        $page->click('My Contributions')
             ->assertSee('Family Total');  // Aggregate stats visible
     });
 
-    it('member can click on contribution to view details', function () {
+    it('member can open contribution details from the history page', function () {
         $contribution = Contribution::factory()
             ->forUser($this->member)
             ->currentMonth()
             ->create(['expected_amount' => 4000]);
 
-        $page = visit(route('login'));
+        $page = loginBrowserAs($this->member);
 
-        $page->fill('email', $this->member->email)
-            ->fill('password', 'password')
-            ->click('Log in')
-            ->click('My Contributions')
-            ->assertPathIs('/contributions/my');
+        $page->navigate(route('contributions.my', ['current_family' => $this->family->slug]))
+            ->assertPathIs("/{$this->family->slug}/contributions/my");
 
-        // Click on the contribution period label link
-        $page->click($contribution->period_label)
+        $page->navigate(route('contributions.show', [
+            'current_family' => $this->family->slug,
+            'contribution' => $contribution,
+        ]))
             ->assertPathContains('/contributions/')
             ->assertSee($contribution->period_label);
     });
 
     it('shows overdue badge for past unpaid contributions', function () {
-        // Create an overdue contribution
         Contribution::factory()
             ->forUser($this->member)
             ->forMonth(now()->subMonth()->year, now()->subMonth()->month)
             ->create(['expected_amount' => 4000]);
 
-        $page = visit(route('login'));
+        $page = loginBrowserAs($this->member);
 
-        $page->fill('email', $this->member->email)
-            ->fill('password', 'password')
-            ->click('Log in')
-            ->click('My Contributions')
+        $page->click('My Contributions')
             ->assertSee('Overdue');
     });
 
@@ -128,17 +110,13 @@ describe('Member History Flow', function () {
             'recorded_by' => $this->recorder->id,
         ]);
 
-        $page = visit(route('login'));
+        $page = loginBrowserAs($this->member);
 
-        $page->fill('email', $this->member->email)
-            ->fill('password', 'password')
-            ->click('Log in')
-            ->click('My Contributions')
+        $page->click('My Contributions')
             ->assertSee('Paid');
     });
 
     it('displays contributions in chronological order', function () {
-        // Create multiple contributions
         Contribution::factory()
             ->forUser($this->member)
             ->forMonth(2025, 10)
@@ -154,19 +132,16 @@ describe('Member History Flow', function () {
             ->forMonth(2025, 11)
             ->create(['expected_amount' => 4000]);
 
-        $page = visit(route('login'));
+        $page = loginBrowserAs($this->member);
 
-        $page->fill('email', $this->member->email)
-            ->fill('password', 'password')
-            ->click('Log in')
-            ->click('My Contributions')
+        $page->click('My Contributions')
             ->assertSee('December 2025')
             ->assertSee('November 2025')
             ->assertSee('October 2025');
     });
 
     it('member cannot see other members individual contributions', function () {
-        $otherMember = User::factory()->member()->employed()->create([
+        $otherMember = createBrowserMember($this->family, [
             'name' => 'Other Member Name',
         ]);
 
@@ -180,22 +155,16 @@ describe('Member History Flow', function () {
             ->currentMonth()
             ->create(['expected_amount' => 4000]);
 
-        $page = visit(route('login'));
+        $page = loginBrowserAs($this->member);
 
-        $page->fill('email', $this->member->email)
-            ->fill('password', 'password')
-            ->click('Log in')
-            ->click('My Contributions')
+        $page->click('My Contributions')
             ->assertDontSee('Other Member Name');
     });
 
     it('shows no contributions message when member has none', function () {
-        $page = visit(route('login'));
+        $page = loginBrowserAs($this->member);
 
-        $page->fill('email', $this->member->email)
-            ->fill('password', 'password')
-            ->click('Log in')
-            ->click('My Contributions')
+        $page->click('My Contributions')
             ->assertSee('No contributions found');
     });
 });

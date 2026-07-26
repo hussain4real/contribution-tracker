@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_test-suite_eb1e3c2ef4",
+  "title": "Laravel test suite tests/Feature#7",
+  "summary": "Laravel tests in tests/Feature#7.",
+  "kind": "test-suite",
+  "source": "laravel-test-suite",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "tests/Feature#7",
+      "symbol": "tests/Feature#7",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "tests/Feature/Models/PlatformPlanTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Models/UserTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Models/WhatsAppMessageTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Notifications/ContributionReminderNotificationTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Notifications/NotificationControllerTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Payments/AdvancePaymentLimitTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Payments/AdvancePaymentTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Payments/BalanceFirstRuleTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Payments/PaymentAuthorizationTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Payments/RecordPartialPaymentTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Payments/RecordPaymentTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/PaystackServiceTest.php",
+      "reason": "PHP test"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "tests/Feature/Models/PlatformPlanTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Models/UserTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Models/WhatsAppMessageTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Notifications/ContributionReminderNotificationTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Notifications/NotificationControllerTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Payments/AdvancePaymentLimitTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Payments/AdvancePaymentTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Payments/BalanceFirstRuleTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Payments/PaymentAuthorizationTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Payments/RecordPartialPaymentTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Payments/RecordPaymentTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/PaystackServiceTest.php",
+      "reason": "nearby test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/Feature/Models/PlatformPlanTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Models/UserTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Models/WhatsAppMessageTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Notifications/ContributionReminderNotificationTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Notifications/NotificationControllerTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Payments/AdvancePaymentLimitTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Payments/AdvancePaymentTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Payments/BalanceFirstRuleTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Payments/PaymentAuthorizationTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Payments/RecordPartialPaymentTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Payments/RecordPaymentTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/PaystackServiceTest.php",
+      "command": "composer test"
+    }
+  ],
+  "tags": [
+    "php",
+    "laravel",
+    "test"
+  ],
+  "trustBoundaries": [],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

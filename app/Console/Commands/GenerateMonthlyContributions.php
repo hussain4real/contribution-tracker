@@ -1,14 +1,15 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Console\Commands;
 
 use App\Models\Contribution;
 use App\Models\Family;
-use App\Models\User;
-use Carbon\Carbon;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Builder;
 
 #[Signature('contributions:generate {--month= : Month (1-12)} {--year= : Year} {--family= : Specific family ID}')]
 #[Description('Generate monthly contribution records for all active family members')]
@@ -20,10 +21,18 @@ class GenerateMonthlyContributions extends Command
     public function handle(): int
     {
         $year = (int) ($this->option('year') ?? now()->year);
-        $month = (int) ($this->option('month') ?? now()->month);
+        $monthOption = $this->option('month') ?? now()->month;
+
+        if (filter_var($monthOption, FILTER_VALIDATE_INT) === false || (int) $monthOption < 1 || (int) $monthOption > 12) {
+            $this->error('The --month option must be an integer between 1 and 12.');
+
+            return self::FAILURE;
+        }
+
+        $month = (int) $monthOption;
         $familyId = $this->option('family');
 
-        $date = Carbon::createFromDate($year, $month, 1);
+        $date = Contribution::dueDateForMonth($year, $month, 1);
         $periodLabel = $date->format('F Y');
 
         $this->info("Generating contributions for {$periodLabel}...");
@@ -39,21 +48,21 @@ class GenerateMonthlyContributions extends Command
         $totalSkipped = 0;
 
         foreach ($families as $family) {
-            $members = User::query()
-                ->where('family_id', $family->id)
+            $memberships = $family->memberships()
+                ->with(['familyCategory', 'categoryAssignments.category', 'user'])
                 ->active()
-                ->whereNotNull('category')
+                ->where(function (Builder $query): void {
+                    $query->whereNotNull('family_members.family_category_id')
+                        ->orWhereNotNull('family_members.category');
+                })
                 ->get();
 
-            foreach ($members as $member) {
-                $exists = Contribution::query()
-                    ->where('family_id', $family->id)
-                    ->where('user_id', $member->id)
-                    ->where('year', $year)
-                    ->where('month', $month)
-                    ->exists();
+            foreach ($memberships as $membership) {
+                $member = $membership->user;
+                $snapshot = $membership->contributionCategorySnapshot($year, $month);
+                $expectedAmount = $snapshot['category_amount'];
 
-                if ($exists) {
+                if ($expectedAmount === null || $expectedAmount < 1) {
                     $totalSkipped++;
 
                     continue;
@@ -61,16 +70,22 @@ class GenerateMonthlyContributions extends Command
 
                 $dueDay = $family->due_day ?? Contribution::DUE_DAY;
 
-                Contribution::create([
+                $contribution = Contribution::query()->firstOrCreate([
                     'family_id' => $family->id,
                     'user_id' => $member->id,
                     'year' => $year,
                     'month' => $month,
-                    'expected_amount' => $member->getMonthlyAmount() ?? 0,
-                    'due_date' => Carbon::createFromDate($year, $month, min($dueDay, $date->daysInMonth)),
+                ], [
+                    'expected_amount' => $expectedAmount,
+                    'due_date' => Contribution::dueDateForMonth($year, $month, $dueDay),
+                    ...$snapshot,
                 ]);
 
-                $totalCreated++;
+                if ($contribution->wasRecentlyCreated) {
+                    $totalCreated++;
+                } else {
+                    $totalSkipped++;
+                }
             }
         }
 

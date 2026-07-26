@@ -1,7 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\Expense;
 use App\Models\User;
+use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
     $this->admin = User::factory()->admin()->create();
@@ -17,7 +20,7 @@ it('allows any authenticated user to view the expenses list', function () {
     $this->actingAs($this->member)
         ->get(route('expenses.index'))
         ->assertSuccessful()
-        ->assertInertia(fn ($page) => $page->component('Expenses/Index'));
+        ->assertInertia(fn (Assert $page) => $page->component('Expenses/Index'));
 });
 
 it('returns paginated expenses with correct data', function () {
@@ -26,7 +29,7 @@ it('returns paginated expenses with correct data', function () {
     $this->actingAs($this->admin)
         ->get(route('expenses.index'))
         ->assertSuccessful()
-        ->assertInertia(fn ($page) => $page
+        ->assertInertia(fn (Assert $page) => $page
             ->component('Expenses/Index')
             ->has('expenses.data', 3)
         );
@@ -39,7 +42,7 @@ it('returns expenses ordered by latest first', function () {
     $this->actingAs($this->admin)
         ->get(route('expenses.index'))
         ->assertSuccessful()
-        ->assertInertia(fn ($page) => $page
+        ->assertInertia(fn (Assert $page) => $page
             ->where('expenses.data.0.description', 'Newer')
             ->where('expenses.data.1.description', 'Older')
         );
@@ -48,13 +51,13 @@ it('returns expenses ordered by latest first', function () {
 it('shows can_create as true for admin', function () {
     $this->actingAs($this->admin)
         ->get(route('expenses.index'))
-        ->assertInertia(fn ($page) => $page->where('can_create', true));
+        ->assertInertia(fn (Assert $page) => $page->where('can_create', true));
 });
 
 it('shows can_create as false for regular member', function () {
     $this->actingAs($this->member)
         ->get(route('expenses.index'))
-        ->assertInertia(fn ($page) => $page->where('can_create', false));
+        ->assertInertia(fn (Assert $page) => $page->where('can_create', false));
 });
 
 it('requires authentication to view expenses', function () {
@@ -70,7 +73,7 @@ it('allows super admin to view create expense form', function () {
     $this->actingAs($this->admin)
         ->get(route('expenses.create'))
         ->assertSuccessful()
-        ->assertInertia(fn ($page) => $page->component('Expenses/Create'));
+        ->assertInertia(fn (Assert $page) => $page->component('Expenses/Create'));
 });
 
 it('allows financial secretary to view create expense form', function () {
@@ -98,8 +101,7 @@ it('allows super admin to store an expense', function () {
         ])
         ->assertRedirect(route('expenses.index'));
 
-    $expense = Expense::first();
-    expect($expense)->not->toBeNull();
+    $expense = Expense::query()->firstOrFail();
     expect($expense->amount)->toBe(5000);
     expect($expense->description)->toBe('Transport to meeting');
     expect($expense->spent_at->toDateString())->toBe('2026-03-15');
@@ -116,7 +118,7 @@ it('allows financial secretary to store an expense', function () {
         ->assertRedirect(route('expenses.index'));
 
     expect(Expense::count())->toBe(1);
-    expect(Expense::first()->recorded_by)->toBe($this->financialSecretary->id);
+    expect(Expense::query()->firstOrFail()->recorded_by)->toBe($this->financialSecretary->id);
 });
 
 it('denies regular member from storing an expense', function () {
@@ -166,34 +168,35 @@ it('validates description max length', function () {
 });
 
 // =========================================================================
-// Destroy
+// Reverse
 // =========================================================================
 
-it('allows super admin to delete an expense', function () {
+it('allows super admin to reverse an expense without deleting it', function () {
     $expense = Expense::factory()->recordedBy($this->admin)->create();
 
     $this->actingAs($this->admin)
-        ->delete(route('expenses.destroy', $expense))
-        ->assertRedirect(route('expenses.index'));
+        ->post(route('expenses.reverse', $expense), ['reason' => 'Duplicate expense'])
+        ->assertRedirect();
 
-    expect(Expense::count())->toBe(0);
+    expect(Expense::count())->toBe(1)
+        ->and($expense->reversal()->exists())->toBeTrue();
 });
 
-it('denies financial secretary from deleting an expense', function () {
+it('denies financial secretary from reversing an expense', function () {
     $expense = Expense::factory()->recordedBy($this->financialSecretary)->create();
 
     $this->actingAs($this->financialSecretary)
-        ->delete(route('expenses.destroy', $expense))
+        ->post(route('expenses.reverse', $expense), ['reason' => 'Duplicate expense'])
         ->assertForbidden();
 
     expect(Expense::count())->toBe(1);
 });
 
-it('denies regular member from deleting an expense', function () {
+it('denies regular member from reversing an expense', function () {
     $expense = Expense::factory()->recordedBy($this->admin)->create();
 
     $this->actingAs($this->member)
-        ->delete(route('expenses.destroy', $expense))
+        ->post(route('expenses.reverse', $expense), ['reason' => 'Duplicate expense'])
         ->assertForbidden();
 
     expect(Expense::count())->toBe(1);

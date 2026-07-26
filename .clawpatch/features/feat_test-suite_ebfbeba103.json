@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_test-suite_ebfbeba103",
+  "title": "Laravel test suite tests/Feature#10",
+  "summary": "Laravel tests in tests/Feature#10.",
+  "kind": "test-suite",
+  "source": "laravel-test-suite",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "tests/Feature#10",
+      "symbol": "tests/Feature#10",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "tests/Feature/SubscriptionTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/WelcomePageTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/WhatsAppInboxTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/WhatsAppServiceTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/WhatsAppWebhookTest.php",
+      "reason": "PHP test"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "tests/Feature/SubscriptionTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/WelcomePageTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/WhatsAppInboxTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/WhatsAppServiceTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/WhatsAppWebhookTest.php",
+      "reason": "nearby test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/Feature/SubscriptionTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/WelcomePageTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/WhatsAppInboxTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/WhatsAppServiceTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/WhatsAppWebhookTest.php",
+      "command": "composer test"
+    }
+  ],
+  "tags": [
+    "php",
+    "laravel",
+    "test"
+  ],
+  "trustBoundaries": [],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

@@ -1,12 +1,47 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\Contribution;
 use App\Models\Family;
+use App\Models\Payment;
+use App\Models\PlatformPlan;
 use App\Models\User;
 use App\Notifications\ContributionReminderNotification;
+use App\Support\PlatformPlanCatalog;
 use Illuminate\Support\Facades\Notification;
 
 describe('Manual email contribution reminder', function () {
+    it('requires email reminders in the family plan', function () {
+        Notification::fake();
+
+        $freePlan = PlatformPlan::create([
+            'name' => 'Free',
+            'slug' => PlatformPlanCatalog::Free,
+            'price' => 0,
+            'max_members' => 5,
+            'features' => [PlatformPlanCatalog::BasicContributions, PlatformPlanCatalog::ManualPayments],
+            'is_active' => true,
+            'sort_order' => 0,
+        ]);
+        $family = Family::factory()->create(['platform_plan_id' => $freePlan->id]);
+        $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+        $member = User::factory()
+            ->member()
+            ->employed()
+            ->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()
+            ->forUser($member)
+            ->currentMonth()
+            ->create(['expected_amount' => 5000]);
+
+        $this->actingAs($admin)
+            ->post("/contributions/{$contribution->id}/email-reminder")
+            ->assertRedirect(route('subscription.index'));
+
+        Notification::assertNothingSent();
+    });
+
     it('sends an email-only reminder when admin triggers it', function () {
         Notification::fake();
 
@@ -138,12 +173,10 @@ describe('Manual email contribution reminder', function () {
             ->currentMonth()
             ->create(['expected_amount' => 1000]);
 
-        $contribution->payments()->create([
-            'user_id' => $member->id,
-            'amount' => 1000,
-            'paid_at' => now(),
-            'recorded_by' => $admin->id,
-        ]);
+        Payment::factory()
+            ->forContribution($contribution)
+            ->recordedBy($admin)
+            ->create(['amount' => 1000]);
 
         $this->actingAs($admin)
             ->from('/members/'.$member->id)

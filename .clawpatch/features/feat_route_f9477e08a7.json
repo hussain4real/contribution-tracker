@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_f9477e08a7",
+  "title": "Laravel controller ExpenseController",
+  "summary": "Laravel HTTP controller ExpenseController.",
+  "kind": "route",
+  "source": "laravel-controller",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "app/Http/Controllers/ExpenseController.php",
+      "symbol": "ExpenseController",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Http/Controllers/ExpenseController.php",
+      "reason": "controller"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "app/Http/Requests/StoreExpenseRequest.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Models/Expense.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Models/User.php",
+      "reason": "imported application class"
+    }
+  ],
+  "tests": [],
+  "tags": [
+    "php",
+    "laravel",
+    "controller",
+    "http"
+  ],
+  "trustBoundaries": [
+    "user-input",
+    "auth",
+    "database",
+    "serialization"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

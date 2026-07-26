@@ -1,18 +1,20 @@
 <script setup lang="ts">
 import { index, store } from '@/actions/App/Http/Controllers/MemberController';
+import { index as subscriptionIndex } from '@/actions/App/Http/Controllers/SubscriptionController';
 import HeadingSmall from '@/components/HeadingSmall.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useCurrencyFormatter } from '@/lib/currency';
 import { type BreadcrumbItem } from '@/types';
 import { Form, Head, Link, usePage } from '@inertiajs/vue3';
-import { ArrowUpCircle } from 'lucide-vue-next';
+import { ArrowUpCircle } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
 interface CategoryOption {
-    value: string;
+    value: number;
     label: string;
     amount: number;
 }
@@ -40,7 +42,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-const selectedCategory = ref('member');
+const selectedCategory = ref<number | null>(props.categories[0]?.value ?? null);
 const selectedRole = ref('member');
 
 const selectedCategoryAmount = computed(() => {
@@ -56,12 +58,7 @@ const canAddMore = computed(
 );
 const subscription = computed(() => page.props.subscription);
 
-function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-NG', {
-        style: 'currency',
-        currency: 'NGN',
-    }).format(amount);
-}
+const { formatCurrency } = useCurrencyFormatter();
 </script>
 
 <template>
@@ -87,7 +84,7 @@ function formatCurrency(amount: number): string {
                         your plan to add more members.
                     </p>
                     <div class="mt-4 flex gap-3">
-                        <Link href="/subscription">
+                        <Link :href="subscriptionIndex().url">
                             <Button>
                                 <ArrowUpCircle class="mr-2 h-4 w-4" />
                                 Upgrade Plan
@@ -105,7 +102,7 @@ function formatCurrency(amount: number): string {
                 >
                     <HeadingSmall
                         title="Add New Member"
-                        description="Create a new family member account"
+                        description="Create a managed account. The member must replace the temporary password when they first sign in."
                     />
 
                     <Form
@@ -167,10 +164,12 @@ function formatCurrency(amount: number): string {
                         </div>
 
                         <div class="grid gap-2">
-                            <Label for="category">Member Category</Label>
+                            <Label for="family_category_id"
+                                >Member Category</Label
+                            >
                             <select
-                                id="category"
-                                name="category"
+                                id="family_category_id"
+                                name="family_category_id"
                                 v-model="selectedCategory"
                                 required
                                 class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
@@ -194,7 +193,7 @@ function formatCurrency(amount: number): string {
                                     formatCurrency(selectedCategoryAmount)
                                 }}</strong>
                             </p>
-                            <InputError :message="errors.category" />
+                            <InputError :message="errors.family_category_id" />
                         </div>
 
                         <div class="grid gap-2">

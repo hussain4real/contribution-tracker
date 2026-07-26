@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_config_cd6cc21cdd",
+  "title": "Project config composer.json",
+  "summary": "Build, release, or quality configuration in composer.json.",
+  "kind": "config",
+  "source": "shared-infra-heuristic",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "composer.json",
+      "symbol": null,
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "composer.json",
+      "reason": "entrypoint"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "config"
+  ],
+  "trustBoundaries": [
+    "process-exec",
+    "filesystem"
+  ],
+  "status": "reviewed",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260518T110727-a1e777",
+      "kind": "review",
+      "summary": "0 finding(s)",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-18T11:07:56.537Z"
+    }
+  ],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:07:56.537Z"
+}

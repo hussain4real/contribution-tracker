@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_test-suite_cd40986648",
+  "title": "Laravel test suite tests/Feature#3",
+  "summary": "Laravel tests in tests/Feature#3.",
+  "kind": "test-suite",
+  "source": "laravel-test-suite",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "tests/Feature#3",
+      "symbol": "tests/Feature#3",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "tests/Feature/ChangelogTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Channels/WhatsAppChannelTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Commands/ProductionSeederTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Commands/SendContributionRemindersTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/ContributionDueDateTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/ContributionStatusTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Contributions/MyContributionsTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Contributions/PartialPaymentDetailsTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Dashboard/AdminDashboardTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Dashboard/FinancialSecretaryDashboardTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Dashboard/FundBalanceTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Dashboard/MemberDashboardTest.php",
+      "reason": "PHP test"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "tests/Feature/ChangelogTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Channels/WhatsAppChannelTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Commands/ProductionSeederTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Commands/SendContributionRemindersTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/ContributionDueDateTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/ContributionStatusTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Contributions/MyContributionsTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Contributions/PartialPaymentDetailsTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Dashboard/AdminDashboardTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Dashboard/FinancialSecretaryDashboardTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Dashboard/FundBalanceTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Dashboard/MemberDashboardTest.php",
+      "reason": "nearby test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/Feature/ChangelogTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Channels/WhatsAppChannelTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Commands/ProductionSeederTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Commands/SendContributionRemindersTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/ContributionDueDateTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/ContributionStatusTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Contributions/MyContributionsTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Contributions/PartialPaymentDetailsTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Dashboard/AdminDashboardTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Dashboard/FinancialSecretaryDashboardTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Dashboard/FundBalanceTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Dashboard/MemberDashboardTest.php",
+      "command": "composer test"
+    }
+  ],
+  "tags": [
+    "php",
+    "laravel",
+    "test"
+  ],
+  "trustBoundaries": [],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

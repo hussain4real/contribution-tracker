@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="720" viewBox="0 0 1600 720" role="img" aria-labelledby="title desc">
+  <title id="title">Existing Manual Family Fund Process</title>
+  <desc id="desc">A flow diagram showing how manual family fund administration moves from family agreement to reminders, payment, manual recording, reconciliation, and reports, with common failure points.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto" markerUnits="strokeWidth">
+      <path d="M 1 1 L 12 7 L 1 13 z" fill="#222222"/>
+    </marker>
+    <style>
+      .title { font-family: Arial, Helvetica, sans-serif; font-size: 34px; font-weight: 700; fill: #111111; }
+      .box-title { font-family: Arial, Helvetica, sans-serif; font-size: 24px; font-weight: 700; fill: #111111; }
+      .box-text { font-family: Arial, Helvetica, sans-serif; font-size: 20px; fill: #111111; }
+      .note-title { font-family: Arial, Helvetica, sans-serif; font-size: 22px; font-weight: 700; fill: #111111; }
+      .note-text { font-family: Arial, Helvetica, sans-serif; font-size: 19px; fill: #111111; }
+      .line { stroke: #222222; stroke-width: 4; fill: none; marker-end: url(#arrow); }
+      .box { stroke: #222222; stroke-width: 3; rx: 12; ry: 12; }
+      .problem { stroke: #222222; stroke-width: 3; rx: 10; ry: 10; fill: #fff4cc; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="720" fill="#ffffff"/>
+  <text x="800" y="62" text-anchor="middle" class="title">Figure 3.1: Existing Manual Family Fund Process</text>
+
+  <rect x="70" y="135" width="250" height="135" class="box" fill="#e9f2ff"/>
+  <text x="195" y="178" text-anchor="middle" class="box-title">Family Agreement</text>
+  <text x="195" y="214" text-anchor="middle" class="box-text">Members agree amount,</text>
+  <text x="195" y="243" text-anchor="middle" class="box-text">due date, and treasurer.</text>
+
+  <rect x="400" y="135" width="250" height="135" class="box" fill="#eaf7ed"/>
+  <text x="525" y="178" text-anchor="middle" class="box-title">Reminder Shared</text>
+  <text x="525" y="214" text-anchor="middle" class="box-text">Due date announced</text>
+  <text x="525" y="243" text-anchor="middle" class="box-text">by WhatsApp or calls.</text>
+
+  <rect x="730" y="135" width="250" height="135" class="box" fill="#fff1e6"/>
+  <text x="855" y="178" text-anchor="middle" class="box-title">Member Pays</text>
+  <text x="855" y="214" text-anchor="middle" class="box-text">Payment may be cash,</text>
+  <text x="855" y="243" text-anchor="middle" class="box-text">transfer, partial, or late.</text>
+
+  <rect x="1060" y="135" width="250" height="135" class="box" fill="#f0eafe"/>
+  <text x="1185" y="178" text-anchor="middle" class="box-title">Manual Recording</text>
+  <text x="1185" y="209" text-anchor="middle" class="box-text">Treasurer updates</text>
+  <text x="1185" y="236" text-anchor="middle" class="box-text">notebook, spreadsheet,</text>
+  <text x="1185" y="263" text-anchor="middle" class="box-text">or chat list.</text>
+
+  <line x1="320" y1="202" x2="382" y2="202" class="line"/>
+  <line x1="650" y1="202" x2="712" y2="202" class="line"/>
+  <line x1="980" y1="202" x2="1042" y2="202" class="line"/>
+
+  <rect x="400" y="355" width="250" height="135" class="box" fill="#f3f7f7"/>
+  <text x="525" y="398" text-anchor="middle" class="box-title">Reconciliation</text>
+  <text x="525" y="434" text-anchor="middle" class="box-text">Treasurer checks</text>
+  <text x="525" y="463" text-anchor="middle" class="box-text">manual balances.</text>
+
+  <rect x="730" y="355" width="250" height="135" class="box" fill="#e9f2ff"/>
+  <text x="855" y="398" text-anchor="middle" class="box-title">Expense Handling</text>
+  <text x="855" y="429" text-anchor="middle" class="box-text">Shared expenses are</text>
+  <text x="855" y="456" text-anchor="middle" class="box-text">noted separately</text>
+  <text x="855" y="483" text-anchor="middle" class="box-text">or verbally.</text>
+
+  <rect x="1060" y="355" width="250" height="135" class="box" fill="#eaf7ed"/>
+  <text x="1185" y="398" text-anchor="middle" class="box-title">Family Report</text>
+  <text x="1185" y="434" text-anchor="middle" class="box-text">Summary is read aloud,</text>
+  <text x="1185" y="463" text-anchor="middle" class="box-text">typed, or screenshot.</text>
+
+  <path d="M 1185 270 L 1185 315 L 525 315 L 525 347" class="line"/>
+  <line x1="650" y1="422" x2="722" y2="422" class="line"/>
+  <line x1="980" y1="422" x2="1052" y2="422" class="line"/>
+
+  <rect x="70" y="545" width="1240" height="120" class="problem"/>
+  <text x="95" y="582" class="note-title">Common weaknesses:</text>
+  <text x="95" y="616" class="note-text">Fragmented records; weak role control; inconsistent partial-payment allocation; delayed reports;</text>
+  <text x="95" y="646" class="note-text">separate expense notes; no audit trail; no tenant privacy; disputes are resolved by memory instead of verifiable data.</text>
+
+  <path d="M 525 490 L 525 528" class="line"/>
+  <path d="M 855 490 L 855 528" class="line"/>
+  <path d="M 1185 490 L 1185 528" class="line"/>
+</svg>

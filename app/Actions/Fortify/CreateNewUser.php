@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Actions\Fortify;
 
 use App\Enums\Role;
@@ -49,9 +51,12 @@ class CreateNewUser implements CreatesNewUsers
         });
     }
 
+    /**
+     * @param  array<string, string>  $input
+     */
     private function createWithNewFamily(array $input): User
     {
-        $familyName = $input['family_name'];
+        $familyName = $input['family_name'] ?? 'Family';
 
         $family = Family::create([
             'name' => $familyName,
@@ -77,19 +82,26 @@ class CreateNewUser implements CreatesNewUsers
             'password' => $input['password'],
             'role' => Role::Admin,
             'family_id' => $family->id,
+            'current_family_id' => $family->id,
         ]);
+
+        $user->ensureFamilyMembership($family, Role::Admin);
 
         $family->update(['created_by' => $user->id]);
 
         return $user;
     }
 
+    /**
+     * @param  array<string, string>  $input
+     */
     private function createViaInvitation(array $input): User
     {
         $invitation = FamilyInvitation::query()
             ->where('token', $input['invitation_token'])
             ->whereNull('accepted_at')
             ->where('expires_at', '>', now())
+            ->with(['family', 'familyCategory'])
             ->firstOrFail();
 
         $user = User::create([
@@ -98,7 +110,18 @@ class CreateNewUser implements CreatesNewUsers
             'password' => $input['password'],
             'role' => $invitation->role,
             'family_id' => $invitation->family_id,
+            'current_family_id' => $invitation->family_id,
+            'family_category_id' => $invitation->family_category_id,
+            'whatsapp_phone' => $invitation->whatsapp_phone,
         ]);
+
+        if ($invitation->family) {
+            $user->ensureFamilyMembership(
+                $invitation->family,
+                $invitation->role,
+                familyCategoryId: $invitation->family_category_id,
+            );
+        }
 
         $invitation->update(['accepted_at' => now()]);
 

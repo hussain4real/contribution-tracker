@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Seeders;
 
 use App\Enums\Role;
@@ -29,10 +31,15 @@ class ProductionSeeder extends Seeder
         // Always seed platform plans
         $this->call(PlatformPlanSeeder::class);
 
-        $email = config('app.admin_email');
-        $password = config('app.admin_password');
-        $name = config('app.admin_name') ?: 'Super Admin';
-        $familyName = config('app.family_name') ?: 'My Family';
+        $configuredEmail = config('app.admin_email');
+        $configuredPassword = config('app.admin_password');
+        $configuredName = config('app.admin_name');
+        $configuredFamilyName = config('app.family_name');
+
+        $email = is_string($configuredEmail) ? $configuredEmail : null;
+        $password = is_string($configuredPassword) ? $configuredPassword : null;
+        $name = is_string($configuredName) && $configuredName !== '' ? $configuredName : 'Super Admin';
+        $familyName = is_string($configuredFamilyName) && $configuredFamilyName !== '' ? $configuredFamilyName : 'My Family';
 
         if (! $email || ! $password) {
             $this->command->error('ADMIN_EMAIL and ADMIN_PASSWORD environment variables are required.');

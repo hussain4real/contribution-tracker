@@ -1,7 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Mail;
 
+use App\Models\Family;
 use App\Models\FamilyInvitation;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -27,8 +30,11 @@ class FamilyInvitationMail extends Mailable implements ShouldQueue
      */
     public function envelope(): Envelope
     {
+        $family = $this->invitation->family;
+        $familyName = $family instanceof Family ? $family->name : 'your family';
+
         return new Envelope(
-            subject: "You've been invited to join {$this->invitation->family->name}",
+            subject: "You've been invited to join {$familyName}",
         );
     }
 

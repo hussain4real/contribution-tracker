@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_infra_f1abe2a7ec",
+  "title": "Laravel migrations database/migrations#4",
+  "summary": "Laravel migrations in database/migrations#4.",
+  "kind": "infra",
+  "source": "laravel-migration",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "database/migrations#4",
+      "symbol": "database/migrations#4",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "database/migrations/2026_05_03_082422_create_oauth_auth_codes_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_05_03_082423_create_oauth_access_tokens_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_05_03_082424_create_oauth_refresh_tokens_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_05_03_082425_create_oauth_clients_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_05_03_082426_create_oauth_device_codes_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_05_07_115509_recreate_passkeys_table_for_laravel_passkeys.php",
+      "reason": "migration"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "php",
+    "laravel",
+    "migration"
+  ],
+  "trustBoundaries": [
+    "database"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

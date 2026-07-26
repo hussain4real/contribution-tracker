@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Requests\Settings;
 
 use App\Models\User;
@@ -16,6 +18,9 @@ class ProfileUpdateRequest extends FormRequest
      */
     public function rules(): array
     {
+        $user = $this->user();
+        $userId = $user instanceof User ? $user->id : null;
+
         return [
             'name' => ['required', 'string', 'max:255'],
             'email' => [
@@ -24,7 +29,7 @@ class ProfileUpdateRequest extends FormRequest
                 'lowercase',
                 'email',
                 'max:255',
-                Rule::unique(User::class)->ignore($this->user()->id),
+                Rule::unique(User::class)->ignore($userId),
             ],
         ];
     }

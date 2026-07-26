@@ -2,9 +2,12 @@ import '../css/app.css';
 
 import { createInertiaApp } from '@inertiajs/vue3';
 import { initializeTheme } from './composables/useAppearance';
+import { initializeFamilyRouteDefaults } from './lib/familyRouteDefaults';
 import { initializeFlashToast } from './lib/flashToast';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+
+initializeFamilyRouteDefaults();
 
 createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),

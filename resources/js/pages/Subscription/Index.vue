@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+    cancel,
     subscribe as subscribeAction,
     callback as subscriptionCallback,
 } from '@/actions/App/Http/Controllers/SubscriptionController';
@@ -18,6 +19,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
+import { Check } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import { toast } from 'vue-sonner';
 
@@ -30,6 +32,9 @@ interface Plan {
     max_members: number | null;
     features: string[];
     is_current: boolean;
+    audience: string;
+    summary: string;
+    is_recommended: boolean;
 }
 
 interface Props {
@@ -45,6 +50,7 @@ interface Props {
     member_count?: number;
     is_admin?: boolean;
     paystack_public_key?: string;
+    available_features?: Record<string, string>;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -55,6 +61,7 @@ const props = withDefaults(defineProps<Props>(), {
     member_count: 0,
     is_admin: false,
     paystack_public_key: '',
+    available_features: () => ({}),
 });
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -65,13 +72,14 @@ const breadcrumbs: BreadcrumbItem[] = [
 const processing = ref(false);
 const processingPlanId = ref<number | null>(null);
 
-const featureLabels: Record<string, string> = {
-    basic_contributions: 'Monthly contributions',
-    manual_payments: 'Manual payment recording',
-    online_payments: 'Online payments (Paystack)',
-    reports: 'Financial reports',
-    exports: 'CSV exports',
-    priority_support: 'Priority support',
+const featureLabels = computed(() => props.available_features);
+
+const memberLimitLabel = (plan: Plan) => {
+    if (plan.max_members) {
+        return `Up to ${plan.max_members} members`;
+    }
+
+    return 'Custom member limit';
 };
 
 const statusLabel = computed(() => {
@@ -94,9 +102,7 @@ const statusVariant = computed(() => {
     };
 
     return (map[props.subscription_status] || 'secondary') as
-        | 'default'
-        | 'secondary'
-        | 'destructive';
+        'default' | 'secondary' | 'destructive';
 });
 
 const subscribeToPlan = async (planId: number) => {
@@ -138,7 +144,7 @@ const subscribeToPlan = async (planId: number) => {
         popup.resumeTransaction(data.access_code, {
             onSuccess: () => {
                 router.visit(
-                    subscriptionCallback.url({
+                    subscriptionCallback.url(undefined, {
                         query: { reference: data.reference },
                     }),
                 );
@@ -153,7 +159,7 @@ const subscribeToPlan = async (planId: number) => {
                     processing.value = false;
                     processingPlanId.value = null;
                     router.visit(
-                        subscriptionCallback.url({
+                        subscriptionCallback.url(undefined, {
                             query: { reference: data.reference },
                         }),
                     );
@@ -176,7 +182,7 @@ const subscribeToPlan = async (planId: number) => {
             <div class="flex items-center justify-between">
                 <HeadingSmall
                     title="Subscription Plans"
-                    description="Choose the plan that works best for your family."
+                    description="Choose the monthly plan that fits your family or organization."
                 />
                 <Badge :variant="statusVariant">
                     {{ statusLabel }}
@@ -222,7 +228,9 @@ const subscribeToPlan = async (planId: number) => {
                         'relative flex flex-col',
                         plan.is_current
                             ? 'border-primary ring-2 ring-primary/20'
-                            : '',
+                            : plan.is_recommended
+                              ? 'border-primary/60'
+                              : '',
                     ]"
                 >
                     <div
@@ -233,26 +241,36 @@ const subscribeToPlan = async (planId: number) => {
                     </div>
 
                     <CardHeader class="pb-2">
-                        <CardTitle class="text-lg">
-                            {{ plan.name }}
-                        </CardTitle>
-                        <CardDescription>
+                        <div class="flex items-start justify-between gap-2">
+                            <CardTitle class="text-lg leading-tight">
+                                {{ plan.name }}
+                            </CardTitle>
+                            <Badge
+                                v-if="plan.is_recommended"
+                                variant="secondary"
+                            >
+                                Recommended
+                            </Badge>
+                        </div>
+                        <CardDescription class="space-y-2">
                             <span class="text-2xl font-bold text-foreground">
                                 {{ plan.formatted_price }}
                             </span>
                             <span v-if="plan.price > 0" class="text-sm">
                                 /month
                             </span>
+                            <span class="block text-sm">
+                                {{ plan.audience }}
+                            </span>
                         </CardDescription>
                     </CardHeader>
 
                     <CardContent class="flex-1">
                         <p class="mb-3 text-sm text-muted-foreground">
-                            {{
-                                plan.max_members
-                                    ? `Up to ${plan.max_members} members`
-                                    : 'Unlimited members'
-                            }}
+                            {{ plan.summary }}
+                        </p>
+                        <p class="mb-3 text-sm font-medium">
+                            {{ memberLimitLabel(plan) }}
                         </p>
                         <ul class="space-y-2">
                             <li
@@ -260,19 +278,9 @@ const subscribeToPlan = async (planId: number) => {
                                 :key="feature"
                                 class="flex items-center gap-2 text-sm"
                             >
-                                <svg
+                                <Check
                                     class="size-4 shrink-0 text-green-600 dark:text-green-400"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                >
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        d="M5 13l4 4L19 7"
-                                    />
-                                </svg>
+                                />
                                 {{ featureLabels[feature] || feature }}
                             </li>
                         </ul>
@@ -283,7 +291,7 @@ const subscribeToPlan = async (planId: number) => {
                             v-if="plan.is_current && plan.price > 0 && is_admin"
                             variant="outline"
                             class="w-full"
-                            @click="$inertia.post('/subscription/cancel')"
+                            @click="$inertia.post(cancel().url)"
                         >
                             Cancel Plan
                         </Button>
@@ -324,6 +332,12 @@ const subscribeToPlan = async (planId: number) => {
                     </CardFooter>
                 </Card>
             </div>
+
+            <p class="text-sm text-muted-foreground">
+                Subscription prices are final monthly platform prices. Groups
+                above 250 members are handled through a custom onboarding
+                review.
+            </p>
 
             <!-- Non-admin notice -->
             <div

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Channels;
 
 use App\Services\WhatsAppService;
@@ -30,9 +32,13 @@ class WhatsAppChannel
      */
     public function send(object $notifiable, Notification $notification): void
     {
+        if (! method_exists($notifiable, 'routeNotificationFor')) {
+            return;
+        }
+
         $to = $notifiable->routeNotificationFor('whatsapp', $notification);
 
-        if (empty($to)) {
+        if (! is_string($to) || $to === '') {
             return;
         }
 

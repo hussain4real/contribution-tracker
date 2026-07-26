@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Ai\Tools\RecordExpense;
 use App\Models\Family;
 use App\Models\User;
@@ -15,11 +17,11 @@ beforeEach(function () {
 test('admin can preview expense recording', function () {
     $tool = new RecordExpense($this->admin);
 
-    $result = json_decode($tool->handle(new Request([
+    $result = decodeToolResult($tool->handle(new Request([
         'amount' => 5000,
         'description' => 'Generator fuel',
         'spent_at' => '2026-04-01',
-    ])), true);
+    ])));
 
     expect($result['status'])->toBe('confirmation_required')
         ->and($result['message'])->toContain('5,000')
@@ -31,12 +33,12 @@ test('admin can preview expense recording', function () {
 test('admin can execute expense recording with confirmation', function () {
     $tool = new RecordExpense($this->admin);
 
-    $result = json_decode($tool->handle(new Request([
+    $result = decodeToolResult($tool->handle(new Request([
         'amount' => 5000,
         'description' => 'Generator fuel',
         'spent_at' => '2026-04-01',
         'confirmed' => true,
-    ])), true);
+    ])));
 
     expect($result['status'])->toBe('success')
         ->and($result['expense_id'])->toBeInt();
@@ -52,12 +54,12 @@ test('admin can execute expense recording with confirmation', function () {
 test('financial secretary can record expenses', function () {
     $tool = new RecordExpense($this->financialSecretary);
 
-    $result = json_decode($tool->handle(new Request([
+    $result = decodeToolResult($tool->handle(new Request([
         'amount' => 3000,
         'description' => 'Office supplies',
         'spent_at' => '2026-04-01',
         'confirmed' => true,
-    ])), true);
+    ])));
 
     expect($result['status'])->toBe('success');
 
@@ -71,11 +73,11 @@ test('financial secretary can record expenses', function () {
 test('member cannot record expenses', function () {
     $tool = new RecordExpense($this->member);
 
-    $result = json_decode($tool->handle(new Request([
+    $result = decodeToolResult($tool->handle(new Request([
         'amount' => 5000,
         'description' => 'Generator fuel',
         'confirmed' => true,
-    ])), true);
+    ])));
 
     expect($result['error'])->toContain('do not have permission');
 
@@ -85,9 +87,9 @@ test('member cannot record expenses', function () {
 test('expense recording validates required amount', function () {
     $tool = new RecordExpense($this->admin);
 
-    $result = json_decode($tool->handle(new Request([
+    $result = decodeToolResult($tool->handle(new Request([
         'description' => 'Generator fuel',
-    ])), true);
+    ])));
 
     expect($result['error'])->toContain('Amount is required');
 });
@@ -95,9 +97,9 @@ test('expense recording validates required amount', function () {
 test('expense recording validates required description', function () {
     $tool = new RecordExpense($this->admin);
 
-    $result = json_decode($tool->handle(new Request([
+    $result = decodeToolResult($tool->handle(new Request([
         'amount' => 5000,
-    ])), true);
+    ])));
 
     expect($result['error'])->toContain('description is required');
 });

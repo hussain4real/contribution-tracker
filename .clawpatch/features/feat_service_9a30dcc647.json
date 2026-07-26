@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_service_9a30dcc647",
+  "title": "Laravel service FamilyContributionReviewService",
+  "summary": "Laravel application service FamilyContributionReviewService.",
+  "kind": "service",
+  "source": "laravel-service",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "app/Services/FamilyContributionReviewService.php",
+      "symbol": "FamilyContributionReviewService",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Services/FamilyContributionReviewService.php",
+      "reason": "service"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "app/Enums/MemberCategory.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Enums/PaymentStatus.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Models/Contribution.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Models/User.php",
+      "reason": "imported application class"
+    }
+  ],
+  "tests": [],
+  "tags": [
+    "php",
+    "laravel",
+    "service"
+  ],
+  "trustBoundaries": [
+    "database",
+    "serialization"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

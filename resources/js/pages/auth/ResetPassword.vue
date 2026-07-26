@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
+import PasswordInput from '@/components/PasswordInput.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -47,9 +48,8 @@ const inputEmail = ref(props.email);
 
                 <div class="grid gap-2">
                     <Label for="password">Password</Label>
-                    <Input
+                    <PasswordInput
                         id="password"
-                        type="password"
                         name="password"
                         autocomplete="new-password"
                         class="mt-1 block w-full"
@@ -63,9 +63,8 @@ const inputEmail = ref(props.email);
                     <Label for="password_confirmation">
                         Confirm Password
                     </Label>
-                    <Input
+                    <PasswordInput
                         id="password_confirmation"
-                        type="password"
                         name="password_confirmation"
                         autocomplete="new-password"
                         class="mt-1 block w-full"

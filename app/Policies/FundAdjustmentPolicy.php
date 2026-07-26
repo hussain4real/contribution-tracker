@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Policies;
 
 use App\Models\FundAdjustment;
@@ -14,7 +16,8 @@ class FundAdjustmentPolicy
 
     public function view(User $user, FundAdjustment $fundAdjustment): bool
     {
-        return $user->family_id === $fundAdjustment->family_id;
+        return ($user->current_family_id ?? $user->family_id) === $fundAdjustment->family_id
+            && $user->membershipForFamilyId($fundAdjustment->family_id) !== null;
     }
 
     public function create(User $user): bool
@@ -24,21 +27,22 @@ class FundAdjustmentPolicy
 
     public function update(User $user, FundAdjustment $fundAdjustment): bool
     {
-        return $user->canRecordPayments() && $user->family_id === $fundAdjustment->family_id;
+        return false;
     }
 
     public function delete(User $user, FundAdjustment $fundAdjustment): bool
     {
-        return $user->canRecordPayments() && $user->family_id === $fundAdjustment->family_id;
+        return ($user->current_family_id ?? $user->family_id) === $fundAdjustment->family_id
+            && $user->membershipForFamilyId($fundAdjustment->family_id)?->role->canRecordPayments() === true;
     }
 
     public function restore(User $user, FundAdjustment $fundAdjustment): bool
     {
-        return $user->canRecordPayments() && $user->family_id === $fundAdjustment->family_id;
+        return false;
     }
 
     public function forceDelete(User $user, FundAdjustment $fundAdjustment): bool
     {
-        return $user->canRecordPayments() && $user->family_id === $fundAdjustment->family_id;
+        return false;
     }
 }

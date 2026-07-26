@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\Payment;
@@ -56,7 +58,7 @@ describe('Financial Secretary Dashboard', function () {
 
     it('displays recent payments for financial secretary', function () {
         // Record a payment first
-        $contribution = Contribution::forUser($this->employedMember->id)->currentMonth()->first();
+        $contribution = Contribution::forUser($this->employedMember->id)->currentMonth()->firstOrFail();
         Payment::factory()
             ->forContribution($contribution)
             ->recordedBy($this->financialSecretary)

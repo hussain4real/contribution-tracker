@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_service_b645db88e6",
+  "title": "Laravel model WhatsAppMessage",
+  "summary": "Laravel model WhatsAppMessage in app/Models/WhatsAppMessage.php.",
+  "kind": "service",
+  "source": "laravel-model",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "app/Models/WhatsAppMessage.php",
+      "symbol": "WhatsAppMessage",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Models/WhatsAppMessage.php",
+      "reason": "laravel model"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "tests/Feature/Models/WhatsAppMessageTest.php",
+      "reason": "associated test"
+    },
+    {
+      "path": "tests/Unit/Channels/WhatsAppMessageTest.php",
+      "reason": "associated test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/Feature/Models/WhatsAppMessageTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Unit/Channels/WhatsAppMessageTest.php",
+      "command": "composer test"
+    }
+  ],
+  "tags": [
+    "php",
+    "laravel",
+    "model",
+    "eloquent"
+  ],
+  "trustBoundaries": [
+    "database",
+    "serialization"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

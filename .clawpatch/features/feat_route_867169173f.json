@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_867169173f",
+  "title": "Laravel controller PlatformFeatureFlagController",
+  "summary": "Laravel HTTP controller PlatformFeatureFlagController.",
+  "kind": "route",
+  "source": "laravel-controller",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "app/Http/Controllers/PlatformFeatureFlagController.php",
+      "symbol": "PlatformFeatureFlagController",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Http/Controllers/PlatformFeatureFlagController.php",
+      "reason": "controller"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "app/Features/AiAssistant.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Http/Requests/FeatureFlagUserRequest.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Models/User.php",
+      "reason": "imported application class"
+    }
+  ],
+  "tests": [],
+  "tags": [
+    "php",
+    "laravel",
+    "controller",
+    "http"
+  ],
+  "trustBoundaries": [
+    "user-input",
+    "auth",
+    "database",
+    "serialization"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

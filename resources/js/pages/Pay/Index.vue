@@ -8,6 +8,7 @@ import HeadingSmall from '@/components/HeadingSmall.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useCurrencyFormatter } from '@/lib/currency';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
@@ -25,20 +26,42 @@ interface PendingContribution {
     period_label: string;
 }
 
+interface PaystackFeeConfig {
+    policy: string;
+    basis_points: number;
+    fixed_kobo: number;
+    waiver_threshold_kobo: number;
+    cap_kobo: number;
+}
+
 interface Props {
     pending_contributions?: PendingContribution[];
     category_amount?: number;
     formatted_amount?: string;
     has_paystack?: boolean;
+    bank_setup_status?:
+        | 'ready'
+        | 'missing_bank_details'
+        | 'incomplete_bank_details'
+        | 'missing_paystack_key';
     paystack_public_key?: string;
+    paystack_fee?: PaystackFeeConfig;
 }
 
 const props = withDefaults(defineProps<Props>(), {
     pending_contributions: () => [],
     category_amount: 0,
-    formatted_amount: '₦0',
+    formatted_amount: '',
     has_paystack: false,
+    bank_setup_status: 'missing_bank_details',
     paystack_public_key: '',
+    paystack_fee: () => ({
+        policy: 'payer_pays',
+        basis_points: 150,
+        fixed_kobo: 10000,
+        waiver_threshold_kobo: 250000,
+        cap_kobo: 200000,
+    }),
 });
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -48,16 +71,82 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const selectedIds = ref<number[]>([]);
 const processing = ref(false);
-
-const formatAmount = (amount: number): string => {
-    return `₦${amount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
-};
+const { formatCurrency: formatAmount } = useCurrencyFormatter();
 
 const totalSelected = computed(() => {
     return props.pending_contributions
         .filter((c) => selectedIds.value.includes(c.id))
         .reduce((sum, c) => sum + c.balance, 0);
 });
+
+const selectedContributionKobo = computed(() => {
+    return Math.max(0, Math.round(totalSelected.value * 100));
+});
+
+const paystackFeeForGrossAmountKobo = (grossAmountKobo: number): number => {
+    if (grossAmountKobo <= 0) {
+        return 0;
+    }
+
+    const percentageFee = Math.ceil(
+        (grossAmountKobo * props.paystack_fee.basis_points) / 10000,
+    );
+    const fixedFee =
+        grossAmountKobo < props.paystack_fee.waiver_threshold_kobo
+            ? 0
+            : props.paystack_fee.fixed_kobo;
+
+    return Math.min(percentageFee + fixedFee, props.paystack_fee.cap_kobo);
+};
+
+const grossAmountKobo = computed(() => {
+    const targetAmountKobo = selectedContributionKobo.value;
+
+    if (targetAmountKobo <= 0) {
+        return 0;
+    }
+
+    let low = targetAmountKobo;
+    let high =
+        targetAmountKobo +
+        Math.max(
+            paystackFeeForGrossAmountKobo(targetAmountKobo),
+            props.paystack_fee.fixed_kobo,
+            props.paystack_fee.cap_kobo,
+        );
+    let attempts = 0;
+
+    while (
+        high - paystackFeeForGrossAmountKobo(high) < targetAmountKobo &&
+        attempts < 32
+    ) {
+        high *= 2;
+        attempts += 1;
+    }
+
+    while (low < high) {
+        const midpoint = Math.floor((low + high) / 2);
+
+        if (
+            midpoint - paystackFeeForGrossAmountKobo(midpoint) >=
+            targetAmountKobo
+        ) {
+            high = midpoint;
+        } else {
+            low = midpoint + 1;
+        }
+    }
+
+    return low;
+});
+
+const estimatedFeeKobo = computed(() => {
+    return Math.max(0, grossAmountKobo.value - selectedContributionKobo.value);
+});
+
+const formatKobo = (amountKobo: number) => {
+    return formatAmount(amountKobo / 100);
+};
 
 const toggleContribution = (id: number, checked: boolean) => {
     if (checked) {
@@ -80,6 +169,18 @@ const allSelected = computed(
         props.pending_contributions.length > 0 &&
         selectedIds.value.length === props.pending_contributions.length,
 );
+
+const setupMessage = computed(() => {
+    if (props.bank_setup_status === 'incomplete_bank_details') {
+        return 'Bank details are saved, but the Paystack bank code is missing. Ask your family admin to reselect the bank and save changes.';
+    }
+
+    if (props.bank_setup_status === 'missing_paystack_key') {
+        return 'Online payments are temporarily unavailable because Paystack is not fully configured for this app.';
+    }
+
+    return 'Online payments are not yet available. Your family admin needs to configure bank details to enable Paystack payments.';
+});
 
 const payWithPaystack = async () => {
     if (selectedIds.value.length === 0) {
@@ -121,7 +222,9 @@ const payWithPaystack = async () => {
         popup.resumeTransaction(data.access_code, {
             onSuccess: () => {
                 router.visit(
-                    payCallback.url({ query: { reference: data.reference } }),
+                    payCallback.url(undefined, {
+                        query: { reference: data.reference },
+                    }),
                 );
             },
             onCancel: () => {
@@ -133,7 +236,7 @@ const payWithPaystack = async () => {
                     processing.value = false;
                     // If still processing when popup closes, check via callback
                     router.visit(
-                        payCallback.url({
+                        payCallback.url(undefined, {
                             query: { reference: data.reference },
                         }),
                     );
@@ -163,8 +266,7 @@ const payWithPaystack = async () => {
                 class="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950"
             >
                 <p class="text-sm text-amber-800 dark:text-amber-200">
-                    Online payments are not yet available. Your family admin
-                    needs to configure bank details to enable Paystack payments.
+                    {{ setupMessage }}
                 </p>
             </div>
 
@@ -192,8 +294,37 @@ const payWithPaystack = async () => {
                         v-if="selectedIds.length > 0"
                         class="text-sm font-medium"
                     >
-                        Total: {{ formatAmount(totalSelected) }}
+                        Contribution:
+                        {{ formatAmount(totalSelected) }}
                     </p>
+                </div>
+
+                <div
+                    v-if="selectedIds.length > 0"
+                    class="space-y-2 rounded-lg border bg-muted/30 p-4 text-sm"
+                >
+                    <div class="flex items-center justify-between gap-4">
+                        <span class="text-muted-foreground">
+                            Contribution due
+                        </span>
+                        <span class="font-medium">
+                            {{ formatAmount(totalSelected) }}
+                        </span>
+                    </div>
+                    <div class="flex items-center justify-between gap-4">
+                        <span class="text-muted-foreground">
+                            Paystack fee
+                        </span>
+                        <span class="font-medium">
+                            {{ formatKobo(estimatedFeeKobo) }}
+                        </span>
+                    </div>
+                    <div
+                        class="flex items-center justify-between gap-4 border-t pt-2 text-base font-semibold"
+                    >
+                        <span>Total to pay</span>
+                        <span>{{ formatKobo(grossAmountKobo) }}</span>
+                    </div>
                 </div>
 
                 <div class="space-y-2">
@@ -265,7 +396,7 @@ const payWithPaystack = async () => {
                                 ? 'Processing...'
                                 : selectedIds.length === 0
                                   ? 'Select contributions to pay'
-                                  : `Pay ${formatAmount(totalSelected)} with Paystack`
+                                  : `Pay ${formatKobo(grossAmountKobo)} with Paystack`
                         }}
                     </Button>
                 </div>

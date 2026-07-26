@@ -1,7 +1,7 @@
 import { router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
-const CACHE_NAME = 'inertia-pages-v2';
+const CACHE_NAME = 'inertia-pages-v3';
 
 function getInitialOnlineStatus(): boolean {
     if (typeof window === 'undefined' || typeof navigator === 'undefined') {

@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_ffab211422",
+  "title": "Laravel controller MemberController",
+  "summary": "Laravel HTTP controller MemberController.",
+  "kind": "route",
+  "source": "laravel-controller",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "app/Http/Controllers/MemberController.php",
+      "symbol": "MemberController",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Http/Controllers/MemberController.php",
+      "reason": "controller"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "app/Enums/MemberCategory.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Enums/Role.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Http/Requests/StoreMemberRequest.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Http/Requests/UpdateMemberRequest.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Models/User.php",
+      "reason": "imported application class"
+    }
+  ],
+  "tests": [],
+  "tags": [
+    "php",
+    "laravel",
+    "controller",
+    "http"
+  ],
+  "trustBoundaries": [
+    "user-input",
+    "auth",
+    "database",
+    "serialization"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

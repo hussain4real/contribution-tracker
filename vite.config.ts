@@ -3,16 +3,23 @@ import { wayfinder } from '@laravel/vite-plugin-wayfinder';
 import tailwindcss from '@tailwindcss/vite';
 import vue from '@vitejs/plugin-vue';
 import laravel from 'laravel-vite-plugin';
+import { bunny } from 'laravel-vite-plugin/fonts';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
-const INERTIA_PAGES_CACHE = 'inertia-pages-v2';
+const CACHE_VERSION = 'v3';
+const INERTIA_PAGES_CACHE = `inertia-pages-${CACHE_VERSION}`;
 
 export default defineConfig({
     plugins: [
         laravel({
-            input: ['resources/js/app.ts'],
+            input: ['resources/js/app.ts', 'resources/css/app.css'],
             refresh: true,
+            fonts: [
+                bunny('Instrument Sans', {
+                    weights: [400, 500, 600],
+                }),
+            ],
         }),
         inertia({
             pages: './pages',
@@ -30,16 +37,21 @@ export default defineConfig({
             },
         }),
         VitePWA({
-            registerType: 'prompt',
+            registerType: 'autoUpdate',
             devOptions: {
                 enabled: !!process.env.VITE_PWA_DEV,
                 type: 'module',
             },
-            includeAssets: ['favicon.ico', 'favicon.svg', 'apple-touch-icon.png', 'offline.html'],
+            includeAssets: [
+                'favicon.ico',
+                'favicon.svg',
+                'apple-touch-icon.png',
+            ],
             manifest: {
                 name: 'FamilyFunds',
                 short_name: 'FamilyFunds',
-                description: 'Track family contributions with ease. Manage monthly contributions, record payments, and monitor your family fund.',
+                description:
+                    'Track family contributions with ease. Manage monthly contributions, record payments, and monitor your family fund.',
                 theme_color: '#ffffff',
                 background_color: '#ffffff',
                 display: 'standalone',
@@ -63,9 +75,56 @@ export default defineConfig({
                         purpose: 'maskable',
                     },
                 ],
+                shortcuts: [
+                    {
+                        name: 'Dashboard',
+                        short_name: 'Dashboard',
+                        url: '/',
+                        icons: [
+                            {
+                                src: '/pwa-192x192.png',
+                                sizes: '192x192',
+                                type: 'image/png',
+                            },
+                        ],
+                    },
+                    {
+                        name: 'My Contributions',
+                        short_name: 'Contributions',
+                        url: '/',
+                        icons: [
+                            {
+                                src: '/pwa-192x192.png',
+                                sizes: '192x192',
+                                type: 'image/png',
+                            },
+                        ],
+                    },
+                    {
+                        name: 'Notifications',
+                        short_name: 'Alerts',
+                        url: '/',
+                        icons: [
+                            {
+                                src: '/pwa-192x192.png',
+                                sizes: '192x192',
+                                type: 'image/png',
+                            },
+                        ],
+                    },
+                ],
             },
             workbox: {
+                cleanupOutdatedCaches: true,
+                skipWaiting: true,
+                clientsClaim: true,
                 importScripts: ['/web-push-sw.js'],
+                additionalManifestEntries: [
+                    {
+                        url: '/offline.html',
+                        revision: CACHE_VERSION,
+                    },
+                ],
                 navigateFallback: '/offline.html',
                 navigateFallbackDenylist: [/^\/build\//, /^\/api\//],
                 runtimeCaching: [
@@ -73,7 +132,7 @@ export default defineConfig({
                         urlPattern: /^https:\/\/fonts\.bunny\.net\/.*/i,
                         handler: 'CacheFirst',
                         options: {
-                            cacheName: 'bunny-fonts-cache',
+                            cacheName: `bunny-fonts-cache-${CACHE_VERSION}`,
                             expiration: {
                                 maxEntries: 10,
                                 maxAgeSeconds: 60 * 60 * 24 * 365,
@@ -87,7 +146,7 @@ export default defineConfig({
                         urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/i,
                         handler: 'CacheFirst',
                         options: {
-                            cacheName: 'images-cache',
+                            cacheName: `images-cache-${CACHE_VERSION}`,
                             expiration: {
                                 maxEntries: 50,
                                 maxAgeSeconds: 60 * 60 * 24 * 30,
@@ -98,7 +157,7 @@ export default defineConfig({
                         urlPattern: /\.(?:js|css)$/i,
                         handler: 'NetworkFirst',
                         options: {
-                            cacheName: 'static-resources',
+                            cacheName: `static-resources-${CACHE_VERSION}`,
                             expiration: {
                                 maxEntries: 50,
                                 maxAgeSeconds: 60 * 60 * 24 * 7,
@@ -120,9 +179,7 @@ export default defineConfig({
                                     'X-Inertia-Partial-Component',
                                 ) ||
                                 request.headers.has('X-Inertia-Partial-Data') ||
-                                request.headers.has(
-                                    'X-Inertia-Partial-Except',
-                                );
+                                request.headers.has('X-Inertia-Partial-Except');
 
                             return (
                                 request.mode === 'navigate' ||

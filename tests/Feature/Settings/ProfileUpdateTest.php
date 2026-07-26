@@ -1,5 +1,8 @@
 <?php
 
+declare(strict_types=1);
+
+use App\Models\Contribution;
 use App\Models\User;
 
 test('profile page is displayed', function () {
@@ -80,6 +83,21 @@ test('correct password must be provided to delete account', function () {
     $response
         ->assertSessionHasErrors('password')
         ->assertRedirect(route('profile.edit'));
+
+    expect($user->fresh())->not->toBeNull();
+});
+
+test('accounts with financial history cannot be deleted', function () {
+    $user = User::factory()->member()->create();
+    Contribution::factory()->forUser($user)->create(['family_id' => $user->family_id]);
+
+    $this->actingAs($user)
+        ->from(route('profile.edit'))
+        ->delete(route('profile.destroy'), ['password' => 'password'])
+        ->assertRedirect(route('profile.edit'))
+        ->assertSessionHasErrors([
+            'password' => 'This account has financial history and cannot be deleted. Contact support to request a privacy-safe anonymization.',
+        ]);
 
     expect($user->fresh())->not->toBeNull();
 });

@@ -1,13 +1,17 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Ai\Tools;
 
+use App\Models\Family;
 use App\Models\FundAdjustment;
 use App\Models\User;
+use App\Support\CurrencyFormatter;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Support\Facades\DB;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
-use Stringable;
 
 class RecordFundAdjustment implements Tool
 {
@@ -16,35 +20,41 @@ class RecordFundAdjustment implements Tool
     /**
      * Get the description of the tool's purpose.
      */
-    public function description(): Stringable|string
+    public function description(): string
     {
-        return 'Records a fund adjustment for the family (e.g., interest earned, donations received, corrections). Requires amount (whole number in Naira), description, and date. Always call without confirmed=true first to preview.';
+        return 'Records a fund adjustment for the family (e.g., interest earned, donations received, corrections). Requires amount (whole number), description, and date. Always call without confirmed=true first to preview.';
     }
 
     /**
      * Execute the tool.
      */
-    public function handle(Request $request): Stringable|string
+    public function handle(Request $request): string
     {
         if (! $this->user->canRecordPayments()) {
             return json_encode(['error' => 'You do not have permission to record fund adjustments. Only admins and financial secretaries can do this.'], JSON_THROW_ON_ERROR);
         }
 
-        $amount = $request['amount'] ?? null;
-        $description = $request['description'] ?? null;
-        $recordedAt = $request['recorded_at'] ?? now()->toDateString();
-        $confirmed = $request['confirmed'] ?? false;
+        $amount = $this->nullableIntegerFromRequest($request['amount'] ?? null);
+        $description = $this->nullableStringFromRequest($request['description'] ?? null);
+        $recordedAt = $this->stringFromRequest($request['recorded_at'] ?? null, now()->toDateString());
+        $confirmed = ($request['confirmed'] ?? false) === true;
 
-        if (! $amount || $amount < 1) {
-            return json_encode(['error' => 'Amount is required and must be at least ₦1.'], JSON_THROW_ON_ERROR);
+        if ($amount === null || $amount === 0) {
+            return json_encode(['error' => 'Amount is required and must be a non-zero whole number.'], JSON_THROW_ON_ERROR);
         }
 
         if (! $description) {
             return json_encode(['error' => 'A description is required for the fund adjustment.'], JSON_THROW_ON_ERROR);
         }
 
-        $currency = $this->user->family?->currency ?? '₦';
-        $formattedAmount = $currency.number_format($amount, 2);
+        $family = $this->user->currentFamily ?? $this->user->family;
+
+        if (! $family instanceof Family) {
+            return json_encode(['error' => 'User is not associated with a family.'], JSON_THROW_ON_ERROR);
+        }
+
+        $currency = $family->currency;
+        $formattedAmount = CurrencyFormatter::format($amount, $currency);
 
         if (! $confirmed) {
             return json_encode([
@@ -58,13 +68,13 @@ class RecordFundAdjustment implements Tool
             ], JSON_THROW_ON_ERROR);
         }
 
-        $adjustment = FundAdjustment::create([
-            'family_id' => $this->user->family_id,
+        $adjustment = DB::transaction(fn (): FundAdjustment => FundAdjustment::create([
+            'family_id' => $family->id,
             'amount' => $amount,
             'description' => $description,
             'recorded_at' => $recordedAt,
             'recorded_by' => $this->user->id,
-        ]);
+        ]), attempts: 3);
 
         return json_encode([
             'status' => 'success',
@@ -79,10 +89,28 @@ class RecordFundAdjustment implements Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'amount' => $schema->integer()->min(1)->required(),
+            'amount' => $schema->anyOf([
+                $schema->integer()->max(-1),
+                $schema->integer()->min(1),
+            ])->required(),
             'description' => $schema->string()->required(),
             'recorded_at' => $schema->string(),
             'confirmed' => $schema->boolean(),
         ];
+    }
+
+    private function nullableIntegerFromRequest(mixed $value): ?int
+    {
+        return is_numeric($value) ? (int) $value : null;
+    }
+
+    private function nullableStringFromRequest(mixed $value): ?string
+    {
+        return is_scalar($value) && (string) $value !== '' ? (string) $value : null;
+    }
+
+    private function stringFromRequest(mixed $value, string $default): string
+    {
+        return is_scalar($value) ? (string) $value : $default;
     }
 }

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Factories;
 
 use App\Models\WhatsAppMessage;
@@ -13,7 +15,7 @@ class WhatsAppMessageFactory extends Factory
     /**
      * Define the model's default state.
      *
-     * @return array<string, mixed>
+     * @return array<model-property<WhatsAppMessage>, mixed>
      */
     public function definition(): array
     {

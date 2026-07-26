@@ -1,14 +1,20 @@
 <?php
 
-use App\Http\Controllers\Settings\PasskeyController;
-use App\Http\Controllers\Settings\PasswordController;
+declare(strict_types=1);
+
+use App\Http\Controllers\FamilySwitchController;
 use App\Http\Controllers\Settings\ProfileController;
-use App\Http\Controllers\Settings\TwoFactorAuthenticationController;
+use App\Http\Controllers\Settings\SecurityController;
 use App\Http\Controllers\Settings\WebPushSubscriptionController;
 use App\Http\Controllers\Settings\WhatsAppVerificationController;
 use Illuminate\Auth\Middleware\Authenticate;
+use Illuminate\Auth\Middleware\RequirePassword;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+
+Route::get('settings/password', fn () => abort(404));
+Route::get('settings/two-factor', fn () => abort(404));
+Route::get('settings/passkeys', fn () => abort(404));
 
 Route::middleware('auth')->group(function () {
     Route::redirect('settings', '/settings/profile');
@@ -33,9 +39,14 @@ Route::middleware('auth')->group(function () {
         ->middleware(Authenticate::class)
         ->name('web-push.subscription.destroy');
 
-    Route::get('settings/password', [PasswordController::class, 'edit'])->name('user-password.edit');
+    Route::post('settings/families/{family:slug}/switch', FamilySwitchController::class)
+        ->name('families.switch');
 
-    Route::put('settings/password', [PasswordController::class, 'update'])
+    Route::get('settings/security', [SecurityController::class, 'edit'])
+        ->middleware(RequirePassword::class)
+        ->name('security.edit');
+
+    Route::put('settings/password', [SecurityController::class, 'update'])
         ->middleware('throttle:6,1')
         ->name('user-password.update');
 
@@ -43,11 +54,11 @@ Route::middleware('auth')->group(function () {
         return Inertia::render('settings/Appearance');
     })->name('appearance.edit');
 
-    Route::get('settings/two-factor', [TwoFactorAuthenticationController::class, 'show'])
-        ->name('two-factor.show');
-
-    Route::get('settings/passkeys', [PasskeyController::class, 'show'])->name('passkeys.show');
-    Route::post('settings/passkeys/options', [PasskeyController::class, 'createOptions'])->name('passkeys.create-options');
-    Route::post('settings/passkeys', [PasskeyController::class, 'store'])->name('passkeys.store');
-    Route::delete('settings/passkeys/{passkey}', [PasskeyController::class, 'destroy'])->name('passkeys.destroy');
 });
+
+Route::get('.well-known/passkey-endpoints', function () {
+    return response()->json([
+        'enroll' => route('security.edit'),
+        'manage' => route('security.edit'),
+    ]);
+})->name('well-known.passkeys');

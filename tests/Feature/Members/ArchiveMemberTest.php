@@ -1,6 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\Contribution;
+use App\Models\Family;
+use App\Models\FamilyMembership;
 use App\Models\User;
 
 /**
@@ -8,33 +12,40 @@ use App\Models\User;
  */
 describe('Archive Member', function () {
     beforeEach(function () {
-        $this->admin = User::factory()->admin()->create();
-        $this->member = User::factory()->member()->employed()->create();
+        $this->family = Family::factory()->create();
+        $this->admin = User::factory()->admin()->create(['family_id' => $this->family->id]);
+        $this->member = User::factory()->member()->employed()->create(['family_id' => $this->family->id]);
     });
 
     it('super admin can archive a member', function () {
         $this->actingAs($this->admin)
             ->delete("/members/{$this->member->id}")
-            ->assertRedirect('/members');
+            ->assertRedirect(route('members.index'));
 
-        $this->member->refresh();
-        expect($this->member->isArchived())->toBeTrue();
-        expect($this->member->archived_at)->not->toBeNull();
+        $membership = $this->member->membershipForFamilyIncludingArchived($this->family);
+
+        expect($membership)->toBeInstanceOf(FamilyMembership::class)
+            ->and($membership?->isArchived())->toBeTrue()
+            ->and($membership?->archived_at)->not->toBeNull()
+            ->and($this->member->refresh()->archived_at)->toBeNull();
+    });
+
+    it('records a supplied family archive reason', function () {
+        $this->actingAs($this->admin)
+            ->delete("/members/{$this->member->id}", ['reason' => 'Moved to another household'])
+            ->assertRedirect(route('members.index'));
+
+        expect($this->member->membershipForFamilyIncludingArchived($this->family)?->archive_reason)
+            ->toBe('Moved to another household');
     });
 
     it('archived member is excluded from active scope', function () {
         $this->actingAs($this->admin)
             ->delete("/members/{$this->member->id}");
 
-        $this->member->refresh();
-
-        // Should not appear in active query
-        $activeMembers = User::active()->where('id', $this->member->id)->exists();
-        expect($activeMembers)->toBeFalse();
-
-        // Should appear in archived query
-        $archivedMembers = User::archived()->where('id', $this->member->id)->exists();
-        expect($archivedMembers)->toBeTrue();
+        expect($this->member->belongsToFamily($this->family))->toBeFalse()
+            ->and($this->member->belongsToFamilyIncludingArchived($this->family))->toBeTrue()
+            ->and($this->member->refresh()->isArchived())->toBeFalse();
     });
 
     it('archived member preserves contribution history', function () {
@@ -56,7 +67,7 @@ describe('Archive Member', function () {
     });
 
     it('cannot archive super admin', function () {
-        $anotherAdmin = User::factory()->admin()->create();
+        $anotherAdmin = User::factory()->admin()->create(['family_id' => $this->family->id]);
 
         $this->actingAs($this->admin)
             ->delete("/members/{$anotherAdmin->id}")

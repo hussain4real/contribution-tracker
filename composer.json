@@ -3,38 +3,45 @@
     "name": "laravel/vue-starter-kit",
     "type": "project",
     "description": "The skeleton application for the Laravel framework.",
-    "keywords": [
-        "laravel",
-        "framework"
-    ],
+    "keywords": ["laravel", "framework"],
     "license": "MIT",
     "require": {
         "php": "^8.2",
+        "dompdf/dompdf": "^3.0",
+        "filament/filament": "^5.0",
         "inertiajs/inertia-laravel": "^3.0.0",
         "laravel-notification-channels/webpush": "^10.5",
         "laravel/ai": "^0.6.4",
         "laravel/fortify": "^1.30",
         "laravel/framework": "^13.0",
+        "laravel/mcp": "^0.7.0",
         "laravel/nightwatch": "^1.24",
+        "laravel/passport": "^13.7",
         "laravel/pennant": "^1.23",
         "laravel/tinker": "^3.0",
         "laravel/wayfinder": "^0.1.9",
         "resend/resend-php": "^1.1",
+        "spatie/laravel-backup": "^10.3",
+        "spatie/laravel-pdf": "^2.0",
         "spomky-labs/cbor-php": "^3.2",
         "web-auth/cose-lib": "^4.5"
     },
     "require-dev": {
         "barryvdh/laravel-debugbar": "^4.1",
         "fakerphp/faker": "^1.23",
+        "larastan/larastan": "^3.10",
         "laravel/boost": "^2.3",
         "laravel/pail": "^1.2.2",
+        "laravel/pao": "^1.0",
         "laravel/pint": "^1.24",
         "laravel/sail": "^1.41",
         "mockery/mockery": "^1.6",
         "nunomaduro/collision": "^8.6",
-        "pestphp/pest": "^4.2",
+        "pestphp/pest": "^4.7",
         "pestphp/pest-plugin-browser": "^4.1",
-        "pestphp/pest-plugin-laravel": "^4.0"
+        "pestphp/pest-plugin-laravel": "^4.0",
+        "pestphp/pest-plugin-profanity": "^4.2",
+        "pestphp/pest-plugin-stressless": "^4.0"
     },
     "autoload": {
         "psr-4": {
@@ -70,9 +77,19 @@
             "@php artisan config:clear --ansi",
             "@php artisan test"
         ],
+        "analyse": "PAO_DISABLE=1 vendor/bin/phpstan analyse -c phpstan.neon.dist --memory-limit=2G --debug",
+        "ci:check": [
+            "@analyse",
+            "vendor/bin/pint --test",
+            "npm run format:check",
+            "npm run lint",
+            "npm run build",
+            "@php -d max_execution_time=0 artisan test --coverage --parallel --compact --min=100"
+        ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
-            "@php artisan package:discover --ansi"
+            "@php artisan package:discover --ansi",
+            "@php artisan filament:upgrade"
         ],
         "post-update-cmd": [
             "@php artisan vendor:publish --tag=laravel-assets --ansi --force",

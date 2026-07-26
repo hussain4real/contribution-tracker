@@ -1,0 +1,41 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+    - vendor/pestphp/pest/extension.neon
+    - vendor/pestphp/pest/phpstan-pest-extension.neon
+
+parameters:
+    level: max
+
+    checkModelProperties: true
+    databaseMigrationsPath:
+        - database/migrations
+
+    paths:
+        - app
+        - bootstrap/app.php
+        - bootstrap/providers.php
+        - config
+        - database
+        - routes
+        - tests
+
+    stubFiles:
+        - phpstan-pest.stub
+
+    bootstrapFiles:
+        - vendor/autoload.php
+
+    scanFiles:
+        - tests/PestStaticAnalysisTestCase.php
+        - vendor/pestphp/pest/src/PendingCalls/AfterEachCall.php
+        - vendor/pestphp/pest/src/PendingCalls/BeforeEachCall.php
+        - vendor/pestphp/pest/src/PendingCalls/TestCall.php
+        - vendor/pestphp/pest/src/Support/HigherOrderTapProxy.php
+
+    universalObjectCratesClasses:
+        - Pest\Support\HigherOrderTapProxy
+        - Pest\Expectation
+        - Pest\Mixins\Expectation
+
+    excludePaths:
+        - bootstrap/cache

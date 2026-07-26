@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Enums\MemberCategory;
 use App\Models\Contribution;
 use App\Models\Payment;
@@ -61,7 +63,7 @@ describe('Annual Report', function () {
 
     it('includes annual total summary', function () {
         $admin = User::factory()->admin()->create();
-        $member = User::factory()->employed()->create();
+        $member = User::factory()->employed()->create(['family_id' => $admin->family_id]);
 
         // Create contributions for the year
         for ($month = 1; $month <= 3; $month++) {
@@ -120,20 +122,20 @@ describe('Annual Report', function () {
         $admin = User::factory()->admin()->create();
 
         // Create members with different categories
-        $employed = User::factory()->employed()->create();
-        $student = User::factory()->student()->create();
+        $employed = User::factory()->employed()->create(['family_id' => $admin->family_id]);
+        $student = User::factory()->student()->create(['family_id' => $admin->family_id]);
 
         // Create contributions
         foreach ([$employed, $student] as $member) {
             $contribution = Contribution::factory()->create([
                 'user_id' => $member->id,
                 'month' => now()->startOfMonth(),
-                'expected_amount' => $member->category->monthlyAmount(),
+                'expected_amount' => $member->getMonthlyAmount(),
             ]);
 
             Payment::factory()->create([
                 'contribution_id' => $contribution->id,
-                'amount' => $member->category->monthlyAmount(),
+                'amount' => $member->getMonthlyAmount(),
                 'recorded_by' => $admin->id,
             ]);
         }
@@ -147,6 +149,29 @@ describe('Annual Report', function () {
             );
     });
 
+    it('calculates annual collection rates for the current family', function () {
+        $admin = User::factory()->admin()->create();
+        $member = User::factory()->employed()->create(['family_id' => $admin->family_id]);
+        $contribution = Contribution::factory()
+            ->forUser($member)
+            ->forMonth(now()->year, 1)
+            ->create(['expected_amount' => 4000]);
+        Payment::factory()
+            ->forContribution($contribution)
+            ->recordedBy($admin)
+            ->create(['amount' => 1000]);
+
+        $this->actingAs($admin)
+            ->get('/reports/annual?year='.now()->year)
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('total.expected', 4000)
+                ->where('total.collected', 1000)
+                ->where('total.collection_rate', 25)
+                ->where('by_category.employed.count', 1)
+            );
+    });
+
     it('shows collection rate trend over months', function () {
         $admin = User::factory()->admin()->create();
 
@@ -156,8 +181,15 @@ describe('Annual Report', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Reports/Annual')
                 ->has('monthly_breakdown')
-                ->where('monthly_breakdown', fn ($breakdown) => collect($breakdown)->every(fn ($month) => isset($month['collection_rate'])
-                ))
+                ->where('monthly_breakdown', function (mixed $breakdown): bool {
+                    foreach (arrayLikeItems($breakdown) as $month) {
+                        if (! is_array($month) || ! array_key_exists('collection_rate', $month)) {
+                            return false;
+                        }
+                    }
+
+                    return true;
+                })
             );
     });
 
@@ -166,19 +198,19 @@ describe('Annual Report', function () {
         $year = now()->year;
 
         // Seed contributions across all 12 months for multiple members
-        $employed = User::factory()->employed()->create();
-        $student = User::factory()->student()->create();
+        $employed = User::factory()->employed()->create(['family_id' => $admin->family_id]);
+        $student = User::factory()->student()->create(['family_id' => $admin->family_id]);
 
         foreach ([$employed, $student] as $member) {
             for ($month = 1; $month <= 12; $month++) {
                 $contribution = Contribution::factory()
                     ->forUser($member)
                     ->forMonth($year, $month)
-                    ->create(['expected_amount' => $member->category->monthlyAmount()]);
+                    ->create(['expected_amount' => $member->getMonthlyAmount()]);
 
                 Payment::factory()->create([
                     'contribution_id' => $contribution->id,
-                    'amount' => $member->category->monthlyAmount(),
+                    'amount' => $member->getMonthlyAmount(),
                     'recorded_by' => $admin->id,
                 ]);
             }
@@ -194,9 +226,9 @@ describe('Annual Report', function () {
 
         DB::disableQueryLog();
 
-        // The annual report should use a fixed number of queries (auth + contribution query
-        // with eager-loaded payments/users + Pennant feature flag resolution),
+        // The annual report should use a fixed number of queries (auth + current family
+        // membership resolution + contribution query with eager-loaded payments/users + Pennant and subscription feature resolution),
         // not scale with the number of months or categories.
-        expect($queryCount)->toBeLessThanOrEqual(8);
+        expect($queryCount)->toBeLessThanOrEqual(18);
     });
 });

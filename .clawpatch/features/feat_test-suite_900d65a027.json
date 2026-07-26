@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_test-suite_900d65a027",
+  "title": "Laravel test suite tests/Feature#2",
+  "summary": "Laravel tests in tests/Feature#2.",
+  "kind": "test-suite",
+  "source": "laravel-test-suite",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "tests/Feature#2",
+      "symbol": "tests/Feature#2",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "tests/Feature/Ai/Tools/ToolMetadataTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/AiChatTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Auth/AuthenticationTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Auth/EmailVerificationTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Auth/PasskeyLoginTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Auth/PasskeyTwoFactorTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Auth/PasswordConfirmationTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Auth/PasswordResetTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Auth/RegistrationTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Auth/TwoFactorChallengeTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Auth/VerificationNotificationTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Authorization/RoleAccessTest.php",
+      "reason": "PHP test"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "tests/Feature/Ai/Tools/ToolMetadataTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/AiChatTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Auth/AuthenticationTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Auth/EmailVerificationTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Auth/PasskeyLoginTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Auth/PasskeyTwoFactorTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Auth/PasswordConfirmationTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Auth/PasswordResetTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Auth/RegistrationTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Auth/TwoFactorChallengeTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Auth/VerificationNotificationTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Authorization/RoleAccessTest.php",
+      "reason": "nearby test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/Feature/Ai/Tools/ToolMetadataTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/AiChatTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Auth/AuthenticationTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Auth/EmailVerificationTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Auth/PasskeyLoginTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Auth/PasskeyTwoFactorTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Auth/PasswordConfirmationTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Auth/PasswordResetTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Auth/RegistrationTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Auth/TwoFactorChallengeTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Auth/VerificationNotificationTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Authorization/RoleAccessTest.php",
+      "command": "composer test"
+    }
+  ],
+  "tags": [
+    "php",
+    "laravel",
+    "test"
+  ],
+  "trustBoundaries": [],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

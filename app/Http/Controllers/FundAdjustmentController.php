@@ -1,11 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreFundAdjustmentRequest;
 use App\Models\FundAdjustment;
-use App\Models\User;
+use App\Support\CurrencyFormatter;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -18,12 +21,14 @@ class FundAdjustmentController extends Controller
     {
         $this->authorize('viewAny', FundAdjustment::class);
 
-        /** @var User $user */
-        $user = request()->user();
+        $user = $this->authUser();
+        $family = $user->currentFamily ?? $user->family;
+
+        abort_unless($family !== null, 403);
 
         $adjustments = FundAdjustment::query()
-            ->where('family_id', $user->family_id)
-            ->with('recorder')
+            ->where('family_id', $family->id)
+            ->with(['recorder', 'reversal'])
             ->latestFirst()
             ->latest('id')
             ->paginate(20)
@@ -33,12 +38,15 @@ class FundAdjustmentController extends Controller
                 'description' => $adjustment->description,
                 'recorded_at' => $adjustment->recorded_at->toDateString(),
                 'recorded_by' => $adjustment->recorder?->name,
-                'created_at' => $adjustment->created_at->toDateString(),
+                'created_at' => $adjustment->created_at?->toDateString(),
+                'is_reversed' => $adjustment->isReversed(),
+                'reversal_reason' => $adjustment->reversal?->reason,
+                'can_reverse' => $user->can('delete', $adjustment) && ! $adjustment->isReversed(),
             ]);
 
         return Inertia::render('FundAdjustments/Index', [
             'adjustments' => $adjustments,
-            'can_create' => request()->user()->canRecordPayments(),
+            'can_create' => $user->canRecordPayments(),
         ]);
     }
 
@@ -47,30 +55,25 @@ class FundAdjustmentController extends Controller
      */
     public function store(StoreFundAdjustmentRequest $request): RedirectResponse
     {
-        FundAdjustment::create([
-            'family_id' => $request->user()->family_id,
-            'amount' => $request->amount,
-            'description' => $request->description,
-            'recorded_at' => $request->recorded_at,
-            'recorded_by' => $request->user()->id,
-        ]);
+        $user = $this->user($request);
+        $family = $user->currentFamily ?? $user->family;
 
-        $formattedAmount = '₦'.number_format($request->amount, 2);
+        abort_unless($family !== null, 403);
+        $amount = $request->integer('amount');
+
+        DB::transaction(function () use ($amount, $family, $request, $user): void {
+            FundAdjustment::create([
+                'family_id' => $family->id,
+                'amount' => $amount,
+                'description' => $request->string('description')->toString(),
+                'recorded_at' => $request->string('recorded_at')->toString(),
+                'recorded_by' => $user->id,
+            ]);
+        }, attempts: 3);
+
+        $formattedAmount = CurrencyFormatter::format($amount, $family->currency);
 
         return redirect()->route('fund-adjustments.index')
             ->with('success', "Fund adjustment of {$formattedAmount} recorded successfully.");
-    }
-
-    /**
-     * Remove the specified fund adjustment.
-     */
-    public function destroy(FundAdjustment $fundAdjustment): RedirectResponse
-    {
-        $this->authorize('delete', $fundAdjustment);
-
-        $fundAdjustment->delete();
-
-        return redirect()->route('fund-adjustments.index')
-            ->with('success', 'Fund adjustment has been deleted.');
     }
 }

@@ -1,8 +1,12 @@
 <script setup lang="ts">
+import { store as archiveFamily } from '@/actions/App/Http/Controllers/FamilyArchiveController';
 import {
     banks as banksRoute,
     destroyCategory,
     edit,
+    storeCategory,
+    update,
+    updateCategory,
 } from '@/actions/App/Http/Controllers/FamilySettingsController';
 import Heading from '@/components/Heading.vue';
 import HeadingSmall from '@/components/HeadingSmall.vue';
@@ -11,9 +15,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { formatCurrencyAmount } from '@/lib/currency';
 import { type BreadcrumbItem } from '@/types';
 import { Form, Head, router } from '@inertiajs/vue3';
-import { Check, ChevronsUpDown, Pencil, Plus, Trash2 } from 'lucide-vue-next';
+import { Check, ChevronsUpDown, Pencil, Plus, Trash2 } from '@lucide/vue';
 import {
     ComboboxAnchor,
     ComboboxContent,
@@ -88,11 +93,23 @@ async function fetchBanks(): Promise<void> {
     try {
         const response = await fetch(banksRoute().url);
         banksList.value = await response.json();
+        ensureSelectedBankCode();
     } catch {
         banksList.value = [];
     } finally {
         banksLoading.value = false;
     }
+}
+
+function ensureSelectedBankCode(): void {
+    if (!selectedBank.value || selectedBankCode.value) {
+        return;
+    }
+
+    const bank = banksList.value.find(
+        (bank) => bank.name === selectedBank.value,
+    );
+    selectedBankCode.value = bank?.code ?? '';
 }
 
 function onBankSelect(bankName: string): void {
@@ -112,12 +129,15 @@ const editingCategory = ref<Category | null>(null);
 const showNewCategoryForm = ref(false);
 
 function formatCurrency(amount: number): string {
-    return `${props.family.currency}${amount.toLocaleString()}`;
+    return formatCurrencyAmount(amount, props.family.currency, {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+    });
 }
 
 function deleteCategory(id: number): void {
     if (confirm('Are you sure you want to delete this category?')) {
-        router.delete(destroyCategory(id).url);
+        router.delete(destroyCategory({ category: id }).url);
     }
 }
 
@@ -148,7 +168,7 @@ function cancelEdit(): void {
                 />
 
                 <Form
-                    action="/family/settings"
+                    :action="update().url"
                     method="put"
                     #default="{ errors, processing, recentlySuccessful }"
                     class="mt-4 space-y-4"
@@ -186,7 +206,7 @@ function cancelEdit(): void {
                                 type="number"
                                 :default-value="String(family.due_day)"
                                 min="1"
-                                max="28"
+                                max="31"
                                 required
                             />
                             <InputError :message="errors.due_day" />
@@ -322,7 +342,11 @@ function cancelEdit(): void {
                     >
                         <template v-if="editingCategory?.id === category.id">
                             <Form
-                                :action="`/family/categories/${category.id}`"
+                                :action="
+                                    updateCategory({
+                                        category: category.id,
+                                    }).url
+                                "
                                 method="put"
                                 #default="{ errors, processing }"
                                 class="flex flex-1 items-end gap-3"
@@ -424,7 +448,7 @@ function cancelEdit(): void {
 
                     <Form
                         v-if="showNewCategoryForm"
-                        action="/family/categories"
+                        :action="storeCategory().url"
                         method="post"
                         #default="{ errors, processing }"
                         class="flex items-end gap-3 rounded-lg border p-4"
@@ -465,6 +489,52 @@ function cancelEdit(): void {
                         >
                     </Form>
                 </div>
+            </section>
+
+            <section class="rounded-xl border border-destructive/40 p-5">
+                <HeadingSmall
+                    title="Archive family"
+                    description="Immediately disables the family workspace. Admins can restore or export it for 30 days before permanent purge."
+                />
+                <Form
+                    :action="archiveFamily().url"
+                    method="post"
+                    #default="{ errors, processing }"
+                    class="mt-4 grid gap-4"
+                >
+                    <div class="grid gap-2">
+                        <Label for="archive_reason">Reason</Label>
+                        <textarea
+                            id="archive_reason"
+                            name="reason"
+                            minlength="10"
+                            maxlength="1000"
+                            required
+                            class="min-h-24 rounded-md border bg-background px-3 py-2 text-sm"
+                        />
+                        <InputError :message="errors.reason" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="archive_confirmation"
+                            >Type ARCHIVE to confirm</Label
+                        >
+                        <Input
+                            id="archive_confirmation"
+                            name="confirmation"
+                            required
+                            autocomplete="off"
+                        />
+                        <InputError :message="errors.confirmation" />
+                    </div>
+                    <div>
+                        <Button
+                            type="submit"
+                            variant="destructive"
+                            :disabled="processing"
+                            >Archive family</Button
+                        >
+                    </div>
+                </Form>
             </section>
         </div>
     </AppLayout>

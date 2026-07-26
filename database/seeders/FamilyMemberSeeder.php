@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Seeders;
 
 use App\Enums\MemberCategory;
@@ -23,7 +25,10 @@ class FamilyMemberSeeder extends Seeder
      */
     public function run(): void
     {
-        $familyName = config('app.family_name') ?: 'Hussain Family';
+        $configuredFamilyName = config('app.family_name');
+        $familyName = is_string($configuredFamilyName) && $configuredFamilyName !== ''
+            ? $configuredFamilyName
+            : 'Hussain Family';
         $freePlan = PlatformPlan::query()->where('slug', 'free')->first();
 
         // Create a family with the free plan
@@ -61,9 +66,19 @@ class FamilyMemberSeeder extends Seeder
         ]);
 
         // Create Admin (Super Admin)
-        $adminEmail = config('app.admin_email') ?: 'admin@family.test';
-        $adminPassword = config('app.admin_password') ?: 'password';
-        $adminName = config('app.admin_name') ?: 'Super Admin';
+        $configuredAdminEmail = config('app.admin_email');
+        $configuredAdminPassword = config('app.admin_password');
+        $configuredAdminName = config('app.admin_name');
+
+        $adminEmail = is_string($configuredAdminEmail) && $configuredAdminEmail !== ''
+            ? $configuredAdminEmail
+            : 'admin@family.test';
+        $adminPassword = is_string($configuredAdminPassword) && $configuredAdminPassword !== ''
+            ? $configuredAdminPassword
+            : 'password';
+        $adminName = is_string($configuredAdminName) && $configuredAdminName !== ''
+            ? $configuredAdminName
+            : 'Super Admin';
 
         $admin = User::factory()->create([
             'name' => $adminName,
@@ -79,7 +94,12 @@ class FamilyMemberSeeder extends Seeder
         // Set family owner
         $family->update(['created_by' => $admin->id]);
 
-        Mail::to($admin)->send(new TwoFactorRecoveryCodesMail($admin, $admin->recoveryCodes()));
+        $recoveryCodes = array_values(array_filter(
+            $admin->recoveryCodes(),
+            static fn (mixed $recoveryCode): bool => is_string($recoveryCode),
+        ));
+
+        Mail::to($admin)->send(new TwoFactorRecoveryCodesMail($admin, $recoveryCodes));
 
         // Create Financial Secretary
         $financialSecretary = User::factory()->create([
@@ -137,13 +157,13 @@ class FamilyMemberSeeder extends Seeder
                 'user_id' => $member->id,
                 'year' => $previousMonth->year,
                 'month' => $previousMonth->month,
-                'expected_amount' => $member->category->monthlyAmount(),
+                'expected_amount' => $member->getMonthlyAmount() ?? 0,
                 'due_date' => $previousMonth->copy()->setDay($family->due_day),
             ]);
 
             Payment::create([
                 'contribution_id' => $previousContribution->id,
-                'amount' => $member->category->monthlyAmount(),
+                'amount' => $member->getMonthlyAmount() ?? 0,
                 'paid_at' => $previousMonth->setDay(15),
                 'recorded_by' => $financialSecretary->id,
                 'notes' => 'Seeded payment',
@@ -155,7 +175,7 @@ class FamilyMemberSeeder extends Seeder
                 'user_id' => $member->id,
                 'year' => $currentYear,
                 'month' => $currentMonth,
-                'expected_amount' => $member->category->monthlyAmount(),
+                'expected_amount' => $member->getMonthlyAmount() ?? 0,
                 'due_date' => now()->setDay($family->due_day),
             ]);
 
@@ -163,7 +183,7 @@ class FamilyMemberSeeder extends Seeder
             if ($member->id === $financialSecretary->id) {
                 Payment::create([
                     'contribution_id' => $currentContribution->id,
-                    'amount' => $member->category->monthlyAmount(),
+                    'amount' => $member->getMonthlyAmount() ?? 0,
                     'paid_at' => now()->setDay(10),
                     'recorded_by' => $financialSecretary->id,
                     'notes' => 'Seeded payment',

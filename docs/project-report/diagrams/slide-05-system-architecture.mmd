@@ -1,11 +1,11 @@
-%%{init: { "theme": "base", "themeVariables": { "fontSize": "16pt" }, "flowchart": { "nodeSpacing": 90, "rankSpacing": 110 } }}%%
+%%{init: { "theme": "base", "themeVariables": { "fontSize": "18pt", "primaryTextColor": "#000000", "lineColor": "#000000", "edgeLabelBackground": "#ffffff" }, "flowchart": { "nodeSpacing": 90, "rankSpacing": 110 } }}%%
 
 flowchart LR
-    classDef actor fill:#f8fafc,stroke:#1f3b64,color:#1f3b64,stroke-width:1px;
-    classDef layer fill:#ffffff,stroke:#1f3b64,color:#16263f,stroke-width:1.4px;
-    classDef external fill:#fff7e8,stroke:#a66a00,color:#6b4200,stroke-width:1.2px;
-    classDef planned fill:#fdf2f8,stroke:#be185d,color:#831843,stroke-dasharray: 5 5;
-    classDef note fill:#f8fafc,stroke:#64748b,color:#334155,stroke-dasharray: 5 5;
+    classDef actor fill:#ffffff,stroke:#000000,color:#000000,stroke-width:1.2px;
+    classDef layer fill:#ffffff,stroke:#000000,color:#000000,stroke-width:1.4px;
+    classDef external fill:#ffffff,stroke:#000000,color:#000000,stroke-width:1.2px;
+    classDef planned fill:#ffffff,stroke:#000000,color:#000000,stroke-dasharray: 6 4;
+    classDef note fill:#ffffff,stroke:#000000,color:#000000,stroke-dasharray: 6 4;
 
     subgraph ACTORS["Actors / Access"]
         direction TB
@@ -31,7 +31,7 @@ flowchart LR
 
     NOTE["Multi-tenant isolation<br/>Each request is bound to one family context;<br/>family financial data stays logically separated<br/>on shared infrastructure"]
     PRED["Predictive Analytics<br/>(planned / advanced module)"]
-    DB["Data Layer<br/><br/>MySQL Relational Database<br/>Families · Users · Contributions · Payments<br/>Expenses · Transactions · Notifications"]
+    DB["Data Layer<br/><br/>PostgreSQL Relational Database<br/>Families · Users · Contributions · Payments<br/>Expenses · Transactions · Notifications"]
 
     subgraph EXTERNAL["External Services"]
         direction TB

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Ai\Tools\GetContributionSummary;
 use App\Models\Contribution;
 use App\Models\Family;
@@ -27,7 +29,7 @@ it('returns contribution summary for current year by default', function () {
     ]);
 
     $tool = new GetContributionSummary($this->user);
-    $result = json_decode($tool->handle(new Request), true);
+    $result = decodeToolResult($tool->handle(new Request));
 
     expect($result)
         ->toHaveKey('period', 'Year '.now()->year)
@@ -56,7 +58,7 @@ it('filters contributions by specific year and month', function () {
     ]);
 
     $tool = new GetContributionSummary($this->user);
-    $result = json_decode($tool->handle(new Request(['year' => 2025, 'month' => 3])), true);
+    $result = decodeToolResult($tool->handle(new Request(['year' => 2025, 'month' => 3])));
 
     expect($result)
         ->toHaveKey('period', 'March 2025')
@@ -66,7 +68,7 @@ it('filters contributions by specific year and month', function () {
 
 it('returns zero values when no contributions exist', function () {
     $tool = new GetContributionSummary($this->user);
-    $result = json_decode($tool->handle(new Request), true);
+    $result = decodeToolResult($tool->handle(new Request));
 
     expect($result)
         ->toHaveKey('total_expected', 0)
@@ -90,7 +92,7 @@ it('excludes archived members from the summary', function () {
     ]);
 
     $tool = new GetContributionSummary($this->user);
-    $result = json_decode($tool->handle(new Request), true);
+    $result = decodeToolResult($tool->handle(new Request));
 
     expect($result['member_count'])->toBe(0);
 });
@@ -107,7 +109,7 @@ it('does not include contributions from other families', function () {
     ]);
 
     $tool = new GetContributionSummary($this->user);
-    $result = json_decode($tool->handle(new Request), true);
+    $result = decodeToolResult($tool->handle(new Request));
 
     expect($result['total_expected'])->toBe(0);
 });
@@ -124,10 +126,10 @@ it('includes per-member breakdown with payment details', function () {
     Payment::factory()->create(['contribution_id' => $contribution->id, 'amount' => 1500]);
 
     $tool = new GetContributionSummary($this->user);
-    $result = json_decode($tool->handle(new Request), true);
+    $result = decodeToolResult($tool->handle(new Request));
 
-    expect($result['members'])->toHaveCount(1);
-    expect($result['members'][0])
+    expect(resultArray($result, 'members'))->toHaveCount(1);
+    expect(firstResultArray($result, 'members'))
         ->toHaveKey('name', $this->user->name)
         ->toHaveKey('expected', 4000)
         ->toHaveKey('paid', 2500)

@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_cli-command_a960e40f9a",
+  "title": "Laravel command contributions:generate",
+  "summary": "Laravel Artisan command 'contributions:generate' in app/Console/Commands/GenerateMonthlyContributions.php.",
+  "kind": "cli-command",
+  "source": "laravel-artisan-command",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "app/Console/Commands/GenerateMonthlyContributions.php",
+      "symbol": "GenerateMonthlyContributions",
+      "route": null,
+      "command": "contributions:generate"
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Console/Commands/GenerateMonthlyContributions.php",
+      "reason": "Artisan command"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "app/Models/Contribution.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Models/Family.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Models/User.php",
+      "reason": "imported application class"
+    }
+  ],
+  "tests": [],
+  "tags": [
+    "php",
+    "laravel",
+    "artisan",
+    "cli"
+  ],
+  "trustBoundaries": [
+    "user-input",
+    "filesystem",
+    "process-exec",
+    "database"
+  ],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-cli-command-a960e40f9a-_a9ac384537",
+    "fnd_sig-feat-cli-command-a960e40f9a-_523d25dc66",
+    "fnd_sig-feat-cli-command-a960e40f9a-_12b094d705"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260518T110727-a1e777",
+      "kind": "review",
+      "summary": "3 finding(s)",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-18T11:09:14.836Z"
+    }
+  ],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:09:14.836Z"
+}

@@ -1,10 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Requests;
 
+use App\Enums\PaymentMethod;
+use App\Models\Family;
+use App\Models\FamilyMembership;
 use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rules\Enum;
 use Illuminate\Validation\Validator;
 
 class StorePaymentRequest extends FormRequest
@@ -14,7 +20,9 @@ class StorePaymentRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return $this->user()->canRecordPayments();
+        $user = $this->user();
+
+        return $user instanceof User && $user->canRecordPayments();
     }
 
     /**
@@ -29,6 +37,9 @@ class StorePaymentRequest extends FormRequest
             'amount' => ['required', 'integer', 'min:1'],
             'paid_at' => ['required', 'date'],
             'notes' => ['nullable', 'string', 'max:500'],
+            'method' => ['sometimes', new Enum(PaymentMethod::class)],
+            'reference' => ['nullable', 'string', 'max:255'],
+            'idempotency_key' => ['nullable', 'uuid'],
             'target_year' => ['nullable', 'integer', 'min:2020', 'max:2100'],
             'target_month' => ['nullable', 'integer', 'min:1', 'max:12'],
         ];
@@ -40,15 +51,29 @@ class StorePaymentRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator) {
-            if ($this->member_id) {
-                $member = User::find($this->member_id);
-                if ($member && ! $member->category) {
-                    $validator->errors()->add('member_id', 'This member does not have a contribution category assigned.');
+            $memberId = $this->integerInput('member_id');
+            $user = $this->user();
+            $family = $user instanceof User ? ($user->currentFamily ?? $user->family) : null;
+
+            if ($memberId !== null) {
+                $member = User::query()->find($memberId);
+
+                if ($member && $family instanceof Family) {
+                    $membership = $member->membershipForFamily($family);
+
+                    if (! $membership instanceof FamilyMembership) {
+                        $validator->errors()->add('member_id', 'The selected member does not belong to this family.');
+                    } elseif ($membership->monthlyAmount() === null) {
+                        $validator->errors()->add('member_id', 'This member does not have a contribution category assigned.');
+                    }
                 }
             }
 
-            if ($this->target_year && $this->target_month) {
-                $targetDate = now()->setYear((int) $this->target_year)->setMonth((int) $this->target_month)->startOfMonth();
+            $targetYear = $this->integerInput('target_year');
+            $targetMonth = $this->integerInput('target_month');
+
+            if ($targetYear !== null && $targetMonth !== null) {
+                $targetDate = now()->setYear($targetYear)->setMonth($targetMonth)->startOfMonth();
                 $maxAdvanceDate = now()->addMonths(6)->startOfMonth();
 
                 if ($targetDate->gt($maxAdvanceDate)) {
@@ -56,6 +81,13 @@ class StorePaymentRequest extends FormRequest
                 }
             }
         });
+    }
+
+    private function integerInput(string $key): ?int
+    {
+        $value = $this->input($key);
+
+        return is_numeric($value) ? (int) $value : null;
     }
 
     /**
@@ -69,8 +101,8 @@ class StorePaymentRequest extends FormRequest
             'member_id.required' => 'Please select a family member.',
             'member_id.exists' => 'The selected member does not exist.',
             'amount.required' => 'Please enter the payment amount.',
-            'amount.integer' => 'The amount must be a whole number in Naira.',
-            'amount.min' => 'The amount must be at least ₦5.',
+            'amount.integer' => 'The amount must be a whole number.',
+            'amount.min' => 'The amount must be at least 1.',
             'paid_at.required' => 'Please enter the payment date.',
             'paid_at.date' => 'Please enter a valid date.',
         ];

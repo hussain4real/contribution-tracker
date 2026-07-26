@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_test-suite_52976cf706",
+  "title": "Laravel test suite tests/Feature#5",
+  "summary": "Laravel tests in tests/Feature#5.",
+  "kind": "test-suite",
+  "source": "laravel-test-suite",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "tests/Feature#5",
+      "symbol": "tests/Feature#5",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "tests/Feature/Mail/TwoFactorRecoveryCodesMailTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/ManualEmailReminderTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/ManualWebPushReminderTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/ManualWhatsAppReminderTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Mcp/FamilyFundReviewTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/MemberPaymentTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Members/ArchiveMemberTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Members/AssignRoleTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Members/CategoryChangeNextMonthTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Members/CreateMemberTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Members/LastFinancialSecretaryWarningTest.php",
+      "reason": "PHP test"
+    },
+    {
+      "path": "tests/Feature/Members/MemberAuthorizationTest.php",
+      "reason": "PHP test"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "tests/Feature/Mail/TwoFactorRecoveryCodesMailTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/ManualEmailReminderTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/ManualWebPushReminderTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/ManualWhatsAppReminderTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Mcp/FamilyFundReviewTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/MemberPaymentTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Members/ArchiveMemberTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Members/AssignRoleTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Members/CategoryChangeNextMonthTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Members/CreateMemberTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Members/LastFinancialSecretaryWarningTest.php",
+      "reason": "nearby test"
+    },
+    {
+      "path": "tests/Feature/Members/MemberAuthorizationTest.php",
+      "reason": "nearby test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/Feature/Mail/TwoFactorRecoveryCodesMailTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/ManualEmailReminderTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/ManualWebPushReminderTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/ManualWhatsAppReminderTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Mcp/FamilyFundReviewTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/MemberPaymentTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Members/ArchiveMemberTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Members/AssignRoleTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Members/CategoryChangeNextMonthTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Members/CreateMemberTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Members/LastFinancialSecretaryWarningTest.php",
+      "command": "composer test"
+    },
+    {
+      "path": "tests/Feature/Members/MemberAuthorizationTest.php",
+      "command": "composer test"
+    }
+  ],
+  "tags": [
+    "php",
+    "laravel",
+    "test"
+  ],
+  "trustBoundaries": [],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

@@ -1,17 +1,23 @@
 <script setup lang="ts">
-import { generate } from '@/actions/App/Http/Controllers/ContributionController';
+import {
+    generate,
+    show as showContribution,
+} from '@/actions/App/Http/Controllers/ContributionController';
+import { create as createPayment } from '@/actions/App/Http/Controllers/PaymentController';
 import AccountDetails from '@/components/AccountDetails.vue';
 import AggregateStats from '@/components/contributions/AggregateStats.vue';
+import StatusBadge from '@/components/contributions/StatusBadge.vue';
 import MemberContributionStatus from '@/components/dashboard/MemberContributionStatus.vue';
 import type { OverdueMember } from '@/components/dashboard/OverdueMembersModal.vue';
 import OverdueMembersModal from '@/components/dashboard/OverdueMembersModal.vue';
 import RecentPayments from '@/components/dashboard/RecentPayments.vue';
 import SummaryCards from '@/components/dashboard/SummaryCards.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useCurrencyFormatter } from '@/lib/currency';
 import { dashboard } from '@/routes';
 import { type BreadcrumbItem } from '@/types';
-import type { MonthlyBreakdown } from '@/types/dashboard';
-import { Head, router, usePoll } from '@inertiajs/vue3';
+import type { MonthlyBreakdown, PaymentStatus } from '@/types/dashboard';
+import { Head, Link, router, usePoll } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
 // Auto-refresh dashboard every 30 seconds (T052)
@@ -32,10 +38,11 @@ interface Summary {
 interface MemberStatus {
     id: number;
     name: string;
-    category: string;
+    category: string | null;
+    category_label: string | null;
     expected_amount: number;
     total_paid: number;
-    current_month_status: string;
+    current_month_status: PaymentStatus;
     current_month_balance: number;
     accrued_balance: number;
     contribution_id: number;
@@ -63,7 +70,7 @@ interface Personal {
     expected_amount: number;
     total_paid: number;
     current_month_balance: number;
-    current_month_status: string;
+    current_month_status: PaymentStatus;
 }
 
 // Admin/FS view
@@ -118,12 +125,14 @@ function generateContributions() {
     );
 }
 
-// Format currency in Naira
-function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-NG', {
-        style: 'currency',
-        currency: 'NGN',
-    }).format(amount);
+const { formatCurrency } = useCurrencyFormatter();
+
+function formatCategory(category: string | null): string {
+    if (!category) {
+        return 'Contribution';
+    }
+
+    return category.charAt(0).toUpperCase() + category.slice(1);
 }
 </script>
 
@@ -196,7 +205,7 @@ function formatCurrency(amount: number): string {
                     :overdue-count="summary.overdue_count"
                     :collection-rate="summary.current_month_collection_rate"
                     :monthly-breakdown="summary.monthly_breakdown"
-                    :can-record-payments="can_record_payments"
+                    :can-record-payments="can_record_payments ?? false"
                     @overdue-click="showOverdueModal = true"
                 />
 
@@ -211,7 +220,95 @@ function formatCurrency(amount: number): string {
                         >
                             Member Contribution Status
                         </h2>
-                        <div class="overflow-x-auto">
+                        <div
+                            class="divide-y divide-neutral-100 md:hidden dark:divide-neutral-800"
+                        >
+                            <div
+                                v-for="member in member_statuses"
+                                :key="member.id"
+                                class="py-3"
+                            >
+                                <div
+                                    class="flex items-start justify-between gap-3"
+                                >
+                                    <div class="min-w-0">
+                                        <Link
+                                            :href="
+                                                showContribution({
+                                                    contribution:
+                                                        member.contribution_id,
+                                                }).url
+                                            "
+                                            class="font-medium text-neutral-900 dark:text-neutral-100"
+                                        >
+                                            {{ member.name }}
+                                        </Link>
+                                        <p
+                                            class="mt-1 text-xs text-muted-foreground"
+                                        >
+                                            {{
+                                                member.category_label ??
+                                                formatCategory(member.category)
+                                            }}
+                                        </p>
+                                    </div>
+                                    <StatusBadge
+                                        :status="member.current_month_status"
+                                    />
+                                </div>
+                                <div
+                                    class="mt-3 flex items-end justify-between gap-3"
+                                >
+                                    <div>
+                                        <p
+                                            class="text-xs text-muted-foreground"
+                                        >
+                                            Outstanding
+                                        </p>
+                                        <p
+                                            class="font-semibold"
+                                            :class="{
+                                                'text-neutral-900 dark:text-neutral-100':
+                                                    member.accrued_balance ===
+                                                    0,
+                                                'text-amber-600 dark:text-amber-400':
+                                                    member.accrued_balance >
+                                                        0 &&
+                                                    member.current_month_status !==
+                                                        'overdue',
+                                                'text-red-600 dark:text-red-400':
+                                                    member.current_month_status ===
+                                                    'overdue',
+                                            }"
+                                        >
+                                            {{
+                                                member.accrued_balance > 0
+                                                    ? formatCurrency(
+                                                          member.accrued_balance,
+                                                      )
+                                                    : '-'
+                                            }}
+                                        </p>
+                                    </div>
+                                    <Link
+                                        v-if="
+                                            can_record_payments &&
+                                            member.current_month_balance > 0
+                                        "
+                                        :href="
+                                            createPayment({
+                                                member: member.id,
+                                            }).url
+                                        "
+                                        class="app-tap rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground"
+                                    >
+                                        Record payment
+                                    </Link>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="hidden overflow-x-auto md:block">
                             <table class="w-full text-left text-sm">
                                 <thead>
                                     <tr

@@ -30,6 +30,21 @@ php artisan route:cache
 php artisan view:cache
 php artisan event:cache
 
+NGINX_SITE_CONFIG=""
+
+if [ -f /etc/nginx/sites-available/familyfunds.app.conf ]; then
+    NGINX_SITE_CONFIG="/etc/nginx/sites-available/familyfunds.app.conf"
+elif [ -f /etc/nginx/sites-available/familyfunds.app ]; then
+    NGINX_SITE_CONFIG="/etc/nginx/sites-available/familyfunds.app"
+fi
+
+if [ -n "$NGINX_SITE_CONFIG" ]; then
+    echo "Updating Nginx PWA cache headers..."
+    sudo cp deployment/nginx/familyfunds.app.conf "$NGINX_SITE_CONFIG"
+    sudo nginx -t
+    sudo systemctl reload nginx
+fi
+
 echo "Restarting queue workers, SSR, and Nightwatch..."
 sudo supervisorctl restart queue-worker:*
 sudo supervisorctl restart ssr

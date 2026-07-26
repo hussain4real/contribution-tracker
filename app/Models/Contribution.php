@@ -1,17 +1,46 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use App\Enums\PaymentStatus;
+use App\Support\CurrencyFormatter;
 use Carbon\Carbon;
+use Database\Factories\ContributionFactory;
+use DateTimeInterface;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property int $id
+ * @property int $family_id
+ * @property int|null $family_category_id
+ * @property string|null $category_name
+ * @property string|null $category_slug
+ * @property int|null $category_amount
+ * @property int $user_id
+ * @property int $expected_amount
+ * @property int $month
+ * @property int $year
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property Carbon $due_date
+ * @property PaymentStatus $status
+ * @property string $period_label
+ * @property Family|null $family
+ * @property FamilyCategory|null $familyCategory
+ * @property User|null $user
+ * @property Collection<int, Payment> $payments
+ * @property-read int $total_paid
+ * @property-read int $balance
+ */
 class Contribution extends Model
 {
+    /** @use HasFactory<ContributionFactory> */
     use HasFactory;
 
     /**
@@ -20,12 +49,26 @@ class Contribution extends Model
     public const DUE_DAY = 28;
 
     /**
+     * Resolve the configured due day within the target month.
+     */
+    public static function dueDateForMonth(int $year, int $month, int $dueDay): Carbon
+    {
+        $date = Carbon::createFromDate($year, $month, 1);
+
+        return $date->setDay(max(1, min($dueDay, $date->daysInMonth)));
+    }
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var list<string>
      */
     protected $fillable = [
         'family_id',
+        'family_category_id',
+        'category_name',
+        'category_slug',
+        'category_amount',
         'user_id',
         'year',
         'month',
@@ -46,6 +89,7 @@ class Contribution extends Model
             'year' => 'integer',
             'month' => 'integer',
             'expected_amount' => 'integer',
+            'category_amount' => 'integer',
             'due_date' => 'date',
             'reminder_sent_at' => 'datetime',
             'follow_up_sent_at' => 'datetime',
@@ -58,6 +102,8 @@ class Contribution extends Model
 
     /**
      * The family this contribution belongs to.
+     *
+     * @return BelongsTo<Family, $this>
      */
     public function family(): BelongsTo
     {
@@ -66,16 +112,32 @@ class Contribution extends Model
 
     /**
      * The user this contribution belongs to.
+     *
+     * @return BelongsTo<User, $this>
      */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    /** @return BelongsTo<FamilyCategory, $this> */
+    public function familyCategory(): BelongsTo
+    {
+        return $this->belongsTo(FamilyCategory::class);
+    }
+
     /**
      * Payments made toward this contribution.
+     *
+     * @return HasMany<Payment, $this>
      */
     public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class)->effective();
+    }
+
+    /** @return HasMany<Payment, $this> */
+    public function allPayments(): HasMany
     {
         return $this->hasMany(Payment::class);
     }
@@ -86,6 +148,9 @@ class Contribution extends Model
 
     /**
      * Scope to contributions for a specific month and year.
+     *
+     * @param  Builder<Contribution>  $query
+     * @return Builder<Contribution>
      */
     public function scopeForMonth(Builder $query, int $year, int $month): Builder
     {
@@ -94,6 +159,9 @@ class Contribution extends Model
 
     /**
      * Scope to contributions for the current month.
+     *
+     * @param  Builder<Contribution>  $query
+     * @return Builder<Contribution>
      */
     public function scopeCurrentMonth(Builder $query): Builder
     {
@@ -102,6 +170,9 @@ class Contribution extends Model
 
     /**
      * Scope to contributions for a specific user.
+     *
+     * @param  Builder<Contribution>  $query
+     * @return Builder<Contribution>
      */
     public function scopeForUser(Builder $query, int|User $user): Builder
     {
@@ -112,6 +183,9 @@ class Contribution extends Model
 
     /**
      * Scope to contributions that are overdue.
+     *
+     * @param  Builder<Contribution>  $query
+     * @return Builder<Contribution>
      */
     public function scopeOverdue(Builder $query): Builder
     {
@@ -120,16 +194,34 @@ class Contribution extends Model
 
     /**
      * Scope to incomplete contributions (not fully paid).
+     *
+     * @param  Builder<Contribution>  $query
+     * @return Builder<Contribution>
      */
     public function scopeIncomplete(Builder $query): Builder
     {
         return $query->whereRaw('(
-            SELECT COALESCE(SUM(amount), 0) FROM payments WHERE payments.contribution_id = contributions.id
-        ) < expected_amount');
+            SELECT COALESCE(SUM(payments.amount), 0)
+            FROM payments
+            LEFT JOIN payment_batches ON payment_batches.id = payments.payment_batch_id
+            WHERE payments.contribution_id = contributions.id
+              AND (
+                payments.payment_batch_id IS NULL
+                OR NOT EXISTS (
+                    SELECT 1
+                    FROM financial_reversals
+                    WHERE financial_reversals.reversible_type = ?
+                      AND financial_reversals.reversible_id = payment_batches.id
+                )
+              )
+        ) < expected_amount', [PaymentBatch::MORPH_TYPE]);
     }
 
     /**
      * Scope to contributions ordered by oldest first (for balance-first rule).
+     *
+     * @param  Builder<Contribution>  $query
+     * @return Builder<Contribution>
      */
     public function scopeOldestFirst(Builder $query): Builder
     {
@@ -149,10 +241,12 @@ class Contribution extends Model
     public function getTotalPaidAttribute(): int
     {
         if ($this->relationLoaded('payments')) {
-            return (int) $this->payments->sum('amount');
+            return (int) $this->payments->sum(fn (Payment $payment): int => $payment->amount);
         }
 
-        return (int) $this->payments()->sum('amount');
+        $total = $this->payments()->sum('amount');
+
+        return (int) $total;
     }
 
     /**
@@ -186,11 +280,13 @@ class Contribution extends Model
      */
     public function getDueDateAttribute(): Carbon
     {
-        if ($this->attributes['due_date'] ?? null) {
-            return Carbon::parse($this->attributes['due_date']);
+        $dueDate = $this->attributes['due_date'] ?? null;
+
+        if ($dueDate instanceof DateTimeInterface || is_string($dueDate) || is_int($dueDate) || is_float($dueDate)) {
+            return Carbon::parse($dueDate);
         }
 
-        return Carbon::createFromDate($this->year, $this->month, self::DUE_DAY);
+        return self::dueDateForMonth($this->year, $this->month, self::DUE_DAY);
     }
 
     /**
@@ -244,7 +340,7 @@ class Contribution extends Model
      */
     public function formattedExpectedAmount(): string
     {
-        return '₦'.number_format($this->expected_amount, 2);
+        return CurrencyFormatter::format($this->expected_amount, $this->family?->currency);
     }
 
     /**
@@ -252,7 +348,7 @@ class Contribution extends Model
      */
     public function formattedTotalPaid(): string
     {
-        return '₦'.number_format($this->total_paid, 2);
+        return CurrencyFormatter::format($this->total_paid, $this->family?->currency);
     }
 
     /**
@@ -260,6 +356,6 @@ class Contribution extends Model
      */
     public function formattedBalance(): string
     {
-        return '₦'.number_format($this->balance, 2);
+        return CurrencyFormatter::format($this->balance, $this->family?->currency);
     }
 }

@@ -6,7 +6,21 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property int $id
+ * @property string $name
+ * @property string $slug
+ * @property int $price
+ * @property Carbon|null $created_at
+ * @property int|null $max_members
+ * @property list<string> $features
+ * @property bool $is_active
+ * @property string|null $paystack_plan_code
+ * @property int $sort_order
+ * @property int $families_count
+ */
 class PlatformPlan extends Model
 {
     /**
@@ -41,6 +55,9 @@ class PlatformPlan extends Model
     // Relationships
     // =========================================================================
 
+    /**
+     * @return HasMany<Family, $this>
+     */
     public function families(): HasMany
     {
         return $this->hasMany(Family::class, 'platform_plan_id');

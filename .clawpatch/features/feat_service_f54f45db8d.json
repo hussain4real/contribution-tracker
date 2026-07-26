@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_service_f54f45db8d",
+  "title": "Laravel project vue-starter-kit",
+  "summary": "Laravel project metadata in composer.json, composer.lock, artisan, bootstrap/app.php.",
+  "kind": "service",
+  "source": "laravel-project",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "composer.json",
+      "symbol": "vue-starter-kit",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "composer.json",
+      "reason": "Laravel project metadata"
+    },
+    {
+      "path": "composer.lock",
+      "reason": "Laravel project metadata"
+    },
+    {
+      "path": "artisan",
+      "reason": "Laravel project metadata"
+    },
+    {
+      "path": "bootstrap/app.php",
+      "reason": "Laravel project metadata"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "phpunit.xml",
+      "reason": "Laravel test configuration"
+    },
+    {
+      "path": ".env.example",
+      "reason": "environment contract"
+    },
+    {
+      "path": "config/app.php",
+      "reason": "application config"
+    },
+    {
+      "path": "config/database.php",
+      "reason": "database config"
+    },
+    {
+      "path": "routes/web.php",
+      "reason": "HTTP routes"
+    },
+    {
+      "path": "routes/console.php",
+      "reason": "scheduled commands"
+    }
+  ],
+  "tests": [],
+  "tags": [
+    "php",
+    "laravel",
+    "project"
+  ],
+  "trustBoundaries": [
+    "filesystem",
+    "database",
+    "process-exec",
+    "secrets"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

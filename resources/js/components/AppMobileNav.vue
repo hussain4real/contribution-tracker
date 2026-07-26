@@ -1,0 +1,316 @@
+<script setup lang="ts">
+import UserInfo from '@/components/UserInfo.vue';
+import {
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+    SheetTrigger,
+} from '@/components/ui/sheet';
+import { navItemIsActive, useAppNavigation } from '@/lib/appNavigation';
+import { toUrl } from '@/lib/utils';
+import { logout } from '@/routes';
+import type { NavItem } from '@/types';
+import { Link, router, usePage } from '@inertiajs/vue3';
+import { LogOut, Menu, Settings } from '@lucide/vue';
+import { computed, ref } from 'vue';
+
+const page = usePage();
+const { mobileTabs, moreGroups, footerItems } = useAppNavigation();
+const moreOpen = ref(false);
+
+const user = computed(() => page.props.auth?.user);
+const unreadCount = computed(() => page.props.notifications?.unread_count ?? 0);
+
+function isActive(item: NavItem): boolean {
+    return navItemIsActive(item, page.url, page.component);
+}
+
+function badgeCount(item: NavItem): number {
+    if (item.badge === 'notifications') {
+        return unreadCount.value;
+    }
+
+    return 0;
+}
+
+const hasMoreBadge = computed(() =>
+    moreGroups.value.some((group) =>
+        group.items.some((item) => badgeCount(item) > 0),
+    ),
+);
+
+const moreIsActive = computed(() =>
+    moreGroups.value.some((group) => group.items.some(isActive)),
+);
+
+const settingsItem = computed(
+    () =>
+        moreGroups.value
+            .flatMap((group) => group.items)
+            .find((item) => item.component === 'settings/Profile') ?? null,
+);
+
+const visibleMoreGroups = computed(() =>
+    moreGroups.value
+        .map((group) => ({
+            ...group,
+            items: group.items.filter(
+                (item) => item.component !== 'settings/Profile',
+            ),
+        }))
+        .filter((group) => group.items.length > 0),
+);
+
+function closeMoreSheet(): void {
+    moreOpen.value = false;
+}
+
+function handleLogout(): void {
+    closeMoreSheet();
+    router.flushAll();
+}
+</script>
+
+<template>
+    <nav
+        class="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_30px_rgba(15,23,42,0.06)] backdrop-blur md:hidden"
+        aria-label="Mobile navigation"
+    >
+        <div class="grid h-16 grid-cols-5 px-1">
+            <Link
+                v-for="item in mobileTabs"
+                :key="item.title"
+                :href="item.href"
+                prefetch
+                :cache-for="['30s', '2m']"
+                view-transition
+                class="app-tap relative mx-0.5 flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[11px] font-medium text-muted-foreground"
+                :class="
+                    isActive(item)
+                        ? 'bg-neutral-950 text-white shadow-sm dark:bg-neutral-50 dark:text-neutral-950'
+                        : 'hover:bg-accent/70'
+                "
+                :aria-current="isActive(item) ? 'page' : undefined"
+            >
+                <span
+                    v-if="isActive(item)"
+                    class="absolute top-1 h-1 w-7 rounded-full bg-red-500 dark:bg-red-500"
+                />
+                <component
+                    :is="item.icon"
+                    class="mt-1 size-5"
+                    :class="{ 'stroke-[2.75]': isActive(item) }"
+                />
+                <span class="w-full truncate text-center">{{
+                    item.title
+                }}</span>
+                <span
+                    v-if="badgeCount(item) > 0"
+                    class="absolute top-1.5 right-3 flex min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] leading-4 font-bold text-white"
+                >
+                    {{ badgeCount(item) > 9 ? '9+' : badgeCount(item) }}
+                </span>
+            </Link>
+
+            <Sheet v-model:open="moreOpen">
+                <SheetTrigger as-child>
+                    <button
+                        class="app-tap relative mx-0.5 flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[11px] font-medium text-muted-foreground"
+                        :class="
+                            moreIsActive
+                                ? 'bg-neutral-950 text-white shadow-sm dark:bg-neutral-50 dark:text-neutral-950'
+                                : 'hover:bg-accent/70'
+                        "
+                        :aria-current="moreIsActive ? 'page' : undefined"
+                    >
+                        <span
+                            v-if="moreIsActive"
+                            class="absolute top-1 h-1 w-7 rounded-full bg-red-500 dark:bg-red-500"
+                        />
+                        <Menu
+                            class="mt-1 size-5"
+                            :class="{ 'stroke-[2.75]': moreIsActive }"
+                        />
+                        <span class="w-full truncate text-center">More</span>
+                        <span
+                            v-if="hasMoreBadge"
+                            class="absolute top-1.5 right-3 size-2 rounded-full bg-red-500"
+                        />
+                    </button>
+                </SheetTrigger>
+                <SheetContent
+                    side="bottom"
+                    class="max-h-[82dvh] overflow-y-auto rounded-t-xl px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+1rem)]"
+                >
+                    <SheetHeader class="mb-2 text-left">
+                        <SheetTitle>More</SheetTitle>
+                        <SheetDescription>
+                            FamilyFunds tools and settings
+                        </SheetDescription>
+                    </SheetHeader>
+
+                    <div class="space-y-4">
+                        <section
+                            v-if="user"
+                            class="rounded-xl border bg-muted/35 p-3"
+                            aria-label="Account"
+                        >
+                            <div class="mb-3">
+                                <UserInfo :user="user" :show-email="true" />
+                            </div>
+
+                            <div class="grid gap-1">
+                                <Link
+                                    v-if="settingsItem"
+                                    :href="settingsItem.href"
+                                    prefetch
+                                    view-transition
+                                    class="app-tap flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium"
+                                    :class="
+                                        isActive(settingsItem)
+                                            ? 'bg-neutral-950 text-white dark:bg-neutral-50 dark:text-neutral-950'
+                                            : 'text-foreground hover:bg-accent/70'
+                                    "
+                                    @click="closeMoreSheet"
+                                >
+                                    <Settings
+                                        class="size-5 text-muted-foreground"
+                                    />
+                                    <span class="min-w-0 flex-1 truncate">
+                                        Settings
+                                    </span>
+                                </Link>
+
+                                <Link
+                                    :href="logout()"
+                                    as="button"
+                                    class="app-tap flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm font-medium text-destructive hover:bg-destructive/10"
+                                    data-test="mobile-logout-button"
+                                    @click="handleLogout"
+                                >
+                                    <LogOut class="size-5" />
+                                    <span class="min-w-0 flex-1 truncate">
+                                        Log out
+                                    </span>
+                                </Link>
+                            </div>
+                        </section>
+
+                        <section
+                            v-for="group in visibleMoreGroups"
+                            :key="group.label ?? 'main'"
+                            class="space-y-2"
+                        >
+                            <p
+                                v-if="group.label"
+                                class="px-1 text-xs font-medium text-muted-foreground"
+                            >
+                                {{ group.label }}
+                            </p>
+                            <div class="grid gap-1">
+                                <a
+                                    v-for="item in group.items.filter(
+                                        (item) => item.fullPageLoad,
+                                    )"
+                                    :key="`${group.label ?? 'main'}-${item.title}`"
+                                    :href="toUrl(item.href)"
+                                    class="app-tap flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium"
+                                    :class="
+                                        isActive(item)
+                                            ? 'bg-neutral-950 text-white dark:bg-neutral-50 dark:text-neutral-950'
+                                            : 'text-foreground hover:bg-accent/70'
+                                    "
+                                    @click="moreOpen = false"
+                                >
+                                    <component
+                                        v-if="item.icon"
+                                        :is="item.icon"
+                                        class="size-5 text-muted-foreground"
+                                    />
+                                    <span class="min-w-0 flex-1 truncate">
+                                        {{ item.title }}
+                                    </span>
+                                    <span
+                                        v-if="badgeCount(item) > 0"
+                                        class="flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs leading-5 font-bold text-white"
+                                    >
+                                        {{
+                                            badgeCount(item) > 99
+                                                ? '99+'
+                                                : badgeCount(item)
+                                        }}
+                                    </span>
+                                </a>
+                                <Link
+                                    v-for="item in group.items.filter(
+                                        (item) => !item.fullPageLoad,
+                                    )"
+                                    :key="`${group.label ?? 'main'}-${item.title}`"
+                                    :href="item.href"
+                                    prefetch
+                                    view-transition
+                                    class="app-tap flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium"
+                                    :class="
+                                        isActive(item)
+                                            ? 'bg-neutral-950 text-white dark:bg-neutral-50 dark:text-neutral-950'
+                                            : 'text-foreground hover:bg-accent/70'
+                                    "
+                                    @click="moreOpen = false"
+                                >
+                                    <component
+                                        v-if="item.icon"
+                                        :is="item.icon"
+                                        class="size-5 text-muted-foreground"
+                                    />
+                                    <span class="min-w-0 flex-1 truncate">
+                                        {{ item.title }}
+                                    </span>
+                                    <span
+                                        v-if="badgeCount(item) > 0"
+                                        class="flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs leading-5 font-bold text-white"
+                                    >
+                                        {{
+                                            badgeCount(item) > 99
+                                                ? '99+'
+                                                : badgeCount(item)
+                                        }}
+                                    </span>
+                                </Link>
+                            </div>
+                        </section>
+
+                        <section class="space-y-2">
+                            <p
+                                class="px-1 text-xs font-medium text-muted-foreground"
+                            >
+                                Legal
+                            </p>
+                            <div class="grid gap-1">
+                                <Link
+                                    v-for="item in footerItems"
+                                    :key="`legal-${item.title}`"
+                                    :href="item.href"
+                                    prefetch
+                                    view-transition
+                                    class="app-tap flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-foreground hover:bg-accent/70"
+                                    @click="closeMoreSheet"
+                                >
+                                    <component
+                                        v-if="item.icon"
+                                        :is="item.icon"
+                                        class="size-5 text-muted-foreground"
+                                    />
+                                    <span class="min-w-0 flex-1 truncate">
+                                        {{ item.title }}
+                                    </span>
+                                </Link>
+                            </div>
+                        </section>
+                    </div>
+                </SheetContent>
+            </Sheet>
+        </div>
+    </nav>
+</template>

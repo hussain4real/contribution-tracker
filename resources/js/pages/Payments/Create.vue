@@ -14,6 +14,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useCurrencyFormatter } from '@/lib/currency';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
 import { Form, Head } from '@inertiajs/vue3';
@@ -23,7 +24,8 @@ interface Member {
     id: number;
     name: string;
     email: string;
-    category: string;
+    category: string | null;
+    category_label: string | null;
 }
 
 interface PendingContribution {
@@ -38,6 +40,11 @@ interface PendingContribution {
 }
 
 interface Category {
+    value: number;
+    label: string;
+}
+
+interface PaymentMethod {
     value: string;
     label: string;
 }
@@ -48,6 +55,8 @@ interface Props {
     category_amount: number;
     formatted_amount: string;
     categories: Category[];
+    paymentMethods: PaymentMethod[];
+    idempotencyKey: string;
 }
 
 const props = defineProps<Props>();
@@ -68,13 +77,10 @@ const amount = ref<string>('');
 const selectedMonth = ref<string>('');
 const paidAt = ref<string>(new Date().toISOString().split('T')[0]);
 const notes = ref<string>('');
+const method = ref<string>(props.paymentMethods[0]?.value ?? 'cash');
+const reference = ref<string>('');
+const { currency, formatCurrency: formatAmount } = useCurrencyFormatter();
 
-// Helper to format amount in Naira
-const formatAmount = (amount: number): string => {
-    return `₦${amount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
-};
-
-// Quick amount buttons (values in Naira)
 const quickAmounts = computed(() => [
     { label: '1 Month', value: props.category_amount },
     { label: '2 Months', value: props.category_amount * 2 },
@@ -107,7 +113,7 @@ const targetMonth = computed(() => {
         <div class="mx-auto max-w-2xl space-y-6 p-4">
             <HeadingSmall
                 :title="`Record Payment for ${member.name}`"
-                :description="`${member.category} category - ${formatted_amount}/month`"
+                :description="`${member.category_label ?? member.category ?? 'Contribution'} - ${formatted_amount}/month`"
             />
 
             <!-- Pending Contributions Summary -->
@@ -160,6 +166,11 @@ const targetMonth = computed(() => {
             >
                 <input type="hidden" name="member_id" :value="member.id" />
                 <input
+                    type="hidden"
+                    name="idempotency_key"
+                    :value="idempotencyKey"
+                />
+                <input
                     v-if="targetYear"
                     type="hidden"
                     name="target_year"
@@ -174,13 +185,13 @@ const targetMonth = computed(() => {
 
                 <!-- Amount Field -->
                 <div class="grid gap-2">
-                    <Label for="amount">Amount (₦)</Label>
+                    <Label for="amount">Amount ({{ currency }})</Label>
                     <Input
                         id="amount"
                         type="number"
                         name="amount"
                         v-model="amount"
-                        placeholder="Enter amount in Naira"
+                        :placeholder="`Enter amount in ${currency}`"
                         required
                         min="1"
                         step="1"
@@ -206,11 +217,7 @@ const targetMonth = computed(() => {
                                 amount === quick.value.toString(),
                         }"
                     >
-                        {{ quick.label }} (₦{{
-                            quick.value.toLocaleString('en-NG', {
-                                minimumFractionDigits: 2,
-                            })
-                        }})
+                        {{ quick.label }} ({{ formatAmount(quick.value) }})
                     </Button>
                 </div>
 
@@ -252,6 +259,40 @@ const targetMonth = computed(() => {
                         required
                     />
                     <InputError :message="errors.paid_at" />
+                </div>
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div class="grid gap-2">
+                        <Label for="method">Payment Method</Label>
+                        <select
+                            id="method"
+                            v-model="method"
+                            name="method"
+                            required
+                            class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                        >
+                            <option
+                                v-for="paymentMethod in paymentMethods"
+                                :key="paymentMethod.value"
+                                :value="paymentMethod.value"
+                            >
+                                {{ paymentMethod.label }}
+                            </option>
+                        </select>
+                        <InputError :message="errors.method" />
+                    </div>
+
+                    <div class="grid gap-2">
+                        <Label for="reference">Reference (Optional)</Label>
+                        <Input
+                            id="reference"
+                            v-model="reference"
+                            name="reference"
+                            maxlength="255"
+                            placeholder="Bank or receipt reference"
+                        />
+                        <InputError :message="errors.reference" />
+                    </div>
                 </div>
 
                 <!-- Notes Field -->

@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Models\PlatformPlan;
+use App\Models\User;
+use App\Support\PlatformPlanCatalog;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -19,16 +22,23 @@ class EnsureFamilySubscription
     public function handle(Request $request, Closure $next, ?string $feature = null): Response
     {
         $user = $request->user();
-        $family = $user?->family;
+
+        if (! $user instanceof User) {
+            return $next($request);
+        }
+
+        $family = $user->currentFamily ?? $user->family;
 
         // No family means user is setting up — let them through
         if (! $family) {
             return $next($request);
         }
 
-        $plan = $family->platformPlan;
+        $family->loadMissing('platformPlan');
 
-        // No plan assigned = free tier (default behavior)
+        $plan = $family->platformPlan ?? $this->defaultFreePlan();
+
+        // If seed data is unavailable, preserve the original permissive fallback.
         if (! $plan) {
             return $next($request);
         }
@@ -36,7 +46,7 @@ class EnsureFamilySubscription
         // Check member limit on member-adding routes
         if (! $plan->hasUnlimitedMembers()) {
             if ($request->routeIs('members.store', 'members.create', 'invitations.store', 'family.invitations.store')) {
-                $memberCount = $family->members()->count();
+                $memberCount = $family->memberships()->active()->count();
 
                 if ($memberCount >= $plan->max_members) {
                     if ($request->expectsJson()) {
@@ -53,7 +63,7 @@ class EnsureFamilySubscription
 
         // Check feature access if a specific feature is requested
         if ($feature) {
-            $features = $plan->features ?? [];
+            $features = $plan->features;
 
             if (! in_array($feature, $features, true)) {
                 if ($request->expectsJson()) {
@@ -89,5 +99,13 @@ class EnsureFamilySubscription
         }
 
         return $next($request);
+    }
+
+    private function defaultFreePlan(): ?PlatformPlan
+    {
+        return PlatformPlan::query()
+            ->where('slug', PlatformPlanCatalog::Free)
+            ->where('is_active', true)
+            ->first();
     }
 }

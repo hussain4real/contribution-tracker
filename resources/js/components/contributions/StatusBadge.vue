@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { Badge } from '@/components/ui/badge';
+import type { PaymentStatus } from '@/types/dashboard';
 import { computed } from 'vue';
-
-type PaymentStatus = 'paid' | 'partial' | 'unpaid' | 'overdue';
 
 interface Props {
     status: PaymentStatus;

@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_10a0854877",
+  "title": "Laravel controller WebPushSubscriptionController",
+  "summary": "Laravel HTTP controller WebPushSubscriptionController.",
+  "kind": "route",
+  "source": "laravel-controller",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "app/Http/Controllers/Settings/WebPushSubscriptionController.php",
+      "symbol": "WebPushSubscriptionController",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Http/Controllers/Settings/WebPushSubscriptionController.php",
+      "reason": "controller"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "app/Http/Controllers/Controller.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Http/Requests/DestroyWebPushSubscriptionRequest.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Http/Requests/StoreWebPushSubscriptionRequest.php",
+      "reason": "imported application class"
+    }
+  ],
+  "tests": [],
+  "tags": [
+    "php",
+    "laravel",
+    "controller",
+    "http"
+  ],
+  "trustBoundaries": [
+    "user-input",
+    "auth",
+    "database",
+    "serialization"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

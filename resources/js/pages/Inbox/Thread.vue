@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Form, Head, Link } from '@inertiajs/vue3';
-import { ArrowLeft, MessageCircle } from 'lucide-vue-next';
+import { ArrowLeft, MessageCircle } from '@lucide/vue';
 
 interface Message {
     id: number;

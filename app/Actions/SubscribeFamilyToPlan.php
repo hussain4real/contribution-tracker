@@ -60,9 +60,13 @@ class SubscribeFamilyToPlan
             ],
         ]);
 
+        $data = $this->responseData($response);
+        $accessCode = $this->requiredString($data, 'access_code');
+        $authorizationUrl = $this->requiredString($data, 'authorization_url');
+
         return [
-            'access_code' => $response['data']['access_code'],
-            'authorization_url' => $response['data']['authorization_url'],
+            'access_code' => $accessCode,
+            'authorization_url' => $authorizationUrl,
             'reference' => $reference,
         ];
     }
@@ -80,7 +84,7 @@ class SubscribeFamilyToPlan
         ]);
 
         $plan->update([
-            'paystack_plan_code' => $response['data']['plan_code'],
+            'paystack_plan_code' => $this->requiredString($this->responseData($response), 'plan_code'),
         ]);
     }
 
@@ -96,7 +100,44 @@ class SubscribeFamilyToPlan
         ]);
 
         $family->update([
-            'paystack_customer_code' => $response['data']['customer_code'],
+            'paystack_customer_code' => $this->requiredString($this->responseData($response), 'customer_code'),
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $response
+     * @return array<string, mixed>
+     */
+    private function responseData(array $response): array
+    {
+        $data = $response['data'] ?? null;
+
+        if (! is_array($data)) {
+            throw new RuntimeException('Paystack response did not include a data payload.');
+        }
+
+        $items = [];
+
+        foreach ($data as $key => $value) {
+            if (is_string($key)) {
+                $items[$key] = $value;
+            }
+        }
+
+        return $items;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function requiredString(array $data, string $key): string
+    {
+        $value = $data[$key] ?? null;
+
+        if (! is_string($value) || $value === '') {
+            throw new RuntimeException("Paystack response did not include {$key}.");
+        }
+
+        return $value;
     }
 }

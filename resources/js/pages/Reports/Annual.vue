@@ -6,6 +6,7 @@ import {
 } from '@/actions/App/Http/Controllers/ReportController';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useCurrencyFormatter } from '@/lib/currency';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
 import {
@@ -16,7 +17,7 @@ import {
     DollarSign,
     FileBarChart2,
     TrendingUp,
-} from 'lucide-vue-next';
+} from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 
 interface MonthData {
@@ -63,17 +64,11 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
     },
     {
         title: `${props.year} Annual`,
-        href: annual({ query: { year: props.year } }).url,
+        href: annual(undefined, { query: { year: props.year } }).url,
     },
 ]);
 
-// Format currency in Naira
-function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-NG', {
-        style: 'currency',
-        currency: 'NGN',
-    }).format(amount);
-}
+const { formatCurrency } = useCurrencyFormatter();
 
 // Navigate to a different year
 function navigateToYear(year: number) {
@@ -320,7 +315,7 @@ function getBarHeight(amount: number): string {
                         </div>
                         <Link
                             :href="
-                                monthly({
+                                monthly(undefined, {
                                     query: { year, month: monthData.month },
                                 }).url
                             "

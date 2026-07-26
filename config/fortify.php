@@ -1,6 +1,15 @@
 <?php
 
+declare(strict_types=1);
+
+use App\Services\PasskeyAllowedOrigins;
 use Laravel\Fortify\Features;
+
+$configuredAppUrl = config('app.url');
+$appUrl = is_string($configuredAppUrl) ? $configuredAppUrl : 'http://localhost';
+$configuredPasskeyRelyingPartyId = parse_url($appUrl, PHP_URL_HOST);
+$passkeyRelyingPartyId = is_string($configuredPasskeyRelyingPartyId) ? $configuredPasskeyRelyingPartyId : 'localhost';
+$passkeyAllowedOrigins = PasskeyAllowedOrigins::fromAppUrl($appUrl, env('PASSKEYS_ALLOWED_ORIGINS'));
 
 return [
 
@@ -116,7 +125,26 @@ return [
 
     'limiters' => [
         'login' => 'login',
+        'passkeys' => 'passkeys',
         'two-factor' => 'two-factor',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Passkeys
+    |--------------------------------------------------------------------------
+    |
+    | These settings configure Fortify's WebAuthn passkey support. The relying
+    | party ID must match the application's public host, while allowed origins
+    | lists the browser origins that may complete passkey ceremonies.
+    |
+    */
+
+    'passkeys' => [
+        'relying_party_id' => $passkeyRelyingPartyId,
+        'allowed_origins' => $passkeyAllowedOrigins,
+        'user_handle_secret' => config('app.key'),
+        'timeout' => 60000,
     ],
 
     /*
@@ -149,6 +177,9 @@ return [
         Features::emailVerification(),
         Features::twoFactorAuthentication([
             'confirm' => true,
+            'confirmPassword' => true,
+        ]),
+        Features::passkeys([
             'confirmPassword' => true,
         ]),
     ]),

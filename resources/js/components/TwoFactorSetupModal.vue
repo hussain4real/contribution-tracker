@@ -18,8 +18,8 @@ import { Spinner } from '@/components/ui/spinner';
 import { useTwoFactorAuth } from '@/composables/useTwoFactorAuth';
 import { confirm } from '@/routes/two-factor';
 import { Form } from '@inertiajs/vue3';
+import { Check, Copy, ScanLine } from '@lucide/vue';
 import { useClipboard } from '@vueuse/core';
-import { Check, Copy, ScanLine } from 'lucide-vue-next';
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue';
 
 interface Props {
@@ -259,12 +259,7 @@ watch(
                                         />
                                     </InputOTPGroup>
                                 </InputOTP>
-                                <InputError
-                                    :message="
-                                        errors?.confirmTwoFactorAuthentication
-                                            ?.code
-                                    "
-                                />
+                                <InputError :message="errors.code" />
                             </div>
 
                             <div class="flex w-full items-center space-x-5">

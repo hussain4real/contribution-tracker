@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 /**
  * T045 [US2] Browser test for dashboard navigation and member click-through
  *
@@ -7,17 +9,20 @@
  */
 
 use App\Models\Contribution;
-use App\Models\User;
 
 describe('Dashboard Flow (Browser)', function () {
     beforeEach(function () {
-        $this->admin = User::factory()->admin()->create([
+        $this->family = createBrowserFamily();
+        $this->admin = createBrowserAdmin($this->family, [
             'email' => 'admin@test.com',
-            'password' => bcrypt('password'),
         ]);
 
-        $this->member = User::factory()->member()->employed()->create([
+        $this->member = createBrowserMember($this->family, [
             'name' => 'John Doe',
+            'email' => 'member@test.com',
+        ]);
+        $this->financialSecretary = createBrowserFinancialSecretary($this->family, [
+            'email' => 'financial-secretary@test.com',
         ]);
 
         // Create contribution for current month
@@ -29,21 +34,13 @@ describe('Dashboard Flow (Browser)', function () {
     });
 
     it('displays dashboard with member statuses after login', function () {
-        $page = visit('/login');
-
-        $page->fill('email', 'admin@test.com')
-            ->fill('password', 'password')
-            ->click('Log in')
+        loginBrowserAs($this->admin)
             ->assertSee('Dashboard')
             ->assertNoJavaScriptErrors();
     });
 
     it('shows summary cards on dashboard', function () {
-        $page = visit('/login');
-
-        $page->fill('email', 'admin@test.com')
-            ->fill('password', 'password')
-            ->click('Log in')
+        loginBrowserAs($this->admin)
             ->assertSee('Dashboard')
             ->assertSee('Total Members')
             ->assertSee('Total Collected')
@@ -51,18 +48,27 @@ describe('Dashboard Flow (Browser)', function () {
     });
 
     it('member dashboard shows personal status', function () {
-        $this->member->update([
-            'email' => 'member@test.com',
-            'password' => bcrypt('password'),
-        ]);
-
-        $page = visit('/login');
-
-        $page->fill('email', 'member@test.com')
-            ->fill('password', 'password')
-            ->click('Log in')
+        loginBrowserAs($this->member)
             ->assertSee('Dashboard')
             ->assertSee('Your Contribution')
+            ->assertNoJavaScriptErrors();
+    });
+
+    it('financial secretary login lands on the family dashboard', function () {
+        loginBrowserAs($this->financialSecretary)
+            ->assertSee('Dashboard')
+            ->assertNoJavaScriptErrors();
+    });
+
+    it('platform administrator login lands on the platform dashboard', function () {
+        $platformAdmin = createBrowserSuperAdmin(null, [
+            'email' => 'platform-admin@test.com',
+            'family_id' => null,
+            'current_family_id' => null,
+        ]);
+
+        loginBrowserAs($platformAdmin)
+            ->assertSee('Platform Overview')
             ->assertNoJavaScriptErrors();
     });
 });

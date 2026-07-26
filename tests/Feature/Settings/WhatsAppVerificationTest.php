@@ -1,6 +1,9 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\User;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
@@ -35,16 +38,20 @@ describe('WhatsApp send code', function () {
 
         $cached = Cache::get("whatsapp_otp:{$user->id}");
 
-        expect($cached)->toBeArray()
-            ->and($cached['phone'])->toBe('+2348012345678')
-            ->and($cached['code'])->toMatch('/^\d{6}$/');
+        if (! is_array($cached)) {
+            throw new RuntimeException('Expected WhatsApp OTP cache payload to be an array.');
+        }
 
-        Http::assertSent(function ($request) {
+        expect($cached['phone'] ?? null)->toBe('+2348012345678')
+            ->and($cached['code'] ?? null)->toMatch('/^\d{6}$/');
+
+        Http::assertSent(function (Request $request): bool {
             $body = $request->data();
+            $template = resultArray($body, 'template');
 
             return str_contains($request->url(), '/messages')
-                && $body['to'] === '2348012345678'
-                && $body['template']['name'] === 'verification_code';
+                && ($body['to'] ?? null) === '2348012345678'
+                && ($template['name'] ?? null) === 'verification_code';
         });
     });
 
@@ -113,7 +120,9 @@ describe('WhatsApp verify code', function () {
 
         $response->assertSessionHasErrors('code');
 
-        expect($user->fresh()->whatsapp_verified_at)->toBeNull();
+        $user->refresh();
+
+        expect($user->whatsapp_verified_at)->toBeNull();
     });
 
     it('rejects a non-numeric or short code via validation', function () {

@@ -1,8 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Enums\PaymentStatus;
 use App\Models\Contribution;
+use App\Models\Family;
 use App\Models\User;
+use Inertia\Testing\AssertableInertia as Assert;
 
 /**
  * FR-018: Advance Payments
@@ -11,8 +15,9 @@ use App\Models\User;
  */
 describe('Advance Payments (FR-018)', function () {
     beforeEach(function () {
-        $this->financialSecretary = User::factory()->financialSecretary()->create();
-        $this->member = User::factory()->member()->employed()->create();
+        $this->family = Family::factory()->create();
+        $this->financialSecretary = User::factory()->financialSecretary()->create(['family_id' => $this->family->id]);
+        $this->member = User::factory()->member()->employed()->create(['family_id' => $this->family->id]);
     });
 
     it('allows payment for next month', function () {
@@ -30,9 +35,8 @@ describe('Advance Payments (FR-018)', function () {
 
         $contribution = Contribution::forUser($this->member->id)
             ->forMonth($nextMonth->year, $nextMonth->month)
-            ->first();
+            ->firstOrFail();
 
-        expect($contribution)->not->toBeNull();
         expect($contribution->status)->toBe(PaymentStatus::Paid);
     });
 
@@ -51,9 +55,8 @@ describe('Advance Payments (FR-018)', function () {
 
         $contribution = Contribution::forUser($this->member->id)
             ->forMonth($nextMonth->year, $nextMonth->month)
-            ->first();
+            ->firstOrFail();
 
-        expect($contribution)->not->toBeNull();
         expect($contribution->status)->toBe(PaymentStatus::Paid);
     });
 
@@ -83,7 +86,7 @@ describe('Advance Payments (FR-018)', function () {
         $this->actingAs($this->financialSecretary)
             ->get(route('payments.create', $this->member))
             ->assertOk()
-            ->assertInertia(fn ($page) => $page
+            ->assertInertia(fn (Assert $page) => $page
                 ->has('pending_contributions', 1)
                 ->where('pending_contributions.0.year', $nextMonth->year)
                 ->where('pending_contributions.0.month', $nextMonth->month)
@@ -121,7 +124,7 @@ describe('Advance Payments (FR-018)', function () {
         $this->actingAs($this->financialSecretary)
             ->get(route('payments.create', $this->member))
             ->assertOk()
-            ->assertInertia(fn ($page) => $page
+            ->assertInertia(fn (Assert $page) => $page
                 ->has('pending_contributions', 1)
                 ->where('pending_contributions.0.balance', 4000)
             );

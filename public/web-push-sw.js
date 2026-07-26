@@ -1,9 +1,34 @@
+self.__FAMILYFUNDS_OLD_RUNTIME_CACHES = [
+    'inertia-pages-v1',
+    'inertia-pages-v2',
+    'static-resources',
+    'bunny-fonts-cache',
+    'images-cache',
+];
+
 self.addEventListener('install', (event) => {
     event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener('activate', (event) => {
-    event.waitUntil(self.clients.claim());
+    event.waitUntil(
+        Promise.all([
+            self.clients.claim(),
+            caches
+                .keys()
+                .then((cacheNames) =>
+                    Promise.all(
+                        cacheNames
+                            .filter((cacheName) =>
+                                self.__FAMILYFUNDS_OLD_RUNTIME_CACHES.includes(
+                                    cacheName,
+                                ),
+                            )
+                            .map((cacheName) => caches.delete(cacheName)),
+                    ),
+                ),
+        ]),
+    );
 });
 
 self.addEventListener('push', (event) => {

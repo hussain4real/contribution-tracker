@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -25,13 +25,16 @@ jobs:
           coverage: xdebug
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: "npm"
 
       - name: Install Node Dependencies
         run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
 
       - name: Install PHP Dependencies
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
@@ -49,7 +52,7 @@ jobs:
         run: npm run build
 
       - name: Run Tests
-        run: ./vendor/bin/pest
+        run: php -d max_execution_time=0 ./vendor/bin/pest --coverage --compact --parallel --min=100
 
   deploy:
     runs-on: ubuntu-latest
@@ -63,10 +66,22 @@ jobs:
           username: deployer
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            set -euo pipefail
+
             cd /var/www/contribution-tracker
 
             # Pull latest changes
-            git pull origin main
+            git config --global --add safe.directory /var/www/contribution-tracker
+
+            if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+              echo "Production checkout has local tracked changes. Refusing to deploy over them."
+              git status --short
+              exit 1
+            fi
+
+            git fetch origin main
+            git merge --ff-only origin/main
+            echo "Deploying $(git rev-parse --short HEAD)"
 
             # Install PHP dependencies
             composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
@@ -95,6 +110,21 @@ jobs:
             php artisan route:cache
             php artisan view:cache
             php artisan event:cache
+
+            # Update Nginx cache headers for PWA service workers and manifest
+            NGINX_SITE_CONFIG=""
+
+            if [ -f /etc/nginx/sites-available/familyfunds.app.conf ]; then
+              NGINX_SITE_CONFIG="/etc/nginx/sites-available/familyfunds.app.conf"
+            elif [ -f /etc/nginx/sites-available/familyfunds.app ]; then
+              NGINX_SITE_CONFIG="/etc/nginx/sites-available/familyfunds.app"
+            fi
+
+            if [ -n "$NGINX_SITE_CONFIG" ]; then
+              sudo cp deployment/nginx/familyfunds.app.conf "$NGINX_SITE_CONFIG"
+              sudo nginx -t
+              sudo systemctl reload nginx
+            fi
 
             # Restart queue workers, SSR server, and Nightwatch agent
             sudo supervisorctl restart queue-worker:*

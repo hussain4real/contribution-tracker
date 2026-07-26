@@ -1,0 +1,86 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches:
+      - staging
+  workflow_dispatch:
+
+concurrency:
+  group: staging-deploy
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate Staging Ref
+        run: test "$GITHUB_REF" = "refs/heads/staging"
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.4
+          tools: composer:v2
+          coverage: xdebug
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install Node Dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Install PHP Dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Copy Environment File
+        run: cp .env.example .env
+
+      - name: Generate Application Key
+        run: php artisan key:generate
+
+      - name: Generate Wayfinder Routes
+        run: php artisan wayfinder:generate
+
+      - name: Build Assets
+        run: npm run build
+
+      - name: Run Tests
+        run: php -d max_execution_time=0 ./vendor/bin/pest --coverage --compact --parallel --min=100
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: deployer
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -euo pipefail
+            cd /var/www/contribution-tracker-staging
+            if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+              echo "Staging checkout has local tracked changes. Refusing to deploy over them."
+              git status --short
+              exit 1
+            fi
+            git fetch origin staging
+            if [ "$(git rev-parse origin/staging)" != '${{ github.sha }}' ]; then
+              echo "Refusing to deploy a commit that is not the current origin/staging tip."
+              exit 1
+            fi
+            git checkout -B staging '${{ github.sha }}'
+            STAGING_COMMIT='${{ github.sha }}' /var/www/contribution-tracker-staging/deployment/deploy-staging.sh

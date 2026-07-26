@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_e75eea970b",
+  "title": "Laravel controller MemberPaymentController",
+  "summary": "Laravel HTTP controller MemberPaymentController.",
+  "kind": "route",
+  "source": "laravel-controller",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "app/Http/Controllers/MemberPaymentController.php",
+      "symbol": "MemberPaymentController",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Http/Controllers/MemberPaymentController.php",
+      "reason": "controller"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "app/Enums/TransactionStatus.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Enums/TransactionType.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Http/Requests/InitiatePaymentRequest.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Models/PaystackTransaction.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Models/User.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Services/PaymentAllocationService.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Services/PaystackService.php",
+      "reason": "imported application class"
+    }
+  ],
+  "tests": [],
+  "tags": [
+    "php",
+    "laravel",
+    "controller",
+    "http"
+  ],
+  "trustBoundaries": [
+    "user-input",
+    "auth",
+    "database",
+    "serialization"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

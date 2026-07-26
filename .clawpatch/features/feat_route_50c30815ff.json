@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_50c30815ff",
+  "title": "Laravel controller InvitationController",
+  "summary": "Laravel HTTP controller for GET /invitations/{token}/accept#accept.",
+  "kind": "route",
+  "source": "laravel-controller",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "app/Http/Controllers/InvitationController.php",
+      "symbol": "InvitationController",
+      "route": "/invitations/{token}/accept",
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Http/Controllers/InvitationController.php",
+      "reason": "controller"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "routes/web.php",
+      "reason": "route definition"
+    },
+    {
+      "path": "app/Enums/Role.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Mail/FamilyInvitationMail.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Models/FamilyInvitation.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Models/User.php",
+      "reason": "imported application class"
+    }
+  ],
+  "tests": [],
+  "tags": [
+    "php",
+    "laravel",
+    "controller",
+    "http"
+  ],
+  "trustBoundaries": [
+    "user-input",
+    "auth",
+    "database",
+    "serialization"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

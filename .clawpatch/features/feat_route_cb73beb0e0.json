@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_cb73beb0e0",
+  "title": "Laravel controller WhatsAppVerificationController",
+  "summary": "Laravel HTTP controller WhatsAppVerificationController.",
+  "kind": "route",
+  "source": "laravel-controller",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "app/Http/Controllers/Settings/WhatsAppVerificationController.php",
+      "symbol": "WhatsAppVerificationController",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Http/Controllers/Settings/WhatsAppVerificationController.php",
+      "reason": "controller"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "app/Channels/WhatsAppMessage.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Http/Controllers/Controller.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Http/Requests/Settings/SendWhatsAppCodeRequest.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Http/Requests/Settings/VerifyWhatsAppCodeRequest.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Services/WhatsAppService.php",
+      "reason": "imported application class"
+    }
+  ],
+  "tests": [],
+  "tags": [
+    "php",
+    "laravel",
+    "controller",
+    "http"
+  ],
+  "trustBoundaries": [
+    "user-input",
+    "auth",
+    "database",
+    "serialization"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

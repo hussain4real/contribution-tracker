@@ -2,11 +2,20 @@
 import AccountDetails from '@/components/AccountDetails.vue';
 import AggregateStats from '@/components/contributions/AggregateStats.vue';
 import ContributionCard from '@/components/contributions/ContributionCard.vue';
+import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useCurrencyFormatter } from '@/lib/currency';
 import { dashboard } from '@/routes';
+import { myStatement } from '@/routes/contributions';
 import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/vue3';
-import { AlertCircle, CheckCircle2, TrendingUp, Wallet } from 'lucide-vue-next';
+import {
+    AlertCircle,
+    CheckCircle2,
+    Download,
+    TrendingUp,
+    Wallet,
+} from '@lucide/vue';
 
 interface Payment {
     id: number;
@@ -50,12 +59,16 @@ interface FamilyAggregate {
 }
 
 interface Props {
+    member_id: number;
+    statement_period: { date_from: string; date_to: string };
     contributions?: Contribution[];
     personal_stats?: PersonalStats;
     family_aggregate?: FamilyAggregate;
 }
 
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
+    member_id: 0,
+    statement_period: () => ({ date_from: '', date_to: '' }),
     contributions: () => [],
     personal_stats: () => ({
         total_expected: 0,
@@ -84,12 +97,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-NG', {
-        style: 'currency',
-        currency: 'NGN',
-    }).format(amount);
-}
+const { formatCurrency } = useCurrencyFormatter();
 </script>
 
 <template>
@@ -98,7 +106,7 @@ function formatCurrency(amount: number): string {
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
             <!-- Page Header -->
-            <div class="flex items-center justify-between">
+            <div class="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h1
                         class="text-2xl font-semibold text-neutral-900 dark:text-neutral-100"
@@ -111,6 +119,23 @@ function formatCurrency(amount: number): string {
                         View your payment history and contribution status
                     </p>
                 </div>
+                <Button variant="outline" as-child>
+                    <a
+                        :href="
+                            myStatement(undefined, {
+                                query: {
+                                    type: 'member_statement',
+                                    format: 'pdf',
+                                    member_id: props.member_id,
+                                    date_from: props.statement_period.date_from,
+                                    date_to: props.statement_period.date_to,
+                                },
+                            }).url
+                        "
+                    >
+                        <Download class="h-4 w-4" /> Download statement
+                    </a>
+                </Button>
             </div>
 
             <AccountDetails />

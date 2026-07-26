@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Settings;
 
 use App\Channels\WhatsAppMessage;
@@ -38,12 +40,13 @@ class WhatsAppVerificationController extends Controller
      */
     public function sendCode(SendWhatsAppCodeRequest $request): RedirectResponse
     {
+        $user = $this->user($request);
         $validated = $request->validated();
 
-        $phone = $validated['whatsapp_phone'];
+        $phone = $this->stringValue($validated['whatsapp_phone'] ?? null);
         $code = (string) random_int(100000, 999999);
 
-        Cache::put($this->cacheKey($request->user()->id), [
+        Cache::put($this->cacheKey($user->id), [
             'code' => $code,
             'phone' => $phone,
         ], self::OTP_TTL_SECONDS);
@@ -69,22 +72,26 @@ class WhatsAppVerificationController extends Controller
      */
     public function verifyCode(VerifyWhatsAppCodeRequest $request): RedirectResponse
     {
+        $user = $this->user($request);
         $validated = $request->validated();
+        $code = $this->stringValue($validated['code'] ?? null);
 
-        $cached = Cache::get($this->cacheKey($request->user()->id));
+        $cached = Cache::get($this->cacheKey($user->id));
+        $cachedCode = is_array($cached) && is_scalar($cached['code'] ?? null) ? (string) $cached['code'] : '';
+        $cachedPhone = is_array($cached) && is_scalar($cached['phone'] ?? null) ? (string) $cached['phone'] : '';
 
-        if (! is_array($cached) || ! hash_equals((string) $cached['code'], $validated['code'])) {
+        if ($cachedCode === '' || ! hash_equals($cachedCode, $code)) {
             return back()->withErrors([
                 'code' => 'The verification code is invalid or has expired.',
             ]);
         }
 
-        $request->user()->forceFill([
-            'whatsapp_phone' => $cached['phone'],
+        $user->forceFill([
+            'whatsapp_phone' => $cachedPhone,
             'whatsapp_verified_at' => now(),
         ])->save();
 
-        Cache::forget($this->cacheKey($request->user()->id));
+        Cache::forget($this->cacheKey($user->id));
 
         return back()->with('status', 'whatsapp-verified');
     }
@@ -94,12 +101,14 @@ class WhatsAppVerificationController extends Controller
      */
     public function destroy(Request $request): RedirectResponse
     {
-        $request->user()->forceFill([
+        $user = $this->user($request);
+
+        $user->forceFill([
             'whatsapp_phone' => null,
             'whatsapp_verified_at' => null,
         ])->save();
 
-        Cache::forget($this->cacheKey($request->user()->id));
+        Cache::forget($this->cacheKey($user->id));
 
         return back()->with('status', 'whatsapp-removed');
     }
@@ -107,5 +116,10 @@ class WhatsAppVerificationController extends Controller
     protected function cacheKey(int $userId): string
     {
         return "whatsapp_otp:{$userId}";
+    }
+
+    private function stringValue(mixed $value): string
+    {
+        return is_scalar($value) ? (string) $value : '';
     }
 }

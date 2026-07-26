@@ -26,7 +26,7 @@ const PUSH_SERVICE_WORKER_URL = '/web-push-sw.js';
 const PUSH_SERVICE_WORKER_SCOPE = '/web-push/';
 const SERVICE_WORKER_ACTIVATION_TIMEOUT_MS = 8000;
 
-function base64ToUint8Array(base64String: string): Uint8Array {
+function base64ToArrayBuffer(base64String: string): ArrayBuffer {
     const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
     const base64 = (base64String + padding)
         .replaceAll('-', '+')
@@ -38,7 +38,10 @@ function base64ToUint8Array(base64String: string): Uint8Array {
         output[i] = rawData.charCodeAt(i);
     }
 
-    return output;
+    return output.buffer.slice(
+        output.byteOffset,
+        output.byteOffset + output.byteLength,
+    );
 }
 
 function supportedContentEncoding(): string {
@@ -91,21 +94,29 @@ async function waitForActivation(
         return registration;
     }
 
+    const activatingWorker = worker;
+
     await new Promise<void>((resolve, reject) => {
         const timeout = window.setTimeout(() => {
-            worker.removeEventListener('statechange', handleStateChange);
+            activatingWorker.removeEventListener(
+                'statechange',
+                handleStateChange,
+            );
             reject(new Error('Timed out waiting for the service worker.'));
         }, SERVICE_WORKER_ACTIVATION_TIMEOUT_MS);
 
         function handleStateChange(): void {
-            if (worker.state === 'activated') {
+            if (activatingWorker.state === 'activated') {
                 window.clearTimeout(timeout);
-                worker.removeEventListener('statechange', handleStateChange);
+                activatingWorker.removeEventListener(
+                    'statechange',
+                    handleStateChange,
+                );
                 resolve();
             }
         }
 
-        worker.addEventListener('statechange', handleStateChange);
+        activatingWorker.addEventListener('statechange', handleStateChange);
         handleStateChange();
     });
 
@@ -225,7 +236,7 @@ async function subscribe(): Promise<void> {
             (await registration.pushManager.getSubscription()) ??
             (await registration.pushManager.subscribe({
                 userVisibleOnly: true,
-                applicationServerKey: base64ToUint8Array(publicKey),
+                applicationServerKey: base64ToArrayBuffer(publicKey),
             }));
 
         await new Promise<void>((resolve) => {

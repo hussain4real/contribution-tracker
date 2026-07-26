@@ -1,13 +1,30 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
+use App\Support\CurrencyFormatter;
 use Database\Factories\FamilyCategoryFactory;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property int $id
+ * @property int $family_id
+ * @property string $name
+ * @property string $slug
+ * @property int $monthly_amount
+ * @property int $sort_order
+ * @property-read string $formatted_amount
+ * @property-read string $label_with_amount
+ * @property-read Collection<int, FamilyMembership> $memberships
+ * @property-read Collection<int, FamilyMembershipCategoryAssignment> $assignments
+ * @property-read Collection<int, Contribution> $contributionSnapshots
+ */
 class FamilyCategory extends Model
 {
     /** @use HasFactory<FamilyCategoryFactory> */
@@ -45,18 +62,30 @@ class FamilyCategory extends Model
 
     /**
      * The family this category belongs to.
+     *
+     * @return BelongsTo<Family, $this>
      */
     public function family(): BelongsTo
     {
         return $this->belongsTo(Family::class);
     }
 
-    /**
-     * Users assigned to this category.
-     */
-    public function users(): HasMany
+    /** @return HasMany<FamilyMembership, $this> */
+    public function memberships(): HasMany
     {
-        return $this->hasMany(User::class);
+        return $this->hasMany(FamilyMembership::class);
+    }
+
+    /** @return HasMany<FamilyMembershipCategoryAssignment, $this> */
+    public function assignments(): HasMany
+    {
+        return $this->hasMany(FamilyMembershipCategoryAssignment::class);
+    }
+
+    /** @return HasMany<Contribution, $this> */
+    public function contributionSnapshots(): HasMany
+    {
+        return $this->hasMany(Contribution::class);
     }
 
     // =========================================================================
@@ -68,7 +97,7 @@ class FamilyCategory extends Model
      */
     public function getFormattedAmountAttribute(): string
     {
-        return '₦'.number_format($this->monthly_amount, 0);
+        return CurrencyFormatter::format($this->monthly_amount, $this->family?->currency, 0);
     }
 
     /**

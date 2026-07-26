@@ -2,410 +2,264 @@
 
 ## METHODOLOGY
 
-### 3.1 Introduction
+### 3.1 Introduction to the Chapter
 
-This chapter describes the methodology used for the design, development, testing, and proposed deployment of FamilyFunds, an AI-enhanced multi-tenant family fund management system. Chapter Two established the theoretical and empirical basis for the project: informal family contribution funds remain important in Nigeria, but the tools available for managing them are either manual, individual-focused, or designed for formal financial institutions. This chapter turns that background into a concrete system plan.
+This chapter explains the methodology used to design and develop FamilyFunds. The aim stated in Chapter One is to build an AI-enhanced multi-tenant web application for managing family contribution funds with secure access, contribution tracking, payment allocation, expense recording, reminders, and reporting. The objectives require both academic investigation and practical system development: review related work, design the system, implement the major modules, integrate controlled AI assistance, define the predictive analytics pathway, and test the system against functional and quality requirements.
 
-The methodology combines system design, iterative software development, database modelling, process modelling, interface design, security planning, and evaluation. The approach is practical rather than purely theoretical. The system is designed as a working web application with real users in mind: family administrators, financial secretaries, ordinary members, and a platform super administrator. Because the problem involves both financial records and trust between family members, the methodology gives special attention to tenant isolation, role-based access control, payment accuracy, auditability, and understandable reporting.
+The chapter therefore covers the project approach, existing-system analysis, proposed-system overview, requirements, data collection, population and sampling considerations, architecture, UML and system diagrams, database design, algorithm and model design, tools and technologies, and ethical considerations. Each methodological choice is linked to the problem: family funds need reliable records, clear responsibilities, private family workspaces, accurate payment handling, and reports that members can understand.
 
-The chapter is organised into twelve sections. It begins with an overview of the proposed system, then explains the development approach adopted. It presents the functional and non-functional requirements, describes the system architecture, explains the database, process, and interface design, identifies the modelling tools used, and outlines the implementation technologies. It also describes the testing and validation strategy, deployment plan, evaluation metrics, and a summary of the methodology.
+### 3.2 Research Design / Project Approach
 
-### 3.2 System Overview
+The study uses an applied system-development design. The output of the research is a working software artefact rather than only a survey or theoretical model. This approach is suitable because the central problem is practical: families need a better way to manage contribution funds than notebooks, spreadsheets, and scattered messages. The system is therefore designed, implemented, and validated as a response to identified requirements.
 
-FamilyFunds is a web-based platform for managing family contribution funds. The system is proposed to solve a specific problem: many Nigerian families collect monthly contributions for shared expenses, but the records are often kept in notebooks, spreadsheets, or messaging groups. These methods are easy to start but difficult to trust over time. They do not handle partial payments consistently, they provide little audit trail, and they make it hard for members to verify their own status without asking the person managing the money.
+The software development approach is Agile and iterative. A strict Waterfall model was not selected because family fund requirements are likely to become clearer during design and implementation. A simple feature such as payment recording affects member balances, reports, reminders, AI summaries, and audit trails. If the system were designed once and frozen too early, important realities of the domain would be missed. Agile development supports incremental delivery, review, and correction while still keeping the work tied to the objectives of the study (Karhapää et al., 2021; Schwaber & Sutherland, 2020).
 
-The proposed system provides a secure, organised, and intelligent alternative. Each family operates as a separate tenant on the platform, meaning that one family cannot view or interfere with another family's financial data. Within each family, access is controlled by roles. A Family Administrator manages family settings, members, contribution categories, invitations, and subscription decisions. A Financial Secretary records payments, expenses, and adjustments, sends reminders, and generates reports. A Member views personal contribution status, pays online where available, and receives notifications.
+The work followed five broad stages:
 
-At the centre of the system is contribution tracking. The system generates monthly contribution obligations for paying members according to their assigned category. Because family members may have different financial capacities, the design supports tiered contribution categories such as employed, unemployed, student, or any custom category defined by the family. When a member pays less than the full amount, or pays an amount covering several months at once, the system applies an oldest-balance-first allocation rule. The oldest unpaid contribution is completed first before newer months are credited. This removes the ambiguity that often occurs in manual record-keeping.
+1. Problem and literature analysis, covering informal finance, existing platforms, multi-tenancy, RBAC, digital payments, AI reporting, and predictive analytics.
+2. Requirements identification, based on the problems observed in manual family fund administration and the gaps established in Chapter Two.
+3. System design, including architecture, data design, user roles, process flows, interface structure, payment allocation, and security controls.
+4. Incremental implementation, where authentication, family management, contributions, payments, expenses, reports, reminders, subscriptions, and AI features were developed in modules.
+5. Validation planning, where the critical behaviours were mapped to tests and acceptance checks, especially tenant isolation, role enforcement, payment allocation, report accuracy, and AI response control.
 
-The proposed system also includes online payment processing through Paystack, manual payment entry for cash or bank-transfer records, expense recording, fund adjustments, reports, email and WhatsApp reminders, subscription management, and security features such as email verification, two-factor authentication, and WebAuthn passkeys. The AI-enhanced layer supports intelligent assistance, plain-language report summaries, and proposed predictive analytics for identifying members who may be likely to default. These AI capabilities extend the system beyond basic CRUD operations and connect it to the research gap identified in Chapter Two.
+This approach allows the project to remain honest about its scope. AI assistant and report-summary features are treated as implemented system features where supported by the application. Predictive analytics is treated as planned and evaluation-dependent because meaningful prediction requires sufficient historical contribution data.
 
-The major features of FamilyFunds are summarised in Table 3.1.
+### 3.3 Analysis of Existing System
+
+The existing system is the manual or semi-digital method commonly used by families to manage contribution funds. In this arrangement, a family appoints a treasurer or financial secretary. Members send contributions through cash, bank transfer, or informal handover. The financial secretary records payments in a notebook, a spreadsheet, a phone note, or a WhatsApp message thread. Reports are given verbally, posted as text summaries, or shared as screenshots.
+
+This existing process has several weaknesses. First, records are fragmented. A payment may exist in a bank alert, a WhatsApp screenshot, and a handwritten note, but those pieces may not agree. Second, roles are informal. A family may know who the financial secretary is, but the tools being used do not technically prevent other people from editing a spreadsheet or forwarding wrong information. Third, partial and lump-sum payments are difficult to allocate consistently. Fourth, expense records are often separate from contribution records, making it hard to calculate the true fund balance. Fifth, reporting depends on manual effort, so reports may be delayed, incomplete, or written in a way that ordinary members cannot interpret.
+
+Figure 3.1 summarises the existing manual family fund process.
+
+![Figure 3.1: Existing Manual Family Fund Process](diagrams/chapter-3-existing-system-flow.png)
+
+The major bottleneck in the existing system is that the family record depends too much on one person's manual discipline. Even when the person is honest, the process does not provide enough structure for verification, audit, payment allocation, or tenant-level privacy. These weaknesses justify the need for a purpose-built system.
+
+### 3.4 Proposed System Overview
+
+The proposed system is FamilyFunds, a multi-tenant web application for family contribution fund management. Each family operates in its own workspace, while the platform uses shared infrastructure. Users are assigned roles that determine what they can see and do. The system records members, contribution categories, monthly obligations, payments, expenses, adjustments, reminders, reports, subscription plans, and AI assistant interactions.
+
+FamilyFunds resolves the problems in the existing system by moving the authoritative record into a structured PostgreSQL database. It also introduces role-based access control, Paystack payment support, deterministic oldest-balance-first payment allocation, automated contribution generation, reminders, and clear reports. AI assistance is added as a controlled interface for answering permitted questions and summarising reports in plain language.
 
 *Table 3.1: Summary of Proposed System Features*
 
 | Feature Area | Description |
 | --- | --- |
-| Multi-tenant family management | Each family has a separate operational space with logically isolated data. |
-| Role-based access control | Administrators, Financial Secretaries, Members, and Platform Super Admins have different permissions. |
-| Contribution tracking | Monthly obligations are generated for members based on their contribution category. |
-| Payment allocation | Partial and lump-sum payments are allocated to the oldest outstanding balances first. |
-| Online payments | Members can pay through Paystack, while authorised officers can record offline payments manually. |
-| Expenses and adjustments | Family expenses, donations, corrections, and non-contribution inflows can be recorded. |
-| Notifications and reminders | Email and WhatsApp reminders can be sent to improve payment follow-up. |
-| Reports | Monthly and annual reports show collection status, payments, expenses, and balances. |
-| AI assistance and reporting | An AI assistant supports financial questions and proposed plain-language report summaries. |
-| Predictive analytics | A proposed analytics module estimates default risk using historical payment behaviour. |
-| Security | Email verification, password hashing, two-factor authentication, passkeys, signed invitations, and tenant scoping protect user data. |
-| Subscription management | Families can subscribe to platform plans with different limits and feature access. |
+| Multi-tenant family workspaces | Each family has a logically isolated workspace within the same application. |
+| Role-based access control | Family Administrator, Financial Secretary, Member, and Platform Super Administrator have separate permissions. |
+| Contribution categories | Families define monthly contribution amounts for groups such as employed members, students, or other categories. |
+| Monthly contribution generation | The system creates contribution obligations for paying members based on category and due date. |
+| Payment recording | Authorised users record offline payments, while members can initiate online payments through Paystack. |
+| Payment allocation | Payments are applied to the oldest outstanding balances first. |
+| Expenses and adjustments | Family spending, donations, corrections, and other balance movements are recorded. |
+| Reminders | Email, browser push, and WhatsApp-related reminder flows support follow-up. |
+| Reports | Monthly and annual reports show collections, balances, expenses, and member status. |
+| AI assistant and summaries | The assistant answers role-permitted questions and supports plain-language report summaries. |
+| Predictive analytics pathway | Historical payment data can later support default-risk indicators when enough data exists. |
+| Security controls | Email verification, password hashing, two-factor authentication, passkeys, signed invitations, policies, and tenant scoping protect the system. |
 
-### 3.3 Research/Development Approach
+### 3.5 System Requirements
 
-The development approach selected for this project is an Agile and iterative Software Development Life Cycle (SDLC). Agile development is suitable when requirements are expected to evolve through feedback, learning, and repeated refinement, especially where functional features and quality requirements must be balanced throughout development (Masood et al., 2020; Karhapää et al., 2021). That is the case in this project. The problem did not come from a fictional case study. It came from the researcher's direct observation of family fund management, where requirements emerge from real scenarios: partial payments, late payments, different contribution categories, disputes about balances, and the need for reports that non-technical family members can understand.
+System requirements define what the system must do and the qualities it must maintain while doing so. The requirements below are written to be testable because vague requirements such as "the system should be fast" do not help implementation or validation.
 
-A strict Waterfall model would require all requirements to be fixed before implementation begins. That does not match the nature of this project. The requirements for family fund management are practical and sometimes messy. A family may decide that students should contribute a smaller amount, that reminders should be sent before a due date, or that a financial secretary should record bank transfers on behalf of older members. These discoveries are easier to handle through short cycles of design, implementation, feedback, and improvement.
-
-The Agile/Iterative approach used in this project follows five broad phases:
-
-1. **Requirement identification.** The problem was studied through observation of manual family contribution practices and through the gaps identified in the literature review.
-2. **System design.** The architecture, database entities, roles, payment processes, and security mechanisms were modelled before implementation.
-3. **Incremental development.** Core modules such as authentication, family management, contributions, payments, expenses, reports, and AI features are developed in manageable iterations.
-4. **Testing and validation.** Each major module is tested using unit, integration, feature, and system-level tests.
-5. **Evaluation and refinement.** The finished system is evaluated against the objectives, research questions, and metrics defined for the project.
-
-This approach also aligns with the Model-View-Controller pattern discussed in Chapter Two. The backend models represent the system data, controllers coordinate requests and business logic, and the Vue/Inertia interface presents the system to users. This separation supports iterative development because each part of the system can be improved without rewriting the whole application.
-
-### 3.4 System Requirements
-
-System requirements define what the proposed system must do and the qualities it must maintain while doing it. They are divided into functional requirements and non-functional requirements.
-
-#### 3.4.1 Functional Requirements
-
-Functional requirements describe the visible behaviours and features of the system. For FamilyFunds, these requirements are driven by the problems identified in Chapters One and Two: unreliable records, weak governance, unclear payment allocation, limited reporting, and lack of intelligent financial support.
+#### 3.5.1 Functional Requirements
 
 *Table 3.2: Functional Requirements*
 
-| ID | Requirement | Description | Primary Users |
+| ID | Requirement | Description | Main Actor |
 | --- | --- | --- | --- |
-| FR-01 | User registration and authentication | The system shall allow users to register, log in, verify email addresses, reset passwords, and manage secure access. | All users |
-| FR-02 | Family tenant creation | The system shall allow a family to create an isolated family workspace with its own name, currency, due day, and settings. | Family Admin |
-| FR-03 | Member invitation | The system shall allow administrators to invite members using secure tokenised invitation links. | Family Admin |
-| FR-04 | Role management | The system shall support Administrator, Financial Secretary, and Member roles within each family. | Family Admin |
-| FR-05 | Platform administration | The system shall allow a platform super administrator to view families, users, plans, and platform-level settings. | Platform Super Admin |
-| FR-06 | Contribution category setup | The system shall allow families to define contribution categories and monthly amounts. | Family Admin |
-| FR-07 | Monthly contribution generation | The system shall generate monthly contribution records for paying members based on their category and due date. | Family Admin, Financial Secretary |
-| FR-08 | Contribution status tracking | The system shall show whether a contribution is unpaid, partially paid, paid, or overdue. | All users |
-| FR-09 | Manual payment recording | The system shall allow authorised users to record payments received outside the platform. | Family Admin, Financial Secretary |
-| FR-10 | Online payment initiation | The system shall allow members to initiate online payments through Paystack where the family plan supports it. | Member |
-| FR-11 | Payment allocation | The system shall allocate partial and lump-sum payments to the oldest outstanding contribution balance first. | System |
-| FR-12 | Payment history | The system shall maintain a history of payments, dates, amounts, and who recorded each transaction. | All authorised users |
-| FR-13 | Expense recording | The system shall allow authorised users to record family expenses with amount, description, and date. | Family Admin, Financial Secretary |
-| FR-14 | Fund adjustments | The system shall allow authorised users to record non-contribution inflows or corrections, such as donations or balance adjustments. | Family Admin, Financial Secretary |
-| FR-15 | Reports | The system shall generate monthly and annual financial reports showing contributions, payments, expenses, and balances. | Family Admin, Financial Secretary |
-| FR-16 | Member dashboard | The system shall provide dashboard summaries showing contribution progress, recent payments, overdue members, and fund status. | All users |
-| FR-17 | Notifications and reminders | The system shall support email and WhatsApp reminders for unpaid or overdue contributions. | Family Admin, Financial Secretary |
-| FR-18 | Subscription management | The system shall allow families to subscribe to platform plans with feature and member-count limits. | Family Admin |
-| FR-19 | AI assistant | The system shall provide an AI assistant capable of answering family-fund questions and performing permitted actions after confirmation. | All users, according to role |
-| FR-20 | AI report summary | The system shall support plain-language financial report summaries for non-expert users. | Family Admin, Financial Secretary |
-| FR-21 | Predictive analytics | The system shall provide proposed payment-behaviour prediction using historical contribution and payment records. | Family Admin, Financial Secretary |
-| FR-22 | Audit-friendly record keeping | The system shall preserve financial records in a way that supports review and accountability. | All authorised users |
+| FR1 | User authentication | Users shall register, log in, verify email, reset passwords, and manage account security. | All users |
+| FR2 | Family workspace creation | A family administrator shall create and configure a family workspace. | Family Admin |
+| FR3 | Member invitation | The system shall allow administrators to invite members using secure invitation links. | Family Admin |
+| FR4 | Role assignment | The system shall support Family Admin, Financial Secretary, Member, and Platform Super Admin roles. | Family Admin |
+| FR5 | Contribution category setup | Administrators shall define contribution categories and monthly amounts. | Family Admin |
+| FR6 | Monthly contribution generation | The system shall generate monthly obligations for paying members. | Family Admin, System |
+| FR7 | Contribution status tracking | The system shall show unpaid, partially paid, paid, and overdue statuses. | All authorised users |
+| FR8 | Manual payment recording | Authorised officers shall record cash, transfer, or offline payments. | Family Admin, Financial Secretary |
+| FR9 | Online payment processing | Members shall initiate online payments through Paystack where enabled. | Member |
+| FR10 | Payment verification | The system shall verify Paystack transactions before marking them successful. | System |
+| FR11 | Payment allocation | The system shall allocate payments to the oldest outstanding contribution balances first. | System |
+| FR12 | Expense recording | Authorised users shall record family expenses with amount, date, description, and recorder. | Family Admin, Financial Secretary |
+| FR13 | Fund adjustment recording | Authorised users shall record donations, corrections, and other non-contribution balance movements. | Family Admin, Financial Secretary |
+| FR14 | Reports | The system shall generate monthly and annual reports for contributions, payments, expenses, adjustments, and balances. | Family Admin, Financial Secretary |
+| FR15 | Member dashboard | Members shall view personal balances, payment history, and contribution status. | Member |
+| FR16 | Reminders | Authorised users shall send or trigger contribution reminders through supported channels. | Family Admin, Financial Secretary |
+| FR17 | Subscription management | Families shall access platform plans with member limits and feature availability. | Family Admin |
+| FR18 | AI assistant | The assistant shall answer questions using permitted family data and role-aware tools. | Authorised users |
+| FR19 | AI report summary | The system shall support plain-language summaries of financial reports. | Family Admin, Financial Secretary |
+| FR20 | Predictive analytics pathway | The system design shall support later prediction of payment behaviour where sufficient history exists. | Family Admin, Financial Secretary |
 
-#### 3.4.2 Non-Functional Requirements
-
-Non-functional requirements describe the qualities the system must maintain. For FamilyFunds, these are as important as the visible features because the system handles money-related records and personal information. Recent Agile requirements research stresses that quality requirements such as performance, security, reliability, and maintainability cannot be left until the end of development; they have to shape design choices from the beginning (Karhapää et al., 2021).
+#### 3.5.2 Non-Functional Requirements
 
 *Table 3.3: Non-Functional Requirements*
 
-| Category | Requirement | Description |
+| ID | Category | Requirement | Expected Measure |
+| --- | --- | --- | --- |
+| NFR1 | Security | A user shall access only records belonging to the user's family tenant. | Cross-family access attempts are denied. |
+| NFR2 | Security | Sensitive actions shall be restricted by role. | Members cannot record payments or alter family settings. |
+| NFR3 | Security | User accounts shall support strong authentication controls. | Email verification, 2FA, passkeys, and password hashing are available. |
+| NFR4 | Reliability | Payment allocation shall be deterministic. | The same payment history produces the same balances. |
+| NFR5 | Reliability | Paystack callbacks shall not create duplicate successful payments. | Repeated callback events do not double-record payments. |
+| NFR6 | Usability | Common workflows shall be usable on mobile and desktop browsers. | Key pages remain responsive and readable. |
+| NFR7 | Usability | Reports shall be understandable to non-accounting users. | Summary text and tables use clear labels and plain language. |
+| NFR8 | Performance | Dashboard and report pages shall remain responsive for ordinary family sizes. | Common pages load within an acceptable time during testing. |
+| NFR9 | Maintainability | Modules shall remain separated by responsibility. | Authentication, payments, reports, and AI logic are not mixed into one layer. |
+| NFR10 | Auditability | Financial records shall store relevant dates, amounts, users, and relationships. | Transactions can be reviewed and reconciled. |
+| NFR11 | Privacy | AI features shall use only the data needed for the user's request. | Prompts and tool calls avoid unnecessary personal exposure. |
+| NFR12 | Availability | The deployed system shall support HTTPS, queues, scheduler, and backups. | Required services are configured in deployment. |
+
+#### 3.5.3 Deployment Requirements
+
+*Table 3.4: Deployment Requirements*
+
+| Requirement Type | Requirement |
+| --- | --- |
+| Runtime | PHP 8.4 or later with required Laravel extensions |
+| Dependency tools | Composer, Node.js, npm, and Vite build process |
+| Database | PostgreSQL database with secure credentials and backups |
+| Web server | HTTPS-enabled Nginx, Apache, Laravel Cloud, or equivalent platform |
+| Background processing | Queue worker and Laravel scheduler for jobs and reminders |
+| Environment configuration | `.env` variables for database, mail, Paystack, AI provider, WhatsApp-related settings, and app keys |
+| Security | HTTPS, password hashing, signed URLs, webhook validation, and restricted credentials |
+
+### 3.6 Data Collection Methods
+
+This project does not rely on a formal questionnaire or invented survey data. The data used for the methodology came from four honest sources. The first source was literature and document analysis, including studies on informal finance, digital financial inclusion, SaaS multi-tenancy, RBAC, digital payments, AI reporting, and predictive analytics. The second source was observation of typical family fund administration: how members are added, how contribution amounts are agreed, how payments are announced, and how balances are reconciled. The third source was analysis of existing tools such as PiggyVest, Cowrywise, CreditClan, Lendsqr, WhatsApp, and spreadsheets. The fourth source was the system's own development artefacts: routes, controllers, models, migrations, diagrams, requirements, and test scenarios.
+
+For AI and predictive features, the relevant data is system-generated family fund data such as contribution months, due dates, payment dates, payment amounts, outstanding balances, reminder history, and report summaries. No personal data is invented for the study. Where sample data is used for testing or demonstration, it is treated as test data rather than real participant data.
+
+### 3.7 Population and Sampling
+
+The study is mainly a system-development project, so it does not use a statistical population or probability sampling method. The relevant user population for design purposes consists of the people who normally participate in a family contribution fund: family administrators, financial secretaries, ordinary members, and the platform administrator.
+
+Validation scenarios are selected purposively because the aim is to test whether the artefact behaves correctly in the most important use cases. The selected scenarios include creating a family, inviting members, assigning roles, generating contributions, recording partial payments, initiating Paystack payments, viewing dashboards, sending reminders, generating reports, using AI assistance, and preventing cross-family access. This sampling approach is appropriate because correctness is judged by system behaviour under realistic workflows, not by generalising survey responses.
+
+### 3.8 System Architecture / Design
+
+FamilyFunds is designed as a layered, modular monolith. The frontend layer uses Vue.js and Inertia.js to present dashboards, forms, reports, settings, and AI chat screens. The application layer uses Laravel controllers, requests, services, policies, jobs, commands, and AI tools. The data layer uses PostgreSQL to store families, users, contributions, payments, expenses, adjustments, plans, notifications, passkeys, WhatsApp-related messages, and AI conversations. External services include Paystack for payments and subscriptions, mail and messaging channels for communication, and AI providers for assistant functions.
+
+Figure 3.2 shows the high-level architecture.
+
+![Figure 3.2: System Architecture Diagram](diagrams/slide-05-system-architecture-full-trimmed.png)
+
+The architecture uses shared-schema multi-tenancy. Each family-specific record carries a `family_id` where appropriate. Middleware, policies, validation, and query scoping enforce the boundary. This strategy keeps the system practical for many small family groups while still maintaining logical separation. The design also keeps external services outside the authority of the application. Paystack verifies transactions, but Laravel decides how verified payments affect contribution records. The AI provider generates language, but Laravel controls permissions, tools, and data access.
+
+### 3.9 Use Case / UML Diagrams
+
+The system uses UML-style and process diagrams to explain the main actors, workflows, and data relationships. The diagrams are used because the system contains several roles, many related entities, and financial processes that are easier to verify visually than through prose alone.
+
+Figure 3.3 presents the use case diagram.
+
+![Figure 3.3: Use Case Diagram](diagrams/slide-06-use-case-diagram-full-trimmed.png)
+
+The main human actors are Platform Super Administrator, Family Administrator, Financial Secretary, and Member. The Platform Super Administrator manages platform-wide oversight. The Family Administrator manages the family workspace, members, settings, contribution categories, subscriptions, and reports. The Financial Secretary records payments, expenses, adjustments, reminders, and reports. Members view their own status and pay contributions. External actors include Paystack and AI providers, but they support rather than control the system.
+
+The payment allocation process is one of the most important workflows because it affects member balances and family trust. Figure 3.4 presents the activity/flowchart view in readable panels.
+
+![Figure 3.4a: Payment Allocation Flowchart, Panel 1](diagrams/panels/slide-07-payment-allocation-flowchart-panel-1.png)
+
+![Figure 3.4b: Payment Allocation Flowchart, Panel 2](diagrams/panels/slide-07-payment-allocation-flowchart-panel-2.png)
+
+![Figure 3.4c: Payment Allocation Flowchart, Panel 3](diagrams/panels/slide-07-payment-allocation-flowchart-panel-3.png)
+
+The class-style model is represented by the main domain entities: Family, User, FamilyCategory, Contribution, Payment, Expense, FundAdjustment, PlatformPlan, PaystackTransaction, Passkey, Notification, WhatsAppMessage, AgentConversation, and AgentConversationMessage. The sequence-style processes include invitation acceptance, contribution generation, manual payment recording, Paystack payment verification, reminder sending, report generation, and AI assistant response generation.
+
+### 3.10 Database Design
+
+The database design uses PostgreSQL as the relational database. The design is centred on the family tenant. Tables that contain family-specific data include a `family_id` field or are connected through another family-owned entity. This supports shared-schema multi-tenancy while keeping relationships clear.
+
+Figure 3.5 shows the entity-relationship diagram.
+
+![Figure 3.5: Entity-Relationship Diagram](diagrams/chapter-3-entity-relationship-diagram.png)
+
+*Table 3.5: Major Database Entities*
+
+| Entity | Purpose | Key Relationship |
 | --- | --- | --- |
-| Performance | Responsive dashboard and reports | Common pages such as the dashboard, contribution list, and reports should load quickly for normal family sizes. |
-| Performance | Efficient queries | Data access should be scoped by family and optimised to avoid unnecessary loading of unrelated tenant data. |
-| Security | Tenant isolation | A user from one family must not access another family's members, contributions, payments, expenses, or reports. |
-| Security | Strong authentication | The system should support password hashing, email verification, two-factor authentication, and passkeys. |
-| Security | Role enforcement | Only authorised roles should perform sensitive actions such as recording payments or changing family settings. |
-| Security | Safe external integrations | Paystack and AI provider integrations should be controlled through environment configuration and secure callbacks. |
-| Usability | Clear navigation | The interface should make common actions easy to find: payments, contributions, reports, members, and settings. |
-| Usability | Plain-language reporting | Reports and AI summaries should be understandable to users without accounting or software backgrounds. |
-| Usability | Mobile responsiveness | The system should work on common mobile and desktop browsers because many family members use smartphones. |
-| Reliability | Accurate payment allocation | A payment should always be allocated deterministically using the oldest-balance-first rule. |
-| Reliability | Scheduled tasks | Contribution generation and reminder jobs should run consistently at configured times. |
-| Reliability | Recovery from failed services | Failed payment callbacks, email delivery issues, or AI provider errors should not corrupt financial records. |
-| Maintainability | Modular design | The system should separate authentication, tenancy, contributions, payments, reports, and AI functionality. |
-| Maintainability | Test coverage | Critical behaviour such as tenant isolation, payment allocation, and role permissions should be covered by automated tests. |
-| Scalability | Multi-family support | The architecture should support many independent families on shared infrastructure through logical data isolation. |
-
-### 3.5 System Architecture
-
-FamilyFunds uses a web-based client-server architecture with a Laravel backend, Vue.js frontend, Inertia.js server-client bridge, MySQL relational database, and external service integrations. The system is designed as a modern monolithic application rather than as a set of microservices. This choice is deliberate. The project is broad enough to require clear separation of responsibilities, but not so large that a distributed microservice architecture would be justified. A modular monolith keeps development manageable while still allowing the application to separate business concerns cleanly.
-
-The architecture is organised into five main layers:
-
-1. **Presentation layer.** Users interact with the system through a Vue 3 single-page interface connected to Laravel routes through Inertia.js.
-2. **Authentication and access layer.** Laravel Fortify, role checks, policies, middleware, two-factor authentication, and WebAuthn passkeys control identity and permissions.
-3. **Application/business layer.** Controllers, services, jobs, commands, and AI tools handle contributions, payments, expenses, reports, notifications, subscriptions, and AI interactions.
-4. **Data layer.** MySQL stores family, user, contribution, payment, expense, notification, subscription, passkey, WhatsApp, and AI conversation data.
-5. **External service layer.** Paystack handles online payments and subscriptions, email/WhatsApp channels handle communication, and AI providers support intelligent assistant and report-summary features.
-
-Figure 3.1 shows the proposed high-level architecture.
-
-![Figure 3.1: System Architecture Diagram](diagrams/slide-05-system-architecture-full-trimmed.png)
-
-The architecture uses shared-schema multi-tenancy. This means that different families share the same application instance and database, but tenant-specific tables contain a `family_id` field where appropriate. Application middleware, policies, and query scoping enforce the rule that a user can only operate within the family to which they belong. Recent work on multi-tenant cloud and SaaS systems continues to identify isolation, resource sharing, and tenant-specific quality requirements as central architectural concerns (Jia et al., 2021; Sharma & Kaur, 2021). This design gives the project the cost and maintenance advantages of SaaS while still respecting the trust boundary between families.
-
-### 3.6 System Design
-
-System design explains how the proposed system is structured internally. It covers data design, process design, and interface design.
-
-#### 3.6.1 Data Design
-
-The database is designed around the family tenant. The `families` table represents each independent family group on the platform. Most financial records are linked either directly or indirectly to a family. This supports tenant isolation and makes it possible to generate reports for one family without mixing data from another.
-
-The main entities are described in Table 3.4.
-
-*Table 3.4: Major Database Entities*
-
-| Entity | Purpose | Key Relationships |
-| --- | --- | --- |
-| `families` | Stores each family tenant, settings, due day, currency, bank details, suspension status, and subscription information. | Has many users, categories, contributions, expenses, adjustments, invitations, and transactions. |
-| `users` | Stores platform users, family membership, role, contribution category, authentication details, and optional super-admin status. | Belongs to a family and optionally belongs to a family category. |
-| `family_categories` | Stores custom contribution tiers and monthly amounts for a family. | Belongs to a family and may be assigned to users. |
-| `family_invitations` | Stores pending invitations, roles, tokens, expiry dates, and acceptance status. | Belongs to a family and inviter user. |
-| `contributions` | Stores monthly contribution obligations for members. | Belongs to a family and user; has many payments. |
-| `payments` | Stores payments applied to specific contributions. | Belongs to a contribution and has a recorded-by user. |
-| `expenses` | Stores family expenses and the user who recorded them. | Belongs to a family and recorded-by user. |
-| `fund_adjustments` | Stores donations, corrections, and other non-contribution balance changes. | Belongs to a family and recorded-by user. |
-| `paystack_transactions` | Stores online payment and subscription transaction records. | Belongs to a user and family. |
-| `platform_plans` | Stores subscription plans, prices, member limits, Paystack plan codes, and feature sets. | Used by families for subscription management. |
-| `passkeys` | Stores WebAuthn credential information for passkey authentication. | Belongs to a user. |
-| `notifications` | Stores system notifications for users. | Polymorphic relationship to notifiable users. |
-| `whatsapp_messages` | Stores inbound and outbound WhatsApp communication records. | Linked to family and user where applicable. |
+| `families` | Stores family workspace settings, currency, due day, status, billing, and bank details. | Has many users, categories, contributions, expenses, adjustments, invitations, and transactions. |
+| `users` | Stores account, role, family membership, category, authentication, and profile data. | Belongs to a family and may belong to a family category. |
+| `family_categories` | Stores contribution tiers and monthly amounts. | Belongs to a family and may be assigned to users. |
+| `family_invitations` | Stores invitation email, role, token, expiry, and acceptance status. | Belongs to a family and inviter. |
+| `contributions` | Stores monthly contribution obligations and statuses. | Belongs to a family and user; receives payments. |
+| `payments` | Stores payment amounts applied to contribution obligations. | Belongs to a contribution and recorded-by user. |
+| `expenses` | Stores family spending records. | Belongs to a family and recorded-by user. |
+| `fund_adjustments` | Stores donations, corrections, and non-contribution balance changes. | Belongs to a family and recorded-by user. |
+| `paystack_transactions` | Stores online payment and subscription transaction references. | Belongs to a family and user. |
+| `platform_plans` | Stores subscription plan names, prices, limits, and features. | Used by families for subscription management. |
+| `passkeys` | Stores WebAuthn credential information. | Belongs to a user. |
+| `notifications` | Stores application notifications. | Linked to notifiable users. |
+| `whatsapp_messages` | Stores inbound and outbound WhatsApp-related communication. | Linked to family and user where applicable. |
 | `agent_conversations` | Stores AI assistant conversation sessions. | Belongs to a user. |
-| `agent_conversation_messages` | Stores AI conversation messages, tool calls, tool results, and metadata. | Belongs to an AI conversation and user. |
+| `agent_conversation_messages` | Stores AI messages, tool calls, tool results, and metadata. | Belongs to an AI conversation. |
 
-Figure 3.2 represents the database design at a high level. The actual database schema uses relational constraints and foreign keys where applicable, while application-level rules enforce role and tenant boundaries.
+The database design supports financial traceability by separating obligations from payments. A contribution records what a member owes for a period. A payment records money applied to that obligation. This separation is important because one incoming amount can be split across more than one contribution.
 
-```mermaid
-erDiagram
-    FAMILIES ||--o{ USERS : has
-    FAMILIES ||--o{ FAMILY_CATEGORIES : defines
-    FAMILIES ||--o{ CONTRIBUTIONS : owns
-    FAMILIES ||--o{ EXPENSES : records
-    FAMILIES ||--o{ FUND_ADJUSTMENTS : records
-    FAMILIES ||--o{ FAMILY_INVITATIONS : sends
-    FAMILIES ||--o{ PAYSTACK_TRANSACTIONS : receives
-    FAMILIES }o--|| PLATFORM_PLANS : subscribes_to
+### 3.11 Algorithm / Model Design
 
-    USERS ||--o{ CONTRIBUTIONS : owes
-    USERS }o--|| FAMILY_CATEGORIES : assigned_to
-    USERS ||--o{ PASSKEYS : registers
-    USERS ||--o{ AGENT_CONVERSATIONS : starts
-    USERS ||--o{ WHATSAPP_MESSAGES : linked_to
+The main algorithm in the system is the oldest-balance-first payment allocation algorithm. It handles manual and verified online payments in a consistent way.
 
-    CONTRIBUTIONS ||--o{ PAYMENTS : receives
-    AGENT_CONVERSATIONS ||--o{ AGENT_CONVERSATION_MESSAGES : contains
+*Table 3.6: Oldest-Balance-First Payment Allocation Algorithm*
 
-    USERS ||--o{ PAYMENTS : records
-    USERS ||--o{ EXPENSES : records
-    USERS ||--o{ FUND_ADJUSTMENTS : records
-```
+| Step | Operation |
+| --- | --- |
+| 1 | Receive the member, payment amount, payment channel, and transaction details. |
+| 2 | Retrieve the member's unpaid and partially paid contributions, ordered from oldest to newest. |
+| 3 | For each contribution, calculate the outstanding balance. |
+| 4 | Apply the available payment amount to the oldest outstanding balance. |
+| 5 | Mark the contribution as paid if the balance reaches zero, or partially paid if a balance remains. |
+| 6 | Continue until the payment amount is exhausted or all outstanding balances are cleared. |
+| 7 | If an overpayment remains, apply it according to the system's advance-payment rules or record it for review. |
+| 8 | Store payment records and update contribution statuses for reporting. |
 
-*Figure 3.2: Entity-Relationship Diagram*
+The AI assistant model is designed as a tool-aware assistant. The user's role and family context are checked before tools are used. Read-only questions, such as contribution summaries or fund balances, return information from permitted records. Write-related actions, such as recording expenses or payments through an assistant tool, require explicit confirmation and role permission.
 
-The most important design decision in the database is that financial records remain traceable. A contribution belongs to a family and a member. A payment belongs to a contribution. An expense or adjustment belongs to a family and records who entered it. This structure makes it possible to reconstruct a member's balance, a family's total fund position, and the history of actions taken by authorised users.
+The predictive analytics model is planned as a supervised classification pathway, not as an unconditional feature claim. Possible input features include payment delay, number of unpaid months, contribution category, previous partial payments, reminder count, and historical consistency. Possible output labels include "likely on time" and "likely overdue." The evaluation should use accuracy together with precision, recall, and F1-score because raw accuracy can be misleading when most members usually pay on time (Hussin Adam Khatir & Bee, 2022; Robisco & Carbó Martínez, 2022).
 
-#### 3.6.2 Process Design
+### 3.12 Tools and Technologies
 
-The system contains several important processes: contribution generation, payment allocation, online payment handling, invitation acceptance, reminder delivery, report generation, and AI-assisted querying. The most critical process is payment allocation because it determines how money is credited against outstanding obligations.
+The project uses tools selected for practicality, maintainability, and compatibility with the application requirements.
 
-The payment allocation algorithm follows an oldest-balance-first rule. This is similar to a First-In, First-Out queue: the earliest unpaid contribution is handled before newer ones. The purpose is not merely technical. It ensures fairness, transparency, and consistency. If a member owes January, February, and March, a payment received in March should not be randomly credited to March while January remains unclear. The system removes that ambiguity.
+*Table 3.7: Tools and Technologies*
 
-The payment allocation process is shown in Figure 3.3.
-
-![Figure 3.3: Payment Allocation Flowchart](diagrams/slide-07-payment-allocation-flowchart-full-trimmed.png)
-
-The algorithm can be expressed as follows:
-
-```text
-Input: member, payment amount, payment date, recorder
-
-1. Retrieve all incomplete contributions for the member.
-2. Sort contributions by year and month from oldest to newest.
-3. Set remaining amount to the payment amount.
-4. For each contribution:
-      a. If remaining amount is zero, stop.
-      b. Calculate the outstanding balance for the contribution.
-      c. Apply the smaller of remaining amount and outstanding balance.
-      d. Create a payment record for the amount applied.
-      e. Reduce remaining amount.
-5. If money remains after all existing balances are cleared:
-      a. Create future monthly contribution records where needed.
-      b. Apply the remaining amount month by month.
-6. Update dashboards, reports, and notifications.
-Output: one or more payment records linked to contribution records.
-```
-
-Other important processes are summarised below:
-
-- **Contribution generation:** At the start of a month, the system creates contribution records for active paying members based on their category and the family's due day.
-- **Online payment flow:** A member initiates payment, Paystack processes checkout, the callback/webhook validates transaction status, and the verified amount is passed to the allocation service.
-- **Invitation flow:** An administrator sends an invitation, the invited user receives a tokenised link, the user accepts before expiry, and the account is attached to the family with the preassigned role.
-- **Reminder flow:** The system identifies unpaid or partially paid contributions and sends reminders through configured email or WhatsApp channels.
-- **Report flow:** The system aggregates contribution, payment, expense, and adjustment records into monthly or annual summaries.
-- **AI assistant flow:** The user asks a question, the assistant checks the user's role and family context, calls only permitted tools, and returns an answer grounded in available family data.
-
-#### 3.6.3 Interface Design
-
-The interface is designed as a responsive single-page web application. The goal is to make the system usable by both technically confident users and ordinary family members who simply want to check their balance or pay their contribution. Recent responsive interface research emphasises consistency across screen sizes because users now move between phones, tablets, and computers when accessing the same system (Li et al., 2022). The interface therefore avoids exposing database complexity. It presents financial information through dashboards, lists, forms, status badges, and plain-language summaries.
-
-The major screens include:
-
-- **Welcome and authentication screens:** Registration, login, password reset, email verification, two-factor challenge, and invitation acceptance.
-- **Dashboard:** A summary of contribution progress, recent payments, overdue members, and family fund position.
-- **Members module:** Member listing, member creation, member profile, role/category assignment, and member editing.
-- **Contributions module:** Contribution list, member contribution details, personal contribution view, and contribution generation.
-- **Payments module:** Manual payment recording, payment history, and member self-payment through Paystack.
-- **Expenses and fund adjustments:** Forms and lists for outgoing expenses, donations, corrections, and other fund movements.
-- **Reports module:** Monthly and annual reports showing financial summaries, contribution status, and balances.
-- **Family settings:** Family details, contribution categories, bank details, invitation management, and subscription settings.
-- **Platform administration:** Platform-level dashboard, user management, family management, plans, and feature flags.
-- **Security settings:** Profile management, password update, two-factor authentication, passkey registration, and WhatsApp verification.
-- **AI assistant:** A chat-based interface for asking questions about the family's fund and generating role-permitted insights.
-
-The interface is designed around role relevance. A Member should not be overwhelmed with administrative functions. A Financial Secretary needs fast access to payments, expenses, reports, and reminders. A Family Administrator needs member management, categories, subscription settings, and overall visibility. This role-sensitive design supports both usability and security.
-
-### 3.7 Modeling Tools
-
-Modelling tools are used to visualise the proposed system before and during implementation. They help explain how users interact with the system, how components are arranged, and how important processes flow.
-
-The following modelling tools are used in this project:
-
-- **Use Case Diagram:** Shows the main actors and what each actor can do in the system.
-- **System Architecture Diagram:** Shows the layers of the system and the relationship between users, application components, database, and external services.
-- **Entity-Relationship Diagram:** Represents the main database entities and relationships.
-- **Activity/Flowchart Diagram:** Shows the steps in the payment allocation process.
-- **Class-style Model Description:** Explains the relationship between major domain objects such as Family, User, Contribution, Payment, Expense, FundAdjustment, PlatformPlan, and Passkey.
-- **Sequence-style Process Description:** Explains the order of interactions in processes such as online payment, invitation acceptance, and AI assistant queries.
-
-Figure 3.4 presents the use-case view of the proposed system.
-
-![Figure 3.4: Use Case Diagram](diagrams/slide-06-use-case-diagram-full-trimmed.png)
-
-The use-case model identifies four main human actors: Platform Super Admin, Family Admin, Financial Secretary, and Member. It also includes external actors such as Paystack and AI providers. This makes the system boundary clear. Paystack does not manage family records; it only processes transactions. The AI provider does not own the family data; it receives controlled prompts or tool outputs for specific assistant functions. The Laravel application remains the authority for permissions, data, and financial records.
-
-### 3.8 Implementation Details
-
-The proposed system is implemented using a modern Laravel and Vue technology stack. The stack was selected because it supports rapid development, secure authentication, server-driven single-page application behaviour, and strong database-backed business logic.
-
-*Table 3.5: Implementation Technologies*
-
-| Category | Technology | Purpose |
+| Category | Tool/Technology | Purpose |
 | --- | --- | --- |
-| Programming language | PHP 8.4 | Backend application development. |
-| Backend framework | Laravel 13 | Routing, controllers, models, queues, scheduler, validation, policies, and services. |
-| Frontend framework | Vue.js 3 | Interactive user interface. |
-| Server-client bridge | Inertia.js 3 | Connects Laravel routes to Vue pages without a separate API layer. |
-| Database | MySQL | Relational storage for families, users, contributions, payments, expenses, subscriptions, and AI records. |
+| Backend language | PHP 8.4 | Main server-side language. |
+| Backend framework | Laravel 13 | Routing, controllers, validation, queues, scheduler, policies, models, and services. |
+| Frontend framework | Vue.js 3 | User interface pages, dashboards, forms, and interactive components. |
+| Server-client bridge | Inertia.js 3 | Connects Laravel routes to Vue pages without a separate REST API. |
+| Database | PostgreSQL | Relational storage for family, user, contribution, payment, expense, and AI records. |
 | Styling | Tailwind CSS 4 | Responsive interface styling. |
-| Authentication | Laravel Fortify | Login, registration, password reset, email verification, and two-factor authentication support. |
-| Passwordless authentication | WebAuthn/passkeys | Strong device-based authentication using public-key credentials. |
+| Authentication | Laravel Fortify | Login, registration, password reset, email verification, and two-factor support. |
+| Passwordless access | WebAuthn/passkeys | Strong browser-based authentication. |
 | Payment gateway | Paystack | Online contribution payments and subscription billing. |
-| AI integration | Laravel AI SDK | AI assistant, tool calling, conversation memory, and provider integration. |
-| Feature flags | Laravel Pennant | Controlled release of advanced features such as AI assistance. |
-| Testing | Pest PHP | Unit, feature, and system-oriented automated tests. |
+| AI integration | Laravel AI SDK | Assistant responses, tool calling, and provider integration. |
+| Feature flags | Laravel Pennant | Controlled release of features such as AI assistance. |
+| Testing | Pest PHP | Automated tests for models, features, policies, payments, reports, and AI tools. |
 | Build tool | Vite | Frontend asset compilation and development server. |
-| Version control | Git | Source code tracking and collaboration. |
-| Code quality | Laravel Pint, ESLint, Prettier | Formatting and style consistency. |
-| Development environment | Composer, Node.js, npm | Dependency management and local development. |
+| Version control | Git | Source tracking and collaboration. |
+| Code quality | Laravel Pint, ESLint, Prettier | Formatting and static code quality. |
+| Development tools | Composer, Node.js, npm | Dependency management and project tooling. |
 
-Laravel is used for the backend because it provides mature support for routing, database modelling through Eloquent ORM, queues, scheduled tasks, form validation, policies, notifications, and authentication. Vue.js is used for the frontend because it supports reactive user interfaces and component-based development. Inertia.js connects these two layers without requiring a separate REST API, which keeps the project manageable for a single-developer final-year project while preserving the user experience of a single-page application (Reinink, 2024; You, 2024).
+Laravel was selected because it provides mature support for routing, validation, queues, scheduled commands, notifications, policies, and Eloquent models. Vue and Inertia were selected because they allow a modern single-page experience without forcing the project to maintain a separate API layer. PostgreSQL was selected as the stated database technology because the project requires reliable relational storage, constraints, and query support. Paystack fits the Nigerian payment context. The Laravel AI SDK keeps assistant features inside the application's own permission and tool structure.
 
-Paystack is selected because it is widely used for payment processing in Nigeria and supports the Naira-based payment context required by the project (Paystack, 2024). Laravel Fortify provides a secure foundation for authentication, while WebAuthn and two-factor authentication strengthen account protection; recent FIDO2 usability research shows why passwordless authentication is promising but still needs fallbacks for users who may not understand or support passkeys on every device (Lyastani et al., 2020; W3C, 2021). The Laravel AI SDK is used to connect AI providers and tool-based assistant functions while keeping application permissions under the system's control.
+### 3.13 Ethical Considerations
 
-### 3.9 System Testing and Validation
+The project handles financial and personal information, so ethical considerations are central to the design. The first concern is privacy. A family member's contribution history, payment status, phone number, email address, and role should not be exposed to another family or to unauthorised members of the same family. Tenant isolation and RBAC are therefore ethical safeguards as well as technical features.
 
-Testing and validation are necessary because the system handles money-related records. A small error in payment allocation or tenant isolation could cause disputes, loss of trust, or exposure of private family data. Testing is therefore planned at multiple levels. AI features require additional validation because recent studies show that LLMs can produce outputs that are fluent but factually wrong or logically weak, especially in financial contexts (de Wynter et al., 2023; Kang & Liu, 2023).
+The second concern is consent and transparency. Members should understand that their records are being stored in a digital system for family fund management. If AI summaries or assistant features are used, users should understand that the AI is a support tool and not an independent auditor or financial adviser.
 
-*Table 3.6: Testing and Validation Plan*
+The third concern is data minimisation. The system should collect only data needed for contribution management, payment processing, reminders, reporting, authentication, and authorised AI assistance. AI prompts should avoid sending unnecessary personal data to external providers.
 
-| Test Type | What Will Be Tested | Expected Result |
-| --- | --- | --- |
-| Unit testing | Individual methods such as payment allocation, contribution status calculation, role helper methods, and amount formatting. | Each unit returns correct values for normal and edge cases. |
-| Feature testing | End-to-end application behaviours such as member creation, contribution generation, payment recording, and report viewing. | Users can complete permitted workflows successfully. |
-| Integration testing | Interaction between modules such as Paystack callbacks, payment allocation, notifications, and reports. | Data flows correctly between modules without duplication or corruption. |
-| Tenant-isolation testing | Attempts by one family user to access another family's records. | Access is denied and no cross-family data is exposed. |
-| Role-permission testing | Actions performed by Admin, Financial Secretary, Member, and Platform Super Admin roles. | Only authorised roles can perform sensitive actions. |
-| Payment-allocation testing | Partial payments, overpayments, lump-sum payments, and future-month payments. | Payments are always allocated oldest-balance-first. |
-| Security testing | Login, email verification, two-factor authentication, passkeys, invitation tokens, throttling, and webhook validation. | Authentication and sensitive flows reject invalid or unauthorised requests. |
-| AI-response validation | AI assistant answers, report summaries, tool calls, and confirmation-before-write behaviour. | AI output is relevant, role-aware, and grounded in available family data. |
-| Usability validation | Navigation, forms, mobile layout, dashboards, and report readability. | Users can complete key tasks with minimal confusion. |
-| System testing | Full user journeys from registration to family setup, contribution generation, payment, reports, and reminders. | The system works as a complete application, not just as isolated modules. |
+The fourth concern is security. Password hashing, email verification, two-factor authentication, passkeys, signed invitation links, webhook validation, HTTPS deployment, and secure environment variables are required to protect users. The design should also comply with applicable Nigerian data protection expectations, including responsible processing and protection of personal data under the Nigeria Data Protection Act 2023.
 
-The most important validation scenarios are:
+The fifth concern is intellectual property. The project uses open-source frameworks and libraries such as Laravel, Vue, Inertia, Tailwind CSS, and Pest according to their licences. External services such as Paystack and AI providers are used through their documented APIs and configuration requirements.
 
-1. A member can view only personal contribution records.
-2. A Financial Secretary can record payments and expenses but cannot change family ownership or platform settings.
-3. An Administrator can manage family members, categories, invitations, and reports.
-4. A payment made for a member with multiple unpaid months is allocated to the oldest unpaid month first.
-5. A Paystack transaction is not recorded as a successful payment unless the transaction is verified.
-6. A user from Family A cannot access records from Family B.
-7. A report total equals the sum of payments, expenses, and adjustments stored in the database.
-8. AI assistant responses respect the user's role and do not expose unauthorised member information.
+### 3.14 Summary of the Chapter
 
-The automated test suite will be run using Pest PHP. The minimum acceptance criterion is that all critical tests for authentication, tenancy, permissions, payment allocation, and financial reports pass before the system is considered valid for demonstration.
+This chapter described the methodology used for FamilyFunds. It adopted an applied system-development design and an Agile iterative approach because the project solves a practical problem whose requirements become clearer through design and implementation. The chapter analysed the existing manual system, introduced the proposed system, specified functional and non-functional requirements, explained the data collection method, clarified the non-survey sampling approach, and described the architecture, diagrams, database design, algorithms, tools, and ethical considerations.
 
-### 3.10 Deployment Strategy
-
-The system is designed for both local development and web/cloud deployment. During development, the application runs on a local machine using PHP, Composer, Node.js, npm, MySQL, and a local web server. For production, it can be deployed to a cloud-hosted Linux server or a managed Laravel hosting environment.
-
-The local development requirements are:
-
-- PHP 8.4 or later.
-- Composer for PHP dependency management.
-- Node.js and npm for frontend dependencies and Vite builds.
-- MySQL database server.
-- Laravel `.env` configuration file.
-- Paystack test credentials for payment flows.
-- AI provider configuration for assistant and report features.
-- Mail and WhatsApp configuration for notifications where applicable.
-- Queue worker and scheduler support for background jobs and scheduled reminders.
-
-The production deployment requirements are:
-
-- HTTPS-enabled domain name.
-- Web server such as Nginx or Apache.
-- PHP 8.4 runtime with required extensions.
-- MySQL database with regular backups.
-- Queue worker process for jobs.
-- Laravel scheduler configured to run scheduled commands.
-- Secure environment variables for database, mail, Paystack, AI provider, and WhatsApp credentials.
-- Proper file permissions for Laravel storage and cache directories.
-- Monitoring of logs, failed jobs, payment callbacks, and scheduled tasks.
-
-The recommended deployment flow is:
-
-1. Prepare the production server and database.
-2. Upload or pull the application source code from version control.
-3. Install Composer dependencies.
-4. Install Node dependencies and build frontend assets.
-5. Configure the `.env` file with production credentials.
-6. Run database migrations.
-7. Cache configuration, routes, and views.
-8. Start queue workers and configure the scheduler.
-9. Configure HTTPS and web server routing to Laravel's public directory.
-10. Perform post-deployment smoke tests for login, dashboard, contribution generation, payment initiation, reports, and reminders.
-
-Because the system manages money-related data, deployment must prioritise secure configuration. Development credentials must not be reused in production. Paystack webhooks should use the production callback URL, and all external service credentials should remain in environment variables rather than in source code.
-
-### 3.11 Evaluation Metrics
-
-Evaluation metrics define how the success of the project will be measured. Since FamilyFunds includes both conventional software modules and AI/data-related features, the evaluation combines functional correctness, security validation, usability, performance, and AI-specific metrics.
-
-*Table 3.7: Evaluation Metrics*
-
-| Metric | What It Measures | Target/Expected Outcome |
-| --- | --- | --- |
-| Requirement coverage | Whether the implemented system satisfies the functional requirements in Section 3.4.1. | All core requirements are implemented or clearly identified as planned advanced features. |
-| Test pass rate | Percentage of automated tests that pass. | Critical authentication, tenant, payment, and report tests pass. |
-| Payment allocation correctness | Whether payments are allocated to the correct contribution periods. | 100% correctness in tested allocation scenarios. |
-| Tenant isolation success | Whether users can access only their own family data. | No cross-family access in tested scenarios. |
-| Role-permission accuracy | Whether each role can perform only permitted actions. | Admin, Financial Secretary, Member, and Super Admin permissions match the specification. |
-| Report accuracy | Whether report totals match database records. | Report totals equal stored payments, expenses, and adjustments. |
-| Response time | Time taken for common pages and actions such as dashboard loading, report generation, and payment recording. | Common operations respond within an acceptable time for normal family sizes. |
-| AI response relevance | Whether AI assistant answers are related to family fund management and based on available system data. | Responses remain within scope and use permitted data. |
-| AI report usefulness | Whether generated summaries are understandable to non-expert family members. | Reports are readable, coherent, and accurately reflect supplied financial data. |
-| Prediction accuracy | Percentage of correct default/on-time predictions where sufficient historical data exists. | Used only where enough historical data is available. |
-| Precision and recall | Quality of predicted default risk, especially the balance between false alarms and missed defaulters. | Precision and recall are reported alongside accuracy to avoid misleading results. |
-| Usability feedback | Whether representative users can complete key tasks without confusion. | Users can perform common workflows such as viewing balances, recording payments, and reading reports. |
-
-For the predictive analytics module, accuracy alone is not enough. If most members usually pay on time, a model can appear accurate simply by predicting "paid" for everyone. Recent credit-scoring literature continues to identify class imbalance, explainability, and model-risk validation as major concerns in default prediction (Hussin Adam Khatir & Bee, 2022; Robisco & Carbó Martínez, 2022). Precision, recall, and F1-score therefore provide a better evaluation of whether the system is actually identifying likely defaulters. Response time is also important for AI features because a report summary that takes too long to generate may be technically correct but practically frustrating.
-
-### 3.12 Summary
-
-This chapter presented the methodology for the proposed FamilyFunds system. It described the system as a secure, AI-enhanced, multi-tenant family fund management platform designed to solve the problems of manual record-keeping, weak governance, inconsistent payment allocation, limited reporting, and lack of predictive insight.
-
-The chapter justified the use of an Agile/Iterative development approach because the project requirements are practical, user-driven, and likely to evolve through feedback. It presented the functional and non-functional requirements, explained the system architecture, and described the database, process, and interface design. It also identified the modelling tools used, listed the implementation technologies, and outlined the testing, deployment, and evaluation strategies.
-
-The next chapter will move from methodology to implementation. It will describe how the proposed design was built, how the modules were integrated, and how testing results demonstrate whether the system satisfies the objectives stated in Chapter One.
+The methodology shows how the project moves from the literature gap in Chapter Two to a concrete system design. Chapter Four will present how the designed modules were implemented, tested, and validated against the requirements stated in this chapter.
 
 ---
 

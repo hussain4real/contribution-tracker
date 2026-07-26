@@ -1,9 +1,15 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\Family;
+use App\Models\PlatformPlan;
 use App\Models\User;
 use App\Models\WhatsAppMessage;
+use App\Support\PlatformPlanCatalog;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
     config()->set('services.whatsapp', [
@@ -18,6 +24,90 @@ beforeEach(function () {
 });
 
 describe('WhatsApp inbox authorization', function () {
+    it('redirects admins without whatsapp messaging in their plan', function () {
+        $freePlan = PlatformPlan::create([
+            'name' => 'Free',
+            'slug' => PlatformPlanCatalog::Free,
+            'price' => 0,
+            'max_members' => 5,
+            'features' => [PlatformPlanCatalog::BasicContributions, PlatformPlanCatalog::ManualPayments],
+            'is_active' => true,
+            'sort_order' => 0,
+        ]);
+        $family = Family::factory()->create(['platform_plan_id' => $freePlan->id]);
+        $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+
+        $this->actingAs($admin)
+            ->get('/inbox/whatsapp')
+            ->assertRedirect(route('subscription.index'))
+            ->assertSessionHas('error', 'This feature is not available on your current plan. Please upgrade.');
+    });
+
+    it('keeps whatsapp inbox access organization-only when paid plans only include reminders', function (
+        string $name,
+        string $slug,
+        int $price,
+        int $maxMembers,
+        int $sortOrder,
+    ) {
+        $plan = PlatformPlan::create([
+            'name' => $name,
+            'slug' => $slug,
+            'price' => $price,
+            'max_members' => $maxMembers,
+            'features' => [
+                PlatformPlanCatalog::BasicContributions,
+                PlatformPlanCatalog::ManualPayments,
+                PlatformPlanCatalog::OnlinePayments,
+                PlatformPlanCatalog::WhatsappReminders,
+            ],
+            'is_active' => true,
+            'sort_order' => $sortOrder,
+        ]);
+        $family = Family::factory()->create([
+            'platform_plan_id' => $plan->id,
+            'subscription_status' => 'active',
+        ]);
+        $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+
+        $this->actingAs($admin)
+            ->get('/inbox/whatsapp')
+            ->assertRedirect(route('subscription.index'))
+            ->assertSessionHas('error', 'This feature is not available on your current plan. Please upgrade.');
+    })->with([
+        'family plan' => ['Family', PlatformPlanCatalog::Family, 3000, 25, 1],
+        'growth plan' => ['Growth', PlatformPlanCatalog::Growth, 7500, 75, 2],
+    ]);
+
+    it('allows organization plan admins to access the inbox', function () {
+        $organizationPlan = PlatformPlan::create([
+            'name' => 'Organization',
+            'slug' => PlatformPlanCatalog::Organization,
+            'price' => 20000,
+            'max_members' => 250,
+            'features' => [
+                PlatformPlanCatalog::BasicContributions,
+                PlatformPlanCatalog::ManualPayments,
+                PlatformPlanCatalog::OnlinePayments,
+                PlatformPlanCatalog::Reports,
+                PlatformPlanCatalog::Exports,
+                PlatformPlanCatalog::AiAssistant,
+                PlatformPlanCatalog::WhatsappReminders,
+                PlatformPlanCatalog::WhatsappMessaging,
+                PlatformPlanCatalog::PrioritySupport,
+            ],
+            'is_active' => true,
+            'sort_order' => 3,
+        ]);
+        $family = Family::factory()->create([
+            'platform_plan_id' => $organizationPlan->id,
+            'subscription_status' => 'active',
+        ]);
+        $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+
+        $this->actingAs($admin)->get('/inbox/whatsapp')->assertOk();
+    });
+
     it('forbids member users from accessing the inbox', function () {
         $family = Family::factory()->create();
         $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
@@ -59,10 +149,34 @@ describe('WhatsApp inbox listing', function () {
 
         $response->assertOk();
         $response->assertInertia(
-            fn ($page) => $page->component('Inbox/Index')
+            fn (Assert $page) => $page->component('Inbox/Index')
                 ->has('threads', 1)
                 ->where('threads.0.phone', '2348012345678')
         );
+    });
+
+    it('includes matched member details in inbox threads', function () {
+        $family = Family::factory()->create();
+        $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+        $member = User::factory()->member()->withVerifiedWhatsApp('+2348012345678')->create([
+            'family_id' => $family->id,
+            'name' => 'Matched Member',
+        ]);
+
+        WhatsAppMessage::factory()->inbound()->create([
+            'family_id' => $family->id,
+            'user_id' => $member->id,
+            'from' => '2348012345678',
+        ]);
+
+        $this->actingAs($admin)
+            ->get('/inbox/whatsapp')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Inbox/Index')
+                ->where('threads.0.member_id', $member->id)
+                ->where('threads.0.member_name', 'Matched Member')
+            );
     });
 
     it('groups multiple messages from the same number into a single thread', function () {
@@ -77,7 +191,7 @@ describe('WhatsApp inbox listing', function () {
         $response = $this->actingAs($admin)->get('/inbox/whatsapp');
 
         $response->assertInertia(
-            fn ($page) => $page->has('threads', 1)
+            fn (Assert $page) => $page->has('threads', 1)
                 ->where('threads.0.message_count', 3)
         );
     });
@@ -104,7 +218,7 @@ describe('WhatsApp inbox thread', function () {
 
         $response->assertOk();
         $response->assertInertia(
-            fn ($page) => $page->component('Inbox/Thread')
+            fn (Assert $page) => $page->component('Inbox/Thread')
                 ->where('phone', '2348012345678')
                 ->has('messages', 2)
                 ->where('canReply', true)
@@ -123,7 +237,7 @@ describe('WhatsApp inbox thread', function () {
 
         $response = $this->actingAs($admin)->get('/inbox/whatsapp/2348012345678');
 
-        $response->assertInertia(fn ($page) => $page->where('canReply', false));
+        $response->assertInertia(fn (Assert $page) => $page->where('canReply', false));
     });
 });
 
@@ -151,10 +265,36 @@ describe('WhatsApp inbox reply', function () {
         $response->assertRedirect();
         $response->assertSessionHas('success');
 
-        Http::assertSent(fn ($request) => str_contains($request->url(), '/messages')
+        Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/messages')
             && $request->data()['type'] === 'text'
-            && $request->data()['text']['body'] === 'Thanks for your message.'
+            && stringValue(resultArray($request->data(), 'text'), 'body') === 'Thanks for your message.'
         );
+    });
+
+    it('returns a validation error when the whatsapp reply send fails', function () {
+        Http::fake([
+            'graph.facebook.com/*' => Http::response([
+                'error' => [
+                    'message' => 'Recipient unavailable',
+                    'code' => 131026,
+                ],
+            ], 400),
+        ]);
+
+        $family = Family::factory()->create();
+        $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+
+        WhatsAppMessage::factory()->inbound()->create([
+            'family_id' => $family->id,
+            'from' => '2348012345678',
+            'created_at' => now()->subMinutes(5),
+        ]);
+
+        $this->actingAs($admin)
+            ->post('/inbox/whatsapp/2348012345678/reply', [
+                'body' => 'Thanks for your message.',
+            ])
+            ->assertSessionHasErrors('body');
     });
 
     it('rejects a reply when last inbound is older than 24h', function () {

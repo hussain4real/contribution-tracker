@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_75aa3a93e4",
+  "title": "Laravel controller DashboardController",
+  "summary": "Laravel HTTP controller DashboardController.",
+  "kind": "route",
+  "source": "laravel-controller",
+  "confidence": "high",
+  "entrypoints": [
+    {
+      "path": "app/Http/Controllers/DashboardController.php",
+      "symbol": "DashboardController",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Http/Controllers/DashboardController.php",
+      "reason": "controller"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "app/Enums/PaymentStatus.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Models/Contribution.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Models/Expense.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Models/FundAdjustment.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Models/Payment.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Models/User.php",
+      "reason": "imported application class"
+    }
+  ],
+  "tests": [],
+  "tags": [
+    "php",
+    "laravel",
+    "controller",
+    "http"
+  ],
+  "trustBoundaries": [
+    "user-input",
+    "auth",
+    "database",
+    "serialization"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

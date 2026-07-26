@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_bce119d828",
+  "title": "Laravel request RenameAiConversationRequest",
+  "summary": "Laravel request RenameAiConversationRequest in app/Http/Requests/RenameAiConversationRequest.php.",
+  "kind": "route",
+  "source": "laravel-request",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "app/Http/Requests/RenameAiConversationRequest.php",
+      "symbol": "RenameAiConversationRequest",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Http/Requests/RenameAiConversationRequest.php",
+      "reason": "laravel request"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "php",
+    "laravel",
+    "request",
+    "validation"
+  ],
+  "trustBoundaries": [
+    "user-input",
+    "auth"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

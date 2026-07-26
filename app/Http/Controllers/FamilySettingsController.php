@@ -4,16 +4,17 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Actions\AssignFamilyCategory;
 use App\Jobs\SyncPaystackSubaccount;
+use App\Models\Family;
 use App\Models\FamilyCategory;
-use App\Models\User;
 use App\Services\PaystackService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -25,14 +26,7 @@ class FamilySettingsController extends Controller
 
     public function edit(): Response
     {
-        /** @var User $user */
-        $user = Auth::user();
-
-        if (! $user->isAdmin()) {
-            abort(403);
-        }
-
-        $family = $user->family;
+        $family = $this->adminFamily();
 
         $categories = $family->categories()
             ->orderBy('sort_order')
@@ -42,7 +36,7 @@ class FamilySettingsController extends Controller
                 'name' => $category->name,
                 'monthly_amount' => $category->monthly_amount,
                 'sort_order' => $category->sort_order,
-                'members_count' => $category->users()->count(),
+                'members_count' => $category->memberships()->active()->count(),
             ]);
 
         return Inertia::render('Family/Settings', [
@@ -63,28 +57,31 @@ class FamilySettingsController extends Controller
 
     public function update(Request $request): RedirectResponse
     {
-        /** @var User $user */
-        $user = Auth::user();
-
-        if (! $user->isAdmin()) {
-            abort(403);
-        }
+        $family = $this->adminFamily();
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'currency' => ['required', 'string', 'max:10'],
-            'due_day' => ['required', 'integer', 'min:1', 'max:28'],
+            'due_day' => ['required', 'integer', 'min:1', 'max:31'],
             'bank_name' => ['nullable', 'string', 'max:255'],
             'account_name' => ['nullable', 'string', 'max:255'],
             'account_number' => ['nullable', 'string', 'max:50'],
             'bank_code' => ['nullable', 'string', 'max:10'],
         ]);
 
-        $family = $user->family;
-        $bankDetailsChanged = $family->bank_code !== ($validated['bank_code'] ?? null)
-            || $family->account_number !== ($validated['account_number'] ?? null);
+        $attributes = $this->familyAttributes($validated);
+        $attributes['bank_code'] ??= $this->bankCodeForName($attributes['bank_name']);
 
-        $family->update($validated);
+        if ($this->requiresBankCode($attributes)) {
+            throw ValidationException::withMessages([
+                'bank_name' => 'Please select a bank from the list so Paystack can identify the bank code.',
+            ]);
+        }
+
+        $bankDetailsChanged = $family->bank_code !== $attributes['bank_code']
+            || $family->account_number !== $attributes['account_number'];
+
+        $family->update($attributes);
 
         // Queue Paystack subaccount sync when bank details change
         if ($bankDetailsChanged && $family->hasBankDetails()) {
@@ -96,38 +93,36 @@ class FamilySettingsController extends Controller
 
     public function storeCategory(Request $request): RedirectResponse
     {
-        /** @var User $user */
-        $user = Auth::user();
-
-        if (! $user->isAdmin()) {
-            abort(403);
-        }
+        $family = $this->adminFamily();
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'monthly_amount' => ['required', 'integer', 'min:0'],
         ]);
+        $attributes = $this->categoryAttributes($validated);
 
-        $family = $user->family;
         $maxSortOrder = $family->categories()->max('sort_order') ?? -1;
+        $maxSortOrder = is_numeric($maxSortOrder) ? (int) $maxSortOrder : -1;
 
         FamilyCategory::create([
             'family_id' => $family->id,
-            'name' => $validated['name'],
-            'slug' => Str::slug($validated['name']),
-            'monthly_amount' => $validated['monthly_amount'],
+            'name' => $attributes['name'],
+            'slug' => Str::slug($attributes['name']),
+            'monthly_amount' => $attributes['monthly_amount'],
             'sort_order' => $maxSortOrder + 1,
         ]);
 
         return redirect()->back()->with('success', 'Category added.');
     }
 
-    public function updateCategory(Request $request, FamilyCategory $category): RedirectResponse
-    {
-        /** @var User $user */
-        $user = Auth::user();
+    public function updateCategory(
+        Request $request,
+        FamilyCategory $category,
+        AssignFamilyCategory $assignFamilyCategory,
+    ): RedirectResponse {
+        $family = $this->adminFamily();
 
-        if (! $user->isAdmin() || $category->family_id !== $user->family_id) {
+        if ($category->family_id !== $family->id) {
             abort(403);
         }
 
@@ -135,27 +130,37 @@ class FamilySettingsController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'monthly_amount' => ['required', 'integer', 'min:0'],
         ]);
+        $attributes = $this->categoryAttributes($validated);
+
+        $memberships = $category->memberships()->active()->get();
 
         $category->update([
-            'name' => $validated['name'],
-            'slug' => Str::slug($validated['name']),
-            'monthly_amount' => $validated['monthly_amount'],
+            'name' => $attributes['name'],
+            'slug' => Str::slug($attributes['name']),
+            'monthly_amount' => $attributes['monthly_amount'],
         ]);
+
+        foreach ($memberships as $membership) {
+            $assignFamilyCategory->handle($membership, $category, $this->authUser());
+        }
 
         return redirect()->back()->with('success', 'Category updated.');
     }
 
     public function destroyCategory(FamilyCategory $category): RedirectResponse
     {
-        /** @var User $user */
-        $user = Auth::user();
+        $family = $this->adminFamily();
 
-        if (! $user->isAdmin() || $category->family_id !== $user->family_id) {
+        if ($category->family_id !== $family->id) {
             abort(403);
         }
 
-        if ($category->users()->exists()) {
-            return redirect()->back()->with('error', 'Cannot delete a category with active members.');
+        if (
+            $category->memberships()->exists()
+            || $category->assignments()->exists()
+            || $category->contributionSnapshots()->exists()
+        ) {
+            return redirect()->back()->with('error', 'Cannot delete a category that is referenced by member or contribution history.');
         }
 
         $category->delete();
@@ -168,31 +173,126 @@ class FamilySettingsController extends Controller
      */
     public function banks(): JsonResponse
     {
-        /** @var User $user */
-        $user = Auth::user();
+        $user = $this->authUser();
 
         if (! $user->isAdmin()) {
             abort(403);
         }
 
-        $banks = Cache::remember('paystack_banks', 86400, function () {
+        $banks = $this->cachedBankOptions();
+
+        return response()->json($banks);
+    }
+
+    private function adminFamily(): Family
+    {
+        $user = $this->authUser();
+
+        $family = $user->currentFamily ?? $user->family;
+
+        if (! $user->isAdmin() || ! $family instanceof Family || ! $user->belongsToFamily($family)) {
+            abort(403);
+        }
+
+        return $family;
+    }
+
+    /**
+     * @return array{name: string, currency: string, due_day: int, bank_name: string|null, account_name: string|null, account_number: string|null, bank_code: string|null}
+     */
+    private function familyAttributes(mixed $validated): array
+    {
+        $validated = is_array($validated) ? $validated : [];
+
+        return [
+            'name' => is_string($validated['name'] ?? null) ? $validated['name'] : '',
+            'currency' => is_string($validated['currency'] ?? null) ? $validated['currency'] : '₦',
+            'due_day' => is_numeric($validated['due_day'] ?? null) ? (int) $validated['due_day'] : 28,
+            'bank_name' => is_string($validated['bank_name'] ?? null) ? $validated['bank_name'] : null,
+            'account_name' => is_string($validated['account_name'] ?? null) ? $validated['account_name'] : null,
+            'account_number' => is_string($validated['account_number'] ?? null) ? $validated['account_number'] : null,
+            'bank_code' => is_string($validated['bank_code'] ?? null) ? $validated['bank_code'] : null,
+        ];
+    }
+
+    /**
+     * @return array{name: string, monthly_amount: int}
+     */
+    private function categoryAttributes(mixed $validated): array
+    {
+        $validated = is_array($validated) ? $validated : [];
+
+        return [
+            'name' => is_string($validated['name'] ?? null) ? $validated['name'] : '',
+            'monthly_amount' => is_numeric($validated['monthly_amount'] ?? null) ? (int) $validated['monthly_amount'] : 0,
+        ];
+    }
+
+    private function bankCodeForName(?string $bankName): ?string
+    {
+        if (! filled($bankName)) {
+            return null;
+        }
+
+        $normalizedBankName = Str::of($bankName)->lower()->squish()->value();
+
+        foreach ($this->cachedBankOptions() as $bank) {
+            if (Str::of($bank['name'])->lower()->squish()->value() === $normalizedBankName) {
+                return $bank['code'];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array{name: string, currency: string, due_day: int, bank_name: string|null, account_name: string|null, account_number: string|null, bank_code: string|null}  $attributes
+     */
+    private function requiresBankCode(array $attributes): bool
+    {
+        return filled($attributes['bank_name'])
+            && filled($attributes['account_number'])
+            && blank($attributes['bank_code']);
+    }
+
+    /**
+     * @return list<array{name: string, code: string}>
+     */
+    private function cachedBankOptions(): array
+    {
+        return Cache::remember('paystack_banks', 86400, function (): array {
             $response = $this->paystack->listBanks();
 
             if (! ($response['status'] ?? false)) {
                 return [];
             }
 
-            return collect($response['data'])
-                ->filter(fn (array $bank) => $bank['active'] ?? false)
-                ->map(fn (array $bank) => [
-                    'name' => $bank['name'],
-                    'code' => $bank['code'],
-                ])
-                ->sortBy('name')
-                ->values()
-                ->all();
+            return $this->bankOptions($response['data'] ?? []);
         });
+    }
 
-        return response()->json($banks);
+    /**
+     * @return list<array{name: string, code: string}>
+     */
+    private function bankOptions(mixed $banks): array
+    {
+        $options = [];
+
+        foreach (is_array($banks) ? $banks : [] as $bank) {
+            if (! is_array($bank) || ($bank['active'] ?? false) !== true) {
+                continue;
+            }
+
+            $name = $bank['name'] ?? null;
+            $code = $bank['code'] ?? null;
+
+            if (is_string($name) && is_string($code)) {
+                $options[] = ['name' => $name, 'code' => $code];
+            }
+        }
+
+        usort($options, fn (array $first, array $second): int => $first['name'] <=> $second['name']);
+
+        return $options;
     }
 }

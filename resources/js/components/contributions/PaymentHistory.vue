@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useCurrencyFormatter } from '@/lib/currency';
 interface Payment {
     id: number;
     amount: number;
@@ -17,12 +18,7 @@ interface Props {
 
 defineProps<Props>();
 
-function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-NG', {
-        style: 'currency',
-        currency: 'NGN',
-    }).format(amount);
-}
+const { formatCurrency } = useCurrencyFormatter();
 
 function formatDate(date: string): string {
     return new Date(date).toLocaleDateString('en-NG', {

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 
@@ -52,7 +54,9 @@ return new class extends Migration
             // Backfill due_date on existing contributions
             $contributions = DB::table('contributions')->get(['id', 'year', 'month']);
             foreach ($contributions as $contribution) {
-                $dueDate = sprintf('%04d-%02d-%02d', $contribution->year, $contribution->month, 28);
+                $year = is_numeric($contribution->year) ? (int) $contribution->year : now()->year;
+                $month = is_numeric($contribution->month) ? (int) $contribution->month : now()->month;
+                $dueDate = sprintf('%04d-%02d-%02d', $year, $month, 28);
                 DB::table('contributions')->where('id', $contribution->id)->update(['due_date' => $dueDate]);
             }
 

@@ -7,22 +7,28 @@ namespace App\Http\Controllers;
 use App\Enums\TransactionStatus;
 use App\Enums\TransactionType;
 use App\Http\Requests\InitiatePaymentRequest;
+use App\Models\Contribution;
+use App\Models\Family;
 use App\Models\PaystackTransaction;
-use App\Models\User;
-use App\Services\PaymentAllocationService;
+use App\Services\PaystackContributionSettlementService;
+use App\Services\PaystackFeeCalculator;
 use App\Services\PaystackService;
+use App\Support\CurrencyFormatter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use RuntimeException;
+use Throwable;
 
 class MemberPaymentController extends Controller
 {
     public function __construct(
         private PaystackService $paystack,
-        private PaymentAllocationService $allocationService
+        private PaystackContributionSettlementService $settlementService,
+        private PaystackFeeCalculator $feeCalculator
     ) {}
 
     /**
@@ -30,14 +36,15 @@ class MemberPaymentController extends Controller
      */
     public function show(): Response
     {
-        /** @var User $user */
-        $user = auth()->user();
+        $user = $this->authUser();
+        $family = app(Family::class);
 
         $pendingContributions = $user->contributions()
+            ->where('family_id', $family->id)
             ->incomplete()
             ->oldestFirst()
             ->get()
-            ->map(fn ($contribution) => [
+            ->map(fn (Contribution $contribution): array => [
                 'id' => $contribution->id,
                 'year' => $contribution->year,
                 'month' => $contribution->month,
@@ -48,14 +55,17 @@ class MemberPaymentController extends Controller
                 'period_label' => $contribution->period_label,
             ]);
 
-        $family = $user->family;
+        $paystackPublicKey = $this->stringConfig('services.paystack.public_key');
+        $bankSetupStatus = $this->bankSetupStatus($family, $paystackPublicKey);
 
         return Inertia::render('Pay/Index', [
             'pending_contributions' => $pendingContributions,
             'category_amount' => $user->getMonthlyAmount() ?? 0,
-            'formatted_amount' => $user->category?->formattedAmount() ?? '₦0',
-            'has_paystack' => $family?->hasBankDetails() && config('services.paystack.public_key'),
-            'paystack_public_key' => config('services.paystack.public_key'),
+            'formatted_amount' => CurrencyFormatter::format($user->getMonthlyAmount() ?? 0, $family->currency),
+            'has_paystack' => $bankSetupStatus === 'ready',
+            'bank_setup_status' => $bankSetupStatus,
+            'paystack_public_key' => $paystackPublicKey,
+            'paystack_fee' => $this->feeCalculator->publicConfig(),
         ]);
     }
 
@@ -66,19 +76,21 @@ class MemberPaymentController extends Controller
     {
         $validated = $request->validated();
 
-        /** @var User $user */
-        $user = auth()->user();
-        $family = $user->family;
+        $user = $this->authUser();
+        $family = app(Family::class);
 
-        if (! $family?->hasBankDetails()) {
+        if (! $family->hasBankDetails()) {
             return response()->json([
                 'message' => 'Online payments are not set up for your family. Ask your admin to configure bank details.',
             ], 422);
         }
 
+        $contributionIds = $this->integerList($validated['contribution_ids'] ?? []);
+
         // Calculate total from selected contributions
         $contributions = $user->contributions()
-            ->whereIn('id', $validated['contribution_ids'])
+            ->where('family_id', $family->id)
+            ->whereIn('id', $contributionIds)
             ->incomplete()
             ->get();
 
@@ -88,7 +100,7 @@ class MemberPaymentController extends Controller
             ], 422);
         }
 
-        $totalAmount = $contributions->sum('balance');
+        $totalAmount = (int) $contributions->sum(fn (Contribution $contribution): int => $contribution->balance);
 
         if ($totalAmount <= 0) {
             return response()->json([
@@ -96,13 +108,12 @@ class MemberPaymentController extends Controller
             ], 422);
         }
 
-        // Amount in kobo for Paystack (already stored in Naira, ×100 for kobo)
-        $paystackAmount = $totalAmount * 100;
+        $feeEstimate = $this->feeCalculator->estimateForContributionAmount($totalAmount);
 
         $reference = 'TXN_'.Str::upper(Str::random(16));
 
         // Determine target month (oldest selected contribution)
-        $oldest = $contributions->sortBy([['year', 'asc'], ['month', 'asc']])->first();
+        $oldest = $contributions->sortBy([['year', 'asc'], ['month', 'asc']])->firstOrFail();
 
         // Store transaction locally
         $transaction = PaystackTransaction::create([
@@ -111,24 +122,36 @@ class MemberPaymentController extends Controller
             'family_id' => $family->id,
             'type' => TransactionType::Contribution,
             'amount' => $totalAmount,
-            'status' => TransactionStatus::Pending,
+            'gross_amount_kobo' => $feeEstimate['gross_amount_kobo'],
+            'estimated_fee_kobo' => $feeEstimate['estimated_fee_kobo'],
+            'settled_amount_kobo' => $feeEstimate['settled_amount_kobo'],
+            'fee_policy' => $feeEstimate['fee_policy'],
+            'status' => TransactionStatus::Initiated,
             'metadata' => [
                 'contribution_ids' => $contributions->pluck('id')->toArray(),
                 'target_year' => $oldest->year,
                 'target_month' => $oldest->month,
+                'contribution_amount_kobo' => $feeEstimate['contribution_amount_kobo'],
+                'gross_amount_kobo' => $feeEstimate['gross_amount_kobo'],
+                'estimated_fee_kobo' => $feeEstimate['estimated_fee_kobo'],
+                'fee_policy' => $feeEstimate['fee_policy'],
             ],
         ]);
 
         try {
             $transactionData = [
                 'email' => $user->email,
-                'amount' => $paystackAmount,
+                'amount' => $feeEstimate['gross_amount_kobo'],
                 'reference' => $reference,
                 'callback_url' => route('pay.callback'),
                 'metadata' => [
                     'member_id' => $user->id,
                     'family_id' => $family->id,
                     'contribution_ids' => $contributions->pluck('id')->toArray(),
+                    'contribution_amount_kobo' => $feeEstimate['contribution_amount_kobo'],
+                    'gross_amount_kobo' => $feeEstimate['gross_amount_kobo'],
+                    'estimated_fee_kobo' => $feeEstimate['estimated_fee_kobo'],
+                    'fee_policy' => $feeEstimate['fee_policy'],
                     'custom_fields' => [
                         [
                             'display_name' => 'Member',
@@ -146,17 +169,26 @@ class MemberPaymentController extends Controller
 
             if ($family->paystack_subaccount_code) {
                 $transactionData['subaccount'] = $family->paystack_subaccount_code;
+                $transactionData['bearer'] = 'subaccount';
             }
 
             $response = $this->paystack->initializeTransaction($transactionData);
+            $data = $this->responseData($response);
 
             return response()->json([
-                'access_code' => $response['data']['access_code'],
-                'authorization_url' => $response['data']['authorization_url'],
+                'access_code' => $this->requiredString($data, 'access_code'),
+                'authorization_url' => $this->requiredString($data, 'authorization_url'),
                 'reference' => $reference,
+                'contribution_amount_kobo' => $feeEstimate['contribution_amount_kobo'],
+                'gross_amount_kobo' => $feeEstimate['gross_amount_kobo'],
+                'estimated_fee_kobo' => $feeEstimate['estimated_fee_kobo'],
             ]);
-        } catch (\RuntimeException $e) {
-            $transaction->update(['status' => TransactionStatus::Failed]);
+        } catch (RuntimeException $e) {
+            $transaction->update([
+                'status' => TransactionStatus::Failed,
+                'failed_at' => now(),
+                'failure_reason' => 'Paystack initialization failed.',
+            ]);
 
             return response()->json([
                 'message' => 'Failed to initialize payment. Please try again.',
@@ -171,7 +203,7 @@ class MemberPaymentController extends Controller
     {
         $reference = $request->query('reference');
 
-        if (! $reference) {
+        if (! is_string($reference) || $reference === '') {
             return redirect()->route('pay.index')->with('error', 'Invalid payment reference.');
         }
 
@@ -181,53 +213,108 @@ class MemberPaymentController extends Controller
             return redirect()->route('pay.index')->with('error', 'Transaction not found.');
         }
 
-        // Verify with Paystack
+        if ($transaction->isSuccessful()) {
+            return redirect()->route('pay.index')->with('success', 'Payment already confirmed.');
+        }
+
         try {
             $response = $this->paystack->verifyTransaction($reference);
-            $status = $response['data']['status'] ?? 'failed';
+            $data = $this->responseData($response);
+            $status = $this->stringValue($data['status'] ?? 'failed');
 
-            if ($status === 'success') {
-                // Atomic update to prevent race condition with webhook
-                $updated = PaystackTransaction::where('reference', $reference)
-                    ->where('status', TransactionStatus::Pending)
-                    ->update([
-                        'status' => TransactionStatus::Success,
-                        'paystack_response' => json_encode($response['data']),
-                    ]);
+            if ($status !== 'success') {
+                return redirect()->route('pay.index')->with('error', 'Payment was not successful. Please try again.');
+            }
 
-                if ($updated > 0) {
-                    $transaction->refresh();
+            $settledTransaction = $this->settlementService->settle($reference, $data);
 
-                    // Use the transaction's user_id (not session user) to handle shared devices
-                    $member = User::find($transaction->user_id);
-
-                    if ($member) {
-                        $metadata = $transaction->metadata ?? [];
-                        $targetYear = $metadata['target_year'] ?? null;
-                        $targetMonth = $metadata['target_month'] ?? null;
-
-                        $this->allocationService->allocate(
-                            member: $member,
-                            amount: $transaction->amount,
-                            paidAt: $response['data']['paid_at'] ?? now()->toDateString(),
-                            recordedBy: $member,
-                            notes: "Online payment via Paystack (Ref: {$transaction->reference})",
-                            targetYear: $targetYear,
-                            targetMonth: $targetMonth,
-                        );
-                    }
-                }
-
+            if ($settledTransaction->isSuccessful()) {
                 return redirect()->route('pay.index')->with('success', 'Payment successful! Your contributions have been updated.');
             }
 
-            if ($transaction->isSuccessful()) {
-                return redirect()->route('pay.index')->with('success', 'Payment already confirmed.');
-            }
-
-            return redirect()->route('pay.index')->with('error', 'Payment was not successful. Please try again.');
-        } catch (\RuntimeException) {
+            return redirect()->route('pay.index')->with('error', 'Payment was verified but could not be posted. Support has been notified.');
+        } catch (Throwable) {
             return redirect()->route('pay.index')->with('error', 'Could not verify payment. Your payment will be confirmed shortly.');
         }
+    }
+
+    private function stringConfig(string $key): string
+    {
+        $value = config($key);
+
+        return is_string($value) ? $value : '';
+    }
+
+    private function bankSetupStatus(Family $family, string $paystackPublicKey): string
+    {
+        if (! $family->hasBankDetails()) {
+            return filled($family->bank_name) || filled($family->account_name) || filled($family->account_number)
+                ? 'incomplete_bank_details'
+                : 'missing_bank_details';
+        }
+
+        if ($paystackPublicKey === '') {
+            return 'missing_paystack_key';
+        }
+
+        return 'ready';
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function integerList(mixed $value): array
+    {
+        $items = [];
+
+        foreach (is_array($value) ? $value : [] as $item) {
+            if (is_numeric($item)) {
+                $items[] = (int) $item;
+            }
+        }
+
+        return $items;
+    }
+
+    /**
+     * @param  array<string, mixed>  $response
+     * @return array<string, mixed>
+     */
+    private function responseData(array $response): array
+    {
+        $data = $response['data'] ?? null;
+
+        if (! is_array($data)) {
+            throw new RuntimeException('Paystack response did not include a data payload.');
+        }
+
+        $items = [];
+
+        foreach ($data as $key => $value) {
+            if (is_string($key)) {
+                $items[$key] = $value;
+            }
+        }
+
+        return $items;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function requiredString(array $data, string $key): string
+    {
+        $value = $data[$key] ?? null;
+
+        if (! is_string($value) || $value === '') {
+            throw new RuntimeException("Paystack response did not include {$key}.");
+        }
+
+        return $value;
+    }
+
+    private function stringValue(mixed $value): string
+    {
+        return is_scalar($value) ? (string) $value : '';
     }
 }

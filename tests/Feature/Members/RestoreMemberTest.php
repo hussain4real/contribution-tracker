@@ -1,5 +1,9 @@
 <?php
 
+declare(strict_types=1);
+
+use App\Models\Family;
+use App\Models\FamilyMembership;
 use App\Models\User;
 
 /**
@@ -7,39 +11,42 @@ use App\Models\User;
  */
 describe('Restore Member', function () {
     beforeEach(function () {
-        $this->admin = User::factory()->admin()->create();
-        $this->archivedMember = User::factory()->member()->employed()->archived()->create();
+        $this->family = Family::factory()->create();
+        $this->admin = User::factory()->admin()->create(['family_id' => $this->family->id]);
+        $this->archivedMember = User::factory()->member()->employed()->create(['family_id' => $this->family->id]);
+        $this->archivedMembership = FamilyMembership::query()
+            ->where('family_id', $this->family->id)
+            ->where('user_id', $this->archivedMember->id)
+            ->firstOrFail();
+        $this->archivedMembership->forceFill([
+            'archived_at' => now(),
+            'archived_by' => $this->admin->id,
+            'archive_reason' => 'Testing restore.',
+        ])->save();
     });
 
     it('super admin can restore an archived member', function () {
-        expect($this->archivedMember->isArchived())->toBeTrue();
+        expect($this->archivedMembership)->toBeInstanceOf(FamilyMembership::class)
+            ->and($this->archivedMembership->isArchived())->toBeTrue();
 
         $this->actingAs($this->admin)
             ->post("/members/{$this->archivedMember->id}/restore")
             ->assertRedirect();
 
-        $this->archivedMember->refresh();
-        expect($this->archivedMember->isArchived())->toBeFalse();
-        expect($this->archivedMember->archived_at)->toBeNull();
+        expect($this->archivedMember->membershipForFamily($this->family)?->isArchived())->toBeFalse()
+            ->and($this->archivedMember->refresh()->archived_at)->toBeNull();
     });
 
     it('restored member appears in active scope', function () {
         $this->actingAs($this->admin)
             ->post("/members/{$this->archivedMember->id}/restore");
 
-        $this->archivedMember->refresh();
-
-        // Should appear in active query
-        $activeMembers = User::active()->where('id', $this->archivedMember->id)->exists();
-        expect($activeMembers)->toBeTrue();
-
-        // Should not appear in archived query
-        $archivedMembers = User::archived()->where('id', $this->archivedMember->id)->exists();
-        expect($archivedMembers)->toBeFalse();
+        expect($this->archivedMember->belongsToFamily($this->family))->toBeTrue()
+            ->and($this->archivedMember->membershipForFamily($this->family)?->isArchived())->toBeFalse();
     });
 
     it('cannot restore non-archived member', function () {
-        $activeMember = User::factory()->member()->create();
+        $activeMember = User::factory()->member()->create(['family_id' => $this->family->id]);
 
         $this->actingAs($this->admin)
             ->post("/members/{$activeMember->id}/restore")
@@ -52,18 +59,15 @@ describe('Restore Member', function () {
     it('restored member can log in again', function () {
         // First verify archived member cannot access dashboard
         $this->actingAs($this->archivedMember)
-            ->get('/dashboard')
+            ->get(route('dashboard', ['current_family' => $this->family->slug]))
             ->assertForbidden();
 
         // Restore the member
         $this->actingAs($this->admin)
             ->post("/members/{$this->archivedMember->id}/restore");
 
-        $this->archivedMember->refresh();
-
-        // Now they should be able to access dashboard
         $this->actingAs($this->archivedMember)
-            ->get('/dashboard')
+            ->get(route('dashboard', ['current_family' => $this->family->slug]))
             ->assertOk();
     });
 });

@@ -13,12 +13,17 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useCurrencyFormatter } from '@/lib/currency';
 import type { AppNotification } from '@/types';
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { Bell } from 'lucide-vue-next';
+import { Bell } from '@lucide/vue';
 import { computed } from 'vue';
 
 const page = usePage();
+const { formatCurrency } = useCurrencyFormatter({
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+});
 
 const notifications = computed(() => page.props.notifications);
 const unreadCount = computed(() => notifications.value?.unread_count ?? 0);
@@ -27,7 +32,11 @@ const recentNotifications = computed(
 );
 
 function handleMarkAsRead(notification: AppNotification): void {
-    router.patch(markAsRead(notification.id).url, {}, { preserveScroll: true });
+    router.patch(
+        markAsRead({ notification: notification.id }).url,
+        {},
+        { preserveScroll: true },
+    );
 }
 
 function handleMarkAllAsRead(): void {
@@ -36,10 +45,13 @@ function handleMarkAllAsRead(): void {
 
 function formatNotificationMessage(notification: AppNotification): string {
     const { data } = notification;
+    const amountOwed = formatCurrency(Number(data.amount_owed ?? 0));
+
     if (data.type === 'follow_up') {
-        return `Follow-up: Your ${data.period_label} contribution of ₦${Number(data.amount_owed).toLocaleString()} is due today`;
+        return `Follow-up: Your ${data.period_label} contribution of ${amountOwed} is due today`;
     }
-    return `Reminder: Your ${data.period_label} contribution of ₦${Number(data.amount_owed).toLocaleString()} is due soon`;
+
+    return `Reminder: Your ${data.period_label} contribution of ${amountOwed} is due soon`;
 }
 </script>
 

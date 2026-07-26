@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_service_e9461ae8aa",
+  "title": "Laravel service GitHubReleaseService",
+  "summary": "Laravel application service GitHubReleaseService.",
+  "kind": "service",
+  "source": "laravel-service",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "app/Services/GitHubReleaseService.php",
+      "symbol": "GitHubReleaseService",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Services/GitHubReleaseService.php",
+      "reason": "service"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "app/Models/User.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "tests/Feature/GitHubReleaseServiceTest.php",
+      "reason": "associated test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/Feature/GitHubReleaseServiceTest.php",
+      "command": "composer test"
+    }
+  ],
+  "tags": [
+    "php",
+    "laravel",
+    "service"
+  ],
+  "trustBoundaries": [
+    "database",
+    "serialization"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_infra_0973937ca8",
+  "title": "Laravel migrations database/migrations#3",
+  "summary": "Laravel migrations in database/migrations#3.",
+  "kind": "infra",
+  "source": "laravel-migration",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "database/migrations#3",
+      "symbol": "database/migrations#3",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "database/migrations/2026_03_25_110222_add_paystack_customer_code_to_users_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_03_25_110228_create_paystack_transactions_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_03_27_182836_drop_plan_column_from_families_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_03_27_182916_add_paystack_subscription_email_token_to_families_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_04_05_131950_create_agent_conversations_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_04_12_071412_create_features_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_04_20_062943_add_whatsapp_columns_to_users_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_04_20_063324_create_whatsapp_messages_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_04_25_060620_add_reminder_sent_at_columns_to_contributions_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_05_01_133231_create_push_subscriptions_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_05_01_143125_add_last_seen_changelog_release_id_to_users_table.php",
+      "reason": "migration"
+    },
+    {
+      "path": "database/migrations/2026_05_02_164650_create_personal_access_tokens_table.php",
+      "reason": "migration"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "php",
+    "laravel",
+    "migration"
+  ],
+  "trustBoundaries": [
+    "database"
+  ],
+  "status": "needs-fix",
+  "lock": null,
+  "findingIds": [
+    "fnd_sig-feat-infra-0973937ca8-84eefa_709f7ee9a6",
+    "fnd_sig-feat-infra-0973937ca8-e35543_768c431018",
+    "fnd_sig-feat-infra-0973937ca8-84e08f_b4c5b5f7b5"
+  ],
+  "patchAttemptIds": [],
+  "analysisHistory": [
+    {
+      "runId": "20260518T110727-a1e777",
+      "kind": "review",
+      "summary": "3 finding(s)",
+      "provider": "codex",
+      "model": null,
+      "reasoningEffort": null,
+      "createdAt": "2026-05-18T11:14:11.273Z"
+    }
+  ],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:14:11.273Z"
+}

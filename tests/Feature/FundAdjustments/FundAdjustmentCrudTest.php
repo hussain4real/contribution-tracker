@@ -1,7 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
+use App\Models\Family;
 use App\Models\FundAdjustment;
 use App\Models\User;
+use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
     $this->admin = User::factory()->admin()->create();
@@ -17,7 +21,7 @@ it('allows any authenticated user to view fund adjustments', function () {
     $this->actingAs($this->member)
         ->get(route('fund-adjustments.index'))
         ->assertSuccessful()
-        ->assertInertia(fn ($page) => $page->component('FundAdjustments/Index'));
+        ->assertInertia(fn (Assert $page) => $page->component('FundAdjustments/Index'));
 });
 
 it('returns paginated adjustments with correct data', function () {
@@ -26,7 +30,7 @@ it('returns paginated adjustments with correct data', function () {
     $this->actingAs($this->admin)
         ->get(route('fund-adjustments.index'))
         ->assertSuccessful()
-        ->assertInertia(fn ($page) => $page
+        ->assertInertia(fn (Assert $page) => $page
             ->component('FundAdjustments/Index')
             ->has('adjustments.data', 3)
         );
@@ -35,19 +39,19 @@ it('returns paginated adjustments with correct data', function () {
 it('shows can_create as true for super admin', function () {
     $this->actingAs($this->admin)
         ->get(route('fund-adjustments.index'))
-        ->assertInertia(fn ($page) => $page->where('can_create', true));
+        ->assertInertia(fn (Assert $page) => $page->where('can_create', true));
 });
 
 it('shows can_create as true for financial secretary', function () {
     $this->actingAs($this->financialSecretary)
         ->get(route('fund-adjustments.index'))
-        ->assertInertia(fn ($page) => $page->where('can_create', true));
+        ->assertInertia(fn (Assert $page) => $page->where('can_create', true));
 });
 
 it('shows can_create as false for regular member', function () {
     $this->actingAs($this->member)
         ->get(route('fund-adjustments.index'))
-        ->assertInertia(fn ($page) => $page->where('can_create', false));
+        ->assertInertia(fn (Assert $page) => $page->where('can_create', false));
 });
 
 // =========================================================================
@@ -63,8 +67,7 @@ it('allows super admin to store a fund adjustment', function () {
         ])
         ->assertRedirect(route('fund-adjustments.index'));
 
-    $adjustment = FundAdjustment::first();
-    expect($adjustment)->not->toBeNull();
+    $adjustment = FundAdjustment::query()->firstOrFail();
     expect($adjustment->amount)->toBe(200000);
     expect($adjustment->description)->toBe('Opening balance from 2+ years of contributions');
     expect($adjustment->recorded_at->toDateString())->toBe('2026-03-15');
@@ -80,9 +83,24 @@ it('allows financial secretary to store a fund adjustment', function () {
         ])
         ->assertRedirect(route('fund-adjustments.index'));
 
-    $adjustment = FundAdjustment::first();
-    expect($adjustment)->not->toBeNull();
+    $adjustment = FundAdjustment::query()->firstOrFail();
     expect($adjustment->recorded_by)->toBe($this->financialSecretary->id);
+});
+
+it('uses the family currency in the fund adjustment recorded flash message', function () {
+    $family = Family::factory()->create(['currency' => 'QAR']);
+    $financialSecretary = User::factory()->financialSecretary()->create([
+        'family_id' => $family->id,
+    ]);
+
+    $this->actingAs($financialSecretary)
+        ->post(route('fund-adjustments.store'), [
+            'amount' => 450,
+            'description' => 'Opening balance',
+            'recorded_at' => '2026-06-08',
+        ])
+        ->assertRedirect(route('fund-adjustments.index'))
+        ->assertSessionHas('success', 'Fund adjustment of QAR 450.00 recorded successfully.');
 });
 
 it('denies regular member from storing a fund adjustment', function () {
@@ -122,34 +140,36 @@ it('validates amount must be a positive integer', function () {
 });
 
 // =========================================================================
-// Destroy
+// Reverse
 // =========================================================================
 
-it('allows super admin to delete a fund adjustment', function () {
+it('allows super admin to reverse a fund adjustment without deleting it', function () {
     $adjustment = FundAdjustment::factory()->recordedBy($this->admin)->create();
 
     $this->actingAs($this->admin)
-        ->delete(route('fund-adjustments.destroy', $adjustment))
-        ->assertRedirect(route('fund-adjustments.index'));
+        ->post(route('fund-adjustments.reverse', $adjustment), ['reason' => 'Incorrect opening balance'])
+        ->assertRedirect();
 
-    expect(FundAdjustment::count())->toBe(0);
+    expect(FundAdjustment::count())->toBe(1)
+        ->and($adjustment->reversal()->exists())->toBeTrue();
 });
 
-it('allows financial secretary to delete a fund adjustment', function () {
+it('allows financial secretary to reverse a fund adjustment', function () {
     $adjustment = FundAdjustment::factory()->recordedBy($this->financialSecretary)->create();
 
     $this->actingAs($this->financialSecretary)
-        ->delete(route('fund-adjustments.destroy', $adjustment))
-        ->assertRedirect(route('fund-adjustments.index'));
+        ->post(route('fund-adjustments.reverse', $adjustment), ['reason' => 'Incorrect opening balance'])
+        ->assertRedirect();
 
-    expect(FundAdjustment::count())->toBe(0);
+    expect(FundAdjustment::count())->toBe(1)
+        ->and($adjustment->reversal()->exists())->toBeTrue();
 });
 
-it('denies regular member from deleting a fund adjustment', function () {
+it('denies regular member from reversing a fund adjustment', function () {
     $adjustment = FundAdjustment::factory()->recordedBy($this->admin)->create();
 
     $this->actingAs($this->member)
-        ->delete(route('fund-adjustments.destroy', $adjustment))
+        ->post(route('fund-adjustments.reverse', $adjustment), ['reason' => 'Incorrect opening balance'])
         ->assertForbidden();
 
     expect(FundAdjustment::count())->toBe(1);

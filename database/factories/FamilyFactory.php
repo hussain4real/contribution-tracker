@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Factories;
 
 use App\Models\Family;
@@ -14,7 +16,7 @@ class FamilyFactory extends Factory
     /**
      * Define the model's default state.
      *
-     * @return array<string, mixed>
+     * @return array<model-property<Family>, mixed>
      */
     public function definition(): array
     {
@@ -55,6 +57,15 @@ class FamilyFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'suspended_at' => now(),
+        ]);
+    }
+
+    public function archived(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'archived_at' => now(),
+            'archive_reason' => 'The family requested account closure.',
+            'purge_after' => now()->addDays(30),
         ]);
     }
 }

@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_route_33542e1e31",
+  "title": "Laravel request StoreExpenseRequest",
+  "summary": "Laravel request StoreExpenseRequest in app/Http/Requests/StoreExpenseRequest.php.",
+  "kind": "route",
+  "source": "laravel-request",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "app/Http/Requests/StoreExpenseRequest.php",
+      "symbol": "StoreExpenseRequest",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Http/Requests/StoreExpenseRequest.php",
+      "reason": "laravel request"
+    }
+  ],
+  "contextFiles": [],
+  "tests": [],
+  "tags": [
+    "php",
+    "laravel",
+    "request",
+    "validation"
+  ],
+  "trustBoundaries": [
+    "user-input",
+    "auth"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

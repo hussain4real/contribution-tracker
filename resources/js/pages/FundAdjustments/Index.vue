@@ -3,15 +3,25 @@ import {
     index,
     store,
 } from '@/actions/App/Http/Controllers/FundAdjustmentController';
+import FundAdjustmentReversalController from '@/actions/App/Http/Controllers/FundAdjustmentReversalController';
 import HeadingSmall from '@/components/HeadingSmall.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useCurrencyFormatter } from '@/lib/currency';
 import { type BreadcrumbItem } from '@/types';
 import { Form, Head, Link, router } from '@inertiajs/vue3';
-import { Landmark, Plus, Trash2 } from 'lucide-vue-next';
+import { Landmark, Plus, RotateCcw } from '@lucide/vue';
 import { ref } from 'vue';
 
 interface AdjustmentItem {
@@ -21,6 +31,9 @@ interface AdjustmentItem {
     recorded_at: string;
     recorded_by: string | null;
     created_at: string;
+    is_reversed: boolean;
+    reversal_reason: string | null;
+    can_reverse: boolean;
 }
 
 interface PaginatedAdjustments {
@@ -48,13 +61,7 @@ const showForm = ref(false);
 const amount = ref<string>('');
 const description = ref<string>('');
 const recordedAt = ref<string>(new Date().toISOString().split('T')[0]);
-
-function formatCurrency(value: number): string {
-    return new Intl.NumberFormat('en-NG', {
-        style: 'currency',
-        currency: 'NGN',
-    }).format(value);
-}
+const { currency, formatCurrency } = useCurrencyFormatter();
 
 function formatDate(date: string): string {
     return new Date(date).toLocaleDateString('en-NG', {
@@ -64,10 +71,45 @@ function formatDate(date: string): string {
     });
 }
 
-function deleteAdjustment(id: number): void {
-    if (confirm('Are you sure you want to delete this fund adjustment?')) {
-        router.delete(route('fund-adjustments.destroy', id));
+function formatAdjustmentAmount(amount: number): string {
+    const sign = amount < 0 ? '-' : '+';
+
+    return `${sign}${formatCurrency(Math.abs(amount))}`;
+}
+
+const reversalTarget = ref<AdjustmentItem | null>(null);
+const reversalReason = ref('');
+const reversalError = ref('');
+const reversing = ref(false);
+
+function openReversal(adjustment: AdjustmentItem): void {
+    reversalTarget.value = adjustment;
+    reversalReason.value = '';
+    reversalError.value = '';
+}
+
+function reverseAdjustment(): void {
+    if (!reversalTarget.value || reversalReason.value.trim().length < 5) {
+        reversalError.value = 'Enter a reason of at least 5 characters.';
+        return;
     }
+
+    reversing.value = true;
+    router.post(
+        FundAdjustmentReversalController({
+            fund_adjustment: reversalTarget.value.id,
+        }).url,
+        { reason: reversalReason.value },
+        {
+            preserveScroll: true,
+            onSuccess: () => (reversalTarget.value = null),
+            onError: (errors) => {
+                reversalError.value =
+                    errors.reason ?? 'Unable to reverse this adjustment.';
+            },
+            onFinish: () => (reversing.value = false),
+        },
+    );
 }
 
 function resetForm(): void {
@@ -110,8 +152,9 @@ function resetForm(): void {
                 class="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20"
             >
                 <p class="text-sm text-blue-800 dark:text-blue-200">
-                    Fund adjustments represent lump sums added to the family
-                    fund (e.g., opening balance from previous contributions).
+                    Fund adjustments record signed corrections to the family
+                    fund. Use a positive amount for money in and a negative
+                    amount for money out.
                 </p>
             </div>
 
@@ -133,15 +176,14 @@ function resetForm(): void {
                 >
                     <div class="grid gap-4 sm:grid-cols-2">
                         <div class="grid gap-2">
-                            <Label for="amount">Amount (₦)</Label>
+                            <Label for="amount">Amount ({{ currency }})</Label>
                             <Input
                                 id="amount"
                                 type="number"
                                 name="amount"
                                 v-model="amount"
-                                placeholder="Enter amount in Naira"
+                                :placeholder="`Enter amount in ${currency}`"
                                 required
-                                min="1"
                                 step="1"
                                 @change="validate('amount')"
                             />
@@ -167,7 +209,7 @@ function resetForm(): void {
                             type="text"
                             name="description"
                             v-model="description"
-                            placeholder="e.g., Opening balance from 2+ years of contributions"
+                            placeholder="e.g., Opening balance or bank correction"
                             required
                             maxlength="1000"
                             @change="validate('description')"
@@ -242,6 +284,9 @@ function resetForm(): void {
                                 v-for="adjustment in adjustments.data"
                                 :key="adjustment.id"
                                 class="hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
+                                :class="{
+                                    'opacity-60': adjustment.is_reversed,
+                                }"
                             >
                                 <td
                                     class="px-4 py-4 text-neutral-900 sm:px-6 dark:text-neutral-100"
@@ -252,11 +297,25 @@ function resetForm(): void {
                                     class="max-w-[120px] truncate px-4 py-4 text-neutral-700 sm:max-w-xs sm:px-6 dark:text-neutral-300"
                                 >
                                     {{ adjustment.description }}
+                                    <span
+                                        v-if="adjustment.is_reversed"
+                                        class="ml-2 text-xs font-medium text-amber-600"
+                                        >Reversed</span
+                                    >
                                 </td>
                                 <td
-                                    class="px-4 py-4 text-right font-medium text-green-600 sm:px-6 dark:text-green-400"
+                                    class="px-4 py-4 text-right font-medium sm:px-6"
+                                    :class="
+                                        adjustment.amount < 0
+                                            ? 'text-red-600 dark:text-red-400'
+                                            : 'text-green-600 dark:text-green-400'
+                                    "
                                 >
-                                    +{{ formatCurrency(adjustment.amount) }}
+                                    {{
+                                        formatAdjustmentAmount(
+                                            adjustment.amount,
+                                        )
+                                    }}
                                 </td>
                                 <td
                                     class="hidden px-6 py-4 text-neutral-500 md:table-cell dark:text-neutral-400"
@@ -265,13 +324,13 @@ function resetForm(): void {
                                 </td>
                                 <td class="px-4 py-4 text-right sm:px-6">
                                     <Button
-                                        v-if="can_create"
+                                        v-if="adjustment.can_reverse"
                                         variant="ghost"
                                         size="sm"
-                                        @click="deleteAdjustment(adjustment.id)"
+                                        @click="openReversal(adjustment)"
                                         class="text-red-500 hover:text-red-700"
                                     >
-                                        <Trash2 class="h-4 w-4" />
+                                        <RotateCcw class="h-4 w-4" />
                                     </Button>
                                 </td>
                             </tr>
@@ -308,6 +367,46 @@ function resetForm(): void {
                     </template>
                 </div>
             </div>
+
+            <Dialog
+                :open="reversalTarget !== null"
+                @update:open="(open) => !open && (reversalTarget = null)"
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Reverse fund adjustment</DialogTitle>
+                        <DialogDescription>
+                            This keeps the original entry in the audit trail and
+                            removes it from the effective family balance.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div class="grid gap-2">
+                        <Label for="adjustment-reversal-reason">Reason</Label>
+                        <textarea
+                            id="adjustment-reversal-reason"
+                            v-model="reversalReason"
+                            rows="4"
+                            maxlength="1000"
+                            class="rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+                        />
+                        <InputError :message="reversalError" />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" @click="reversalTarget = null"
+                            >Cancel</Button
+                        >
+                        <Button
+                            variant="destructive"
+                            :disabled="reversing"
+                            @click="reverseAdjustment"
+                        >
+                            {{
+                                reversing ? 'Reversing…' : 'Reverse adjustment'
+                            }}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     </AppLayout>
 </template>

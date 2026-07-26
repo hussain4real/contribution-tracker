@@ -6,7 +6,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { EllipsisVertical, Pencil, Trash2 } from 'lucide-vue-next';
+import { EllipsisVertical, Pencil, Trash2 } from '@lucide/vue';
 
 interface Conversation {
     id: string;

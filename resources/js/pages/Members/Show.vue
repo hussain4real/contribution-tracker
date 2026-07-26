@@ -4,6 +4,7 @@ import { send as sendWebPushReminderAction } from '@/actions/App/Http/Controller
 import { send as sendWhatsAppReminderAction } from '@/actions/App/Http/Controllers/ContributionWhatsAppReminderController';
 import {
     destroy,
+    edit,
     index,
     restore,
     show,
@@ -18,7 +19,9 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useCurrencyFormatter } from '@/lib/currency';
 import { type BreadcrumbItem } from '@/types';
+import type { Page } from '@inertiajs/core';
 import { Head, Link, router } from '@inertiajs/vue3';
 import {
     AlertCircle,
@@ -37,7 +40,7 @@ import {
     TrendingUp,
     User,
     Wallet,
-} from 'lucide-vue-next';
+} from '@lucide/vue';
 import { ref } from 'vue';
 import { toast } from 'vue-sonner';
 
@@ -109,9 +112,7 @@ const sendingEmailReminderId = ref<number | null>(null);
 const sendingWhatsAppReminderId = ref<number | null>(null);
 const sendingWebPushReminderId = ref<number | null>(null);
 
-function handleReminderResponse(page: {
-    props: { flash?: { success?: string; error?: string } };
-}) {
+function handleReminderResponse(page: Page) {
     const flash = page.props.flash;
 
     if (flash?.success) {
@@ -129,7 +130,7 @@ function sendEmailReminder(contributionId: number) {
     sendingEmailReminderId.value = contributionId;
 
     router.post(
-        sendEmailReminderAction(contributionId).url,
+        sendEmailReminderAction({ contribution: contributionId }).url,
         {},
         {
             preserveScroll: true,
@@ -152,7 +153,7 @@ function sendWhatsAppReminder(contributionId: number) {
     sendingWhatsAppReminderId.value = contributionId;
 
     router.post(
-        sendWhatsAppReminderAction(contributionId).url,
+        sendWhatsAppReminderAction({ contribution: contributionId }).url,
         {},
         {
             preserveScroll: true,
@@ -175,7 +176,7 @@ function sendWebPushReminder(contributionId: number) {
     sendingWebPushReminderId.value = contributionId;
 
     router.post(
-        sendWebPushReminderAction(contributionId).url,
+        sendWebPushReminderAction({ contribution: contributionId }).url,
         {},
         {
             preserveScroll: true,
@@ -199,16 +200,11 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
     {
         title: props.member.name,
-        href: show(props.member.id).url,
+        href: show({ member: props.member.id }).url,
     },
 ];
 
-function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-NG', {
-        style: 'currency',
-        currency: 'NGN',
-    }).format(amount);
-}
+const { formatCurrency } = useCurrencyFormatter();
 
 function formatDate(dateStr: string): string {
     return new Date(dateStr).toLocaleDateString('en-NG', {
@@ -321,7 +317,7 @@ function archiveMember() {
             .optimistic((pageProps: any) => ({
                 member: { ...pageProps.member, is_archived: true },
             }))
-            .delete(destroy(props.member.id).url);
+            .delete(destroy({ member: props.member.id }).url);
     }
 }
 
@@ -335,7 +331,7 @@ function restoreMember() {
                     archived_at: null,
                 },
             }))
-            .post(restore(props.member.id).url);
+            .post(restore({ member: props.member.id }).url);
     }
 }
 </script>
@@ -379,7 +375,7 @@ function restoreMember() {
                             class="flex items-center gap-2"
                         >
                             <template v-if="!member.is_archived">
-                                <Link :href="`/members/${member.id}/edit`">
+                                <Link :href="edit({ member: member.id }).url">
                                     <Button variant="outline" size="sm">
                                         <Pencil class="mr-2 h-4 w-4" />
                                         Edit
@@ -388,6 +384,7 @@ function restoreMember() {
                                 <Button
                                     variant="outline"
                                     size="sm"
+                                    data-test="archive-member-button"
                                     @click="archiveMember"
                                 >
                                     <Archive
@@ -400,6 +397,7 @@ function restoreMember() {
                                 <Button
                                     variant="outline"
                                     size="sm"
+                                    data-test="restore-member-button"
                                     @click="restoreMember"
                                 >
                                     <RotateCcw

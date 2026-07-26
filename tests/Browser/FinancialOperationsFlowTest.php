@@ -1,0 +1,204 @@
+<?php
+
+declare(strict_types=1);
+
+use App\Models\Contribution;
+use App\Models\Expense;
+use App\Models\FamilyCategory;
+use App\Models\FamilyInvitation;
+use App\Models\FundAdjustment;
+use App\Models\ReportSchedule;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Mail;
+
+describe('Financial and family administration flows (Browser)', function () {
+    beforeEach(function () {
+        $this->family = createBrowserFamily([
+            'name' => 'Browser Operations Family',
+            'account_name' => 'Browser Operations Family',
+            'account_number' => '0123456789',
+        ]);
+        $this->admin = createBrowserAdmin($this->family, [
+            'email' => 'operations-admin@example.com',
+        ]);
+        $this->financialSecretary = createBrowserFinancialSecretary($this->family, [
+            'email' => 'operations-secretary@example.com',
+        ]);
+
+        Cache::put('paystack_banks', [], now()->addDay());
+    });
+
+    it('records an expense through the UI', function () {
+        $page = loginBrowserAs($this->financialSecretary);
+
+        $page->navigate(route('expenses.create'))
+            ->assertSee('Record Expense');
+
+        fillBrowserFieldWithoutChange($page, '[name="amount"]', '1250');
+        fillBrowserFieldWithoutChange($page, 'input[name="description"]', 'Browser workflow transport');
+        fillBrowserFieldWithoutChange($page, '[name="spent_at"]', now()->format('Y-m-d'));
+
+        $page->click('button[type="submit"]')
+            ->assertSee('Expenses')
+            ->assertSee('Browser workflow transport')
+            ->assertNoJavaScriptErrors();
+
+        expect(Expense::where('family_id', $this->family->id)
+            ->where('recorded_by', $this->financialSecretary->id)
+            ->where('description', 'Browser workflow transport')
+            ->exists())->toBeTrue();
+    });
+
+    it('shows members when online payments need Paystack setup', function () {
+        config(['services.paystack.public_key' => 'pk_test_browser']);
+
+        $this->family->update([
+            'bank_code' => null,
+            'account_number' => '0123456789',
+        ]);
+
+        $member = createBrowserMember($this->family, [
+            'email' => 'paying-member@example.com',
+        ]);
+        Contribution::factory()
+            ->forUser($member)
+            ->currentMonth()
+            ->create(['expected_amount' => 4000]);
+
+        $this->actingAs($member);
+
+        visit("/{$this->family->slug}/pay")
+            ->assertSee('Pay Contributions')
+            ->assertSee('Bank details are saved, but the Paystack bank code is missing')
+            ->assertNoJavaScriptErrors();
+    });
+
+    it('records a fund adjustment through the UI', function () {
+        FundAdjustment::factory()->recordedBy($this->admin)->create([
+            'family_id' => $this->family->id,
+            'amount' => -750,
+            'description' => 'Browser workflow correction',
+        ]);
+        $page = loginBrowserAs($this->admin);
+
+        $page->navigate(route('fund-adjustments.index'))
+            ->assertSee('Fund Adjustments')
+            ->assertSee('-₦750.00')
+            ->click('Record Adjustment')
+            ->assertSee('Record Fund Adjustment');
+
+        fillBrowserFieldWithoutChange($page, '[name="amount"]', '25000');
+        fillBrowserFieldWithoutChange($page, '[name="recorded_at"]', now()->format('Y-m-d'));
+        fillBrowserFieldWithoutChange($page, 'input[name="description"]', 'Browser workflow opening balance');
+
+        $page->click('form button[type="submit"]')
+            ->assertSee('Browser workflow opening balance')
+            ->assertNoJavaScriptErrors();
+
+        expect(FundAdjustment::where('family_id', $this->family->id)
+            ->where('recorded_by', $this->admin->id)
+            ->where('description', 'Browser workflow opening balance')
+            ->exists())->toBeTrue();
+    });
+
+    it('schedules a member statement with a browser-local first run', function () {
+        $member = createBrowserMember($this->family, [
+            'name' => 'Scheduled Statement Member',
+            'email' => 'scheduled-statement@example.com',
+        ]);
+        $page = loginBrowserAs($this->financialSecretary);
+
+        $page->navigate(route('reports.index'))
+            ->assertSee('Schedule delivery')
+            ->assertDontSee('Statement member');
+
+        $defaultRun = $page->script(<<<'JS'
+            () => {
+                const field = document.querySelector('[name="schedule_next_run_at"]');
+                const target = new Date(Date.now() + 60 * 60 * 1000);
+                const actual = field instanceof HTMLInputElement ? field.value : null;
+
+                return {
+                    actual,
+                    differenceMs: actual === null
+                        ? null
+                        : Math.abs(new Date(actual).getTime() - target.getTime()),
+                };
+            }
+        JS);
+
+        if (! is_array($defaultRun)) {
+            throw new RuntimeException('Expected browser script to return the schedule run time.');
+        }
+
+        expect($defaultRun['actual'] ?? null)->toBeString()
+            ->and($defaultRun['differenceMs'] ?? null)->toBeInt()->toBeLessThanOrEqual(120_000);
+
+        $page->select('schedule_report_type', 'member_statement')
+            ->wait(0.5)
+            ->select('schedule_member_id', (string) $member->id)
+            ->fill('schedule_name', 'Browser member statement')
+            ->fill('schedule_recipients', 'member@example.com')
+            ->click('Create schedule')
+            ->assertSee('Browser member statement')
+            ->assertNoJavaScriptErrors();
+
+        $schedule = ReportSchedule::query()
+            ->where('family_id', $this->family->id)
+            ->where('name', 'Browser member statement')
+            ->firstOrFail();
+
+        expect($schedule->filters['member_id'])->toBe($member->id)
+            ->and($schedule->timezone)->not->toBeEmpty();
+    });
+
+    it('sends a family invitation through the UI', function () {
+        Mail::fake();
+
+        $page = loginBrowserAs($this->financialSecretary);
+
+        $page->navigate(route('family.invitations'))
+            ->assertSee('Invitations')
+            ->click('Invite Member')
+            ->fill('email', 'browser-invite@example.com')
+            ->select('role', 'member')
+            ->click('Send Invitation')
+            ->assertSee('browser-invite@example.com')
+            ->assertSee('Pending')
+            ->assertNoJavaScriptErrors();
+
+        expect(FamilyInvitation::where('family_id', $this->family->id)
+            ->where('email', 'browser-invite@example.com')
+            ->where('invited_by', $this->financialSecretary->id)
+            ->exists())->toBeTrue();
+    });
+
+    it('updates family settings and adds a contribution category through the UI', function () {
+        $page = loginBrowserAs($this->admin);
+
+        $page->navigate(route('family.settings'))
+            ->assertSee('Family Settings')
+            ->fill('name', 'Browser Updated Family')
+            ->fill('currency', '₦')
+            ->fill('due_day', '30')
+            ->fill('account_name', 'Browser Account')
+            ->fill('account_number', '1234567890')
+            ->click('Save Changes')
+            ->assertSee('Saved.')
+            ->click('Add Category')
+            ->fill('new-name', 'Browser Senior')
+            ->fill('new-amount', '7500')
+            ->click('Add')
+            ->assertSee('Browser Senior')
+            ->assertNoJavaScriptErrors();
+
+        $this->family->refresh();
+
+        expect($this->family->name)->toBe('Browser Updated Family')
+            ->and($this->family->due_day)->toBe(30)
+            ->and(FamilyCategory::where('family_id', $this->family->id)
+                ->where('name', 'Browser Senior')
+                ->where('monthly_amount', 7500)
+                ->exists())->toBeTrue();
+    });
+});

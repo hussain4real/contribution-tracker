@@ -5,6 +5,7 @@ on:
     branches:
       - develop
       - main
+      - staging
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -14,12 +15,12 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.4"
+          php-version: '8.4'
 
       - name: Install Dependencies
         run: |
@@ -28,6 +29,9 @@ jobs:
 
       - name: Check PHP Code Style
         run: vendor/bin/pint --test
+
+      - name: Analyse PHP
+        run: composer analyse
 
       - name: Check Frontend Formatting
         run: npm run format:check

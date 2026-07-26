@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { seen as markChangelogSeen } from '@/routes/changelog';
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { ExternalLink, Rocket, X } from 'lucide-vue-next';
+import { ExternalLink, Rocket, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
 
 const page = usePage();

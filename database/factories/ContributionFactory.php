@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Factories;
 
 use App\Enums\MemberCategory;
@@ -16,7 +18,7 @@ class ContributionFactory extends Factory
     /**
      * Define the model's default state.
      *
-     * @return array<string, mixed>
+     * @return array<model-property<Contribution>, mixed>
      */
     public function definition(): array
     {
@@ -134,10 +136,18 @@ class ContributionFactory extends Factory
      */
     public function forUser(User $user): static
     {
-        return $this->state(fn (array $attributes) => [
-            'user_id' => $user->id,
-            'family_id' => $user->family_id,
-            'expected_amount' => $user->getMonthlyAmount() ?? MemberCategory::Employed->monthlyAmount(),
-        ]);
+        return $this->state(function (array $attributes) use ($user): array {
+            $familyId = $user->family_id;
+            $membership = is_int($familyId) ? $user->membershipForFamilyId($familyId) : null;
+            $year = is_numeric($attributes['year'] ?? null) ? (int) $attributes['year'] : now()->year;
+            $month = is_numeric($attributes['month'] ?? null) ? (int) $attributes['month'] : now()->month;
+
+            return [
+                'user_id' => $user->id,
+                'family_id' => $familyId,
+                'expected_amount' => $user->getMonthlyAmount() ?? MemberCategory::Employed->monthlyAmount(),
+                ...($membership?->contributionCategorySnapshot($year, $month) ?? []),
+            ];
+        });
     }
 }

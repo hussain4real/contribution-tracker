@@ -1,10 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Enums\MemberCategory;
 use App\Enums\PaymentStatus;
 use App\Models\Contribution;
 use App\Models\Payment;
 use App\Models\User;
+use App\Services\FamilyContributionReviewService;
 use Inertia\Testing\AssertableInertia as Assert;
 
 describe('Monthly Report', function () {
@@ -36,8 +39,8 @@ describe('Monthly Report', function () {
         $admin = User::factory()->admin()->create();
 
         // Create members with different categories
-        $employed = User::factory()->employed()->create();
-        $student = User::factory()->student()->create();
+        $employed = User::factory()->employed()->create(['family_id' => $admin->family_id]);
+        $student = User::factory()->student()->create(['family_id' => $admin->family_id]);
 
         // Create contributions for current month
         $contribution1 = Contribution::factory()->create([
@@ -85,18 +88,16 @@ describe('Monthly Report', function () {
         $admin = User::factory()->admin()->create();
 
         // Create members with different categories
-        User::factory()->employed()->count(3)->create();
-        User::factory()->student()->count(2)->create();
+        User::factory()->employed()->count(3)->create(['family_id' => $admin->family_id]);
+        User::factory()->student()->count(2)->create(['family_id' => $admin->family_id]);
 
         // Create contributions for current month
         User::query()
             ->whereNot('id', $admin->id)
             ->get()
-            ->each(function ($user) {
-                Contribution::factory()->create([
-                    'user_id' => $user->id,
-                    'month' => now()->startOfMonth(),
-                    'expected_amount' => $user->category->monthlyAmount(),
+            ->each(function (User $user) {
+                Contribution::factory()->forUser($user)->currentMonth()->create([
+                    'expected_amount' => $user->getMonthlyAmount(),
                 ]);
             });
 
@@ -106,7 +107,8 @@ describe('Monthly Report', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Reports/Monthly')
                 ->has('by_category')
-                ->where('by_category', fn ($categories) => isset($categories['employed']) && isset($categories['student']))
+                ->where('by_category', fn (mixed $categories): bool => arrayLikeHasKey($categories, 'employed')
+                    && arrayLikeHasKey($categories, 'student'))
             );
     });
 
@@ -209,5 +211,22 @@ describe('Monthly Report', function () {
                     ->etc()
                 )
             );
+    });
+
+    it('returns an empty monthly review for users without a family context', function () {
+        $user = User::factory()->financialSecretary()->create(['family_id' => null]);
+
+        $review = app(FamilyContributionReviewService::class)->monthly($user, 2026, 5);
+
+        expect($review['family'])
+            ->toMatchArray([
+                'name' => null,
+                'currency' => 'NGN',
+                'period' => 'May 2026',
+                'year' => 2026,
+                'month' => 5,
+            ])
+            ->and($review['members'])->toBe([])
+            ->and($review['summary']['member_count'])->toBe(0);
     });
 });

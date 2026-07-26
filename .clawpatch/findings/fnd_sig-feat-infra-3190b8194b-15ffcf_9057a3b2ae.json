@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-infra-3190b8194b-15ffcf_9057a3b2ae",
+  "featureId": "feat_infra_3190b8194b",
+  "title": "ProductionSeeder reports missing required credentials but still exits successfully",
+  "category": "build-release",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "database/seeders/ProductionSeeder.php",
+      "startLine": 37,
+      "endLine": 41,
+      "symbol": "ProductionSeeder::run",
+      "quote": "if (! $email || ! $password) {\n    $this->command->error('ADMIN_EMAIL and ADMIN_PASSWORD environment variables are required.');\n    $this->command->info('Set them via: ADMIN_EMAIL=you@example.com ADMIN_PASSWORD=secret php artisan db:seed --class=ProductionSeeder');\n\n    return;\n}"
+    }
+  ],
+  "reasoning": "The seeder prints an error and returns from run(), but does not throw or otherwise mark the Artisan command as failed. Deployment/bootstrap automation can therefore continue after a successful exit code even though the required super-admin account was not created.",
+  "reproduction": "Run php artisan db:seed --class=ProductionSeeder with app.admin_email or app.admin_password unset, then check the shell exit code. The code path returns normally after printing the error.",
+  "recommendation": "Make missing required production credentials a hard failure, such as throwing a RuntimeException after printing the message, and update the command test to assert a non-zero failure status.",
+  "whyTestsDoNotAlreadyCoverThis": "ProductionSeederTest checks the output text and user count for missing email/password, but it does not assert that the Artisan command fails with a non-zero status.",
+  "suggestedRegressionTest": "Update the missing-email and missing-password tests to assert the seeder command fails and no admin user is created.",
+  "minimumFixScope": "Change the missing-credential branch in ProductionSeeder and tighten the two existing tests.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-infra-3190b8194b_15ffcf040d",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260518T110727-a1e777",
+  "createdAt": "2026-05-18T11:10:30.586Z",
+  "updatedAt": "2026-05-18T11:10:30.586Z"
+}

@@ -1,10 +1,10 @@
-%%{init: { "theme": "base", "themeVariables": { "fontSize": "16pt" }, "flowchart": { "nodeSpacing": 55, "rankSpacing": 55 } }}%%
+%%{init: { "theme": "base", "themeVariables": { "fontSize": "18pt", "primaryTextColor": "#000000", "lineColor": "#000000", "edgeLabelBackground": "#ffffff" }, "flowchart": { "nodeSpacing": 55, "rankSpacing": 55 } }}%%
 
 flowchart TB
-    classDef terminator fill:#1f3b64,stroke:#1f3b64,color:#ffffff,stroke-width:1.2px;
-    classDef process fill:#ffffff,stroke:#355e9a,color:#17335c,stroke-width:1.2px;
-    classDef decision fill:#fff7e8,stroke:#a66a00,color:#6b4200,stroke-width:1.2px;
-    classDef error fill:#fef2f2,stroke:#b91c1c,color:#7f1d1d,stroke-width:1.2px;
+    classDef terminator fill:#ffffff,stroke:#000000,color:#000000,stroke-width:1.4px;
+    classDef process fill:#ffffff,stroke:#000000,color:#000000,stroke-width:1.2px;
+    classDef decision fill:#ffffff,stroke:#000000,color:#000000,stroke-width:1.2px;
+    classDef error fill:#ffffff,stroke:#000000,color:#000000,stroke-dasharray: 6 4;
 
     A([Start]) --> B{"Payment source?"}
 
@@ -58,3 +58,4 @@ flowchart TB
     class X error;
     style ROW1 fill:transparent,stroke:transparent
     style ROW2 fill:transparent,stroke:transparent
+    style LOOP fill:#ffffff,stroke:#000000

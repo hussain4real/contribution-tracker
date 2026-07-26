@@ -2,7 +2,7 @@
 import type { DialogContentEmits, DialogContentProps } from "reka-ui"
 import type { HTMLAttributes } from "vue"
 import { reactiveOmit } from "@vueuse/core"
-import { X } from "lucide-vue-next"
+import { X } from "@lucide/vue"
 import {
   DialogClose,
   DialogContent,
@@ -45,7 +45,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
         side === 'top'
           && 'data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top inset-x-0 top-0 h-auto border-b',
         side === 'bottom'
-          && 'data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom inset-x-0 bottom-0 h-auto border-t',
+          && 'data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom inset-x-0 bottom-0 h-auto border-t pb-[env(safe-area-inset-bottom)]',
         props.class)"
       v-bind="{ ...$attrs, ...forwarded }"
     >

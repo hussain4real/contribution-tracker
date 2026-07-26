@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_test-suite_677cdb8024",
+  "title": "Composer script test",
+  "summary": "Composer script 'test': @php artisan config:clear --ansi && @php artisan test",
+  "kind": "test-suite",
+  "source": "composer-script",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "composer.json",
+      "symbol": "test",
+      "route": null,
+      "command": "test"
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "composer.json",
+      "reason": "composer script"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "composer.json",
+      "reason": "nearby test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "composer.json",
+      "command": "composer test"
+    }
+  ],
+  "tags": [
+    "php",
+    "composer",
+    "script"
+  ],
+  "trustBoundaries": [],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

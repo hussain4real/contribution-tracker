@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-infra-0973937ca8-84eefa_709f7ee9a6",
+  "featureId": "feat_infra_0973937ca8",
+  "title": "Verified WhatsApp numbers are not unique",
+  "category": "security",
+  "severity": "medium",
+  "confidence": "medium",
+  "triage": "risk",
+  "evidence": [
+    {
+      "path": "database/migrations/2026_04_20_062943_add_whatsapp_columns_to_users_table.php",
+      "startLine": 15,
+      "endLine": 18,
+      "symbol": null,
+      "quote": "$table->string('whatsapp_phone')->nullable()->after('email');\n$table->timestamp('whatsapp_verified_at')->nullable()->after('whatsapp_phone');\n\n$table->index('whatsapp_phone');"
+    }
+  ],
+  "reasoning": "The schema permits multiple users to store the same verified WhatsApp phone because it only adds a normal index. The inspected verification request validates format but not uniqueness, and inbound WhatsApp user lookup resolves by phone to the first verified user. That can attribute inbound messages or reminder actions to the wrong member or family when two accounts verify the same number.",
+  "reproduction": "Verify the same E.164 WhatsApp number on two different users, then process an inbound webhook from that number; the database allows both verified rows and the lookup has no unambiguous owner.",
+  "recommendation": "Add a forward migration that deduplicates existing rows and enforces uniqueness for verified WhatsApp phone numbers, ideally with a user-facing validation rule before verification. Because nulls are allowed, a unique index on the normalized E.164 value is sufficient if all stored values remain in the validated format.",
+  "whyTestsDoNotAlreadyCoverThis": "The WhatsApp settings tests cover valid format, invalid format, OTP success, and removal, but they do not create two users with the same verified phone or exercise inbound webhook attribution under duplicates.",
+  "suggestedRegressionTest": "Add a feature test that verifies one user with a phone number, attempts to verify the same number for a second user, and asserts the second verification is rejected and inbound lookup remains unambiguous.",
+  "minimumFixScope": "Forward migration for the unique constraint plus WhatsApp verification validation/test coverage.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-infra-0973937ca8_84eefac288",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260518T110727-a1e777",
+  "createdAt": "2026-05-18T11:14:11.271Z",
+  "updatedAt": "2026-05-18T11:14:11.271Z"
+}

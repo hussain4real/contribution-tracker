@@ -1,5 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
+use App\Models\Contribution;
+use App\Models\Family;
+use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -10,10 +15,11 @@ use Inertia\Testing\AssertableInertia as Assert;
  */
 describe('Member Authorization', function () {
     beforeEach(function () {
-        $this->admin = User::factory()->admin()->create();
-        $this->financialSecretary = User::factory()->financialSecretary()->create();
-        $this->member = User::factory()->member()->employed()->create();
-        $this->targetMember = User::factory()->member()->student()->create();
+        $this->family = Family::factory()->create();
+        $this->admin = User::factory()->admin()->create(['family_id' => $this->family->id]);
+        $this->financialSecretary = User::factory()->financialSecretary()->create(['family_id' => $this->family->id]);
+        $this->member = User::factory()->member()->employed()->create(['family_id' => $this->family->id]);
+        $this->targetMember = User::factory()->member()->student()->create(['family_id' => $this->family->id]);
     });
 
     // Index - All authenticated users can view list
@@ -40,12 +46,24 @@ describe('Member Authorization', function () {
 
     // Show - Admin and Financial Secretary can view any member, regular members can only view their own
     it('super admin can view any member profile', function () {
+        $contribution = Contribution::factory()
+            ->forUser($this->targetMember)
+            ->currentMonth()
+            ->create(['expected_amount' => 4000]);
+        Payment::factory()
+            ->forContribution($contribution)
+            ->recordedBy($this->admin)
+            ->create(['amount' => 1500, 'notes' => 'Cash']);
+
         $this->actingAs($this->admin)
             ->get("/members/{$this->targetMember->id}")
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Members/Show')
                 ->has('contributions')
+                ->where('contributions.0.payments.0.amount', 1500)
+                ->where('contributions.0.payments.0.notes', 'Cash')
+                ->where('contributions.0.payments.0.recorder.name', $this->admin->name)
             );
     });
 
@@ -93,17 +111,22 @@ describe('Member Authorization', function () {
             );
     });
 
-    // Create - Only Admin
+    // Create - Admin and Financial Secretary can add ordinary members
     it('super admin can access create form', function () {
         $this->actingAs($this->admin)
             ->get('/members/create')
             ->assertOk();
     });
 
-    it('financial secretary cannot access create form', function () {
+    it('financial secretary can access create form with only member role available', function () {
         $this->actingAs($this->financialSecretary)
             ->get('/members/create')
-            ->assertForbidden();
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Members/Create')
+                ->has('roles', 1)
+                ->where('roles.0.value', 'member')
+            );
     });
 
     it('member cannot access create form', function () {
@@ -112,7 +135,7 @@ describe('Member Authorization', function () {
             ->assertForbidden();
     });
 
-    // Store - Only Admin
+    // Store - Admin and Financial Secretary can add ordinary members
     it('super admin can create member', function () {
         $this->actingAs($this->admin)
             ->post('/members', [
@@ -128,7 +151,7 @@ describe('Member Authorization', function () {
         $this->assertDatabaseHas('users', ['email' => 'new@example.com']);
     });
 
-    it('financial secretary cannot create member', function () {
+    it('financial secretary can create ordinary member', function () {
         $this->actingAs($this->financialSecretary)
             ->post('/members', [
                 'name' => 'New Member',
@@ -138,9 +161,27 @@ describe('Member Authorization', function () {
                 'category' => 'employed',
                 'role' => 'member',
             ])
-            ->assertForbidden();
+            ->assertRedirect();
 
-        $this->assertDatabaseMissing('users', ['email' => 'new@example.com']);
+        $this->assertDatabaseHas('users', [
+            'email' => 'new@example.com',
+            'role' => 'member',
+        ]);
+    });
+
+    it('financial secretary cannot create privileged member', function () {
+        $this->actingAs($this->financialSecretary)
+            ->post('/members', [
+                'name' => 'New Admin',
+                'email' => 'new-admin@example.com',
+                'password' => 'password123',
+                'password_confirmation' => 'password123',
+                'category' => 'employed',
+                'role' => 'admin',
+            ])
+            ->assertSessionHasErrors('role');
+
+        $this->assertDatabaseMissing('users', ['email' => 'new-admin@example.com']);
     });
 
     it('member cannot create member', function () {
@@ -205,7 +246,7 @@ describe('Member Authorization', function () {
 
     // Restore - Only Admin
     it('financial secretary cannot restore member', function () {
-        $archivedMember = User::factory()->member()->archived()->create();
+        $archivedMember = User::factory()->member()->archived()->create(['family_id' => $this->family->id]);
 
         $this->actingAs($this->financialSecretary)
             ->post("/members/{$archivedMember->id}/restore")

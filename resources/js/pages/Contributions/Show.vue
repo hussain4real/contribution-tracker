@@ -19,6 +19,7 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useCurrencyFormatter } from '@/lib/currency';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/vue3';
@@ -76,10 +77,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-// Helper to format amount in Naira
-const formatAmount = (amount: number): string => {
-    return `₦${amount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
-};
+const { formatCurrency: formatAmount } = useCurrencyFormatter();
 
 // Helper to format date
 const formatDate = (dateStr: string): string => {
@@ -203,7 +201,13 @@ const progressPercentage = (): number => {
                         v-if="can_record_payment && contribution.balance > 0"
                         class="pt-4"
                     >
-                        <Link :href="createPayment(contribution.user.id).url">
+                        <Link
+                            :href="
+                                createPayment({
+                                    member: contribution.user.id,
+                                }).url
+                            "
+                        >
                             <Button class="w-full"> Record Payment </Button>
                         </Link>
                     </div>

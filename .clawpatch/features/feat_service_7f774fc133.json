@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "featureId": "feat_service_7f774fc133",
+  "title": "Laravel service WhatsAppService",
+  "summary": "Laravel application service WhatsAppService.",
+  "kind": "service",
+  "source": "laravel-service",
+  "confidence": "medium",
+  "entrypoints": [
+    {
+      "path": "app/Services/WhatsAppService.php",
+      "symbol": "WhatsAppService",
+      "route": null,
+      "command": null
+    }
+  ],
+  "ownedFiles": [
+    {
+      "path": "app/Services/WhatsAppService.php",
+      "reason": "service"
+    }
+  ],
+  "contextFiles": [
+    {
+      "path": "app/Channels/WhatsAppMessage.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "app/Models/WhatsAppMessage.php",
+      "reason": "imported application class"
+    },
+    {
+      "path": "tests/Feature/WhatsAppServiceTest.php",
+      "reason": "associated test"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/Feature/WhatsAppServiceTest.php",
+      "command": "composer test"
+    }
+  ],
+  "tags": [
+    "php",
+    "laravel",
+    "service"
+  ],
+  "trustBoundaries": [
+    "database",
+    "serialization"
+  ],
+  "status": "pending",
+  "lock": null,
+  "findingIds": [],
+  "patchAttemptIds": [],
+  "analysisHistory": [],
+  "createdAt": "2026-05-18T11:03:17.671Z",
+  "updatedAt": "2026-05-18T11:03:17.671Z"
+}

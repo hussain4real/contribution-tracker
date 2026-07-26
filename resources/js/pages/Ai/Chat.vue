@@ -20,6 +20,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { correctTranscriptMemberNameCasing } from '@/lib/transcript-corrections';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
 import { useStream } from '@laravel/stream-vue';
@@ -35,9 +36,10 @@ import {
     User,
     X,
     XCircle,
-} from 'lucide-vue-next';
+} from '@lucide/vue';
 import { marked } from 'marked';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { toast } from 'vue-sonner';
 
 // Configure marked for safe rendering
 marked.setOptions({
@@ -116,13 +118,16 @@ const messageInput = ref('');
 const chatMessages = ref<Message[]>([...props.messages]);
 const currentConversationId = ref<string | null>(props.activeConversationId);
 const messagesContainer = ref<HTMLElement | null>(null);
+const messageTextarea = ref<HTMLTextAreaElement | null>(null);
 const showMobileSidebar = ref(false);
+const MESSAGE_INPUT_MAX_HEIGHT = 192;
 
 // Skip Teleport during SSR to prevent hydration mismatch
 const isMounted = ref(false);
 onMounted(() => {
     isMounted.value = true;
     initSpeechRecognition();
+    resizeMessageTextarea();
 });
 
 // Parsed streaming text (extracted from SSE text_delta events)
@@ -488,11 +493,9 @@ function createStream() {
                 onSuccess: (page) => {
                     const props = page.props as Record<string, unknown>;
                     const updatedConversations = props.conversations as
-                        | Conversation[]
-                        | undefined;
+                        Conversation[] | undefined;
                     const updatedMessages = props.messages as
-                        | Message[]
-                        | undefined;
+                        Message[] | undefined;
 
                     let resolvedConversationId =
                         currentConversationId.value ?? null;
@@ -593,118 +596,27 @@ const pendingConfirmation = computed(() => {
     return patterns.some((phrase) => content.includes(phrase));
 });
 
-// Phonetic correction for speech recognition
-function soundex(str: string): string {
-    const s = str.toUpperCase().replace(/[^A-Z]/g, '');
-    if (!s) return '';
-
-    const map: Record<string, string> = {
-        B: '1',
-        F: '1',
-        P: '1',
-        V: '1',
-        C: '2',
-        G: '2',
-        J: '2',
-        K: '2',
-        Q: '2',
-        S: '2',
-        X: '2',
-        Z: '2',
-        D: '3',
-        T: '3',
-        L: '4',
-        M: '5',
-        N: '5',
-        R: '6',
-    };
-
-    let code = s[0];
-    let prev = map[s[0]] || '0';
-
-    for (let i = 1; i < s.length && code.length < 4; i++) {
-        const c = map[s[i]] || '0';
-        if (c !== '0' && c !== prev) {
-            code += c;
-        }
-        prev = c;
-    }
-
-    return code.padEnd(4, '0');
-}
-
-function levenshtein(a: string, b: string): number {
-    const m = a.length;
-    const n = b.length;
-    const dp: number[][] = Array.from(
-        { length: m + 1 },
-        () => Array(n + 1).fill(0) as number[],
-    );
-
-    for (let i = 0; i <= m; i++) dp[i][0] = i;
-    for (let j = 0; j <= n; j++) dp[0][j] = j;
-
-    for (let i = 1; i <= m; i++) {
-        for (let j = 1; j <= n; j++) {
-            dp[i][j] =
-                a[i - 1] === b[j - 1]
-                    ? dp[i - 1][j - 1]
-                    : 1 +
-                      Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
-        }
-    }
-
-    return dp[m][n];
-}
-
 function correctTranscript(text: string): string {
-    if (!props.memberNames.length) return text;
+    return correctTranscriptMemberNameCasing(text, props.memberNames);
+}
 
-    // Build lookup: split multi-word names into individual tokens and full names
-    const nameTokens = new Map<string, string>();
-    for (const fullName of props.memberNames) {
-        for (const part of fullName.split(/\s+/)) {
-            nameTokens.set(part.toLowerCase(), part);
-        }
-    }
+function resizeMessageTextarea(): void {
+    nextTick(() => {
+        const textarea = messageTextarea.value;
 
-    return text.replace(/\b[A-Za-z]{3,}\b/g, (word) => {
-        const lower = word.toLowerCase();
-
-        // Skip if it's already an exact match (case-insensitive)
-        if (nameTokens.has(lower)) return nameTokens.get(lower)!;
-
-        const wordSoundex = soundex(word);
-        let bestMatch: string | null = null;
-        let bestDistance = Infinity;
-
-        for (const [tokenLower, original] of nameTokens) {
-            // Must share soundex code or be within 40% edit distance
-            const tokenSoundex = soundex(tokenLower);
-            const dist = levenshtein(lower, tokenLower);
-            const maxLen = Math.max(lower.length, tokenLower.length);
-            const threshold = Math.ceil(maxLen * 0.4);
-
-            if (
-                (wordSoundex === tokenSoundex || dist <= threshold) &&
-                dist < bestDistance &&
-                dist > 0
-            ) {
-                bestDistance = dist;
-                bestMatch = original;
-            }
+        if (!textarea) {
+            return;
         }
 
-        // Only correct if the edit distance is reasonable (not too far off)
-        if (
-            bestMatch &&
-            bestDistance <=
-                Math.ceil(Math.max(word.length, bestMatch.length) * 0.4)
-        ) {
-            return bestMatch;
-        }
-
-        return word;
+        textarea.style.height = 'auto';
+        textarea.style.height = `${Math.min(
+            textarea.scrollHeight,
+            MESSAGE_INPUT_MAX_HEIGHT,
+        )}px`;
+        textarea.style.overflowY =
+            textarea.scrollHeight > MESSAGE_INPUT_MAX_HEIGHT
+                ? 'auto'
+                : 'hidden';
     });
 }
 
@@ -713,18 +625,47 @@ const isListening = ref(false);
 const isTranscribing = ref(false);
 const speechSupported = ref(false);
 const recordingSeconds = ref(0);
+const recordingLevel = ref(0);
 const MAX_RECORDING_SECONDS = 30;
+const RECORDING_MIME_TYPES = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/mp4',
+    'audio/ogg;codecs=opus',
+    'audio/ogg',
+];
 let recognition: SpeechRecognition | null = null;
 let mediaRecorder: MediaRecorder | null = null;
 let audioChunks: Blob[] = [];
 let recordingTimer: ReturnType<typeof setInterval> | null = null;
+let recordingStartedAt = 0;
+let recordingPeakLevel = 0;
+let recordingChunkCount = 0;
+let audioContext: AudioContext | null = null;
+let audioSource: MediaStreamAudioSourceNode | null = null;
+let audioAnalyser: AnalyserNode | null = null;
+let audioLevelFrame: number | null = null;
 
 // Use server-side transcription when available, fall back to Web Speech API
 const useServerTranscription = computed(
     () =>
         props.transcriptionAvailable &&
         typeof navigator !== 'undefined' &&
-        !!navigator.mediaDevices,
+        !!navigator.mediaDevices &&
+        typeof MediaRecorder !== 'undefined',
+);
+
+const recordingLevelBars = computed(() =>
+    Array.from({ length: 12 }, (_, index) => {
+        const threshold = (index + 1) / 12;
+        const active = recordingLevel.value >= threshold;
+
+        return {
+            active,
+            height: `${6 + Math.min(index + 1, 7) * 2}px`,
+            opacity: active ? 1 : 0.28,
+        };
+    }),
 );
 
 function initSpeechRecognition(): void {
@@ -778,54 +719,176 @@ function initSpeechRecognition(): void {
     };
 }
 
+function supportedRecordingMimeType(): string {
+    if (
+        typeof MediaRecorder === 'undefined' ||
+        typeof MediaRecorder.isTypeSupported !== 'function'
+    ) {
+        return '';
+    }
+
+    return (
+        RECORDING_MIME_TYPES.find((mimeType) =>
+            MediaRecorder.isTypeSupported(mimeType),
+        ) ?? ''
+    );
+}
+
+function normalizeRecordedMimeType(mimeType: string): string {
+    const baseType = mimeType.split(';')[0]?.trim().toLowerCase() ?? '';
+
+    switch (baseType) {
+        case 'audio/webm':
+        case 'video/webm':
+            return 'audio/webm';
+        case 'audio/mp4':
+        case 'audio/m4a':
+        case 'audio/x-m4a':
+        case 'video/mp4':
+            return 'audio/mp4';
+        case 'audio/ogg':
+            return 'audio/ogg';
+        default:
+            return 'audio/webm';
+    }
+}
+
+function extensionForAudioMimeType(mimeType: string): string {
+    if (mimeType.includes('mp4')) return 'mp4';
+    if (mimeType.includes('ogg')) return 'ogg';
+
+    return 'webm';
+}
+
+function resetRecordingDiagnostics(): void {
+    recordingStartedAt = Date.now();
+    recordingPeakLevel = 0;
+    recordingLevel.value = 0;
+    recordingChunkCount = 0;
+}
+
+function startAudioLevelMonitor(stream: MediaStream): void {
+    stopAudioLevelMonitor();
+
+    const AudioContextConstructor =
+        window.AudioContext ||
+        (window as Window & { webkitAudioContext?: typeof AudioContext })
+            .webkitAudioContext;
+
+    if (!AudioContextConstructor) return;
+
+    audioContext = new AudioContextConstructor();
+    audioSource = audioContext.createMediaStreamSource(stream);
+    audioAnalyser = audioContext.createAnalyser();
+    audioAnalyser.fftSize = 1024;
+    audioSource.connect(audioAnalyser);
+
+    const samples = new Uint8Array(audioAnalyser.fftSize);
+
+    const measure = () => {
+        if (!audioAnalyser) return;
+
+        audioAnalyser.getByteTimeDomainData(samples);
+
+        let peak = 0;
+        for (const sample of samples) {
+            peak = Math.max(peak, Math.abs(sample - 128) / 128);
+        }
+
+        recordingPeakLevel = Math.max(recordingPeakLevel, peak);
+        recordingLevel.value = Math.min(1, peak * 6);
+        audioLevelFrame = window.requestAnimationFrame(measure);
+    };
+
+    measure();
+}
+
+function stopAudioLevelMonitor(): void {
+    if (audioLevelFrame !== null) {
+        window.cancelAnimationFrame(audioLevelFrame);
+        audioLevelFrame = null;
+    }
+
+    audioSource?.disconnect();
+    audioSource = null;
+    audioAnalyser = null;
+
+    if (audioContext) {
+        void audioContext.close();
+        audioContext = null;
+    }
+}
+
 async function startMediaRecording(): Promise<void> {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({
-            audio: true,
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+            },
         });
         audioChunks = [];
+        resetRecordingDiagnostics();
+        startAudioLevelMonitor(stream);
 
-        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-            ? 'audio/webm;codecs=opus'
-            : MediaRecorder.isTypeSupported('audio/webm')
-              ? 'audio/webm'
-              : '';
+        const mimeType = supportedRecordingMimeType();
+        const recorderOptions: MediaRecorderOptions = {
+            audioBitsPerSecond: 128000,
+        };
 
-        mediaRecorder = new MediaRecorder(
-            stream,
-            mimeType ? { mimeType } : undefined,
-        );
+        if (mimeType) {
+            recorderOptions.mimeType = mimeType;
+        }
+
+        mediaRecorder = new MediaRecorder(stream, recorderOptions);
 
         mediaRecorder.ondataavailable = (event) => {
             if (event.data.size > 0) {
                 audioChunks.push(event.data);
+                recordingChunkCount++;
             }
         };
 
         mediaRecorder.onstop = async () => {
             // Stop all tracks to release the microphone
             stream.getTracks().forEach((track) => track.stop());
+            stopAudioLevelMonitor();
             clearRecordingTimer();
 
-            if (audioChunks.length === 0) return;
+            if (audioChunks.length === 0) {
+                toast.error(
+                    'No microphone audio was captured. Check your microphone and try again.',
+                );
+                return;
+            }
 
-            // Use the actual mimeType from the recorder
-            const actualType = mediaRecorder?.mimeType || 'audio/webm';
-            const ext = actualType.includes('mp4')
-                ? 'mp4'
-                : actualType.includes('ogg')
-                  ? 'ogg'
-                  : 'webm';
+            const durationSeconds = Math.max(
+                0,
+                (Date.now() - recordingStartedAt) / 1000,
+            );
+            const actualType = normalizeRecordedMimeType(
+                mediaRecorder?.mimeType || mimeType,
+            );
+            const ext = extensionForAudioMimeType(actualType);
             const audioBlob = new Blob(audioChunks, { type: actualType });
             audioChunks = [];
-            await sendAudioForTranscription(audioBlob, ext);
+
+            await sendAudioForTranscription(audioBlob, ext, {
+                durationSeconds,
+                audioLevel: recordingPeakLevel,
+                chunkCount: recordingChunkCount,
+                mimeType: actualType,
+            });
         };
 
-        mediaRecorder.start();
+        mediaRecorder.start(250);
         isListening.value = true;
         startRecordingTimer();
     } catch {
         isListening.value = false;
+        stopAudioLevelMonitor();
+        toast.error('Could not access your microphone.');
     }
 }
 
@@ -849,6 +912,11 @@ function clearRecordingTimer(): void {
 
 function stopMediaRecording(): void {
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        try {
+            mediaRecorder.requestData();
+        } catch {
+            // Continue stopping even if the browser has no pending data chunk.
+        }
         mediaRecorder.stop();
     }
     isListening.value = false;
@@ -857,12 +925,25 @@ function stopMediaRecording(): void {
 async function sendAudioForTranscription(
     audioBlob: Blob,
     ext: string,
+    metadata: {
+        durationSeconds: number;
+        audioLevel: number;
+        chunkCount: number;
+        mimeType: string;
+    },
 ): Promise<void> {
     isTranscribing.value = true;
 
     try {
         const formData = new FormData();
         formData.append('audio', audioBlob, `recording.${ext}`);
+        formData.append(
+            'duration_seconds',
+            metadata.durationSeconds.toFixed(2),
+        );
+        formData.append('audio_level', metadata.audioLevel.toFixed(4));
+        formData.append('chunk_count', String(metadata.chunkCount));
+        formData.append('client_mime_type', metadata.mimeType);
 
         const response = await fetch(aiTranscribe().url, {
             method: 'POST',
@@ -881,14 +962,28 @@ async function sendAudioForTranscription(
             body: formData,
         });
 
-        if (!response.ok) throw new Error('Transcription failed');
+        if (!response.ok) {
+            const errorData = (await response.json().catch(() => null)) as {
+                message?: string;
+            } | null;
+
+            throw new Error(errorData?.message || 'Transcription failed.');
+        }
 
         const data = (await response.json()) as { text: string };
         if (data.text) {
             messageInput.value = correctTranscript(data.text);
+        } else {
+            throw new Error(
+                'No speech was recognized. Check your microphone and try again.',
+            );
         }
-    } catch {
-        // Silently fail — user can still type manually
+    } catch (error) {
+        toast.error(
+            error instanceof Error
+                ? error.message
+                : 'Transcription failed. Please try again.',
+        );
     } finally {
         isTranscribing.value = false;
     }
@@ -926,6 +1021,7 @@ onUnmounted(() => {
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
         mediaRecorder.stop();
     }
+    stopAudioLevelMonitor();
     clearRecordingTimer();
 });
 
@@ -968,6 +1064,8 @@ watch(
         deep: true,
     },
 );
+
+watch(messageInput, () => resizeMessageTextarea());
 
 // Send message
 function sendMessage(): void {
@@ -1024,7 +1122,7 @@ function submitRename(): void {
     if (!renamingConversation.value || !renameTitle.value.trim()) return;
 
     router.patch(
-        rename(renamingConversation.value.id).url,
+        rename({ conversation: renamingConversation.value.id }).url,
         { title: renameTitle.value.trim() },
         {
             preserveScroll: true,
@@ -1048,7 +1146,7 @@ function confirmDelete(): void {
 
     const conversationId = deletingConversation.value.id;
 
-    router.delete(destroy(conversationId).url, {
+    router.delete(destroy({ conversation: conversationId }).url, {
         preserveScroll: true,
         onSuccess: () => {
             deletingConversation.value = null;
@@ -1570,11 +1668,31 @@ function confirmDelete(): void {
                         />
                         Recording {{ recordingSeconds }}s /
                         {{ MAX_RECORDING_SECONDS }}s — tap mic to stop
+                        <span
+                            class="ml-2 flex h-5 items-center gap-0.5"
+                            aria-hidden="true"
+                        >
+                            <span
+                                v-for="(bar, index) in recordingLevelBars"
+                                :key="index"
+                                class="w-1 rounded-full bg-red-500 transition-all duration-75 ease-out dark:bg-red-400"
+                                :style="{
+                                    height: bar.height,
+                                    opacity: bar.opacity,
+                                    transform: bar.active
+                                        ? 'scaleY(1)'
+                                        : 'scaleY(0.45)',
+                                }"
+                            />
+                        </span>
                     </div>
-                    <div class="flex gap-2">
-                        <Input
+                    <div class="flex items-end gap-2">
+                        <textarea
+                            ref="messageTextarea"
                             v-model="messageInput"
-                            type="text"
+                            rows="1"
+                            aria-label="Ask AI assistant"
+                            data-testid="ai-chat-input"
                             :placeholder="
                                 isTranscribing
                                     ? 'Transcribing...'
@@ -1582,7 +1700,7 @@ function confirmDelete(): void {
                                       ? 'Listening...'
                                       : 'Ask about contributions, expenses, or reports...'
                             "
-                            class="flex-1"
+                            class="max-h-48 min-h-9 flex-1 resize-none rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
                             :class="{
                                 'border-red-400 ring-1 ring-red-400':
                                     isListening,

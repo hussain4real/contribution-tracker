@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "findingId": "fnd_sig-feat-infra-3190b8194b-fe873d_bd90df2c1f",
+  "featureId": "feat_infra_3190b8194b",
+  "title": "Month-end seeding can create duplicate current-month contributions",
+  "category": "bug",
+  "severity": "medium",
+  "confidence": "high",
+  "triage": "confirmed-bug",
+  "evidence": [
+    {
+      "path": "database/seeders/FamilyMemberSeeder.php",
+      "startLine": 127,
+      "endLine": 129,
+      "symbol": "FamilyMemberSeeder::run",
+      "quote": "$currentYear = now()->year;\n$currentMonth = now()->month;\n$previousMonth = now()->subMonth();"
+    },
+    {
+      "path": "database/seeders/FamilyMemberSeeder.php",
+      "startLine": 135,
+      "endLine": 160,
+      "symbol": "FamilyMemberSeeder::run",
+      "quote": "Contribution::create([... 'year' => $previousMonth->year, 'month' => $previousMonth->month ...]); ... Contribution::create([... 'year' => $currentYear, 'month' => $currentMonth ...]);"
+    }
+  ],
+  "reasoning": "Carbon's default month overflow semantics mean dates like 2026-05-31 subtract one month to 2026-05-01, not 2026-04-30. On those dates, the seeder treats the previous contribution and current contribution as the same year/month for every member. That either creates corrupt demo data or trips the contribution uniqueness constraint for user/month.",
+  "reproduction": "Freeze time to 2026-05-31 and run FamilyMemberSeeder on an empty migrated database. The first member gets a May previous contribution, then the current contribution also targets May.",
+  "recommendation": "Compute the previous period without month overflow, for example from the first day of the current month or with subMonthNoOverflow(), and use fresh immutable/copy instances for due_date and paid_at values.",
+  "whyTestsDoNotAlreadyCoverThis": "No tests are listed for FamilyMemberSeeder. The existing ProductionSeederTest exercises ProductionSeeder only and does not freeze time around month-end dates.",
+  "suggestedRegressionTest": "Add a Pest test that travels to 2026-05-31, runs FamilyMemberSeeder, and asserts each paying member has one previous-month contribution for April 2026 and one current-month contribution for May 2026 with no duplicate-key failure.",
+  "minimumFixScope": "Update FamilyMemberSeeder previous-month date calculation and add one date-boundary seeder test.",
+  "status": "open",
+  "history": [],
+  "signature": "sig_feat-infra-3190b8194b_fe873d5bc7",
+  "linkedPatchAttemptIds": [],
+  "createdByRunId": "20260518T110727-a1e777",
+  "createdAt": "2026-05-18T11:10:30.586Z",
+  "updatedAt": "2026-05-18T11:10:30.586Z"
+}

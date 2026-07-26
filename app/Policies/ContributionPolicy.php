@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Policies;
 
 use App\Models\Contribution;
@@ -14,7 +16,7 @@ class ContributionPolicy
 
     public function view(User $user, Contribution $contribution): bool
     {
-        if ($user->family_id !== $contribution->family_id) {
+        if ($user->membershipForFamilyId($contribution->family_id) === null) {
             return false;
         }
 
@@ -32,22 +34,22 @@ class ContributionPolicy
 
     public function update(User $user, Contribution $contribution): bool
     {
-        return $user->isAdmin() && $user->family_id === $contribution->family_id;
+        return $user->isAdmin() && $user->membershipForFamilyId($contribution->family_id) !== null;
     }
 
     public function delete(User $user, Contribution $contribution): bool
     {
-        return $user->isAdmin() && $user->family_id === $contribution->family_id;
+        return $user->isAdmin() && $user->membershipForFamilyId($contribution->family_id) !== null;
     }
 
     public function restore(User $user, Contribution $contribution): bool
     {
-        return $user->isAdmin() && $user->family_id === $contribution->family_id;
+        return false;
     }
 
     public function forceDelete(User $user, Contribution $contribution): bool
     {
-        return $user->isAdmin() && $user->family_id === $contribution->family_id;
+        return false;
     }
 
     /**

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 use Laravel\Fortify\Features;
@@ -70,6 +72,30 @@ test('user can authenticate with a valid recovery code', function () {
     ]);
 
     $response->assertRedirect(route('dashboard', absolute: false));
+    $this->assertAuthenticatedAs($user);
+});
+
+test('platform administrator is redirected to the platform dashboard after two factor login', function () {
+    if (! Features::canManageTwoFactorAuthentication()) {
+        $this->markTestSkipped('Two-factor authentication is not enabled.');
+    }
+
+    $recoveryCodes = [RecoveryCode::generate(), RecoveryCode::generate()];
+    $user = User::factory()->superAdmin()->create([
+        'family_id' => null,
+        'current_family_id' => null,
+        'two_factor_recovery_codes' => encrypt(json_encode($recoveryCodes)),
+    ]);
+
+    $this->post(route('login'), [
+        'email' => $user->email,
+        'password' => 'password',
+    ]);
+
+    $this->post(route('two-factor.login'), [
+        'recovery_code' => $recoveryCodes[0],
+    ])->assertRedirect(route('filament.platform.pages.dashboard', absolute: false));
+
     $this->assertAuthenticatedAs($user);
 });
 
