@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 it('normalizes storage permissions before production deployment completes', function () {
     $projectRoot = dirname(__DIR__, 2);
     $script = file_get_contents($projectRoot.'/deployment/ensure-storage-permissions.sh');
