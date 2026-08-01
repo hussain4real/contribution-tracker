@@ -1,0 +1,25 @@
+#!/bin/bash
+set -euo pipefail
+
+# Keep Laravel's writable paths usable by both PHP-FPM (www-data) and the
+# deployer-owned scheduler, including backup commands that traverse storage.
+APP_DIR="${1:-/var/www/contribution-tracker}"
+WRITABLE_PATHS=(
+    "$APP_DIR/storage"
+    "$APP_DIR/bootstrap/cache"
+)
+
+for path in "${WRITABLE_PATHS[@]}"; do
+    if [[ ! -d "$path" ]]; then
+        echo "Writable path does not exist: $path" >&2
+        exit 1
+    fi
+done
+
+sudo chown -R deployer:www-data "${WRITABLE_PATHS[@]}"
+sudo find "${WRITABLE_PATHS[@]}" -type d -exec chmod 2775 {} +
+sudo find "${WRITABLE_PATHS[@]}" -type f -exec chmod 0664 {} +
+
+# Report generation creates this directory on demand. Creating it here also
+# makes its ownership explicit before the backup scheduler traverses storage.
+sudo install -d -o deployer -g www-data -m 2775 "$APP_DIR/storage/app/private/reports"

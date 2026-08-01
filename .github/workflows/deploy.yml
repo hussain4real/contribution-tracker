@@ -105,6 +105,9 @@ jobs:
             # Run database migrations
             php artisan migrate --force
 
+            # Keep storage readable by the scheduled backup process and PHP-FPM
+            bash deployment/ensure-storage-permissions.sh /var/www/contribution-tracker
+
             # Clear and rebuild caches
             php artisan config:cache
             php artisan route:cache
