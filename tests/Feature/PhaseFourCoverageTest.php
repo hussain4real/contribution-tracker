@@ -111,6 +111,7 @@ it('exercises reconciliation mutation endpoints and their validated requests', f
         'source' => PaymentSource::Paystack,
         'recorded_by' => $admin->id,
         'receipt_number' => 2,
+        'paid_at' => '2026-09-01',
     ]);
     $providerTransaction = PaystackTransaction::factory()->create([
         'family_id' => $family->id,
