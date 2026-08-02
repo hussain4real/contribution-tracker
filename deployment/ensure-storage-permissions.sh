@@ -16,10 +16,10 @@ for path in "${WRITABLE_PATHS[@]}"; do
     fi
 done
 
-sudo chown -R deployer:www-data "${WRITABLE_PATHS[@]}"
-sudo find "${WRITABLE_PATHS[@]}" -type d -exec chmod 2775 {} +
-sudo find "${WRITABLE_PATHS[@]}" -type f -exec chmod 0664 {} +
+sudo /usr/bin/chown -R deployer:www-data "${WRITABLE_PATHS[@]}"
+sudo /usr/bin/find "${WRITABLE_PATHS[@]}" -type d -exec /usr/bin/chmod 2775 {} +
+sudo /usr/bin/find "${WRITABLE_PATHS[@]}" -type f -exec /usr/bin/chmod 0664 {} +
 
 # Report generation creates this directory on demand. Creating it here also
 # makes its ownership explicit before the backup scheduler traverses storage.
-sudo install -d -o deployer -g www-data -m 2775 "$APP_DIR/storage/app/private/reports"
+sudo /usr/bin/install -d -o deployer -g www-data -m 2775 "$APP_DIR/storage/app/private/reports"
