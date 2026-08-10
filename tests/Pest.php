@@ -40,6 +40,11 @@ pest()->extend(TestCase::class)
 
 pest()->browser()->timeout(15_000);
 
+pest()
+    ->tia()
+    ->locally()
+    ->baselined();
+
 /*
 |--------------------------------------------------------------------------
 | Expectations

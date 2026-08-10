@@ -24,8 +24,8 @@ it('casts role and timestamp fields and exposes relationships', function () {
     ]);
 
     expect($invitation->role)->toBe(Role::FinancialSecretary)
-        ->and($invitation->accepted_at)->toBeInstanceOf(Carbon::class)
-        ->and($invitation->expires_at)->toBeInstanceOf(Carbon::class)
+        ->and($invitation->accepted_at?->toDateTimeString())->toBe('2026-05-10 08:00:00')
+        ->and($invitation->expires_at->toDateTimeString())->toBe('2026-05-18 08:00:00')
         ->and($invitation->family()->firstOrFail()->is($family))->toBeTrue()
         ->and($invitation->inviter()->firstOrFail()->is($inviter))->toBeTrue();
 });

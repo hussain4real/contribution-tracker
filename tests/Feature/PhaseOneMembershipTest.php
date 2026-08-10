@@ -241,6 +241,42 @@ it('guards category ownership and reconstructs missing category history', functi
     expect(app(AssignFamilyCategory::class)->handle($membership, null, $actor)->family_category_id)->toBeNull();
 });
 
+it('keeps current-month reconstructed category history open ended', function () {
+    Date::setTestNow('2026-07-13 10:00:00');
+
+    $family = Family::factory()->create();
+    $adult = FamilyCategory::factory()->create([
+        'family_id' => $family->id,
+        'name' => 'Adult',
+        'slug' => 'adult',
+        'monthly_amount' => 4000,
+    ]);
+    $student = FamilyCategory::factory()->create([
+        'family_id' => $family->id,
+        'name' => 'Student',
+        'slug' => 'student',
+        'monthly_amount' => 1000,
+    ]);
+    $actor = User::factory()->admin()->create(['family_id' => $family->id]);
+    $member = User::factory()->member()->create([
+        'family_id' => $family->id,
+        'family_category_id' => $adult->id,
+    ]);
+    $membership = FamilyMembership::query()
+        ->where('family_id', $family->id)
+        ->where('user_id', $member->id)
+        ->firstOrFail();
+
+    $membership->categoryAssignments()->delete();
+    app(AssignFamilyCategory::class)->handle($membership, $student, $actor, effectiveImmediately: true);
+
+    $assignment = $membership->categoryAssignments()->sole();
+
+    expect($assignment->category_name)->toBe('Student')
+        ->and($assignment->effective_from->toDateString())->toBe('2026-07-01')
+        ->and($assignment->effective_until)->toBeNull();
+});
+
 it('falls back to canonical and legacy category amounts when history is absent', function () {
     $family = Family::factory()->create();
     $category = FamilyCategory::factory()->create([

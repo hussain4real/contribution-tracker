@@ -34,7 +34,7 @@ it('casts payment values and exposes relationships', function () {
     }
 
     expect($payment->amount)->toBe(123456)
-        ->and($payment->paid_at)->toBeInstanceOf(Carbon::class)
+        ->and($payment->paid_at->toDateTimeString())->toBe('2026-05-11 09:30:00')
         ->and($payment->formatted_amount)->toBe("\u{20A6}123,456.00")
         ->and($payment->contribution()->firstOrFail()->is($contribution))->toBeTrue()
         ->and($payment->recorder()->firstOrFail()->is($recorder))->toBeTrue()

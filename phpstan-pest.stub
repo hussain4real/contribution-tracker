@@ -133,182 +133,11 @@ class PendingCommand
 
 }
 
-namespace App\Models {
-
-class Contribution {}
-
-class Expense {}
-
-class Family {}
-
-class FundAdjustment {}
-
-class Payment {}
-
-class User {}
-
-}
-
-namespace App\Policies {
-
-class ContributionPolicy {}
-
-class ExpensePolicy {}
-
-class FundAdjustmentPolicy {}
-
-class PaymentPolicy {}
-
-}
-
-namespace Mockery {
-
-interface MockInterface {}
-
-}
-
-namespace Tests {
-
-/**
- * @property \App\Models\User $admin
- * @property \App\Models\User $archivedMember
- * @property \App\Models\User $employedMember
- * @property \App\Models\User $financialSecretary
- * @property \App\Models\User $member
- * @property \App\Models\User $otherMember
- * @property \App\Models\User $outsider
- * @property \App\Models\User $payingMember
- * @property \App\Models\User $recorder
- * @property \App\Models\User $studentMember
- * @property \App\Models\User $targetMember
- * @property \App\Models\User $user
- * @property \App\Models\Family $family
- * @property \App\Models\Family $otherFamily
- * @property \App\Models\Contribution $contribution
- * @property \App\Models\Contribution $employedContribution
- * @property \App\Models\Contribution $memberContribution
- * @property \App\Models\Contribution $otherContribution
- * @property \App\Models\Contribution $studentContribution
- * @property \App\Models\Expense $expense
- * @property \App\Models\FundAdjustment $fundAdjustment
- * @property \App\Models\Payment $otherPayment
- * @property \App\Models\Payment $payment
- * @property \App\Policies\ContributionPolicy|\App\Policies\ExpensePolicy|\App\Policies\FundAdjustmentPolicy|\App\Policies\PaymentPolicy $policy
- */
-abstract class PestStaticAnalysisTestCase extends \Illuminate\Foundation\Testing\TestCase
-{
-    /**
-     * @var \Illuminate\Foundation\Application
-     */
-    public $app;
-
-    /**
-     * @param  string  $command
-     * @param  array<string, mixed>  $parameters
-     */
-    public function artisan($command, $parameters = []): \Illuminate\Testing\PendingCommand {}
-
-    public function withoutVite(): static {}
-
-    /**
-     * @param  array<string, mixed>  $data
-     * @return \Illuminate\Testing\TestResponse<\Symfony\Component\HttpFoundation\Response>
-     */
-    public function view(string $view, array $data = []): \Illuminate\Testing\TestResponse {}
-
-    /**
-     * @param  array<string, mixed>  $data
-     */
-    public function renderTestViewWithoutVite(string $view, array $data = []): string {}
-
-    /**
-     * @param  class-string  $abstract
-     */
-    public function mock($abstract, ?\Closure $mock = null): \Mockery\MockInterface {}
-
-    /**
-     * @param  class-string  $abstract
-     */
-    public function partialMock($abstract, ?\Closure $mock = null): \Mockery\MockInterface {}
-
-    /**
-     * @param  class-string  $abstract
-     */
-    public function spy($abstract, ?\Closure $mock = null): \Mockery\MockInterface {}
-
-    /**
-     * @param  \Illuminate\Database\Eloquent\Model|class-string<\Illuminate\Database\Eloquent\Model>|string  $table
-     * @param  array<string, mixed>  $data
-     */
-    public function assertDatabaseHas($table, array $data = [], mixed $connection = null): static {}
-
-    /**
-     * @param  \Illuminate\Database\Eloquent\Model|class-string<\Illuminate\Database\Eloquent\Model>|string  $table
-     * @param  array<string, mixed>  $data
-     */
-    public function assertDatabaseMissing($table, array $data = [], mixed $connection = null): static {}
-
-    /**
-     * @param  \Illuminate\Database\Eloquent\Model|class-string<\Illuminate\Database\Eloquent\Model>|string  $table
-     */
-    public function assertDatabaseCount($table, int $count, mixed $connection = null): static {}
-}
-
-}
-
-namespace Pest\PendingCalls {
-
-class TestCall
-{
-    public function with(mixed ...$data): self {}
-
-    public function group(string ...$groups): self {}
-
-    public function skip(bool|string $conditionOrMessage = true, ?string $message = null): self {}
-}
-
-class BeforeEachCall {}
-
-class AfterEachCall {}
-
-}
-
-namespace Pest\Support {
-
-class HigherOrderTapProxy {}
-
-}
-
-namespace {
-
-/**
- * @param-closure-this \Tests\PestStaticAnalysisTestCase  $closure
- *
- * @return ($description is string ? \Pest\PendingCalls\TestCall : \Pest\Support\HigherOrderTapProxy|\Pest\PendingCalls\TestCall)
- */
-function test(?string $description = null, ?\Closure $closure = null): \Pest\Support\HigherOrderTapProxy|\Pest\PendingCalls\TestCall {}
-
-/**
- * @param-closure-this \Tests\PestStaticAnalysisTestCase  $closure
- */
-function it(string $description, ?\Closure $closure = null): \Pest\PendingCalls\TestCall {}
-
-/**
- * @param-closure-this \Tests\PestStaticAnalysisTestCase  $closure
- */
-function beforeEach(?\Closure $closure = null): \Pest\PendingCalls\BeforeEachCall {}
-
-/**
- * @param-closure-this \Tests\PestStaticAnalysisTestCase  $closure
- */
-function afterEach(?\Closure $closure = null): \Pest\PendingCalls\AfterEachCall {}
-
-}
-
 namespace Mockery {
 
 /**
  * @method self once()
+ * @method self twice()
  * @method self zeroOrMoreTimes()
  * @method self with(...$args)
  * @method self withArgs(array<int, mixed>|\Closure $args)
@@ -317,6 +146,7 @@ interface ExpectationInterface {}
 
 /**
  * @method \Mockery\ExpectationInterface once()
+ * @method \Mockery\ExpectationInterface twice()
  * @method \Mockery\ExpectationInterface zeroOrMoreTimes()
  * @method \Mockery\ExpectationInterface with(...$args)
  * @method \Mockery\ExpectationInterface andReturn(...$args)

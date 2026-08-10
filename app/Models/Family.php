@@ -20,6 +20,8 @@ use LogicException;
  * @property string $slug
  * @property string $currency
  * @property int $due_day
+ * @property Carbon|null $trial_ends_at
+ * @property int|null $max_members
  * @property Carbon|null $created_at
  * @property string|null $bank_name
  * @property string|null $account_name

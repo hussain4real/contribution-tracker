@@ -20,6 +20,12 @@ it('uses Node 24-compatible GitHub actions in active workflows', function () {
         'tests.yml' => [
             'actions/checkout@v7',
             'actions/setup-node@v7',
+            'actions/upload-artifact@v4',
+        ],
+        'tia-baseline.yml' => [
+            'actions/checkout@v7',
+            'actions/setup-node@v7',
+            'actions/upload-artifact@v4',
         ],
         'copilot-setup-steps.yml' => [
             'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1',
@@ -43,6 +49,68 @@ it('uses Node 24-compatible GitHub actions in active workflows', function () {
         foreach ($expectedWorkflowActions as $expectedWorkflowAction) {
             expect($workflow)->toContain($expectedWorkflowAction);
         }
+    }
+});
+
+it('keeps pull request CI on full coverage and publishes its report', function () {
+    $workflow = file_get_contents(__DIR__.'/../../.github/workflows/tests.yml');
+
+    if ($workflow === false) {
+        throw new RuntimeException('Unable to read the tests workflow.');
+    }
+
+    expect(Yaml::parse($workflow))->toBeArray()
+        ->and($workflow)->toContain('composer test:coverage -- --ci --coverage-cobertura=coverage/cobertura.xml')
+        ->and($workflow)->toContain('name: coverage-cobertura')
+        ->and($workflow)->toContain('path: coverage/cobertura.xml')
+        ->and($workflow)->not->toContain('test:coverage:tia');
+});
+
+it('records and publishes a fresh shared TIA baseline from main', function () {
+    $workflow = file_get_contents(__DIR__.'/../../.github/workflows/tia-baseline.yml');
+
+    if ($workflow === false) {
+        throw new RuntimeException('Unable to read the TIA baseline workflow.');
+    }
+
+    $configuration = Yaml::parse($workflow);
+
+    if (! is_array($configuration)) {
+        throw new RuntimeException('Expected the TIA baseline workflow to be valid YAML.');
+    }
+
+    $triggers = $configuration['on'] ?? null;
+
+    if (! is_array($triggers)) {
+        throw new RuntimeException('Expected the TIA baseline workflow to define triggers.');
+    }
+
+    $pushTrigger = $triggers['push'] ?? null;
+
+    if (! is_array($pushTrigger)) {
+        throw new RuntimeException('Expected the TIA baseline workflow to define a push trigger.');
+    }
+
+    expect($pushTrigger['branches'] ?? null)->toBe(['main'])
+        ->and(array_key_exists('schedule', $triggers))->toBeTrue()
+        ->and(array_key_exists('workflow_dispatch', $triggers))->toBeTrue()
+        ->and($workflow)->toContain('composer test:coverage:tia:fresh')
+        ->and($workflow)->toContain('echo "path=$(./vendor/bin/pest --baseline)" >> "$GITHUB_OUTPUT"')
+        ->and($workflow)->toContain('name: pest-tia-baseline')
+        ->and($workflow)->toContain('include-hidden-files: true')
+        ->and($workflow)->toContain('retention-days: 30');
+});
+
+it('keeps deployment tests on the canonical full coverage script', function () {
+    foreach (['deploy.yml', 'deploy-staging.yml'] as $workflowName) {
+        $workflow = file_get_contents(__DIR__.'/../../.github/workflows/'.$workflowName);
+
+        if ($workflow === false) {
+            throw new RuntimeException("Unable to read the {$workflowName} workflow.");
+        }
+
+        expect($workflow)->toContain('composer test:coverage -- --ci')
+            ->not->toContain('test:coverage:tia');
     }
 });
 

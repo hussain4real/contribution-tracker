@@ -201,9 +201,14 @@ describe('WhatsApp inbox thread', function () {
     it('shows messages in chronological order', function () {
         $family = Family::factory()->create();
         $admin = User::factory()->admin()->create(['family_id' => $family->id]);
+        $member = User::factory()->member()->create([
+            'family_id' => $family->id,
+            'name' => 'Thread Member',
+        ]);
 
         WhatsAppMessage::factory()->inbound()->create([
             'family_id' => $family->id,
+            'user_id' => $member->id,
             'from' => '2348012345678',
             'created_at' => now()->subMinutes(5),
         ]);
@@ -222,6 +227,8 @@ describe('WhatsApp inbox thread', function () {
                 ->where('phone', '2348012345678')
                 ->has('messages', 2)
                 ->where('canReply', true)
+                ->where('member.id', $member->id)
+                ->where('member.name', 'Thread Member')
         );
     });
 
@@ -237,7 +244,10 @@ describe('WhatsApp inbox thread', function () {
 
         $response = $this->actingAs($admin)->get('/inbox/whatsapp/2348012345678');
 
-        $response->assertInertia(fn (Assert $page) => $page->where('canReply', false));
+        $response->assertInertia(fn (Assert $page) => $page
+            ->where('canReply', false)
+            ->where('member', null)
+        );
     });
 });
 

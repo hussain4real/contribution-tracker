@@ -69,13 +69,14 @@ abstract class FamilySubAgent implements Agent, CanActAsTool, HasMiddleware, Has
      */
     public function providerOptions(Lab|string $provider): array
     {
-        return match ($provider) {
-            Lab::Ollama => [
+        if ($provider === Lab::Ollama) {
+            return [
                 'top_p' => 0.95,
                 'top_k' => 64,
-            ],
-            default => [],
-        };
+            ];
+        }
+
+        return [];
     }
 
     protected function familyContext(): string
@@ -99,12 +100,12 @@ abstract class FamilySubAgent implements Agent, CanActAsTool, HasMiddleware, Has
 
     protected function confirmFirstInstructions(): string
     {
-        return <<<'INSTRUCTIONS'
-        Confirm-first rule:
-        - Never execute a write action on the first pass.
-        - First call your tool without confirmed=true to produce a preview.
-        - If the delegated task explicitly includes the user's confirmation and the exact action details, call the tool with confirmed=true.
-        - If confirmation details are missing or ambiguous, return a concise request for confirmation instead of guessing.
-        INSTRUCTIONS;
+        return implode("\n", [
+            'Confirm-first rule:',
+            '- Never execute a write action on the first pass.',
+            '- First call your tool without confirmed=true to produce a preview.',
+            "- If the delegated task explicitly includes the user's confirmation and the exact action details, call the tool with confirmed=true.",
+            '- If confirmation details are missing or ambiguous, return a concise request for confirmation instead of guessing.',
+        ]);
     }
 }

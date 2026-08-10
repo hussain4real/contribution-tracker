@@ -41,6 +41,7 @@ describe('Member Management Flow (Browser)', function () {
 
         $page->click('Members')
             ->click('Add Member')
+            ->assertSee('Add New Member')
             ->fill('name', 'Test Student')
             ->fill('email', 'student@test.com')
             ->fill('password', 'password123')

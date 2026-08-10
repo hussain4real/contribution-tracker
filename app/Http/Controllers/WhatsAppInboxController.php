@@ -135,16 +135,21 @@ class WhatsAppInboxController extends Controller
             ->whereNotNull('user_id')
             ->latest('created_at')
             ->first()?->user;
+        $memberData = null;
+
+        if ($member !== null) {
+            $memberData = [
+                'id' => $member->id,
+                'name' => $member->name,
+            ];
+        }
 
         return Inertia::render('Inbox/Thread', [
             'phone' => $phone,
             'messages' => $messages,
             'canReply' => $canReply,
             'replyWindowHours' => self::REPLY_WINDOW_HOURS,
-            'member' => $member ? [
-                'id' => $member->id,
-                'name' => $member->name,
-            ] : null,
+            'member' => $memberData,
         ]);
     }
 

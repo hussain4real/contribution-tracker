@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Testing\AssertableInertia as Assert;
+use Laravel\Fortify\Features;
 use Laravel\Passkeys\Actions\VerifyPasskey;
 use Mockery\MockInterface;
 
@@ -19,6 +20,29 @@ test('passkeys settings page can be rendered with a fresh empty list', function 
             ->component('settings/Security')
             ->has('passkeys', 0)
         );
+});
+
+test('security settings omit passkeys when the feature is disabled', function () {
+    config(['fortify.features' => [
+        Features::twoFactorAuthentication([
+            'confirm' => true,
+            'confirmPassword' => true,
+        ]),
+    ]]);
+    $user = User::factory()->withoutTwoFactor()->create();
+
+    $this->actingAs($user)
+        ->withSession(['auth.password_confirmed_at' => time()])
+        ->get(route('security.edit'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('settings/Security')
+            ->where('canManagePasskeys', false)
+            ->where('canManageTwoFactor', true)
+            ->has('passkeys', 0)
+        );
+
+    expect(Features::canManagePasskeys())->toBeFalse();
 });
 
 test('security settings page requires password confirmation', function () {

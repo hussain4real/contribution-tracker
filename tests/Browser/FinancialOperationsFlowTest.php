@@ -109,8 +109,10 @@ describe('Financial and family administration flows (Browser)', function () {
         $page = loginBrowserAs($this->financialSecretary);
 
         $page->navigate(route('reports.index'))
+            ->waitForEvent('networkidle')
             ->assertSee('Schedule delivery')
-            ->assertDontSee('Statement member');
+            ->assertDontSee('Statement member')
+            ->assertPresent('[name="schedule_next_run_at"]');
 
         $defaultRun = $page->script(<<<'JS'
             () => {
