@@ -14,6 +14,7 @@ use App\Services\GitHubReleaseService;
 use App\Support\PlatformPlanCatalog;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 use Inertia\Middleware;
 use Laravel\Pennant\Feature;
 
@@ -142,6 +143,14 @@ class HandleInertiaRequests extends Middleware
             ];
         }
 
+        $changelogUpdate = null;
+
+        if ($user) {
+            $changelogUpdate = $request->routeIs('changelog')
+                ? fn () => app(GitHubReleaseService::class)->updateDataFor($user)
+                : Inertia::defer(fn () => app(GitHubReleaseService::class)->updateDataFor($user), 'changelog');
+        }
+
         return [
             ...parent::share($request),
             'name' => config('app.name'),
@@ -161,7 +170,7 @@ class HandleInertiaRequests extends Middleware
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'impersonating' => $request->hasSession() && $request->session()->has('impersonating_from'),
             'featureFlags' => $featureFlags,
-            'changelogUpdate' => $user ? fn () => app(GitHubReleaseService::class)->updateDataFor($user) : null,
+            'changelogUpdate' => $changelogUpdate,
             'webPush' => $user ? fn () => $this->webPushData($user) : null,
             'notifications' => $notifications,
         ];

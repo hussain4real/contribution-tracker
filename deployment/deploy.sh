@@ -24,6 +24,9 @@ npm run build
 echo "Running migrations..."
 php artisan migrate --force
 
+echo "Normalizing Laravel writable-path permissions..."
+bash deployment/ensure-storage-permissions.sh "$APP_DIR"
+
 echo "Caching configuration..."
 php artisan config:cache
 php artisan route:cache
