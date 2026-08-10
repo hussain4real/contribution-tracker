@@ -50,6 +50,7 @@ test('flash returns null when session is not available', function () {
         ->and(data_get($shared, 'auth.can'))->toBeNull()
         ->and(data_get($shared, 'family'))->toBeNull()
         ->and(data_get($shared, 'featureFlags'))->toBeNull()
+        ->and(data_get($shared, 'changelogUpdate'))->toBeNull()
         ->and(data_get($shared, 'notifications'))->toBeNull();
 });
 
