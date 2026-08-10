@@ -128,6 +128,6 @@ test('user cannot authenticate with an invalid recovery code', function () {
 test('user factory creates valid encrypted two factor data', function () {
     $user = User::factory()->create();
 
-    expect($user->recoveryCodes())->toBeArray()->toHaveCount(8);
+    expect($user->recoveryCodes())->toHaveCount(8);
     expect($user->recoveryCodes()[0])->toBeString()->toContain('-');
 });

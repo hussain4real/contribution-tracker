@@ -17,13 +17,18 @@ use App\Policies\ContributionPolicy;
 use App\Policies\ExpensePolicy;
 use App\Policies\FundAdjustmentPolicy;
 use App\Policies\PaymentPolicy;
+use Closure;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Testing\TestResponse;
+use Mockery\MockInterface;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
+ * @method \Illuminate\Testing\PendingCommand artisan(string $command, array<string, mixed> $parameters = [])
+ *
  * @property User $admin
  * @property User $archivedMember
  * @property User $employedMember
@@ -81,6 +86,62 @@ abstract class TestCase extends BaseTestCase
                 ]);
             }
         }
+
+        return $this;
+    }
+
+    /**
+     * @param  class-string  $abstract
+     */
+    public function mock($abstract, ?Closure $mock = null): MockInterface
+    {
+        return parent::mock($abstract, $mock);
+    }
+
+    /**
+     * @param  class-string  $abstract
+     */
+    public function partialMock($abstract, ?Closure $mock = null): MockInterface
+    {
+        return parent::partialMock($abstract, $mock);
+    }
+
+    /**
+     * @param  class-string  $abstract
+     */
+    public function spy($abstract, ?Closure $mock = null): MockInterface
+    {
+        return parent::spy($abstract, $mock);
+    }
+
+    /**
+     * @param  Model|class-string<Model>|string  $table
+     * @param  array<string, mixed>  $data
+     */
+    public function assertDatabaseHas($table, array $data = [], mixed $connection = null): static
+    {
+        parent::assertDatabaseHas($table, $data, $connection);
+
+        return $this;
+    }
+
+    /**
+     * @param  Model|class-string<Model>|string  $table
+     * @param  array<string, mixed>  $data
+     */
+    public function assertDatabaseMissing($table, array $data = [], mixed $connection = null): static
+    {
+        parent::assertDatabaseMissing($table, $data, $connection);
+
+        return $this;
+    }
+
+    /**
+     * @param  Model|class-string<Model>|string  $table
+     */
+    public function assertDatabaseCount($table, int $count, mixed $connection = null): static
+    {
+        parent::assertDatabaseCount($table, $count, $connection);
 
         return $this;
     }

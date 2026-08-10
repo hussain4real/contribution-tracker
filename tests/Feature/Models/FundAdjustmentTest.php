@@ -5,7 +5,6 @@ declare(strict_types=1);
 use App\Models\Family;
 use App\Models\FundAdjustment;
 use App\Models\User;
-use Carbon\Carbon;
 
 it('casts and formats fund adjustment values and exposes relationships', function () {
     $family = Family::factory()->create();
@@ -16,7 +15,7 @@ it('casts and formats fund adjustment values and exposes relationships', functio
     ]);
 
     expect($adjustment->amount)->toBe(250000)
-        ->and($adjustment->recorded_at)->toBeInstanceOf(Carbon::class)
+        ->and($adjustment->recorded_at->toDateTimeString())->toBe('2026-05-11 09:00:00')
         ->and($adjustment->formatted_amount)->toBe("\u{20A6}250,000.00")
         ->and($adjustment->family()->firstOrFail()->is($family))->toBeTrue()
         ->and($adjustment->recorder()->firstOrFail()->is($recorder))->toBeTrue();

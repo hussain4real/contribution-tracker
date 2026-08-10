@@ -104,11 +104,15 @@ final class PlatformPlanCatalog
      */
     public static function subscriptionCard(PlatformPlan $plan, ?PlatformPlan $currentPlan = null): array
     {
-        $metadata = self::subscriptionCardMetadata()[$plan->slug] ?? [
-            'audience' => 'FamilyFunds workspace',
-            'summary' => 'A custom package configured by the platform team.',
-            'is_recommended' => false,
-        ];
+        $metadata = self::subscriptionCardMetadata()[$plan->slug] ?? null;
+
+        if ($metadata === null) {
+            $metadata = [
+                'audience' => 'FamilyFunds workspace',
+                'summary' => 'A custom package configured by the platform team.',
+                'is_recommended' => false,
+            ];
+        }
 
         return [
             'id' => $plan->id,

@@ -26,8 +26,7 @@ describe('Restore Member', function () {
     });
 
     it('super admin can restore an archived member', function () {
-        expect($this->archivedMembership)->toBeInstanceOf(FamilyMembership::class)
-            ->and($this->archivedMembership->isArchived())->toBeTrue();
+        expect($this->archivedMembership->isArchived())->toBeTrue();
 
         $this->actingAs($this->admin)
             ->post("/members/{$this->archivedMember->id}/restore")

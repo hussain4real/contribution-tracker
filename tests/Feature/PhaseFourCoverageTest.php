@@ -108,6 +108,7 @@ it('exercises reconciliation mutation endpoints and their validated requests', f
     $providerBatch = PaymentBatch::factory()->create([
         'family_id' => $family->id,
         'total_amount' => 1000,
+        'paid_at' => '2026-09-01',
         'source' => PaymentSource::Paystack,
         'recorded_by' => $admin->id,
         'receipt_number' => 2,

@@ -170,12 +170,13 @@ class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasProvid
 
     public function providerOptions(Lab|string $provider): array
     {
-        return match ($provider) {
-            Lab::Ollama => [
+        if ($provider === Lab::Ollama) {
+            return [
                 'top_p' => 0.95,
                 'top_k' => 64,
-            ],
-            default => [],
-        };
+            ];
+        }
+
+        return [];
     }
 }
