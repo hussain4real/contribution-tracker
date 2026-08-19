@@ -33,6 +33,7 @@ cat > /etc/sudoers.d/familyfunds-storage-permissions << 'EOF'
 deployer ALL=(root) NOPASSWD: /usr/bin/chown -R deployer:www-data /var/www/contribution-tracker/storage /var/www/contribution-tracker/bootstrap/cache
 deployer ALL=(root) NOPASSWD: /usr/bin/find /var/www/contribution-tracker/storage /var/www/contribution-tracker/bootstrap/cache -type d -exec /usr/bin/chmod 2775 {} +
 deployer ALL=(root) NOPASSWD: /usr/bin/find /var/www/contribution-tracker/storage /var/www/contribution-tracker/bootstrap/cache -type f -exec /usr/bin/chmod 0664 {} +
+deployer ALL=(root) NOPASSWD: /usr/bin/chmod 0660 /var/www/contribution-tracker/storage/oauth-private.key
 deployer ALL=(root) NOPASSWD: /usr/bin/install -d -o deployer -g www-data -m 2775 /var/www/contribution-tracker/storage/app/private/reports
 EOF
 chmod 440 /etc/sudoers.d/deployer /etc/sudoers.d/familyfunds-storage-permissions
