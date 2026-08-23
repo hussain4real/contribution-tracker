@@ -23,8 +23,12 @@ use Laravel\Ai\Files\Base64Audio;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Transcription;
 
+use function Illuminate\Support\defer;
+
 class AiChatController extends Controller
 {
+    private const int STREAM_MAX_EXECUTION_SECONDS = 120;
+
     private const int MIN_TRANSCRIPTION_AUDIO_BYTES = 4096;
 
     private const float MIN_TRANSCRIPTION_AUDIO_LEVEL = 0.01;
@@ -270,7 +274,13 @@ class AiChatController extends Controller
      */
     public function stream(StreamAiChatRequest $request): StreamableAgentResponse
     {
-        set_time_limit(120);
+        $originalMaximumExecutionTime = (int) ini_get('max_execution_time');
+
+        set_time_limit(self::STREAM_MAX_EXECUTION_SECONDS);
+
+        defer(static function () use ($originalMaximumExecutionTime): void {
+            set_time_limit($originalMaximumExecutionTime);
+        })->always();
 
         $validated = $request->validated();
 
