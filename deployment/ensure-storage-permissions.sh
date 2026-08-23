@@ -20,11 +20,11 @@ sudo /usr/bin/chown -R deployer:www-data "${WRITABLE_PATHS[@]}"
 sudo /usr/bin/find "${WRITABLE_PATHS[@]}" -type d -exec /usr/bin/chmod 2775 {} +
 sudo /usr/bin/find "${WRITABLE_PATHS[@]}" -type f -exec /usr/bin/chmod 0664 {} +
 
-# Passport's private key must remain readable by PHP-FPM without being
-# group-writable. The broad storage normalization above would otherwise make
-# Passport reject the key during authorization requests.
+# Passport's private key must remain owner-writable and group-readable. The
+# broad storage normalization above would otherwise make Passport reject the
+# key during authorization requests.
 if [[ -f "$APP_DIR/storage/oauth-private.key" ]]; then
-    sudo /usr/bin/chmod 0660 "$APP_DIR/storage/oauth-private.key"
+    /usr/bin/chmod 0640 "$APP_DIR/storage/oauth-private.key"
 fi
 
 # Report generation creates this directory on demand. Creating it here also
