@@ -79,11 +79,11 @@
             "@php artisan config:clear --ansi",
             "@php vendor/bin/pest"
         ],
-        "test:tia": "@php -d max_execution_time=0 vendor/bin/pest --parallel --compact --tia --passthru-php=\"'-d' 'max_execution_time=0'\"",
-        "test:tia:fresh": "@php -d max_execution_time=0 vendor/bin/pest --parallel --compact --tia --fresh --passthru-php=\"'-d' 'max_execution_time=0'\"",
-        "test:tia:shared": "@php -d max_execution_time=0 vendor/bin/pest --parallel --compact --tia --baselined --passthru-php=\"'-d' 'max_execution_time=0'\"",
+        "test:tia": "@php -d max_execution_time=0 vendor/bin/pest --compact --tia",
+        "test:tia:fresh": "@php -d max_execution_time=0 vendor/bin/pest --compact --tia --fresh",
+        "test:tia:shared": "@php -d max_execution_time=0 vendor/bin/pest --compact --tia --baselined",
         "test:coverage": "@php -d max_execution_time=0 vendor/bin/pest --coverage --parallel --compact --min=100 --no-tia --passthru-php=\"'-d' 'max_execution_time=0'\"",
-        "test:coverage:tia": "@php -d max_execution_time=0 vendor/bin/pest --coverage --parallel --compact --min=100 --tia --passthru-php=\"'-d' 'max_execution_time=0'\"",
+        "test:coverage:tia": "@php -d max_execution_time=0 vendor/bin/pest --coverage --compact --min=100 --tia",
         "test:coverage:tia:fresh": [
             "@test:tia:fresh",
             "@test:coverage:tia"

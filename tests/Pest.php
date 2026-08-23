@@ -19,8 +19,6 @@ use Mockery\MockInterface;
 use Pest\Browser\Api\PendingAwaitablePage;
 use Tests\TestCase;
 
-set_time_limit(0);
-
 /*
 |--------------------------------------------------------------------------
 | Test Case
