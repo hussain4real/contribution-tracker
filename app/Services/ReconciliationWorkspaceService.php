@@ -50,32 +50,38 @@ class ReconciliationWorkspaceService
         $suggestions = $this->matchingService->suggestionsFor(
             $transactions->getCollection()->where('status', '!=', ReconciliationStatus::Matched),
         );
-        $transactions->through(fn (BankTransaction $transaction): array => [
-            'id' => $transaction->id,
-            'date' => $transaction->transacted_at->toDateString(),
-            'direction' => $transaction->direction->value,
-            'direction_label' => $transaction->direction->label(),
-            'amount' => $transaction->amount,
-            'reference' => $transaction->reference,
-            'description' => $transaction->description,
-            'source_account' => $transaction->source_account,
-            'status' => $transaction->status->value,
-            'status_label' => $transaction->status->label(),
-            'linked_amount' => $transaction->linkedAmount(),
-            'remaining_amount' => $transaction->remainingAmount(),
-            'ignored_reason' => $transaction->ignored_reason,
-            'disputed_reason' => $transaction->disputed_reason,
-            'suggestions' => $transaction->status === ReconciliationStatus::Matched
-                ? []
-                : $suggestions[$transaction->id] ?? [],
-            'links' => $transaction->links->map(fn (ReconciliationLink $link): array => [
-                'id' => $link->id,
-                'type' => $link->reconcilable_type,
-                'target_id' => $link->reconcilable_id,
-                'label' => $this->targetLabel($link->reconcilable),
-                'amount' => $link->amount,
-            ])->all(),
-        ]);
+        $transactions->through(function (BankTransaction $transaction) use ($suggestions): array {
+            $transactionSuggestions = [];
+
+            if ($transaction->status !== ReconciliationStatus::Matched) {
+                $transactionSuggestions = $suggestions[$transaction->id] ?? [];
+            }
+
+            return [
+                'id' => $transaction->id,
+                'date' => $transaction->transacted_at->toDateString(),
+                'direction' => $transaction->direction->value,
+                'direction_label' => $transaction->direction->label(),
+                'amount' => $transaction->amount,
+                'reference' => $transaction->reference,
+                'description' => $transaction->description,
+                'source_account' => $transaction->source_account,
+                'status' => $transaction->status->value,
+                'status_label' => $transaction->status->label(),
+                'linked_amount' => $transaction->linkedAmount(),
+                'remaining_amount' => $transaction->remainingAmount(),
+                'ignored_reason' => $transaction->ignored_reason,
+                'disputed_reason' => $transaction->disputed_reason,
+                'suggestions' => $transactionSuggestions,
+                'links' => $transaction->links->map(fn (ReconciliationLink $link): array => [
+                    'id' => $link->id,
+                    'type' => $link->reconcilable_type,
+                    'target_id' => $link->reconcilable_id,
+                    'label' => $this->targetLabel($link->reconcilable),
+                    'amount' => $link->amount,
+                ])->all(),
+            ];
+        });
 
         $summary = collect(ReconciliationStatus::cases())->mapWithKeys(fn (ReconciliationStatus $status): array => [
             $status->value => BankTransaction::query()

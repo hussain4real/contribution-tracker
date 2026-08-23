@@ -89,6 +89,11 @@ class AssignFamilyCategory
         }
 
         $startsAt = $membership->created_at?->copy()->startOfMonth() ?? now()->startOfMonth();
+        $effectiveUntil = null;
+
+        if ($startsAt->lt($effectiveFrom)) {
+            $effectiveUntil = $effectiveFrom->copy()->subDay()->toDateString();
+        }
 
         FamilyMembershipCategoryAssignment::query()->create([
             'family_membership_id' => $membership->id,
@@ -98,9 +103,7 @@ class AssignFamilyCategory
             'category_slug' => $membership->familyCategory->slug,
             'monthly_amount' => $membership->familyCategory->monthly_amount,
             'effective_from' => $startsAt->toDateString(),
-            'effective_until' => $startsAt->lt($effectiveFrom)
-                ? $effectiveFrom->copy()->subDay()->toDateString()
-                : null,
+            'effective_until' => $effectiveUntil,
         ]);
     }
 }

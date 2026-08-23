@@ -162,18 +162,27 @@ class FamilyContributionReviewService
      */
     public function report(Family $family, ReportType $type, array $filters): array
     {
-        return match ($type) {
-            ReportType::ContributionRegister => $this->contributionReport($family, $type, $filters),
-            ReportType::ContributionAging => $this->agingReport($family, $filters),
-            ReportType::MemberStatement => $this->contributionReport($family, $type, $filters),
-            ReportType::CategoryPerformance => $this->categoryPerformanceReport($family, $filters),
-            ReportType::FundStatement => $this->fundStatementReport($family, $filters),
-            ReportType::CashFlow => $this->cashFlowReport($family, $filters),
-            ReportType::ExpenseTotals => $this->expenseTotalsReport($family, $filters),
-            ReportType::Reversals => $this->reversalReport($family, $filters),
-            ReportType::AuditActivity => $this->auditReport($family, $filters),
-            ReportType::Receipt => $this->contributionReport($family, ReportType::MemberStatement, $filters),
-        };
+        switch ($type) {
+            case ReportType::ContributionRegister:
+            case ReportType::MemberStatement:
+                return $this->contributionReport($family, $type, $filters);
+            case ReportType::ContributionAging:
+                return $this->agingReport($family, $filters);
+            case ReportType::CategoryPerformance:
+                return $this->categoryPerformanceReport($family, $filters);
+            case ReportType::FundStatement:
+                return $this->fundStatementReport($family, $filters);
+            case ReportType::CashFlow:
+                return $this->cashFlowReport($family, $filters);
+            case ReportType::ExpenseTotals:
+                return $this->expenseTotalsReport($family, $filters);
+            case ReportType::Reversals:
+                return $this->reversalReport($family, $filters);
+            case ReportType::AuditActivity:
+                return $this->auditReport($family, $filters);
+            case ReportType::Receipt:
+                return $this->contributionReport($family, ReportType::MemberStatement, $filters);
+        }
     }
 
     /** @param array<string, mixed> $filters

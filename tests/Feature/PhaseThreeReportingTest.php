@@ -13,7 +13,6 @@ use App\Models\FamilyCategory;
 use App\Models\FinancialReversal;
 use App\Models\FundAdjustment;
 use App\Models\Payment;
-use App\Models\PaymentBatch;
 use App\Models\ReportArtifact;
 use App\Models\ReportDelivery;
 use App\Models\ReportSchedule;
@@ -122,6 +121,9 @@ it('builds all roadmap report types including a reconciled fund statement', func
         expect($service->report($family, $type, $filters)['title'])->toBe($type->label());
     }
 
+    expect($service->report($family, ReportType::Receipt, $filters)['title'])
+        ->toBe(ReportType::MemberStatement->label());
+
     $statement = $service->report($family, ReportType::FundStatement, $filters);
     expect($statement['totals'])->toMatchArray([
         'opening_balance' => 0,
@@ -163,7 +165,7 @@ it('generates immutable private receipts only for the member and family officers
     $artifact = ReportArtifact::query()->where('type', ReportType::Receipt)->firstOrFail();
     expect(Storage::disk('local')->get($artifact->path))->toStartWith('%PDF-')
         ->and($artifact->filters['member_id'])->toBe($member->id)
-        ->and($batch->refresh())->toBeInstanceOf(PaymentBatch::class);
+        ->and($batch->refresh()->exists)->toBeTrue();
 });
 
 it('allows members to download only their own statement', function () {

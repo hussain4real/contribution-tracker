@@ -1,7 +1,6 @@
 includes:
     - vendor/larastan/larastan/extension.neon
-    - vendor/pestphp/pest/extension.neon
-    - vendor/pestphp/pest/phpstan-pest-extension.neon
+    - vendor/pestphp/pest-plugin-phpstan/extension.neon
 
 parameters:
     level: max
@@ -24,18 +23,6 @@ parameters:
 
     bootstrapFiles:
         - vendor/autoload.php
-
-    scanFiles:
-        - tests/PestStaticAnalysisTestCase.php
-        - vendor/pestphp/pest/src/PendingCalls/AfterEachCall.php
-        - vendor/pestphp/pest/src/PendingCalls/BeforeEachCall.php
-        - vendor/pestphp/pest/src/PendingCalls/TestCall.php
-        - vendor/pestphp/pest/src/Support/HigherOrderTapProxy.php
-
-    universalObjectCratesClasses:
-        - Pest\Support\HigherOrderTapProxy
-        - Pest\Expectation
-        - Pest\Mixins\Expectation
 
     excludePaths:
         - bootstrap/cache

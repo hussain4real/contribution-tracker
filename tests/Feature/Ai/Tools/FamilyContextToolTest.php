@@ -11,7 +11,6 @@ use App\Ai\Tools\RecordFundAdjustment;
 use App\Ai\Tools\RecordPayment;
 use App\Ai\Tools\SendInvitation;
 use App\Models\User;
-use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 
 test('family scoped AI tools require a family context', function (string $toolClass, array $payload) {
@@ -28,8 +27,6 @@ test('family scoped AI tools require a family context', function (string $toolCl
         SendInvitation::class => new SendInvitation($user),
         default => throw new InvalidArgumentException('Unsupported AI tool class.'),
     };
-
-    expect($tool)->toBeInstanceOf(Tool::class);
 
     $result = decodeToolResult($tool->handle(new Request($payload)));
 

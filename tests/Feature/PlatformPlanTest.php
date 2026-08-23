@@ -138,6 +138,27 @@ it('seeds the freemium self serve pricing ladder and retires legacy plans', func
         ]);
 });
 
+it('uses safe subscription card metadata for custom plans', function () {
+    $plan = PlatformPlan::create([
+        'name' => 'Community',
+        'slug' => 'community',
+        'price' => 2500,
+        'max_members' => null,
+        'features' => [PlatformPlanCatalog::BasicContributions],
+        'is_active' => true,
+        'sort_order' => 10,
+    ]);
+
+    expect(PlatformPlanCatalog::subscriptionCard($plan, $plan))->toMatchArray([
+        'id' => $plan->id,
+        'slug' => 'community',
+        'audience' => 'FamilyFunds workspace',
+        'summary' => 'A custom package configured by the platform team.',
+        'is_recommended' => false,
+        'is_current' => true,
+    ]);
+});
+
 it('shows the plans resource for super admin', function () {
     $admin = createSuperAdmin();
 

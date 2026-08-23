@@ -569,6 +569,7 @@ describe('ProcessWhatsAppWebhook job', function () {
 
         DB::partialMock()
             ->shouldReceive('connection')
+            ->twice()
             ->andReturn(new class($driver)
             {
                 public function __construct(private string $driver) {}
@@ -585,8 +586,6 @@ describe('ProcessWhatsAppWebhook job', function () {
             // The test database is SQLite, so the vendor-specific SQL is only
             // exercised up to execution. That is enough to protect branch drift.
         }
-
-        expect(true)->toBeTrue();
     })->with([
         'pgsql',
         'mysql',

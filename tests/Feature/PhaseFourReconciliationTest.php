@@ -32,6 +32,7 @@ use App\Services\ReconciliationMatchingService;
 use App\Services\ReconciliationPeriodService;
 use App\Services\ReconciliationWorkspaceService;
 use App\Support\PlatformPlanCatalog;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Storage;
@@ -381,6 +382,31 @@ it('rejects reversed Paystack transactions from settlement groups', function () 
             '2026-07-10',
             $admin,
         ))->toThrow(InvalidArgumentException::class, 'Every Paystack transaction must be allocated in this family.');
+});
+
+it('omits match suggestions for reconciled workspace transactions', function () {
+    [$family, $admin] = phaseFourFixture();
+    $import = reconciliationImport($family, $admin);
+    $transaction = BankTransaction::factory()->create([
+        'family_id' => $family->id,
+        'reconciliation_import_id' => $import->id,
+        'status' => ReconciliationStatus::Matched,
+    ]);
+
+    $workspace = app(ReconciliationWorkspaceService::class)->data($family, $admin, []);
+    $transactions = $workspace['transactions'] ?? null;
+
+    if (! $transactions instanceof LengthAwarePaginator) {
+        throw new RuntimeException('Expected paginated workspace transactions.');
+    }
+
+    $row = collect($transactions->items())->firstWhere('id', $transaction->id);
+
+    if (! is_array($row)) {
+        throw new RuntimeException('Expected the reconciled workspace transaction.');
+    }
+
+    expect($row['suggestions'])->toBe([]);
 });
 
 it('keeps settled Paystack receipts exclusive to their settlement groups', function () {

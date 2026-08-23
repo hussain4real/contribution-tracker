@@ -11,7 +11,6 @@ use App\Models\FundAdjustment;
 use App\Models\PaymentBatch;
 use App\Models\PlatformPlan;
 use App\Models\User;
-use Carbon\Carbon;
 
 it('casts family fields and reports status helpers', function () {
     $family = Family::factory()->create([
@@ -27,10 +26,10 @@ it('casts family fields and reports status helpers', function () {
     ]);
 
     expect($family->due_day)->toBe(15)
-        ->and($family->trial_ends_at)->toBeInstanceOf(Carbon::class)
+        ->and($family->trial_ends_at?->toDateTimeString())->toBe('2026-05-31 23:59:59')
         ->and($family->max_members)->toBe(25)
-        ->and($family->suspended_at)->toBeInstanceOf(Carbon::class)
-        ->and($family->current_period_end)->toBeInstanceOf(Carbon::class)
+        ->and($family->suspended_at?->toDateTimeString())->toBe('2026-05-11 09:00:00')
+        ->and($family->current_period_end?->toDateTimeString())->toBe('2026-06-11 09:00:00')
         ->and($family->isSuspended())->toBeTrue()
         ->and($family->hasPaystackSubaccount())->toBeTrue()
         ->and($family->hasActiveSubscription())->toBeTrue()

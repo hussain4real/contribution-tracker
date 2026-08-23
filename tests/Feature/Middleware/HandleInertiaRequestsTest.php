@@ -45,7 +45,13 @@ test('flash returns null when session is not available', function () {
     // Resolve the flash closures — should not throw
     expect($success())->toBeNull();
     expect($error())->toBeNull();
-    expect($warning())->toBeNull();
+    expect($warning())->toBeNull()
+        ->and(data_get($shared, 'auth.user'))->toBeNull()
+        ->and(data_get($shared, 'auth.can'))->toBeNull()
+        ->and(data_get($shared, 'family'))->toBeNull()
+        ->and(data_get($shared, 'featureFlags'))->toBeNull()
+        ->and(data_get($shared, 'changelogUpdate'))->toBeNull()
+        ->and(data_get($shared, 'notifications'))->toBeNull();
 });
 
 test('share exposes add member permission for financial secretaries', function () {

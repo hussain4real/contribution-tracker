@@ -3,17 +3,14 @@
 declare(strict_types=1);
 
 use App\Channels\WhatsAppChannel;
-use App\Channels\WhatsAppMessage;
 use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
 use App\Notifications\ContributionReminderNotification;
-use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Queue\Middleware\RateLimited;
 use Illuminate\Support\Facades\URL;
 use NotificationChannels\WebPush\WebPushChannel;
-use NotificationChannels\WebPush\WebPushMessage;
 
 describe('ContributionReminderNotification', function () {
     it('sends via mail, database, whatsapp, and web push channels', function () {
@@ -72,8 +69,7 @@ describe('ContributionReminderNotification', function () {
         $notification = new ContributionReminderNotification($contribution, 'reminder');
         $mail = $notification->toMail($user);
 
-        expect($mail)->toBeInstanceOf(MailMessage::class)
-            ->and($mail->subject)->toContain('Reminder')
+        expect($mail->subject)->toContain('Reminder')
             ->and($mail->subject)->toContain($contribution->period_label);
     });
 
@@ -190,8 +186,6 @@ describe('ContributionReminderNotification', function () {
         $notification = new ContributionReminderNotification($contribution, 'follow_up');
         $message = $notification->toWhatsApp($user);
 
-        expect($message)->toBeInstanceOf(WhatsAppMessage::class);
-
         $payload = $message->toPayload('2348012345678');
         $component = firstResultArray(resultArray($payload, 'template'), 'components');
         $params = resultArray($component, 'parameters');
@@ -212,8 +206,7 @@ describe('ContributionReminderNotification', function () {
         $payload = $message->toArray();
         $data = resultArray($payload, 'data');
 
-        expect($message)->toBeInstanceOf(WebPushMessage::class)
-            ->and($payload['title'])->toBe('Contribution due soon')
+        expect($payload['title'])->toBe('Contribution due soon')
             ->and($payload['body'])->toContain($contribution->period_label)
             ->and($payload['body'])->toContain('Smith Family')
             ->and($payload['icon'])->toBe('/pwa-192x192.png')

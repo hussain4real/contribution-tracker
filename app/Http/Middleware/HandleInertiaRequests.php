@@ -85,35 +85,53 @@ class HandleInertiaRequests extends Middleware
             }
         }
 
-        return [
-            ...parent::share($request),
-            'name' => config('app.name'),
-            'quote' => ['message' => trim($message), 'author' => trim($author)],
-            'auth' => [
-                'user' => $user instanceof User ? [
-                    'id' => $user->id,
-                    'name' => $currentMembership?->displayName() ?? $user->name,
-                    'email' => $user->email,
-                    'email_verified_at' => $user->email_verified_at,
-                    'role' => $activeRole?->value,
-                    'role_label' => $activeRole?->label(),
-                    'category' => $activeCategoryValue,
-                    'category_label' => $activeCategoryLabel,
-                    'family_id' => $currentFamily?->id,
-                    'current_family_id' => $user->current_family_id,
-                    'family_category_id' => $currentMembership?->family_category_id,
-                    'is_super_admin' => $user->is_super_admin,
-                    'whatsapp_phone' => $user->whatsapp_phone,
-                    'whatsapp_verified_at' => $user->whatsapp_verified_at,
-                ] : null,
-                'can' => $user ? [
-                    'add_members' => $activeRole?->canAddMembers() ?? false,
-                    'manage_members' => $activeRole?->canManageMembers() ?? false,
-                    'record_payments' => $activeRole?->canRecordPayments() ?? false,
-                    'generate_reports' => $activeRole?->canGenerateReports() ?? false,
-                ] : null,
-            ],
-            'family' => $currentFamily ? [
+        $authUser = null;
+        $permissions = null;
+        $featureFlags = null;
+        $notifications = null;
+
+        if ($user instanceof User) {
+            $authUser = [
+                'id' => $user->id,
+                'name' => $currentMembership?->displayName() ?? $user->name,
+                'email' => $user->email,
+                'email_verified_at' => $user->email_verified_at,
+                'role' => $activeRole?->value,
+                'role_label' => $activeRole?->label(),
+                'category' => $activeCategoryValue,
+                'category_label' => $activeCategoryLabel,
+                'family_id' => $currentFamily?->id,
+                'current_family_id' => $user->current_family_id,
+                'family_category_id' => $currentMembership?->family_category_id,
+                'is_super_admin' => $user->is_super_admin,
+                'whatsapp_phone' => $user->whatsapp_phone,
+                'whatsapp_verified_at' => $user->whatsapp_verified_at,
+            ];
+            $permissions = [
+                'add_members' => $activeRole?->canAddMembers() ?? false,
+                'manage_members' => $activeRole?->canManageMembers() ?? false,
+                'record_payments' => $activeRole?->canRecordPayments() ?? false,
+                'generate_reports' => $activeRole?->canGenerateReports() ?? false,
+            ];
+            $featureFlags = [
+                'ai_assistant' => fn () => Feature::for($user)->active(AiAssistant::class),
+            ];
+            $notifications = [
+                'unread_count' => fn () => $user->unreadNotifications()->count(),
+                'recent' => fn () => $user->unreadNotifications()->latest()->limit(10)->get()->map(fn ($n) => [
+                    'id' => $n->id,
+                    'type' => $n->type,
+                    'data' => $n->data,
+                    'read_at' => $n->read_at,
+                    'created_at' => $n->created_at?->diffForHumans(),
+                ]),
+            ];
+        }
+
+        $familyData = null;
+
+        if ($currentFamily instanceof Family) {
+            $familyData = [
                 'id' => $currentFamily->id,
                 'name' => $currentFamily->name,
                 'slug' => $currentFamily->slug,
@@ -122,7 +140,26 @@ class HandleInertiaRequests extends Middleware
                 'bank_name' => $currentFamily->bank_name,
                 'account_name' => $currentFamily->account_name,
                 'account_number' => $currentFamily->account_number,
-            ] : null,
+            ];
+        }
+
+        $changelogUpdate = null;
+
+        if ($user) {
+            $changelogUpdate = $request->routeIs('changelog')
+                ? fn () => app(GitHubReleaseService::class)->updateDataFor($user)
+                : Inertia::defer(fn () => app(GitHubReleaseService::class)->updateDataFor($user), 'changelog');
+        }
+
+        return [
+            ...parent::share($request),
+            'name' => config('app.name'),
+            'quote' => ['message' => trim($message), 'author' => trim($author)],
+            'auth' => [
+                'user' => $authUser,
+                'can' => $permissions,
+            ],
+            'family' => $familyData,
             'families' => $user ? fn () => $user->toUserFamilies() : null,
             'flash' => [
                 'success' => fn () => $request->hasSession() ? $request->session()->get('success') : null,
@@ -132,25 +169,10 @@ class HandleInertiaRequests extends Middleware
             'subscription' => $currentFamily && $user instanceof User ? fn () => $this->subscriptionData($user) : null,
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'impersonating' => $request->hasSession() && $request->session()->has('impersonating_from'),
-            'featureFlags' => $user ? [
-                'ai_assistant' => fn () => Feature::for($user)->active(AiAssistant::class),
-            ] : null,
-            'changelogUpdate' => $user
-                ? ($request->routeIs('changelog')
-                    ? fn () => app(GitHubReleaseService::class)->updateDataFor($user)
-                    : Inertia::defer(fn () => app(GitHubReleaseService::class)->updateDataFor($user), 'changelog'))
-                : null,
+            'featureFlags' => $featureFlags,
+            'changelogUpdate' => $changelogUpdate,
             'webPush' => $user ? fn () => $this->webPushData($user) : null,
-            'notifications' => $user ? [
-                'unread_count' => fn () => $user->unreadNotifications()->count(),
-                'recent' => fn () => $user->unreadNotifications()->latest()->limit(10)->get()->map(fn ($n) => [
-                    'id' => $n->id,
-                    'type' => $n->type,
-                    'data' => $n->data,
-                    'read_at' => $n->read_at,
-                    'created_at' => $n->created_at?->diffForHumans(),
-                ]),
-            ] : null,
+            'notifications' => $notifications,
         ];
     }
 

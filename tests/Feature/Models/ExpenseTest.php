@@ -5,7 +5,6 @@ declare(strict_types=1);
 use App\Models\Expense;
 use App\Models\Family;
 use App\Models\User;
-use Carbon\Carbon;
 
 it('casts and formats expense values and exposes relationships', function () {
     $family = Family::factory()->create();
@@ -16,7 +15,7 @@ it('casts and formats expense values and exposes relationships', function () {
     ]);
 
     expect($expense->amount)->toBe(12345)
-        ->and($expense->spent_at)->toBeInstanceOf(Carbon::class)
+        ->and($expense->spent_at->toDateTimeString())->toBe('2026-05-11 09:00:00')
         ->and($expense->formatted_amount)->toBe("\u{20A6}12,345.00")
         ->and($expense->family()->firstOrFail()->is($family))->toBeTrue()
         ->and($expense->recorder()->firstOrFail()->is($recorder))->toBeTrue();
