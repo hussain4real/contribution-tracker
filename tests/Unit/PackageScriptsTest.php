@@ -2,6 +2,10 @@
 
 declare(strict_types=1);
 
+it('disables the execution time limit inside Pest workers', function () {
+    expect(ini_get('max_execution_time'))->toBe('0');
+});
+
 it('keeps lint validation non-mutating', function () {
     $contents = file_get_contents(__DIR__.'/../../package.json');
 
