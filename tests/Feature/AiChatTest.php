@@ -186,6 +186,27 @@ test('authenticated users can stream an AI chat response', function () {
     $response->assertSuccessful();
 });
 
+test('the AI chat stream restores the process execution time limit after the response', function () {
+    $originalMaximumExecutionTime = (int) ini_get('max_execution_time');
+
+    set_time_limit(37);
+
+    try {
+        $family = Family::factory()->create();
+        $user = User::factory()->create(['family_id' => $family->id]);
+
+        FamilyAssistant::fake(['Hello!']);
+
+        $this->actingAs($user)
+            ->post(route('ai.chat'), ['message' => 'Hello'])
+            ->assertSuccessful();
+
+        expect((int) ini_get('max_execution_time'))->toBe(37);
+    } finally {
+        set_time_limit($originalMaximumExecutionTime);
+    }
+});
+
 test('users can continue an existing conversation', function () {
     $family = Family::factory()->create();
     $user = User::factory()->create(['family_id' => $family->id]);
