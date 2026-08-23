@@ -9,8 +9,8 @@ it('normalizes storage permissions before production deployment completes', func
     $setupScript = file_get_contents($projectRoot.'/deployment/setup-server.sh');
     $workflow = file_get_contents($projectRoot.'/.github/workflows/deploy.yml');
 
-    if ($workflow === false) {
-        throw new RuntimeException('Unable to read the production deployment workflow.');
+    if ($script === false || $deployScript === false || $setupScript === false || $workflow === false) {
+        throw new RuntimeException('Unable to read the deployment permission fixtures.');
     }
 
     expect($script)
