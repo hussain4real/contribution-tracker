@@ -31,11 +31,10 @@ it('normalizes storage permissions before production deployment completes', func
 
     expect($deployScript)->toContain('bash deployment/ensure-storage-permissions.sh "$APP_DIR"');
     expect($workflow)
-        ->toContain('name: Bootstrap writable-path permissions')
-        ->toContain('username: root')
-        ->toContain('/usr/bin/chown -R deployer\:www-data /var/www/contribution-tracker/storage /var/www/contribution-tracker/bootstrap/cache')
-        ->toContain('/usr/bin/find /var/www/contribution-tracker/storage /var/www/contribution-tracker/bootstrap/cache -path /var/www/contribution-tracker/storage/oauth-private.key -prune -o -type f -exec /usr/bin/chmod 0664')
-        ->toContain('visudo -cf /etc/sudoers.d/familyfunds-storage-permissions')
+        ->not->toContain('name: Bootstrap writable-path permissions')
+        ->not->toContain('username: root')
+        ->not->toContain('/etc/sudoers.d/familyfunds-storage-permissions')
+        ->toContain('username: deployer')
         ->toContain('bash deployment/ensure-storage-permissions.sh /var/www/contribution-tracker');
 
     $keyPermissionPosition = strpos($script, '/usr/bin/chmod 0640 "$APP_DIR/storage/oauth-private.key"');
@@ -46,13 +45,4 @@ it('normalizes storage permissions before production deployment completes', func
     }
 
     expect($keyPermissionPosition)->toBeLessThan($fileNormalizationPosition);
-
-    $bootstrapPosition = strpos($workflow, 'name: Bootstrap writable-path permissions');
-    $deployPosition = strpos($workflow, 'name: Deploy to Server');
-
-    if ($bootstrapPosition === false || $deployPosition === false) {
-        throw new RuntimeException('Expected the permission bootstrap and deployment steps to exist.');
-    }
-
-    expect($bootstrapPosition)->toBeLessThan($deployPosition);
 });

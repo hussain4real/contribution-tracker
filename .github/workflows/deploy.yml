@@ -59,25 +59,6 @@ jobs:
     needs: test
 
     steps:
-      - name: Bootstrap writable-path permissions
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: root
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            set -euo pipefail
-
-            cat > /etc/sudoers.d/familyfunds-storage-permissions << 'EOF'
-            deployer ALL=(root) NOPASSWD: /usr/bin/chown -R deployer\:www-data /var/www/contribution-tracker/storage /var/www/contribution-tracker/bootstrap/cache
-            deployer ALL=(root) NOPASSWD: /usr/bin/find /var/www/contribution-tracker/storage /var/www/contribution-tracker/bootstrap/cache -type d -exec /usr/bin/chmod 2775 {} +
-            deployer ALL=(root) NOPASSWD: /usr/bin/find /var/www/contribution-tracker/storage /var/www/contribution-tracker/bootstrap/cache -path /var/www/contribution-tracker/storage/oauth-private.key -prune -o -type f -exec /usr/bin/chmod 0664 {} +
-            deployer ALL=(root) NOPASSWD: /usr/bin/install -d -o deployer -g www-data -m 2775 /var/www/contribution-tracker/storage/app/private/reports
-            EOF
-
-            chmod 440 /etc/sudoers.d/familyfunds-storage-permissions
-            visudo -cf /etc/sudoers.d/familyfunds-storage-permissions
-
       - name: Deploy to Server
         uses: appleboy/ssh-action@v1
         with:
