@@ -2,10 +2,6 @@
 
 declare(strict_types=1);
 
-it('disables the execution time limit inside Pest workers', function () {
-    expect(ini_get('max_execution_time'))->toBe('0');
-});
-
 it('keeps lint validation non-mutating', function () {
     $contents = file_get_contents(__DIR__.'/../../package.json');
 
@@ -55,18 +51,24 @@ it('configures Pest 5 with local TIA and an unchanged full coverage gate', funct
         ->and($developmentRequirements['pestphp/pest-plugin-agent'] ?? null)->toBe('^5.0')
         ->and($developmentRequirements['pestphp/pest-plugin-phpstan'] ?? null)->toBe('^5.0')
         ->and($scripts['test:tia'] ?? null)->toContain('--tia')
-        ->and($scripts['test:tia'] ?? null)->toContain('--passthru-php')
+        ->and($scripts['test:tia'] ?? null)->toContain('-d max_execution_time=0')
+        ->and($scripts['test:tia'] ?? null)->not->toContain('--parallel')
+        ->and($scripts['test:tia'] ?? null)->not->toContain('--passthru-php')
         ->and($scripts['test:tia:fresh'] ?? null)->toContain('--tia --fresh')
-        ->and($scripts['test:tia:fresh'] ?? null)->toContain('--passthru-php')
+        ->and($scripts['test:tia:fresh'] ?? null)->not->toContain('--parallel')
+        ->and($scripts['test:tia:fresh'] ?? null)->not->toContain('--passthru-php')
         ->and($scripts['test:tia:shared'] ?? null)->toContain('--tia --baselined')
-        ->and($scripts['test:tia:shared'] ?? null)->toContain('--passthru-php')
+        ->and($scripts['test:tia:shared'] ?? null)->not->toContain('--parallel')
+        ->and($scripts['test:tia:shared'] ?? null)->not->toContain('--passthru-php')
         ->and($scripts['test:coverage:tia'] ?? null)->toContain('--coverage')
         ->and($scripts['test:coverage:tia'] ?? null)->toContain('--min=100')
         ->and($scripts['test:coverage:tia'] ?? null)->toContain('--tia')
-        ->and($scripts['test:coverage:tia'] ?? null)->toContain('--passthru-php')
+        ->and($scripts['test:coverage:tia'] ?? null)->not->toContain('--parallel')
+        ->and($scripts['test:coverage:tia'] ?? null)->not->toContain('--passthru-php')
         ->and($freshCoverageTia)->toBe(['@test:tia:fresh', '@test:coverage:tia'])
         ->and($scripts['test:coverage'] ?? null)->toContain('--min=100')
         ->and($scripts['test:coverage'] ?? null)->toContain('--no-tia')
+        ->and($scripts['test:coverage'] ?? null)->toContain('--parallel')
         ->and($scripts['test:coverage'] ?? null)->toContain('--passthru-php')
         ->and($scripts['test:coverage'] ?? null)->not->toContain('--tia')
         ->and($ciCheck)->toContain('@test:coverage')
