@@ -13,11 +13,14 @@ it('normalizes storage permissions before production deployment completes', func
         ->toContain('chown -R deployer:www-data')
         ->toContain('find "${WRITABLE_PATHS[@]}" -type d -exec /usr/bin/chmod 2775')
         ->toContain('find "${WRITABLE_PATHS[@]}" -type f -exec /usr/bin/chmod 0664')
+        ->toContain('/usr/bin/chmod 0640 "$APP_DIR/storage/oauth-private.key"')
+        ->not->toContain('sudo /usr/bin/chmod 0640 "$APP_DIR/storage/oauth-private.key"')
         ->toContain('storage/app/private/reports');
 
     expect($setupScript)
         ->toContain('/etc/sudoers.d/familyfunds-storage-permissions')
         ->toContain('/usr/bin/chown -R deployer:www-data /var/www/contribution-tracker/storage /var/www/contribution-tracker/bootstrap/cache')
+        ->not->toContain('/var/www/contribution-tracker/storage/oauth-private.key')
         ->toContain('/usr/bin/install -d -o deployer -g www-data -m 2775 /var/www/contribution-tracker/storage/app/private/reports');
 
     expect($deployScript)->toContain('bash deployment/ensure-storage-permissions.sh "$APP_DIR"');
