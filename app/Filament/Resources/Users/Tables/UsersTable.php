@@ -91,7 +91,7 @@ class UsersTable
 
                         auth()->login($record);
 
-                        return redirect()->route('dashboard')->with('success', "Now impersonating {$record->name}.");
+                        return redirect()->route('legacy.dashboard')->with('success', "Now impersonating {$record->name}.");
                     }),
             ]);
     }

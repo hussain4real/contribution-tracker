@@ -12,17 +12,21 @@ use Livewire\Livewire;
 
 describe('Platform Impersonate Users', function () {
     it('allows super admin to impersonate a user', function () {
-        $family = Family::factory()->create();
-        $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
-        $member = User::factory()->member()->create(['family_id' => $family->id]);
+        $superAdminFamily = Family::factory()->create();
+        $memberFamily = Family::factory()->create();
+        $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $superAdminFamily->id]);
+        $member = User::factory()->member()->create(['family_id' => $memberFamily->id]);
 
         $this->actingAs($superAdmin);
 
         Livewire::test(ViewUser::class, ['record' => $member->getRouteKey()])
             ->callAction('impersonate')
-            ->assertRedirect(route('dashboard'));
+            ->assertRedirect(route('legacy.dashboard'));
 
         $this->assertAuthenticatedAs($member);
+
+        $this->get(route('legacy.dashboard'))
+            ->assertRedirect(route('dashboard', ['current_family' => $memberFamily->slug]));
     });
 
     it('stores original user id in session during impersonation', function () {
@@ -119,10 +123,11 @@ describe('Platform Impersonate Users', function () {
     });
 
     it('allows super admin to impersonate a user from the users table', function () {
-        $family = Family::factory()->create();
-        $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
+        $superAdminFamily = Family::factory()->create();
+        $memberFamily = Family::factory()->create();
+        $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $superAdminFamily->id]);
         $member = User::factory()->member()->create([
-            'family_id' => $family->id,
+            'family_id' => $memberFamily->id,
             'name' => 'Table User',
         ]);
 
@@ -130,9 +135,12 @@ describe('Platform Impersonate Users', function () {
 
         Livewire::test(ListUsers::class)
             ->callTableAction('impersonate', $member)
-            ->assertRedirect(route('dashboard'));
+            ->assertRedirect(route('legacy.dashboard'));
 
         $this->assertAuthenticatedAs($member);
+
+        $this->get(route('legacy.dashboard'))
+            ->assertRedirect(route('dashboard', ['current_family' => $memberFamily->slug]));
 
         expect(session('impersonating_from'))->toBe($superAdmin->id)
             ->and(session('success'))->toBe('Now impersonating Table User.');
