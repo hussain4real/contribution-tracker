@@ -4,7 +4,7 @@ flowchart LR
     classDef actor fill:#ffffff,stroke:#000000,color:#000000,stroke-width:1.2px;
     classDef layer fill:#ffffff,stroke:#000000,color:#000000,stroke-width:1.4px;
     classDef external fill:#ffffff,stroke:#000000,color:#000000,stroke-width:1.2px;
-    classDef planned fill:#ffffff,stroke:#000000,color:#000000,stroke-dasharray: 6 4;
+    classDef gated fill:#ffffff,stroke:#000000,color:#000000,stroke-dasharray: 6 4;
     classDef note fill:#ffffff,stroke:#000000,color:#000000,stroke-dasharray: 6 4;
 
     subgraph ACTORS["Actors / Access"]
@@ -30,8 +30,8 @@ flowchart LR
     end
 
     NOTE["Multi-tenant isolation<br/>Each request is bound to one family context;<br/>family financial data stays logically separated<br/>on shared infrastructure"]
-    PRED["Predictive Analytics<br/>(planned / advanced module)"]
-    DB["Data Layer<br/><br/>PostgreSQL Relational Database<br/>Families · Users · Contributions · Payments<br/>Expenses · Transactions · Notifications"]
+    PRED["Predictive Analytics<br/>Advisory scoring<br/>activation gated"]
+    DB["Data Layer<br/><br/>PostgreSQL<br/>Family and ledger data<br/>Risk models and predictions"]
 
     subgraph EXTERNAL["External Services"]
         direction TB
@@ -74,5 +74,5 @@ flowchart LR
     class PSA,FA,FS,MB actor;
     class SPA,AUTH,CTRL,GOV,CORE,AI,DB layer;
     class PAY,MSG,LLM external;
-    class PRED planned;
+    class PRED gated;
     class NOTE note;

@@ -2,16 +2,25 @@
 
 declare(strict_types=1);
 
+use App\Actions\InstallPaymentRiskModel;
 use App\Ai\Agents\FamilySubAgent;
 use App\Enums\MemberCategory;
+use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\FamilyCategory;
+use App\Models\Payment;
 use App\Models\User;
+use App\Services\PaymentRiskArtifactValidator;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Http\Response;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia;
 use Laravel\Passkeys\Passkey;
@@ -307,6 +316,261 @@ function decodeJsonObject(string $json): array
     }
 
     return $items;
+}
+
+/**
+ * Build a valid, activation-eligible payment-risk artifact for PHP integration tests.
+ *
+ * @return array<string, mixed>
+ */
+function validPaymentRiskArtifact(): array
+{
+    $featureNames = PaymentRiskArtifactValidator::FEATURE_NAMES;
+    $threshold = 0.55;
+    $trainingStart = now()->subMonths(18)->startOfMonth();
+    $trainingEnd = now()->subMonths(9)->startOfMonth();
+    $validationStart = now()->subMonths(8)->startOfMonth();
+    $validationEnd = now()->subMonths(6)->startOfMonth();
+    $heldOutStart = now()->subMonths(5)->startOfMonth();
+    $heldOutEnd = now()->subMonth()->startOfMonth();
+    $datasetId = 'test-consented-anonymized-v1';
+
+    return [
+        'artifact_schema_version' => PaymentRiskArtifactValidator::SCHEMA_VERSION,
+        'model_version' => 'test-model-v1',
+        'generated_at' => now()->toIso8601String(),
+        'training' => [
+            'dataset_id' => $datasetId,
+            'source_type' => 'consented_anonymized',
+            'feature_contract_version' => PaymentRiskArtifactValidator::FEATURE_CONTRACT_VERSION,
+            'feature_names' => $featureNames,
+            'window' => [
+                'start' => $trainingStart->toDateString(),
+                'end' => $trainingEnd->toDateString(),
+            ],
+            'seed' => PaymentRiskArtifactValidator::RANDOM_SEED,
+            'overdue_prevalence' => 0.4,
+            'split' => [
+                'policy' => PaymentRiskArtifactValidator::SPLIT_POLICY,
+                'training' => [
+                    'period_count' => 10,
+                    'row_count' => 400,
+                    'start' => $trainingStart->toDateString(),
+                    'end' => $trainingEnd->toDateString(),
+                ],
+                'validation' => [
+                    'period_count' => 3,
+                    'row_count' => 100,
+                    'start' => $validationStart->toDateString(),
+                    'end' => $validationEnd->toDateString(),
+                ],
+                'held_out' => [
+                    'period_count' => 5,
+                    'row_count' => 100,
+                    'start' => $heldOutStart->toDateString(),
+                    'end' => $heldOutEnd->toDateString(),
+                ],
+            ],
+        ],
+        'data_quality' => [
+            'dataset_id' => $datasetId,
+            'source_type' => 'consented_anonymized',
+            'valid_row_count' => 600,
+            'distinct_member_count' => 60,
+            'distinct_period_count' => 18,
+            'on_time_count' => 360,
+            'overdue_count' => 240,
+            'gate_passed' => true,
+            'gates' => [
+                'minimum_rows' => true,
+                'minimum_distinct_members' => true,
+                'minimum_complete_periods' => true,
+                'minimum_on_time_class' => true,
+                'minimum_overdue_class' => true,
+            ],
+        ],
+        'preprocessing' => [
+            'type' => 'z_score_standardization',
+            'formula' => 'standardized=(value-mean)/scale',
+            'mean' => array_fill(0, count($featureNames), 0.0),
+            'scale' => array_fill(0, count($featureNames), 1.0),
+        ],
+        'model' => [
+            'type' => 'l2_logistic_regression',
+            'penalty' => 'l2',
+            'class_weight' => 'balanced',
+            'solver' => 'liblinear',
+            'positive_class' => 'overdue',
+            'intercept' => -0.25,
+            'coefficients' => [0.000001, -0.03, 0.01, 0.01, 0.03, -0.2, -0.25, -0.3, 0.2, 0.04, 0.04, 0.08, 0.000001, 0.12],
+        ],
+        'decision' => [
+            'threshold' => $threshold,
+            'positive_class' => 'overdue',
+            'negative_class' => 'on_time',
+            'risk_bands' => [
+                [
+                    'label' => 'routine_review',
+                    'minimum_inclusive' => 0.0,
+                    'maximum_exclusive' => $threshold,
+                ],
+                [
+                    'label' => 'priority_review',
+                    'minimum_inclusive' => $threshold,
+                    'maximum_inclusive' => 1.0,
+                ],
+            ],
+        ],
+        'evaluation' => [
+            'selection' => [
+                'objective' => 'max_overdue_f1_subject_to_recall_at_least_0_70_tie_precision',
+                'validation_threshold' => $threshold,
+                'minimum_overdue_recall' => PaymentRiskArtifactValidator::MINIMUM_VALIDATION_RECALL,
+            ],
+            'validation' => [
+                'recall_overdue' => 0.75,
+            ],
+            'activation_eligible' => true,
+            'activation_policy_version' => PaymentRiskArtifactValidator::ACTIVATION_POLICY_VERSION,
+            'activation_checks' => [
+                'consented_anonymized_provenance' => true,
+                'data_quality_gate_passed' => true,
+                'validation_recall_at_least_0_70' => true,
+                'held_out_f1_beats_both_baselines' => true,
+                'held_out_balanced_accuracy_above_0_5' => true,
+                'held_out_brier_beats_training_prevalence' => true,
+            ],
+            'held_out' => [
+                'accuracy' => 0.72,
+                'balanced_accuracy' => 0.7,
+                'overdue_precision' => 0.7,
+                'overdue_recall' => 0.75,
+                'overdue_f1' => 0.72,
+                'pr_auc' => 0.74,
+                'roc_auc' => 0.77,
+                'brier_score' => 0.17,
+                'support' => 120,
+                'prevalence' => 0.4,
+            ],
+            'baselines' => [
+                'training_prevalence' => ['overdue_f1' => 0.5, 'brier_score' => 0.24],
+                'previous_period_late' => ['overdue_f1' => 0.58, 'brier_score' => 0.22],
+            ],
+        ],
+        'explanation' => [
+            'coefficient_space' => 'standardized_feature_space',
+            'factors' => collect($featureNames)->map(function (string $feature, int $index): array {
+                $coefficient = validPaymentRiskArtifactCoefficient($index);
+
+                return [
+                    'feature' => $feature,
+                    'label' => str($feature)->replace('_minor', '')->replace('_', ' ')->headline()->toString(),
+                    'coefficient' => $coefficient,
+                    'sign' => match (true) {
+                        $coefficient > 0 => 'increases_overdue_risk',
+                        $coefficient < 0 => 'reduces_overdue_risk',
+                        default => 'neutral',
+                    },
+                ];
+            })->values()->all(),
+        ],
+    ];
+}
+
+function validPaymentRiskArtifactCoefficient(int $index): float
+{
+    $coefficients = [0.000001, -0.03, 0.01, 0.01, 0.03, -0.2, -0.25, -0.3, 0.2, 0.04, 0.04, 0.08, 0.000001, 0.12];
+
+    return $coefficients[$index];
+}
+
+/**
+ * @param  array<string, mixed>  $artifact
+ * @return array<string, mixed>
+ */
+function paymentRiskArtifactWith(array $artifact, string $path, mixed $value): array
+{
+    Arr::set($artifact, $path, $value);
+
+    $updatedArtifact = [];
+
+    foreach ($artifact as $key => $item) {
+        if (! is_string($key)) {
+            throw new RuntimeException('Expected the payment-risk artifact to use string keys.');
+        }
+
+        $updatedArtifact[$key] = $item;
+    }
+
+    return $updatedArtifact;
+}
+
+/**
+ * @param  array<string, mixed>  $artifact
+ */
+function paymentRiskArtifactFile(
+    array $artifact,
+    ?string $manifestContents = null,
+    string $filename = 'model.json',
+): UploadedFile {
+    $directory = storage_path('framework/testing/payment-risk/'.Str::uuid()->toString());
+    File::ensureDirectoryExists($directory);
+    $json = json_encode($artifact, JSON_THROW_ON_ERROR);
+    $path = "{$directory}/{$filename}";
+    File::put($path, $json);
+    File::put(
+        "{$directory}/checksums.sha256",
+        $manifestContents ?? hash('sha256', $json).'  model.json'.PHP_EOL,
+    );
+
+    return new UploadedFile($path, $filename, 'application/json', null, true);
+}
+
+function installActiveTestPaymentRiskModel(): void
+{
+    $file = paymentRiskArtifactFile(validPaymentRiskArtifact());
+
+    app(InstallPaymentRiskModel::class)->handle($file->getPathname(), activate: true);
+}
+
+function scoreTestContribution(
+    Family $family,
+    User $member,
+    CarbonImmutable $period,
+    ?CarbonImmutable $createdAt = null,
+): Contribution {
+    $createdAt ??= $period->startOfMonth()->setTime(9, 0);
+
+    return Contribution::factory()->create([
+        'family_id' => $family->id,
+        'user_id' => $member->id,
+        'year' => $period->year,
+        'month' => $period->month,
+        'expected_amount' => 100,
+        'due_date' => $period->day(28),
+        'created_at' => $createdAt,
+        'updated_at' => $createdAt,
+    ]);
+}
+
+function createMatureRiskHistory(Family $family, User $member, int $periods): void
+{
+    $targetPeriod = now()->toImmutable()->startOfMonth();
+
+    foreach (range($periods, 1) as $monthsBack) {
+        $period = $targetPeriod->subMonths($monthsBack);
+        $contribution = scoreTestContribution($family, $member, $period);
+
+        if ($monthsBack % 2 === 0) {
+            Payment::factory()->create([
+                'contribution_id' => $contribution->id,
+                'amount' => $contribution->expected_amount,
+                'paid_at' => $period->day(20),
+                'created_at' => $period->day(20)->setTime(10, 0),
+                'updated_at' => $period->day(20)->setTime(10, 0),
+            ]);
+        }
+    }
 }
 
 function responseContent(Symfony\Component\HttpFoundation\Response $response): string

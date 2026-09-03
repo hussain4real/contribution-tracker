@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Features\AiAssistant;
+use App\Features\PredictiveAnalytics;
 use App\Http\Controllers\AiChatController;
 use App\Http\Controllers\ChangelogController;
 use App\Http\Controllers\ChangelogSeenController;
@@ -24,6 +25,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentBatchReversalController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PaymentReceiptController;
+use App\Http\Controllers\PaymentRiskController;
 use App\Http\Controllers\PaystackWebhookController;
 use App\Http\Controllers\PlatformAdminController;
 use App\Http\Controllers\PricingController;
@@ -256,6 +258,16 @@ Route::prefix('{current_family}')
             Route::get('artifacts/{reportArtifact}', [ReportArtifactController::class, 'show'])->name('artifacts.show');
             Route::post('schedules', [ReportScheduleController::class, 'store'])->name('schedules.store');
             Route::delete('schedules/{reportSchedule}', [ReportScheduleController::class, 'destroy'])->name('schedules.destroy');
+        });
+
+        // Officer-only advisory predictions (Reports entitlement plus Pennant flag)
+        Route::prefix('payment-risk')->name('payment-risk.')->middleware([
+            'can:generate-reports',
+            'subscription:'.PlatformPlanCatalog::Reports.',strict',
+            EnsureFeaturesAreActive::using(PredictiveAnalytics::class),
+        ])->group(function () {
+            Route::get('/', [PaymentRiskController::class, 'index'])->name('index');
+            Route::post('refresh', [PaymentRiskController::class, 'refresh'])->name('refresh');
         });
 
         // Family Settings (Admin only)

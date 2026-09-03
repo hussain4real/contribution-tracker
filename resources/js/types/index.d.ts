@@ -76,6 +76,7 @@ export interface Flash {
 
 export interface FeatureFlags {
     ai_assistant: boolean;
+    predictive_analytics: boolean;
 }
 
 export interface Subscription {

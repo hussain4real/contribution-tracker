@@ -72,3 +72,30 @@ it('configures Pest 5 with local TIA and an unchanged full coverage gate', funct
         ->and($pestContents)->toContain('->baselined()')
         ->and($pestContents)->not->toContain('pest()->tia()->always();');
 });
+
+it('keeps the locked payment-risk Python checks in local and hosted CI', function () {
+    $composerContents = file_get_contents(__DIR__.'/../../composer.json');
+    $testsWorkflow = file_get_contents(__DIR__.'/../../.github/workflows/tests.yml');
+    $lintWorkflow = file_get_contents(__DIR__.'/../../.github/workflows/lint.yml');
+
+    if ($composerContents === false || $testsWorkflow === false || $lintWorkflow === false) {
+        throw new RuntimeException('Unable to read the ML continuous-integration configuration.');
+    }
+
+    $composer = json_decode($composerContents, true, 512, JSON_THROW_ON_ERROR);
+    $scripts = is_array($composer) && is_array($composer['scripts'] ?? null)
+        ? $composer['scripts']
+        : [];
+    $mlCheck = is_array($scripts['ml:check'] ?? null) ? $scripts['ml:check'] : [];
+    $staticCheck = is_array($scripts['ci:check:static'] ?? null) ? $scripts['ci:check:static'] : [];
+
+    expect($scripts['ml:sync'] ?? null)->toContain('uv sync')
+        ->and($scripts['ml:sync'] ?? null)->toContain('--frozen')
+        ->and($scripts['ml:test'] ?? null)->toContain('pytest')
+        ->and($mlCheck)->toBe(['@ml:sync', '@ml:format', '@ml:lint', '@ml:test'])
+        ->and($staticCheck)->toContain('@ml:check')
+        ->and($testsWorkflow)->toContain('astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0')
+        ->and($testsWorkflow)->toContain('composer ml:test')
+        ->and($lintWorkflow)->toContain('composer ml:format')
+        ->and($lintWorkflow)->toContain('composer ml:lint');
+});

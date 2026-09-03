@@ -12,6 +12,8 @@ Akanji, O. O. (2006). Microfinance as a strategy for poverty reduction. *Central
 
 Aker, J. C., & Mbiti, I. M. (2010). Mobile phones and economic development in Africa. *Journal of Economic Perspectives, 24*(3), 207–232. https://doi.org/10.1257/jep.24.3.207
 
+Amazon Web Services. (2020). *SaaS tenant isolation strategies: Isolating resources in a multi-tenant environment.* https://docs.aws.amazon.com/whitepapers/latest/saas-tenant-isolation-strategies/saas-tenant-isolation-strategies.html
+
 Anderson, S., & Baland, J.-M. (2002). The economics of ROSCAs and intrahousehold resource allocation. *Quarterly Journal of Economics, 117*(3), 963–995. https://doi.org/10.1162/003355302760193931
 
 Apt, N. A. (2002). Ageing and the changing role of the family and the community: An African perspective. *International Social Security Review, 55*(1), 39–47. https://doi.org/10.1111/1468-246X.00113
@@ -21,8 +23,6 @@ Ardener, S. (1964). The comparative study of rotating credit associations. *Jour
 Ardener, S., & Burman, S. (Eds.). (1995). *Money-go-rounds: The importance of rotating savings and credit associations for women.* Berg Publishers.
 
 Aryeetey, E. (2008). From informal finance to formal finance in Sub-Saharan Africa: Lessons from linkage efforts. In *African Finance for the 21st Century* (pp. 1–24). International Monetary Fund.
-
-Amazon Web Services. (2020). *SaaS tenant isolation strategies: Isolating resources in a multi-tenant environment.* https://docs.aws.amazon.com/whitepapers/latest/saas-tenant-isolation-strategies/saas-tenant-isolation-strategies.html
 
 Bascom, W. R. (1952). The Esusu: A credit institution of the Yoruba. *Journal of the Royal Anthropological Institute of Great Britain and Ireland, 82*(1), 63–69. https://doi.org/10.2307/2844040
 
@@ -60,9 +60,9 @@ Devlin, J., Chang, M.-W., Lee, K., & Toutanova, K. (2019). BERT: Pre-training of
 
 EFInA. (2023). *Access to Financial Services in Nigeria 2023 Survey.* Enhancing Financial Innovation & Access. https://efina.org.ng
 
-Ferraiolo, D. F., Sandhu, R., Gavrila, S., Kuhn, D. R., & Chandramouli, R. (2001). Proposed NIST standard for role-based access control. *ACM Transactions on Information and Systems Security, 4*(3), 224–274. https://doi.org/10.1145/501978.501980
-
 Federal Republic of Nigeria. (2023). *Nigeria Data Protection Act, 2023.* https://ndpc.gov.ng
+
+Ferraiolo, D. F., Sandhu, R., Gavrila, S., Kuhn, D. R., & Chandramouli, R. (2001). Proposed NIST standard for role-based access control. *ACM Transactions on Information and Systems Security, 4*(3), 224–274. https://doi.org/10.1145/501978.501980
 
 FIDO Alliance. (2022). *FIDO2: Web Authentication (WebAuthn).* https://fidoalliance.org/fido2/fido2-web-authentication-webauthn/
 
@@ -70,11 +70,11 @@ Fielding, R. T. (2000). *Architectural styles and the design of network-based so
 
 Fowler, M. (2002). *Patterns of Enterprise Application Architecture.* Addison-Wesley.
 
-Gugerty, M. K. (2007). You can't save alone: Commitment in rotating savings and credit associations in Kenya. *Economic Development and Cultural Change, 55*(2), 251–282. https://doi.org/10.1086/508716
-
 Gamma, E., Helm, R., Johnson, R., & Vlissides, J. (1994). *Design Patterns: Elements of Reusable Object-Oriented Software.* Addison-Wesley.
 
 Gomber, P., Koch, J. A., & Siering, M. (2017). Digital finance and FinTech: Current research and future research directions. *Journal of Business Economics, 87*(5), 537–580. https://doi.org/10.1007/s11573-017-0852-x
+
+Gugerty, M. K. (2007). You can't save alone: Commitment in rotating savings and credit associations in Kenya. *Economic Development and Cultural Change, 55*(2), 251–282. https://doi.org/10.1086/508716
 
 Hand, D. J. (2009). Measuring classifier performance: A coherent alternative to the area under the ROC curve. *Machine Learning, 77*(1), 103–123. https://doi.org/10.1007/s10994-009-5119-5
 
@@ -92,13 +92,13 @@ Jia, R., Yang, Y., Grundy, J., Keung, J., & Hao, L. (2021). A systematic review 
 
 Kang, H., & Liu, X.-Y. (2023). *Deficiency of large language models in finance: An empirical examination of hallucination* (arXiv:2311.15548). arXiv. https://arxiv.org/abs/2311.15548
 
-Khandani, A. E., Kim, A. J., & Lo, A. W. (2010). Consumer credit-risk models via machine-learning algorithms. *Journal of Banking & Finance, 34*(11), 2767–2787. https://doi.org/10.1016/j.jbankfin.2010.06.001
-
 Karhapää, P., Behutiye, W., Rodríguez, P., Oivo, M., Costal, D., Franch, X., Aaramaa, S., Choraś, M., Partanen, J., & Abherve, A. (2021). Strategies to manage quality requirements in agile software development: A multiple case study. *Empirical Software Engineering, 26*, Article 28. https://doi.org/10.1007/s10664-020-09903-x
 
-Krasner, G. E., & Pope, S. T. (1988). A description of the model-view-controller user interface paradigm in the Smalltalk-80 system. *Journal of Object-Oriented Programming, 1*(3), 26–49.
+Khandani, A. E., Kim, A. J., & Lo, A. W. (2010). Consumer credit-risk models via machine-learning algorithms. *Journal of Banking & Finance, 34*(11), 2767–2787. https://doi.org/10.1016/j.jbankfin.2010.06.001
 
 Kouandou, A., & Zeh, I. P. (2024). Insuring consumption against shocks: The role of informal savings in Nigeria. *Food Policy, 129*, Article 102737. https://doi.org/10.1016/j.foodpol.2024.102737
+
+Krasner, G. E., & Pope, S. T. (1988). A description of the model-view-controller user interface paradigm in the Smalltalk-80 system. *Journal of Object-Oriented Programming, 1*(3), 26–49.
 
 Lessmann, S., Baesens, B., Seow, H. V., & Thomas, L. C. (2015). Benchmarking state-of-the-art classification algorithms for credit scoring: An update of research. *European Journal of Operational Research, 247*(1), 124–136. https://doi.org/10.1016/j.ejor.2015.05.030
 
@@ -108,9 +108,9 @@ Lyastani, S. G., Schilling, M., Neuber, M., Backes, M., & Bugiel, S. (2020). Is 
 
 Masood, Z., Hoda, R., & Blincoe, K. (2020). How agile teams make self-assignment work: A grounded theory study. *Empirical Software Engineering, 25*, 4962–5005. https://doi.org/10.1007/s10664-020-09876-x
 
-Mikowski, M. S., & Powell, J. C. (2013). *Single page web applications: JavaScript end-to-end.* Manning Publications.
-
 Mbiti, I., & Weil, D. N. (2016). Mobile banking: The impact of M-Pesa in Kenya. In S. Edwards, S. Johnson, & D. N. Weil (Eds.), *African Successes, Volume III: Modernization and Development* (pp. 247–293). University of Chicago Press. https://doi.org/10.7208/chicago/9780226315867.003.0009
+
+Mikowski, M. S., & Powell, J. C. (2013). *Single page web applications: JavaScript end-to-end.* Manning Publications.
 
 Oloyede, J. A. (2008). Informal financial sector, savings mobilisation and rural development in Nigeria: Further evidence from Ekiti State of Nigeria. *African Economic and Business Review, 6*(1), 35–63.
 
