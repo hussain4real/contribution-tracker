@@ -1,0 +1,120 @@
+{
+  "artifact": {
+    "artifact_schema_version": "payment-risk-logistic-v1",
+    "model_version": "payment-risk-golden-v1",
+    "generated_at": "2026-08-10T00:00:00+00:00",
+    "training": {
+      "dataset_id": "golden-synthetic-v1",
+      "source_type": "synthetic",
+      "feature_contract_version": "payment-risk-features-v1",
+      "feature_names": [
+        "expected_amount_minor",
+        "days_until_due",
+        "calendar_month",
+        "calendar_quarter",
+        "previous_mature_period_count",
+        "prior_3_on_time_rate",
+        "prior_6_on_time_rate",
+        "prior_lifetime_on_time_rate",
+        "prior_partial_payment_rate",
+        "mean_recorded_settlement_delay_days",
+        "median_recorded_settlement_delay_days",
+        "prior_outstanding_count",
+        "prior_outstanding_amount_minor",
+        "overdue_streak"
+      ],
+      "overdue_prevalence": 0.25,
+      "seed": 41729,
+      "window": {"start": "2024-01-01", "end": "2024-12-01"},
+      "split": {"policy": "golden_fixture"}
+    },
+    "data_quality": {
+      "valid_row_count": 600,
+      "distinct_member_count": 50,
+      "distinct_period_count": 12,
+      "on_time_count": 450,
+      "overdue_count": 150,
+      "gate_passed": true
+    },
+    "preprocessing": {
+      "type": "z_score_standardization",
+      "formula": "standardized=(value-mean)/scale",
+      "mean": [100000, 27, 6, 2, 6, 0.6, 0.6, 0.6, 0.2, 2, 1, 1, 5000, 1],
+      "scale": [50000, 5, 4, 1, 4, 0.2, 0.2, 0.2, 0.1, 5, 4, 2, 10000, 2]
+    },
+    "model": {
+      "type": "l2_logistic_regression",
+      "penalty": "l2",
+      "class_weight": "balanced",
+      "solver": "liblinear",
+      "positive_class": "overdue",
+      "intercept": -0.2,
+      "coefficients": [0.15, -0.1, 0.05, 0.03, -0.2, -0.4, -0.35, -0.5, 0.25, 0.1, 0.08, 0.3, 0.2, 0.45]
+    },
+    "decision": {
+      "threshold": 0.55,
+      "positive_class": "overdue",
+      "negative_class": "on_time",
+      "risk_bands": [
+        {"label": "routine_review", "minimum_inclusive": 0, "maximum_exclusive": 0.55},
+        {"label": "priority_review", "minimum_inclusive": 0.55, "maximum_inclusive": 1}
+      ]
+    },
+    "evaluation": {
+      "activation_eligible": false,
+      "held_out": {"overdue_f1": 0.7, "balanced_accuracy": 0.7, "brier_score": 0.2},
+      "baselines": {
+        "training_prevalence": {"overdue_f1": 0, "brier_score": 0.25},
+        "previous_period_late": {"overdue_f1": 0.5, "brier_score": 0.3}
+      }
+    },
+    "explanation": {
+      "coefficient_space": "standardized_feature_space",
+      "factors": [
+        {"feature": "expected_amount_minor", "label": "Expected contribution amount", "coefficient": 0.15, "sign": "increases_overdue_risk"},
+        {"feature": "days_until_due", "label": "Days available before the due date", "coefficient": -0.1, "sign": "reduces_overdue_risk"},
+        {"feature": "calendar_month", "label": "Contribution calendar month", "coefficient": 0.05, "sign": "increases_overdue_risk"},
+        {"feature": "calendar_quarter", "label": "Contribution calendar quarter", "coefficient": 0.03, "sign": "increases_overdue_risk"},
+        {"feature": "previous_mature_period_count", "label": "Previous mature contribution periods", "coefficient": -0.2, "sign": "reduces_overdue_risk"},
+        {"feature": "prior_3_on_time_rate", "label": "On-time rate across the latest 3 mature periods", "coefficient": -0.4, "sign": "reduces_overdue_risk"},
+        {"feature": "prior_6_on_time_rate", "label": "On-time rate across the latest 6 mature periods", "coefficient": -0.35, "sign": "reduces_overdue_risk"},
+        {"feature": "prior_lifetime_on_time_rate", "label": "Lifetime on-time contribution rate", "coefficient": -0.5, "sign": "reduces_overdue_risk"},
+        {"feature": "prior_partial_payment_rate", "label": "Previous partial-payment rate", "coefficient": 0.25, "sign": "increases_overdue_risk"},
+        {"feature": "mean_recorded_settlement_delay_days", "label": "Mean recorded settlement delay", "coefficient": 0.1, "sign": "increases_overdue_risk"},
+        {"feature": "median_recorded_settlement_delay_days", "label": "Median recorded settlement delay", "coefficient": 0.08, "sign": "increases_overdue_risk"},
+        {"feature": "prior_outstanding_count", "label": "Previous contributions still outstanding", "coefficient": 0.3, "sign": "increases_overdue_risk"},
+        {"feature": "prior_outstanding_amount_minor", "label": "Previous amount still outstanding", "coefficient": 0.2, "sign": "increases_overdue_risk"},
+        {"feature": "overdue_streak", "label": "Consecutive overdue mature periods", "coefficient": 0.45, "sign": "increases_overdue_risk"}
+      ]
+    }
+  },
+  "feature_vector": {
+    "expected_amount_minor": 150000,
+    "days_until_due": 32,
+    "calendar_month": 10,
+    "calendar_quarter": 3,
+    "previous_mature_period_count": 10,
+    "prior_3_on_time_rate": 0.8,
+    "prior_6_on_time_rate": 0.8,
+    "prior_lifetime_on_time_rate": 0.8,
+    "prior_partial_payment_rate": 0.3,
+    "mean_recorded_settlement_delay_days": 7,
+    "median_recorded_settlement_delay_days": 5,
+    "prior_outstanding_count": 3,
+    "prior_outstanding_amount_minor": 15000,
+    "overdue_streak": 3
+  },
+  "expected": {
+    "linear_score": -0.14,
+    "probability": 0.4650570548417855,
+    "predicted_class": "on_time",
+    "advisory_band": "routine_review",
+    "threshold": 0.55,
+    "top_factor_features": [
+      "prior_lifetime_on_time_rate",
+      "overdue_streak",
+      "prior_3_on_time_rate"
+    ]
+  },
+  "absolute_tolerance": 1e-12
+}

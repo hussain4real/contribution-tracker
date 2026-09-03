@@ -11,26 +11,34 @@ use App\Support\PlatformPlanCatalog;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-function makeMiddlewareRequest(User $user, string $routeName = 'dashboard', ?string $feature = null): Response
-{
+function makeMiddlewareRequest(
+    User $user,
+    string $routeName = 'dashboard',
+    ?string $feature = null,
+    ?string $planRequirement = null,
+): Response {
     $middleware = new EnsureFamilySubscription;
 
     $request = Request::create(route($routeName), 'GET');
     $request->setUserResolver(fn () => $user);
     $request->setRouteResolver(fn () => app('router')->getRoutes()->getByName($routeName));
 
-    return $middleware->handle($request, fn ($r) => response('OK'), $feature);
+    return $middleware->handle($request, fn ($r) => response('OK'), $feature, $planRequirement);
 }
 
-function makeMiddlewareJsonRequest(User $user, string $routeName = 'dashboard', ?string $feature = null): Response
-{
+function makeMiddlewareJsonRequest(
+    User $user,
+    string $routeName = 'dashboard',
+    ?string $feature = null,
+    ?string $planRequirement = null,
+): Response {
     $middleware = new EnsureFamilySubscription;
 
     $request = Request::create(route($routeName), 'GET', server: ['HTTP_ACCEPT' => 'application/json']);
     $request->setUserResolver(fn () => $user);
     $request->setRouteResolver(fn () => app('router')->getRoutes()->getByName($routeName));
 
-    return $middleware->handle($request, fn ($r) => response('OK'), $feature);
+    return $middleware->handle($request, fn ($r) => response('OK'), $feature, $planRequirement);
 }
 
 /**
@@ -69,6 +77,32 @@ it('allows users on free plan (no plan assigned)', function () {
     $response = makeMiddlewareRequest($user);
 
     expect(responseContent($response))->toBe('OK');
+});
+
+it('preserves legacy feature access when no plan can be resolved', function () {
+    $family = Family::factory()->create(['platform_plan_id' => null]);
+    $user = User::factory()->create(['family_id' => $family->id]);
+
+    $response = makeMiddlewareRequest($user, 'dashboard', PlatformPlanCatalog::Reports);
+
+    expect(responseContent($response))->toBe('OK');
+});
+
+it('fails closed for a strict paid feature when no plan can be resolved', function () {
+    $family = Family::factory()->create(['platform_plan_id' => null]);
+    $user = User::factory()->create(['family_id' => $family->id]);
+
+    $response = makeMiddlewareJsonRequest(
+        $user,
+        'dashboard',
+        PlatformPlanCatalog::Reports,
+        'strict',
+    );
+
+    expect($response->getStatusCode())->toBe(403)
+        ->and(decodeJsonObject(responseContent($response)))->toBe([
+            'message' => 'This feature is not available on your current plan. Please upgrade.',
+        ]);
 });
 
 it('uses the seeded free plan for families without an assigned plan', function () {

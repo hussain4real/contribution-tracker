@@ -282,6 +282,12 @@ class Family extends Model
         return $this->hasMany(ReportSchedule::class);
     }
 
+    /** @return HasMany<PaymentRiskPrediction, $this> */
+    public function paymentRiskPredictions(): HasMany
+    {
+        return $this->hasMany(PaymentRiskPrediction::class);
+    }
+
     /** @return HasMany<ReconciliationImport, $this> */
     public function reconciliationImports(): HasMany
     {

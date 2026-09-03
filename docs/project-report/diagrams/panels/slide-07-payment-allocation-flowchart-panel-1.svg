@@ -17,7 +17,7 @@
     ]]></style>
   </defs>
 <rect width="1800" height="1380" fill="#fff"/>
-<text x="900" y="72" text-anchor="middle" class="title"><tspan x="900" dy="0">Figure 3.3a: Payment Capture and Verification</tspan></text>
+<text x="900" y="72" text-anchor="middle" class="title"><tspan x="900" dy="0">Figure 3.4a: Payment Capture and Verification</tspan></text>
 <rect x="760" y="125" width="280" height="80" rx="40" fill="#e8f1ff" stroke="#111" stroke-width="3" />
 <text x="900" y="149" text-anchor="middle" class="label-sm"><tspan x="900" dy="0">Start</tspan></text>
 <polygon points="900,250 1100,360 900,470 700,360" fill="#fff7ed" stroke="#111" stroke-width="3"/>

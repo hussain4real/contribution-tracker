@@ -1,0 +1,253 @@
+{"kind":"slide","id":"sl/g6925t","slide":1,"title":"MIVA OPEN UNIVERSITY  ·  FACULTY OF COMPUTING","textShapes":10}
+{"kind":"textbox","id":"sh/ruh0765c","slide":1,"textChars":45,"textLines":1}
+{"kind":"textbox","id":"sh/cvq10b6x","slide":1,"textChars":11,"textLines":1}
+{"kind":"textbox","id":"sh/dwji9gn2","slide":1,"textChars":86,"textLines":1}
+{"kind":"textbox","id":"sh/exsj2lon","slide":1,"textChars":90,"textLines":1}
+{"kind":"shape","id":"sh/zi10bq58","slide":1,"bbox":[740,42,484,578]}
+{"kind":"textbox","id":"sh/1kjidgne","slide":1,"textChars":14,"textLines":1}
+{"kind":"textbox","id":"sh/u1ozqhoj","slide":1,"textChars":20,"textLines":1}
+{"kind":"textbox","id":"sh/vmx0zm54","slide":1,"textChars":21,"textLines":1}
+{"kind":"textbox","id":"sh/vyt4zix8","slide":1,"textChars":42,"textLines":1}
+{"kind":"textbox","id":"sh/axk36dgn","slide":1,"textChars":29,"textLines":1}
+{"kind":"textbox","id":"sh/x0bm1sfe","slide":1,"textChars":2,"textLines":1}
+{"kind":"image","id":"im/pk3i1gfq","slide":1,"name":"","alt":"FamilyFunds application icon","bbox":[842,118,280,280]}
+{"kind":"notes","id":"nt/g6925t","slide":1,"text":"Timing: 35–40 seconds. | Introduce the project as a software-engineering resp..."}
+{"kind":"slide","id":"sl/udr17l","slide":2,"title":"THE PROBLEM","textShapes":13}
+{"kind":"textbox","id":"sh/jup0faho","slide":2,"textChars":11,"textLines":1}
+{"kind":"textbox","id":"sh/kvy18vi9","slide":2,"textChars":43,"textLines":1}
+{"kind":"shape","id":"sh/5w7ih0ze","slide":2,"bbox":[56,142,1168,0]}
+{"kind":"textbox","id":"sh/apwj2l0r","slide":2,"textChars":37,"textLines":1}
+{"kind":"textbox","id":"sh/vq50bqhc","slide":2,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/wre14vix","slide":2,"textChars":78,"textLines":1}
+{"kind":"textbox","id":"sh/xsnid0zi","slide":2,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/m1wjyl0v","slide":2,"textChars":25,"textLines":1}
+{"kind":"shape","id":"sh/n2507qhg","slide":2,"bbox":[56,343,332,0]}
+{"kind":"textbox","id":"sh/fq1k7apw","slide":2,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/eps3e58r","slide":2,"textChars":20,"textLines":1}
+{"kind":"shape","id":"sh/1s329072","slide":2,"bbox":[56,413,332,0]}
+{"kind":"textbox","id":"sh/0rulgvqh","slide":2,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/nul4bap8","slide":2,"textChars":39,"textLines":1}
+{"kind":"shape","id":"sh/2tc3i58n","slide":2,"bbox":[56,483,332,0]}
+{"kind":"textbox","id":"sh/pw3mdk7e","slide":2,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/ovulkfqt","slide":2,"textChars":36,"textLines":1}
+{"kind":"shape","id":"sh/3yhkz6po","slide":2,"bbox":[426,171,798,468]}
+{"kind":"image","id":"im/lojqts7m","slide":2,"name":"","alt":"Existing manual family fund workflow and its weaknesses","bbox":[446,190,758,430]}
+{"kind":"notes","id":"nt/udr17l","slide":2,"text":"Timing: 45 seconds. | Explain that the problem is not simply a lack of digita..."}
+{"kind":"slide","id":"sl/05upv0","slide":3,"title":"THE GAP","textShapes":26}
+{"kind":"textbox","id":"sh/6po3yd8r","slide":3,"textChars":7,"textLines":1}
+{"kind":"textbox","id":"sh/tszm987i","slide":3,"textChars":47,"textLines":1}
+{"kind":"shape","id":"sh/srql0nqx","slide":3,"bbox":[56,142,1168,0]}
+{"kind":"textbox","id":"sh/jmx43yp0","slide":3,"textChars":37,"textLines":1}
+{"kind":"textbox","id":"sh/ilo3ut8v","slide":3,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/5ofm5876","slide":3,"textChars":88,"textLines":1}
+{"kind":"shape","id":"sh/kn6lw3ql","slide":3,"bbox":[56,230,1168,54]}
+{"kind":"textbox","id":"sh/3i14f2pk","slide":3,"textChars":8,"textLines":1}
+{"kind":"textbox","id":"sh/2h836x8z","slide":3,"textChars":18,"textLines":1}
+{"kind":"textbox","id":"sh/432twbeh","slide":3,"textChars":21,"textLines":1}
+{"kind":"textbox","id":"sh/54bupgv2","slide":3,"textChars":30,"textLines":1}
+{"kind":"shape","id":"sh/ih0bu1wr","slide":3,"bbox":[56,284,1168,71]}
+{"kind":"shape","id":"sh/3itsn6dw","slide":3,"bbox":[56,354,1168,0]}
+{"kind":"textbox","id":"sh/gfitsbel","slide":3,"textChars":29,"textLines":1}
+{"kind":"textbox","id":"sh/hgralwf6","slide":3,"textChars":6,"textLines":1}
+{"kind":"textbox","id":"sh/ud0bq1wf","slide":3,"textChars":4,"textLines":1}
+{"kind":"textbox","id":"sh/ve9sj6x0","slide":3,"textChars":10,"textLines":1}
+{"kind":"shape","id":"sh/8bitore9","slide":3,"bbox":[56,355,1168,71]}
+{"kind":"shape","id":"sh/tcrahwfu","slide":3,"bbox":[56,425,1168,0]}
+{"kind":"textbox","id":"sh/98jqls7y","slide":3,"textChars":33,"textLines":1}
+{"kind":"textbox","id":"sh/87a9sn6d","slide":3,"textChars":7,"textLines":1}
+{"kind":"textbox","id":"sh/n6h8jips","slide":3,"textChars":10,"textLines":1}
+{"kind":"textbox","id":"sh/m58rqdo7","slide":3,"textChars":11,"textLines":1}
+{"kind":"shape","id":"sh/l4zqh87m","slide":3,"bbox":[56,426,1168,71]}
+{"kind":"shape","id":"sh/03q9o361","slide":3,"bbox":[56,496,1168,0]}
+{"kind":"textbox","id":"sh/z2h8fypg","slide":3,"textChars":28,"textLines":1}
+{"kind":"textbox","id":"sh/y18rmdob","slide":3,"textChars":10,"textLines":1}
+{"kind":"textbox","id":"sh/503atc7q","slide":3,"textChars":16,"textLines":1}
+{"kind":"textbox","id":"sh/kzu9076l","slide":3,"textChars":17,"textLines":1}
+{"kind":"shape","id":"sh/i9kfy50r","slide":3,"bbox":[56,497,1168,71]}
+{"kind":"shape","id":"sh/3adw7a1c","slide":3,"bbox":[56,567,1168,0]}
+{"kind":"textbox","id":"sh/4bmx0fix","slide":3,"textChars":11,"textLines":1}
+{"kind":"textbox","id":"sh/5wve9kj2","slide":3,"textChars":14,"textLines":1}
+{"kind":"textbox","id":"sh/u5kfu50f","slide":3,"textChars":17,"textLines":1}
+{"kind":"textbox","id":"sh/v6tw3q10","slide":3,"textChars":25,"textLines":1}
+{"kind":"textbox","id":"sh/g72xwvil","slide":3,"textChars":73,"textLines":1}
+{"kind":"notes","id":"nt/05upv0","slide":3,"text":"Timing: 45 seconds. | Compare system categories, not marketing claims. Saving..."}
+{"kind":"slide","id":"sl/6f1rn0","slide":4,"title":"STUDY OBJECTIVES","textShapes":22}
+{"kind":"textbox","id":"sh/dovuhc3q","slide":4,"textChars":16,"textLines":1}
+{"kind":"textbox","id":"sh/q14bmx4z","slide":4,"textChars":44,"textLines":1}
+{"kind":"shape","id":"sh/r2dcf2lk","slide":4,"bbox":[56,142,1168,0]}
+{"kind":"textbox","id":"sh/4zmtknmt","slide":4,"textChars":37,"textLines":1}
+{"kind":"textbox","id":"sh/50vuds3e","slide":4,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/ixkbix43","slide":4,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/3ytcb2l8","slide":4,"textChars":6,"textLines":1}
+{"kind":"textbox","id":"sh/ov6dwrmd","slide":4,"textChars":30,"textLines":1}
+{"kind":"shape","id":"sh/9wfupw3y","slide":4,"bbox":[56,301,528,0]}
+{"kind":"textbox","id":"sh/lk7ydkza","slide":4,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/kjyhkfyp","slide":4,"textChars":6,"textLines":1}
+{"kind":"textbox","id":"sh/jipgbah4","slide":4,"textChars":40,"textLines":1}
+{"kind":"shape","id":"sh/yhgfi5gj","slide":4,"bbox":[640,301,528,0]}
+{"kind":"textbox","id":"sh/xgny9kze","slide":4,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/cfexgfyt","slide":4,"textChars":9,"textLines":1}
+{"kind":"textbox","id":"sh/be5g7ah8","slide":4,"textChars":36,"textLines":1}
+{"kind":"shape","id":"sh/atwfe5gn","slide":4,"bbox":[56,444,528,0]}
+{"kind":"textbox","id":"sh/hcryl4zi","slide":4,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/gbihszyx","slide":4,"textChars":9,"textLines":1}
+{"kind":"textbox","id":"sh/gvq1o369","slide":4,"textChars":42,"textLines":1}
+{"kind":"shape","id":"sh/1wzih87u","slide":4,"bbox":[640,444,528,0]}
+{"kind":"textbox","id":"sh/et8jmdo3","slide":4,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/fuh0fipo","slide":4,"textChars":19,"textLines":1}
+{"kind":"textbox","id":"sh/sr61k36x","slide":4,"textChars":41,"textLines":1}
+{"kind":"shape","id":"sh/tszid87i","slide":4,"bbox":[56,587,528,0]}
+{"kind":"textbox","id":"sh/6pojitor","slide":4,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/rqx0bypc","slide":4,"textChars":4,"textLines":1}
+{"kind":"textbox","id":"sh/4n6hgj61","slide":4,"textChars":47,"textLines":1}
+{"kind":"shape","id":"sh/5ofi9o7m","slide":4,"bbox":[640,587,528,0]}
+{"kind":"notes","id":"nt/6f1rn0","slide":4,"text":"Timing: 50 seconds. | Present the objectives as a chain: understand the domai..."}
+{"kind":"slide","id":"sl/tecqap","slide":5,"title":"METHOD","textShapes":16}
+{"kind":"textbox","id":"sh/sfmpsv6l","slide":5,"textChars":6,"textLines":1}
+{"kind":"textbox","id":"sh/rudozqp0","slide":5,"textChars":55,"textLines":1}
+{"kind":"shape","id":"sh/6t47qlof","slide":5,"bbox":[56,142,1168,0]}
+{"kind":"textbox","id":"sh/5sb6x07a","slide":5,"textChars":37,"textLines":1}
+{"kind":"textbox","id":"sh/4r2pov6p","slide":5,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/jqtovqp4","slide":5,"textChars":78,"textLines":1}
+{"kind":"shape","id":"sh/ipk7mloj","slide":5,"bbox":[122,342,1036,0]}
+{"kind":"shape","id":"sh/pofq9k7e","slide":5,"bbox":[122,330,24,24]}
+{"kind":"textbox","id":"sh/on6p0f6t","slide":5,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/yxwrmp4v","slide":5,"textChars":8,"textLines":1}
+{"kind":"textbox","id":"sh/zy5sfu5g","slide":5,"textChars":33,"textLines":2}
+{"kind":"shape","id":"sh/kze9ozm1","slide":5,"bbox":[506,330,24,24]}
+{"kind":"textbox","id":"sh/l0nah4nm","slide":5,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/atcripoz","slide":5,"textChars":5,"textLines":1}
+{"kind":"textbox","id":"sh/bulsbu5k","slide":5,"textChars":49,"textLines":2}
+{"kind":"shape","id":"sh/cvu9kzm5","slide":5,"bbox":[890,330,24,24]}
+{"kind":"textbox","id":"sh/xw3ad4nq","slide":5,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/upgrut43","slide":5,"textChars":8,"textLines":1}
+{"kind":"textbox","id":"sh/vqpsne5o","slide":5,"textChars":43,"textLines":2}
+{"kind":"shape","id":"sh/rahof6l0","slide":5,"bbox":[56,520,1168,112]}
+{"kind":"textbox","id":"sh/q987ml4f","slide":5,"textChars":21,"textLines":1}
+{"kind":"textbox","id":"sh/dcz6hg36","slide":5,"textChars":126,"textLines":1}
+{"kind":"notes","id":"nt/tecqap","slide":5,"text":"Timing: 45 seconds. | Describe the method as applied and iterative, not as an..."}
+{"kind":"slide","id":"sl/pvxno4","slide":6,"title":"SYSTEM ARCHITECTURE","textShapes":10}
+{"kind":"textbox","id":"sh/vyd8j2dk","slide":6,"textChars":19,"textLines":1}
+{"kind":"textbox","id":"sh/gzmps7u5","slide":6,"textChars":36,"textLines":1}
+{"kind":"shape","id":"sh/h0vqlcva","slide":6,"bbox":[56,142,1168,0]}
+{"kind":"textbox","id":"sh/6t47mdcn","slide":6,"textChars":37,"textLines":1}
+{"kind":"textbox","id":"sh/7ud8fid8","slide":6,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/8vmponut","slide":6,"textChars":14,"textLines":1}
+{"kind":"textbox","id":"sh/twvqhsve","slide":6,"textChars":55,"textLines":1}
+{"kind":"textbox","id":"sh/qporyhc7","slide":6,"textChars":20,"textLines":1}
+{"kind":"textbox","id":"sh/rqx8rmds","slide":6,"textChars":74,"textLines":1}
+{"kind":"textbox","id":"sh/3u18v25s","slide":6,"textChars":24,"textLines":1}
+{"kind":"textbox","id":"sh/2t87mx47","slide":6,"textChars":71,"textLines":1}
+{"kind":"shape","id":"sh/pwjqxcny","slide":6,"bbox":[398,174,826,468]}
+{"kind":"image","id":"im/r6xwn2tc","slide":6,"name":"","alt":"Layered FamilyFunds architecture with actors, Laravel modules, data and external services","bbox":[416,190,790,434]}
+{"kind":"notes","id":"nt/pvxno4","slide":6,"text":"Timing: 55 seconds. | Follow the request from the user interface into Laravel..."}
+{"kind":"slide","id":"sl/llaqqs","slide":7,"title":"PAYMENT ALLOCATION","textShapes":13}
+{"kind":"textbox","id":"sh/4nuh8f2h","slide":7,"textChars":18,"textLines":1}
+{"kind":"textbox","id":"sh/jml0falw","slide":7,"textChars":57,"textLines":1}
+{"kind":"shape","id":"sh/ilcz65kb","slide":7,"bbox":[56,142,1168,0]}
+{"kind":"textbox","id":"sh/hk3yd036","slide":7,"textChars":37,"textLines":1}
+{"kind":"textbox","id":"sh/wjuh4v2l","slide":7,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/vylgbql0","slide":7,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/uxcz2lkf","slide":7,"textChars":20,"textLines":1}
+{"kind":"textbox","id":"sh/1g7ipk3a","slide":7,"textChars":73,"textLines":1}
+{"kind":"shape","id":"sh/gfehgz2p","slide":7,"bbox":[56,308,428,0]}
+{"kind":"textbox","id":"sh/u1oj2hkz","slide":7,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/v2xkv2lk","slide":7,"textChars":27,"textLines":1}
+{"kind":"textbox","id":"sh/g3614725","slide":7,"textChars":73,"textLines":1}
+{"kind":"shape","id":"sh/h4f2xc3q","slide":7,"bbox":[56,450,428,0]}
+{"kind":"textbox","id":"sh/6d4jyxk3","slide":7,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/7ex0r2lo","slide":7,"textChars":21,"textLines":1}
+{"kind":"textbox","id":"sh/8z610729","slide":7,"textChars":73,"textLines":1}
+{"kind":"shape","id":"sh/t0f2tc3u","slide":7,"bbox":[522,174,702,468]}
+{"kind":"image","id":"im/5s3m54nm","slide":7,"name":"","alt":"Oldest-balance-first payment allocation loop","bbox":[598,184,550,446]}
+{"kind":"notes","id":"nt/llaqqs","slide":7,"text":"Timing: 55 seconds. | Use a partial or lump-sum payment example: the oldest u..."}
+{"kind":"slide","id":"sl/ioqe0y","slide":8,"title":"AI AND PREDICTIVE GOVERNANCE","textShapes":15}
+{"kind":"textbox","id":"sh/twzyl8fu","slide":8,"textChars":28,"textLines":1}
+{"kind":"textbox","id":"sh/6tozqtg3","slide":8,"textChars":43,"textLines":1}
+{"kind":"shape","id":"sh/7uxgjyxo","slide":8,"bbox":[56,142,1168,0]}
+{"kind":"textbox","id":"sh/kr6hojyx","slide":8,"textChars":37,"textLines":1}
+{"kind":"textbox","id":"sh/lsfyhofi","slide":8,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/ypozm9g7","slide":8,"textChars":23,"textLines":1}
+{"kind":"textbox","id":"sh/jqxgfehs","slide":8,"textChars":19,"textLines":1}
+{"kind":"textbox","id":"sh/4nah0nyh","slide":8,"textChars":65,"textLines":1}
+{"kind":"shape","id":"sh/5ojitsf2","slide":8,"bbox":[72,357,470,0]}
+{"kind":"textbox","id":"sh/1ozm5kzm","slide":8,"textChars":21,"textLines":1}
+{"kind":"textbox","id":"sh/0nqlwfy1","slide":8,"textChars":75,"textLines":1}
+{"kind":"textbox","id":"sh/zmh43ahg","slide":8,"textChars":21,"textLines":1}
+{"kind":"textbox","id":"sh/el83u5gv","slide":8,"textChars":29,"textLines":1}
+{"kind":"textbox","id":"sh/d0zm1kza","slide":8,"textChars":81,"textLines":1}
+{"kind":"shape","id":"sh/czqlsfyp","slide":8,"bbox":[684,357,470,0]}
+{"kind":"textbox","id":"sh/ryhkzah4","slide":8,"textChars":25,"textLines":1}
+{"kind":"textbox","id":"sh/qxo3q5gz","slide":8,"textChars":89,"textLines":1}
+{"kind":"shape","id":"sh/xgjmd4ze","slide":8,"bbox":[622,180,0,0]}
+{"kind":"shape","id":"sh/wval4zy9","slide":8,"bbox":[56,536,1168,92]}
+{"kind":"textbox","id":"sh/gb2xw7ah","slide":8,"textChars":82,"textLines":1}
+{"kind":"notes","id":"nt/ioqe0y","slide":8,"text":"Timing: 55 seconds. | Contrast the two intelligent features. The assistant is..."}
+{"kind":"slide","id":"sl/td0whm","slide":9,"title":"EXECUTED TEST EVIDENCE","textShapes":15}
+{"kind":"textbox","id":"sh/s7e9ofqx","slide":9,"textChars":22,"textLines":1}
+{"kind":"textbox","id":"sh/r65sva9c","slide":9,"textChars":49,"textLines":1}
+{"kind":"shape","id":"sh/65wrm58r","slide":9,"bbox":[56,142,1168,0]}
+{"kind":"textbox","id":"sh/1c7a1k7e","slide":9,"textChars":37,"textLines":1}
+{"kind":"textbox","id":"sh/gby9sfqt","slide":9,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/fapszapo","slide":9,"textChars":103,"textLines":1}
+{"kind":"shape","id":"sh/e9wrq583","slide":9,"bbox":[56,260,360,334]}
+{"kind":"textbox","id":"sh/xg3qp0ra","slide":9,"textChars":5,"textLines":1}
+{"kind":"textbox","id":"sh/wfu9wvqp","slide":9,"textChars":10,"textLines":1}
+{"kind":"shape","id":"sh/i90vu1wb","slide":9,"bbox":[84,450,304,0]}
+{"kind":"textbox","id":"sh/3a9w36xw","slide":9,"textChars":36,"textLines":2}
+{"kind":"shape","id":"sh/4bidwbeh","slide":9,"bbox":[452,260,360,334]}
+{"kind":"textbox","id":"sh/5cre5wf2","slide":9,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/qd0vy1wn","slide":9,"textChars":15,"textLines":1}
+{"kind":"shape","id":"sh/re9w76xs","slide":9,"bbox":[480,450,304,0]}
+{"kind":"textbox","id":"sh/sf2d0bed","slide":9,"textChars":49,"textLines":2}
+{"kind":"shape","id":"sh/dgbe9gfy","slide":9,"bbox":[848,260,360,334]}
+{"kind":"textbox","id":"sh/e1kv2lwj","slide":9,"textChars":7,"textLines":1}
+{"kind":"textbox","id":"sh/f2twbqd4","slide":9,"textChars":13,"textLines":1}
+{"kind":"shape","id":"sh/b6tcjqtc","slide":9,"bbox":[876,450,304,0]}
+{"kind":"textbox","id":"sh/a5kvqlcr","slide":9,"textChars":70,"textLines":2}
+{"kind":"textbox","id":"sh/x8vul0b2","slide":9,"textChars":51,"textLines":1}
+{"kind":"notes","id":"nt/td0whm","slide":9,"text":"Timing: 55 seconds. | Report the final canonical local Laravel rerun from 15 ..."}
+{"kind":"slide","id":"sl/0thqd1","slide":10,"title":"OBJECTIVE VERDICTS","textShapes":25}
+{"kind":"textbox","id":"sh/650rqpkv","slide":10,"textChars":18,"textLines":1}
+{"kind":"textbox","id":"sh/t8bq1kjm","slide":10,"textChars":68,"textLines":1}
+{"kind":"shape","id":"sh/s7i9sf21","slide":10,"bbox":[56,142,1168,0]}
+{"kind":"textbox","id":"sh/fat83u1s","slide":10,"textChars":37,"textLines":1}
+{"kind":"textbox","id":"sh/u9krupk7","slide":10,"textChars":2,"textLines":1}
+{"kind":"shape","id":"sh/hwba54ji","slide":10,"bbox":[56,174,1168,48]}
+{"kind":"textbox","id":"sh/gv29wz2d","slide":10,"textChars":3,"textLines":1}
+{"kind":"textbox","id":"sh/3yts7e1o","slide":10,"textChars":22,"textLines":1}
+{"kind":"textbox","id":"sh/2xkry9k3","slide":10,"textChars":7,"textLines":1}
+{"kind":"shape","id":"sh/4be10vmd","slide":10,"bbox":[56,222,1168,66]}
+{"kind":"shape","id":"sh/5cnit0ni","slide":10,"bbox":[56,287,1168,0]}
+{"kind":"textbox","id":"sh/i9wjyl47","slide":10,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/3a50rq5s","slide":10,"textChars":46,"textLines":1}
+{"kind":"textbox","id":"sh/sfe14vm9","slide":10,"textChars":20,"textLines":1}
+{"kind":"shape","id":"sh/dg72x0nu","slide":10,"bbox":[56,288,1168,66]}
+{"kind":"shape","id":"sh/qdwj2l43","slide":10,"bbox":[56,353,1168,0]}
+{"kind":"textbox","id":"sh/re5kvq5o","slide":10,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/03y18fm5","slide":10,"textChars":38,"textLines":1}
+{"kind":"textbox","id":"sh/14721knq","slide":10,"textChars":20,"textLines":1}
+{"kind":"shape","id":"sh/903il0fu","slide":10,"bbox":[56,354,1168,66]}
+{"kind":"shape","id":"sh/ozu1cfep","slide":10,"bbox":[56,419,1168,0]}
+{"kind":"textbox","id":"sh/nyl0jax4","slide":10,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/mxcja5wj","slide":10,"textChars":25,"textLines":1}
+{"kind":"textbox","id":"sh/xon2pkf6","slide":10,"textChars":21,"textLines":1}
+{"kind":"shape","id":"sh/wne1gfel","slide":10,"bbox":[56,420,1168,66]}
+{"kind":"shape","id":"sh/b2l0nax0","slide":10,"bbox":[56,485,1168,0]}
+{"kind":"textbox","id":"sh/a1cje5wf","slide":10,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/dsjidgf2","slide":10,"textChars":32,"textLines":1}
+{"kind":"textbox","id":"sh/cra14beh","slide":10,"textChars":13,"textLines":1}
+{"kind":"shape","id":"sh/i1o7yx83","slide":10,"bbox":[56,486,1168,66]}
+{"kind":"shape","id":"sh/3mxor298","slide":10,"bbox":[56,551,1168,0]}
+{"kind":"textbox","id":"sh/4n6p07qt","slide":10,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/5ofqtsre","slide":10,"textChars":42,"textLines":1}
+{"kind":"textbox","id":"sh/qpo72x8z","slide":10,"textChars":38,"textLines":1}
+{"kind":"shape","id":"sh/rqh8v29k","slide":10,"bbox":[56,552,1168,66]}
+{"kind":"shape","id":"sh/srqp47q5","slide":10,"bbox":[56,617,1168,0]}
+{"kind":"textbox","id":"sh/dszqxcrq","slide":10,"textChars":2,"textLines":1}
+{"kind":"textbox","id":"sh/6t47qd8v","slide":10,"textChars":29,"textLines":1}
+{"kind":"textbox","id":"sh/7udoji9g","slide":10,"textChars":13,"textLines":1}
+{"kind":"notes","id":"nt/0thqd1","slide":10,"text":"Timing: 55 seconds. | Read the verdict pattern rather than every cell. Litera..."}
+{"kind":"slide","id":"sl/3ejfzx","slide":11,"title":"EVIDENCE BOUNDARY","textShapes":17}
+{"kind":"textbox","id":"sh/8vy9k7a5","slide":11,"textChars":17,"textLines":1}
+{"kind":"notice","message":"Truncated: omitted 33 lines. Increase maxChars or narrow target."}

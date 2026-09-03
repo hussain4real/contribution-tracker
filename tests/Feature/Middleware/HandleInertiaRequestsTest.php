@@ -5,7 +5,10 @@ declare(strict_types=1);
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Models\Family;
 use App\Models\FamilyCategory;
+use App\Models\PlatformPlan;
 use App\Models\User;
+use App\Support\PlatformPlanCatalog;
+use Database\Seeders\PlatformPlanSeeder;
 use Illuminate\Http\Request;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -90,6 +93,36 @@ test('subscription data falls back when a user has no family', function () {
         'can_add_members' => false,
         'features' => [],
     ]);
+});
+
+test('share preserves the current family paid plan and its features', function () {
+    $this->seed(PlatformPlanSeeder::class);
+
+    $plan = PlatformPlan::query()
+        ->where('slug', PlatformPlanCatalog::Growth)
+        ->firstOrFail();
+    $family = Family::factory()->create(['platform_plan_id' => $plan->id]);
+    $user = User::factory()->admin()->create(['family_id' => $family->id]);
+    $freshUser = User::query()->findOrFail($user->id);
+
+    $request = Request::create('/test', 'GET');
+    $request->setUserResolver(fn (): User => $freshUser);
+
+    $shared = (new HandleInertiaRequests)->share($request);
+    $subscription = $shared['subscription'] ?? null;
+
+    if (! is_callable($subscription)) {
+        throw new RuntimeException('Expected subscription data to be a closure.');
+    }
+
+    $subscriptionData = $subscription();
+
+    if (! is_array($subscriptionData)) {
+        throw new RuntimeException('Expected subscription closure to return an array.');
+    }
+
+    expect($subscriptionData['plan_name'] ?? null)->toBe($plan->name)
+        ->and($subscriptionData['features'] ?? null)->toBe($plan->features);
 });
 
 test('share exposes a legacy family category label when there is no active membership category', function () {

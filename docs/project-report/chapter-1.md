@@ -37,7 +37,7 @@ Table 1.1 compares common digital finance tools with the requirements of the pro
 | Online payment support | Yes | Yes | Yes | Yes | Yes |
 | Family-readable reports | Limited | Limited | Limited | Limited | Yes |
 | AI assistant or narrative summaries | No | No | No | No | Yes |
-| Predictive analytics | No | No | No | Yes | Planned |
+| Predictive analytics | No | No | No | Yes | Activation-gated logistic regression |
 
 The specific problem addressed in this study is the absence of a purpose-built, secure, and intelligent digital system for managing informal family contribution funds. Existing tools do not combine multi-tenant family separation, role-based governance, tiered contribution tracking, deterministic payment allocation, expense management, online payment support, and understandable reporting in one system. This gap exposes families to inaccurate records, weak accountability, delayed follow-up, and avoidable disputes.
 
@@ -53,7 +53,7 @@ The objectives of the study are to:
 2. Design a multi-tenant family fund management system with logical data isolation, role-based access control, contribution categories, payment allocation rules, reporting, and secure user access.
 3. Implement the proposed system using Laravel, Vue.js, Inertia.js, PostgreSQL, Paystack, Laravel Fortify, Laravel AI SDK, and related development tools.
 4. Integrate AI assistant and report-summary features in a controlled way that respects role permissions and uses available family fund data.
-5. Define and evaluate the planned predictive analytics component according to data availability, payment-history quality, and suitable metrics such as accuracy, precision, recall, and usefulness.
+5. Implement an activation-gated logistic regression component that estimates whether a monthly contribution will still have a system-recorded outstanding balance at the end of its due date and evaluate it, when an authorised historical dataset is available, against training-prevalence and previous-period-late baselines using accuracy, precision, recall, F1-score, calibration, and discrimination metrics.
 6. Test the system against key requirements, including tenant isolation, role enforcement, payment allocation correctness, report accuracy, authentication security, and usability.
 
 ### 1.5 Research Questions
@@ -64,7 +64,7 @@ The study is guided by the following research questions:
 2. How can multi-tenant architecture and role-based access control be applied to protect the records of separate family groups on one platform?
 3. How can partial and lump-sum payments be allocated consistently across outstanding contribution balances?
 4. To what extent can AI assistant and report-summary features improve access to understandable family fund information without exposing unauthorised data?
-5. Under what conditions can historical contribution data support predictive analytics for member payment behaviour?
+5. How does logistic regression perform against training-prevalence and previous-period-late baselines when predicting whether a monthly contribution will still have a system-recorded outstanding balance at the end of its due date from authorised historical records?
 6. How can the system be tested to confirm that it meets functional, security, reliability, and usability requirements?
 
 ### 1.7 Significance of the Study
@@ -81,9 +81,9 @@ The project may also benefit small community groups, religious associations, cla
 
 The study covers the design and implementation of a web-based family fund management system. Each family is treated as a tenant, meaning that its records are separated from other families' records. The functional scope includes family workspace setup, member invitation, contribution category management, monthly contribution generation, manual payment recording, Paystack payment initiation and verification, oldest-balance-first payment allocation, expense tracking, fund adjustments, reminders, subscription plans, dashboards, reports, AI assistant support, and AI-assisted report summaries.
 
-The technical scope covers a Laravel 13 backend, Vue.js 3 frontend, Inertia.js 3 server-client bridge, PostgreSQL database, Tailwind CSS 4 styling, Laravel Fortify authentication, WebAuthn/passkeys, Paystack integration, Laravel AI SDK, Laravel Pennant feature flags, Vite, Git, and Pest testing. The application is designed for web and mobile-browser access rather than native mobile deployment.
+The technical scope covers a Laravel 13 backend, Vue.js 3 frontend, Inertia.js 3 server-client bridge, PostgreSQL database, Tailwind CSS 4 styling, Laravel Fortify authentication, WebAuthn/passkeys, Paystack integration, Laravel AI SDK, Laravel Pennant feature flags, a Python 3.12/scikit-learn offline predictive package, Vite, Git, and Pest testing. The application is designed for web and mobile-browser access rather than native mobile deployment.
 
-The study does not cover cryptocurrency payments, direct bank API integration, tax computation, full double-entry accounting, regulatory management for formal cooperative societies, or multilingual interfaces. Predictive analytics is included as a planned and evaluation-dependent capability because useful prediction requires sufficient payment-history data. The AI assistant and report-summary functions are treated as system features only where the application can ground the output in available family data and role permissions.
+The study does not cover cryptocurrency payments, direct bank API integration, tax computation, full double-entry accounting, regulatory management for formal cooperative societies, or multilingual interfaces. Predictive analytics is limited to an activation-gated logistic regression classifier and two transparent baselines: training prevalence and the member's previous-period-late state. The classifier may be trained and activated only when an authorised dataset passes minimum schema, history, class, and evaluation checks. The AI assistant and report-summary functions are treated as system features only where the application can ground the output in available family data and role permissions.
 
 ### 1.9 Limitations of the Study
 
@@ -91,7 +91,7 @@ The first limitation is internet dependency. FamilyFunds is a web application, s
 
 The second limitation is payment-channel scope. Paystack is used as the online payment gateway because the project is designed around Nigerian use. Families outside Paystack-supported contexts would need other gateways.
 
-The third limitation is data availability for prediction. A new family may not have enough historical contribution records for reliable predictive analytics. In such cases, the system can still track payments and produce reports, but prediction should be delayed or treated as experimental.
+The third limitation is data availability for prediction. No private training CSV is stored in the report package, and a new family may not have enough historical contribution records or both outcome classes for defensible evaluation. The system can still track payments and produce reports, but the predictive component must remain unavailable until its data and quality gates are satisfied. This report therefore distinguishes implementation readiness from executed training and does not invent model metrics.
 
 The fourth limitation concerns AI output. Large Language Models can produce fluent but inaccurate responses if they are not constrained (Kang & Liu, 2023). For this reason, AI features in FamilyFunds must be grounded in system data, limited by user permissions, and validated before they are trusted for financial decisions.
 
@@ -117,7 +117,7 @@ The fifth limitation is project scale. The system is designed for multiple famil
 
 ### 1.11 Organisation of the Report
 
-This report is organised into five chapters. Chapter One introduces the study, states the problem, presents the aim, objectives, research questions, significance, scope, limitations, and key terms. Chapter Two reviews the literature on informal finance, multi-tenant systems, access control, payment systems, AI-assisted reporting, predictive analytics, and related systems. Chapter Three explains the methodology and system design, including the development approach, existing-system analysis, proposed system, requirements, data collection, architecture, UML diagrams, database design, algorithm design, tools, and ethical considerations. Chapter Four presents the implementation, testing, results, and validation of the system. Chapter Five summarises the study, draws conclusions, states the contribution of the project, and recommends areas for future work.
+This report is organised into five chapters. Chapter One introduces the problem, aim, objectives, research questions, significance, scope, limitations, and key terms. Chapter Two reviews informal finance, multi-tenancy, access control, payments, AI-assisted reporting, predictive analytics, and related systems. Chapter Three explains the methodology and design: development approach, requirements, data collection, architecture, UML diagrams, database, algorithms, tools, and ethics. Chapter Four presents system implementation, testing, results, and validation. Chapter Five summarises the study, conclusions, contributions, and recommendations.
 
 ---
 
