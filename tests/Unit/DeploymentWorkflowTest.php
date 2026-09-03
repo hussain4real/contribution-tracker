@@ -94,6 +94,7 @@ it('records and publishes a fresh shared TIA baseline from main', function () {
     expect($pushTrigger['branches'] ?? null)->toBe(['main'])
         ->and(array_key_exists('schedule', $triggers))->toBeTrue()
         ->and(array_key_exists('workflow_dispatch', $triggers))->toBeTrue()
+        ->and($workflow)->toContain('ini-values: max_execution_time=0')
         ->and($workflow)->toContain('composer test:coverage:tia:fresh')
         ->and($workflow)->toContain('echo "path=$(./vendor/bin/pest --baseline)" >> "$GITHUB_OUTPUT"')
         ->and($workflow)->toContain('name: pest-tia-baseline')
