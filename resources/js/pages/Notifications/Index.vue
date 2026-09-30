@@ -34,6 +34,7 @@ interface NotificationPayload {
     family_name?: string;
     period_label?: string;
     amount_owed?: number | string;
+    total_outstanding?: number;
     due_date?: string | null;
     type?: NotificationType | string;
 }
@@ -198,6 +199,14 @@ function notificationTitle(notification: NotificationItem): string {
 function notificationMessage(notification: NotificationItem): string {
     const period = notification.data.period_label ?? 'This period';
     const amount = formatMoney(notification.data.amount_owed);
+
+    if (notification.data.total_outstanding !== undefined) {
+        const totalOutstanding = formatMoney(
+            notification.data.total_outstanding,
+        );
+        const due = isFollowUp(notification) ? 'today' : 'soon';
+        return `${period} contribution is due ${due}. Total outstanding, including previous months: ${totalOutstanding}.`;
+    }
 
     if (isFollowUp(notification)) {
         return `${period} contribution of ${amount} is due today.`;

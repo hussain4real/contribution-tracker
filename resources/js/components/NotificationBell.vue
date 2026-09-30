@@ -47,6 +47,12 @@ function formatNotificationMessage(notification: AppNotification): string {
     const { data } = notification;
     const amountOwed = formatCurrency(Number(data.amount_owed ?? 0));
 
+    if (data.total_outstanding !== undefined) {
+        const totalOutstanding = formatCurrency(data.total_outstanding);
+        const due = data.type === 'follow_up' ? 'today' : 'soon';
+        return `${data.period_label} contribution is due ${due}. Total outstanding, including previous months: ${totalOutstanding}`;
+    }
+
     if (data.type === 'follow_up') {
         return `Follow-up: Your ${data.period_label} contribution of ${amountOwed} is due today`;
     }

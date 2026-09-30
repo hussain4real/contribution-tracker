@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Middleware\EnsureFamilySubscription;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Models\Family;
 use App\Models\FamilyCategory;
@@ -10,6 +11,7 @@ use App\Models\User;
 use App\Support\PlatformPlanCatalog;
 use Database\Seeders\PlatformPlanSeeder;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('share returns flash messages when session is available', function () {
@@ -124,6 +126,49 @@ test('share preserves the current family paid plan and its features', function (
     expect($subscriptionData['plan_name'] ?? null)->toBe($plan->name)
         ->and($subscriptionData['features'] ?? null)->toBe($plan->features);
 });
+
+test('share preserves family subscription columns for downstream plan gates', function () {
+    $growthPlan = PlatformPlan::query()->create([
+        'name' => 'Growth',
+        'slug' => PlatformPlanCatalog::Growth,
+        'price' => 7500,
+        'max_members' => 75,
+        'features' => [PlatformPlanCatalog::AiAssistant],
+        'is_active' => true,
+        'sort_order' => 2,
+    ]);
+    $family = Family::factory()->create([
+        'platform_plan_id' => $growthPlan->id,
+        'subscription_status' => 'active',
+        'current_period_end' => '2026-09-30 12:00:00',
+    ]);
+    $financialSecretary = User::factory()->financialSecretary()->create([
+        'family_id' => $family->id,
+    ]);
+    $financialSecretary = User::query()->findOrFail($financialSecretary->id);
+
+    $request = Request::create('/'.$family->slug.'/ai', 'GET');
+    $request->setUserResolver(fn (): User => $financialSecretary);
+
+    $shared = (new HandleInertiaRequests)->share($request);
+    $subscription = $shared['subscription'] ?? null;
+
+    if (! is_callable($subscription)) {
+        throw new RuntimeException('Expected subscription data to be a closure.');
+    }
+
+    $response = (new EnsureFamilySubscription)->handle(
+        $request,
+        fn (): Response => response('OK'),
+        PlatformPlanCatalog::AiAssistant,
+    );
+
+    expect($subscription())
+        ->plan_name->toBe('Growth')
+        ->features->toContain(PlatformPlanCatalog::AiAssistant)
+        ->and($response->getContent())->toBe('OK');
+});
+
 
 test('share exposes a legacy family category label when there is no active membership category', function () {
     $family = Family::factory()->create();

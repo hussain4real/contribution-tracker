@@ -16,8 +16,12 @@ This is a friendly reminder that your **{{ $contribution->period_label }}** cont
 | **Period** | {{ $contribution->period_label }} |
 | **Expected Amount** | {{ $contribution->formattedExpectedAmount() }} |
 | **Amount Paid** | {{ $contribution->formattedTotalPaid() }} |
-| **Remaining Balance** | {{ $contribution->formattedBalance() }} |
+| **Period Balance** | {{ $contribution->formattedBalance() }} |
+| **Previous Unpaid Balance** | {{ $previousBalance }} |
+| **Remaining Balance** | {{ $remainingBalance }} |
 | **Due Date** | {{ $contribution->due_date->toFormattedDateString() }} |
+
+The remaining balance includes unpaid contributions from previous months plus the balance for {{ $contribution->period_label }}.
 
 <x-mail::button :url="$contributionsUrl">
 View My Contributions

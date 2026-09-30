@@ -47,8 +47,8 @@ class HandleInertiaRequests extends Middleware
 
         if ($user instanceof User) {
             $user->loadMissing([
-                'currentFamily:id,name,slug,currency,due_day,bank_name,account_name,account_number,platform_plan_id',
-                'family:id,name,slug,currency,due_day,bank_name,account_name,account_number,platform_plan_id',
+                'currentFamily:id,name,slug,currency,due_day,bank_name,account_name,account_number,platform_plan_id,subscription_status,current_period_end',
+                'family:id,name,slug,currency,due_day,bank_name,account_name,account_number,platform_plan_id,subscription_status,current_period_end',
                 'familyCategory:id,name,monthly_amount',
             ]);
         }

@@ -56,6 +56,7 @@ export interface AppNotification {
         family_name: string;
         period_label: string;
         amount_owed: number;
+        total_outstanding?: number;
         due_date: string;
         type: 'reminder' | 'follow_up';
     };
