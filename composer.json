@@ -88,10 +88,10 @@
             "@test:tia:fresh",
             "@test:coverage:tia"
         ],
-        "ml:sync": "UV_CACHE_DIR=storage/framework/cache/uv uv sync --project ml/payment-risk --frozen",
-        "ml:format": "UV_CACHE_DIR=storage/framework/cache/uv uv run --project ml/payment-risk --frozen ruff format --check ml/payment-risk",
-        "ml:lint": "UV_CACHE_DIR=storage/framework/cache/uv uv run --project ml/payment-risk --frozen ruff check ml/payment-risk",
-        "ml:test": "COVERAGE_FILE=storage/framework/cache/payment-risk-coverage UV_CACHE_DIR=storage/framework/cache/uv uv run --project ml/payment-risk --frozen pytest -c ml/payment-risk/pyproject.toml ml/payment-risk/tests",
+        "ml:sync": "UV_CACHE_DIR=\"${UV_CACHE_DIR:-storage/framework/cache/uv}\" uv sync --project ml/payment-risk --frozen",
+        "ml:format": "UV_CACHE_DIR=\"${UV_CACHE_DIR:-storage/framework/cache/uv}\" uv run --project ml/payment-risk --frozen ruff format --check ml/payment-risk",
+        "ml:lint": "UV_CACHE_DIR=\"${UV_CACHE_DIR:-storage/framework/cache/uv}\" uv run --project ml/payment-risk --frozen ruff check ml/payment-risk",
+        "ml:test": "COVERAGE_FILE=storage/framework/cache/payment-risk-coverage UV_CACHE_DIR=\"${UV_CACHE_DIR:-storage/framework/cache/uv}\" uv run --project ml/payment-risk --frozen pytest -c ml/payment-risk/pyproject.toml ml/payment-risk/tests",
         "ml:check": [
             "@ml:sync",
             "@ml:format",

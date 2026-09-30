@@ -169,7 +169,6 @@ test('share preserves family subscription columns for downstream plan gates', fu
         ->and($response->getContent())->toBe('OK');
 });
 
-
 test('share exposes a legacy family category label when there is no active membership category', function () {
     $family = Family::factory()->create();
     $category = FamilyCategory::factory()->create([

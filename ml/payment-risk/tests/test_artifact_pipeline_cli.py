@@ -11,6 +11,7 @@ import pytest
 
 from payment_risk.artifact import (
     ARTIFACT_TOP_LEVEL_KEYS,
+    REQUIRED_EVIDENCE_PATHS,
     ArtifactValidationError,
     _coefficient_sign,
     load_artifact,
@@ -296,12 +297,52 @@ def test_pipeline_refuses_invalid_runtime_or_destructive_output(dataset_factory,
         )
 
 
+def _write_complete_evidence(root):
+    paths = []
+    for name in sorted(REQUIRED_EVIDENCE_PATHS):
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("{}", encoding="utf-8")
+        paths.append(path)
+    return write_checksum_manifest(root, tuple(paths))
+
+
+@pytest.mark.parametrize("missing", sorted(REQUIRED_EVIDENCE_PATHS))
+def test_checksum_manifest_requires_every_evidence_output(tmp_path, missing, capsys):
+    manifest = _write_complete_evidence(tmp_path)
+    lines = manifest.read_text().splitlines()
+    manifest.write_text("\n".join(line for line in lines if line.split("  ")[1] != missing))
+    assert not verify_checksum_manifest(tmp_path, manifest)
+    assert main(["verify", "--output-dir", str(tmp_path)]) == 2
+    assert "checksum verification failed" in capsys.readouterr().err
+
+    manifest = _write_complete_evidence(tmp_path)
+    (tmp_path / missing).unlink()
+    assert not verify_checksum_manifest(tmp_path, manifest)
+
+
+@pytest.mark.parametrize("mutation", ["duplicate", "alias", "unrelated", "unreadable"])
+def test_checksum_manifest_rejects_invalid_coverage(tmp_path, mutation, monkeypatch):
+    manifest = _write_complete_evidence(tmp_path)
+    contents = manifest.read_text()
+    if mutation == "duplicate":
+        manifest.write_text(contents + contents.splitlines()[0] + "\n")
+    elif mutation == "alias":
+        manifest.write_text(contents.replace("  model.json", "  ./model.json"))
+    elif mutation == "unrelated":
+        unrelated = tmp_path / "unrelated.json"
+        unrelated.write_text("{}")
+        write_checksum_manifest(tmp_path, (unrelated,))
+    else:
+        monkeypatch.setattr(Path, "read_bytes", lambda _self: (_ for _ in ()).throw(OSError()))
+    assert not verify_checksum_manifest(tmp_path, manifest)
+
+
 def test_checksum_manifest_rejects_tampering_malformed_and_traversal(tmp_path):
     evidence = tmp_path / "evidence"
     evidence.mkdir()
-    first = evidence / "a.json"
-    first.write_text("{}", encoding="utf-8")
-    manifest = write_checksum_manifest(evidence, (first,))
+    first = evidence / "model.json"
+    manifest = _write_complete_evidence(evidence)
     assert verify_checksum_manifest(evidence, manifest)
 
     first.write_text("tampered", encoding="utf-8")
@@ -343,9 +384,7 @@ def test_cli_dispatches_validate_score_train_verify_and_errors(
 
     output = tmp_path / "verified"
     output.mkdir()
-    evidence = output / "evidence.json"
-    evidence.write_text("{}", encoding="utf-8")
-    write_checksum_manifest(output, (evidence,))
+    _write_complete_evidence(output)
     assert main(["verify", "--output-dir", str(output)]) == 0
     assert json.loads(capsys.readouterr().out)["verified"] is True
 

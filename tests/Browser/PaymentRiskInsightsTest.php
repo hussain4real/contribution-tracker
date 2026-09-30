@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Actions\ScoreFamilyPaymentRisk;
 use App\Enums\Role;
 use App\Features\PredictiveAnalytics;
+use App\Models\PaymentRiskModelVersion;
 use App\Models\PlatformPlan;
 use App\Support\PlatformPlanCatalog;
 use Illuminate\Support\Facades\Storage;
@@ -52,6 +53,8 @@ describe('Payment risk insights (Browser)', function () {
             ->assertSee('Advisory insight, not an automated decision')
             ->assertSee('This is not a credit score')
             ->assertSee('No validated model is active')
+            ->assertSee('Guidance is unavailable until an active model passes all readiness checks.')
+            ->assertDontSee('There is not enough mature payment history')
             ->assertMissing('button[aria-label="Refresh payment risk insights for the selected period"]')
             ->assertScript(<<<'JS'
                 () => {
@@ -69,6 +72,27 @@ describe('Payment risk insights (Browser)', function () {
             ->assertNoJavaScriptErrors()
             ->assertNoSmoke();
     });
+
+    it('does not blame payment history when model verification fails', function (string $failure) {
+        installActiveTestPaymentRiskModel();
+        $model = PaymentRiskModelVersion::query()->where('is_active', true)->sole();
+
+        if ($failure === 'stale') {
+            $this->travel(366)->days();
+        } else {
+            Storage::disk($model->artifact_disk)->put($model->artifact_path, 'corrupt');
+        }
+
+        $page = loginBrowserAs($this->admin);
+
+        $page->navigate(route('payment-risk.index', ['current_family' => $this->family->slug]))
+            ->assertSee('Insights unavailable')
+            ->assertSee('The payment-risk model could not be verified safely.')
+            ->assertSee('Guidance is unavailable until an active model passes all readiness checks.')
+            ->assertDontSee('There is not enough mature payment history')
+            ->assertMissing('button[aria-label="Refresh payment risk insights for the selected period"]')
+            ->assertNoJavaScriptErrors();
+    })->with(['stale', 'corrupt']);
 
     it('allows a financial secretary to open payment risk insights from officer navigation', function () {
         $financialSecretary = createBrowserFinancialSecretary($this->family, [

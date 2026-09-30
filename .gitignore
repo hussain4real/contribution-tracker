@@ -31,3 +31,6 @@ yarn-error.log
 /.vscode
 /.zed
 /.playwright-mcp
+
+/.tmp/
+**/__pycache__/

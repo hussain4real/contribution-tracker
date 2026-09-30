@@ -15,6 +15,7 @@ export default defineConfigWithVueTs(
             'tailwind.config.js',
             'resources/js/components/ui/*',
             'ml/**/.venv/**',
+            'storage/framework/cache/**',
         ],
     },
     {

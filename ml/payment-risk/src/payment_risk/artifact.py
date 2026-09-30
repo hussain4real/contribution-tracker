@@ -39,6 +39,19 @@ ARTIFACT_TOP_LEVEL_KEYS: Final = frozenset(
         "explanation",
     }
 )
+REQUIRED_EVIDENCE_PATHS: Final = frozenset(
+    {
+        "model.json",
+        "evaluation.json",
+        "data-quality.json",
+        "charts/class-distribution.png",
+        "charts/confusion-matrix.png",
+        "charts/roc-curve.png",
+        "charts/precision-recall-curve.png",
+        "charts/calibration-curve.png",
+        "charts/standardized-coefficients.png",
+    }
+)
 PRIVATE_DIRECTORY_MODE: Final = 0o700
 PRIVATE_FILE_MODE: Final = 0o600
 
@@ -317,24 +330,31 @@ def write_checksum_manifest(root: Path, paths: tuple[Path, ...]) -> Path:
 
 
 def verify_checksum_manifest(root: Path, manifest: Path) -> bool:
-    """Verify every exact digest listed in a checksum manifest."""
+    """Verify checksums and coverage of every required model evidence output."""
 
     try:
+        root = root.resolve()
         lines = manifest.read_text(encoding="utf-8").splitlines()
-    except (OSError, UnicodeDecodeError):
+        verified_paths: set[str] = set()
+        for line in lines:
+            parts = line.split("  ", maxsplit=1)
+            if len(parts) != 2 or HASH_PATTERN.fullmatch(parts[0]) is None:
+                return False
+            relative_path = parts[1]
+            candidate = (root / relative_path).resolve()
+            if not candidate.is_relative_to(root) or not candidate.is_file():
+                return False
+            if (
+                candidate.relative_to(root).as_posix() != relative_path
+                or relative_path in verified_paths
+            ):
+                return False
+            if hashlib.sha256(candidate.read_bytes()).hexdigest() != parts[0]:
+                return False
+            verified_paths.add(relative_path)
+        return REQUIRED_EVIDENCE_PATHS.issubset(verified_paths)
+    except (OSError, UnicodeDecodeError, RuntimeError):
         return False
-    if not lines:
-        return False
-    for line in lines:
-        parts = line.split("  ", maxsplit=1)
-        if len(parts) != 2 or HASH_PATTERN.fullmatch(parts[0]) is None:
-            return False
-        candidate = (root / parts[1]).resolve()
-        if not candidate.is_relative_to(root.resolve()) or not candidate.is_file():
-            return False
-        if hashlib.sha256(candidate.read_bytes()).hexdigest() != parts[0]:
-            return False
-    return True
 
 
 HASH_PATTERN: Final = re.compile(r"[0-9a-f]{64}\Z")

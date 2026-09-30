@@ -89,7 +89,7 @@ const readinessStates = {
     unavailable: {
         title: 'Insights unavailable',
         description:
-            'There is not enough mature payment history to produce responsible guidance for this period.',
+            'Guidance is unavailable until an active model passes all readiness checks.',
     },
     ready: {
         title: 'Model ready',
