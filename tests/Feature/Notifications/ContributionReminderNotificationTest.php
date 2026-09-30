@@ -5,7 +5,9 @@ declare(strict_types=1);
 use App\Channels\WhatsAppChannel;
 use App\Models\Contribution;
 use App\Models\Family;
+use App\Models\FinancialReversal;
 use App\Models\Payment;
+use App\Models\PaymentBatch;
 use App\Models\User;
 use App\Notifications\ContributionReminderNotification;
 use Illuminate\Queue\Middleware\RateLimited;
@@ -96,6 +98,104 @@ describe('ContributionReminderNotification', function () {
 
         expect($mail->subject)->toContain('Follow-up')
             ->and($mail->subject)->toContain($contribution->period_label);
+    });
+
+    it('includes unpaid contributions from earlier periods across all reminder channels', function (bool $isFollowUp) {
+        $family = Family::factory()->create(['currency' => 'NGN']);
+        $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($user)->forMonth(2026, 9)->create([
+            'expected_amount' => 4000,
+        ]);
+        $previous = Contribution::factory()->forUser($user)->forMonth(2026, 8)->create([
+            'expected_amount' => 4000,
+        ]);
+        Contribution::factory()->forUser($user)->forMonth(2025, 12)->create([
+            'expected_amount' => 4000,
+        ]);
+        Payment::factory()->forContribution($contribution)->create(['amount' => 1000]);
+        Payment::factory()->forContribution($previous)->create(['amount' => 1500]);
+
+        $notification = new ContributionReminderNotification($contribution, $isFollowUp ? 'follow_up' : 'reminder');
+        $html = (string) $notification->toMail($user)->render();
+
+        expect(strip_tags($html))->toMatch('/Period Balance\s+NGN 3,000\.00/')
+            ->toMatch('/Previous Unpaid Balance\s+NGN 6,500\.00/')
+            ->toMatch('/Remaining Balance\s+NGN 9,500\.00/');
+
+        $data = $notification->toArray($user);
+        $whatsApp = $notification->toWhatsApp($user)->toPayload('2348012345678');
+        $component = firstResultArray(resultArray($whatsApp, 'template'), 'components');
+        $balance = resultArray(resultArray($component, 'parameters'), 4);
+        $push = $notification->toWebPush($user, $notification)->toArray();
+
+        expect($data['amount_owed'])->toBe(9500)
+            ->and($data['total_outstanding'] ?? null)->toBe(9500)
+            ->and($balance['text'] ?? null)->toBe('NGN 9,500.00')
+            ->and($push['body'])->toContain('Total outstanding, including previous months: NGN 9,500.00');
+    })->with(['reminder' => false, 'follow_up' => true]);
+
+    it('excludes other members, other families, future periods, and settled contributions from the remaining balance', function () {
+        $family = Family::factory()->create(['currency' => 'USD']);
+        $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $otherUser = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $otherFamily = Family::factory()->create();
+        $contribution = Contribution::factory()->forUser($user)->forMonth(2026, 9)->create([
+            'expected_amount' => 4000,
+        ]);
+        Contribution::factory()->forUser($user)->forMonth(2026, 8)->create(['expected_amount' => 4000]);
+        Contribution::factory()->forUser($otherUser)->forMonth(2026, 8)->create();
+        Contribution::factory()->forUser($user)->forMonth(2026, 8)->create(['family_id' => $otherFamily->id]);
+        Contribution::factory()->forUser($user)->forMonth(2026, 10)->create();
+        Contribution::factory()->forUser($user)->forMonth(2027, 1)->create();
+
+        foreach ([6 => 4000, 7 => 5000] as $month => $paid) {
+            $settled = Contribution::factory()->forUser($user)->forMonth(2026, $month)->create([
+                'expected_amount' => 4000,
+            ]);
+            Payment::factory()->forContribution($settled)->create(['amount' => $paid]);
+        }
+
+        $html = (string) (new ContributionReminderNotification($contribution))->toMail($user)->render();
+
+        expect(strip_tags($html))->toMatch('/Previous Unpaid Balance\s+USD 4,000\.00/')
+            ->toMatch('/Remaining Balance\s+USD 8,000\.00/');
+    });
+
+    it('keeps reversed payments outstanding in the reminder balance', function () {
+        $family = Family::factory()->create(['currency' => 'NGN']);
+        $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($user)->forMonth(2026, 9)->create([
+            'expected_amount' => 4000,
+        ]);
+        $previous = Contribution::factory()->forUser($user)->forMonth(2026, 8)->create([
+            'expected_amount' => 4000,
+        ]);
+        $batch = PaymentBatch::factory()->create(['family_id' => $family->id, 'total_amount' => 4000]);
+        Payment::factory()->forContribution($previous)->create(['payment_batch_id' => $batch->id]);
+        FinancialReversal::factory()->create([
+            'family_id' => $family->id,
+            'reversible_type' => PaymentBatch::MORPH_TYPE,
+            'reversible_id' => $batch->id,
+        ]);
+
+        $html = (string) (new ContributionReminderNotification($contribution))->toMail($user)->render();
+
+        expect(strip_tags($html))->toMatch('/Previous Unpaid Balance\s+NGN 4,000\.00/')
+            ->toMatch('/Remaining Balance\s+NGN 8,000\.00/');
+    });
+
+    it('renders the period balance as the total when there are no earlier unpaid contributions', function () {
+        $family = Family::factory()->create(['currency' => 'NGN']);
+        $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($user)->currentMonth()->create([
+            'expected_amount' => 4000,
+        ]);
+        Payment::factory()->forContribution($contribution)->create(['amount' => 1000]);
+
+        $html = (string) (new ContributionReminderNotification($contribution))->toMail($user)->render();
+
+        expect(strip_tags($html))->toMatch('/Previous Unpaid Balance\s+NGN 0\.00/')
+            ->toMatch('/Remaining Balance\s+NGN 3,000\.00/');
     });
 
     it('returns correct database notification data', function () {

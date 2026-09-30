@@ -47,11 +47,14 @@ it('shows the active freemium plans with subscription card metadata', function (
     $family = Family::factory()->create([
         'platform_plan_id' => $familyPlan->id,
         'subscription_status' => 'active',
+        'current_period_end' => '2026-09-30 12:00:00',
     ]);
     $admin = User::factory()->admin()->create(['family_id' => $family->id]);
 
-    $this->actingAs($admin)
-        ->get(route('subscription.index'))
+    $this->actingAs($admin);
+    $admin->unsetRelation('currentFamily')->unsetRelation('family');
+
+    $this->get(route('subscription.index', ['current_family' => $family->slug]))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->component('Subscription/Index')
@@ -71,6 +74,8 @@ it('shows the active freemium plans with subscription card metadata', function (
             ->where('plans.3.price', 20000)
             ->where('plans.3.max_members', 250)
             ->where('current_plan.name', 'Family')
+            ->where('subscription_status', 'active')
+            ->where('current_period_end', '2026-09-30')
             ->where('is_admin', true)
             ->where('available_features.'.PlatformPlanCatalog::WhatsappReminders, 'WhatsApp Reminders')
             ->where('available_features.'.PlatformPlanCatalog::WhatsappMessaging, 'WhatsApp Inbox & Replies')

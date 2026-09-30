@@ -70,7 +70,7 @@ test('free plan users are redirected away from the AI chat page', function () {
         ->assertSessionHas('error', 'This feature is not available on your current plan. Please upgrade.');
 });
 
-test('growth plan users can visit the AI chat page when the feature flag is active', function () {
+test('growth plan financial secretaries can visit the AI chat page when the feature flag is active', function () {
     $growthPlan = PlatformPlan::create([
         'name' => 'Growth',
         'slug' => PlatformPlanCatalog::Growth,
@@ -91,10 +91,12 @@ test('growth plan users can visit the AI chat page when the feature flag is acti
         'platform_plan_id' => $growthPlan->id,
         'subscription_status' => 'active',
     ]);
-    $user = User::factory()->create(['family_id' => $family->id]);
+    $user = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
 
-    $this->actingAs($user)
-        ->get(route('ai.index'))
+    $this->actingAs($user);
+    $user->unsetRelation('currentFamily')->unsetRelation('family');
+
+    $this->get(route('ai.index', ['current_family' => $family->slug]))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->component('Ai/Chat')
