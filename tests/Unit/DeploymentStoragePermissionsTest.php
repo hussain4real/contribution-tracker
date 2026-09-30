@@ -30,7 +30,12 @@ it('normalizes writable paths without changing report access or exposing Passpor
         expect($script)
             ->toContain($keyCommand)
             ->not->toContain('sudo '.$keyCommand);
-        expect(strpos($script, $keyCommand))->toBeLessThan(strpos($script, $normalizationCommand));
+        $keyPosition = strpos($script, $keyCommand);
+        $normalizationPosition = strpos($script, $normalizationCommand);
+        if ($keyPosition === false || $normalizationPosition === false) {
+            throw new RuntimeException('Expected key hardening and normalization commands to exist.');
+        }
+        expect($keyPosition)->toBeLessThan($normalizationPosition);
     }
 
     expect($setupScript)->toContain('/etc/sudoers.d/familyfunds-storage-permissions');
@@ -77,10 +82,15 @@ it('preserves report metadata while normalizing other files on repeated runs', f
     chmod($applicationRoot.'/storage/logs/example.log', 0600);
     file_put_contents($commandLog, '');
 
+    $keyPaths = [];
     foreach ($keys as $keyType) {
+        if (! is_string($keyType)) {
+            throw new RuntimeException('Expected a string key type in the fixture dataset.');
+        }
         $keyPath = $applicationRoot.'/storage/oauth-'.$keyType.'.key';
         file_put_contents($keyPath, 'synthetic fixture, not a key');
         chmod($keyPath, 0664);
+        $keyPaths[] = $keyPath;
     }
 
     $reportPaths = [];
@@ -94,6 +104,9 @@ it('preserves report metadata while normalizing other files on repeated runs', f
         chmod($reportFile, 0600);
         foreach ([$reportsDirectory, $reportsDirectory.'/22', $reportsDirectory.'/22/nested', $reportFile] as $path) {
             $metadata = stat($path);
+            if ($metadata === false) {
+                throw new RuntimeException('Unable to read report fixture metadata.');
+            }
             $reportPaths[$path] = array_intersect_key($metadata, array_flip(['ino', 'mode', 'uid', 'gid', 'mtime', 'ctime']));
         }
     }
@@ -101,6 +114,9 @@ it('preserves report metadata while normalizing other files on repeated runs', f
     // Execute real find/chmod; replace privileged ownership and install with spies.
     $chmodBinary = is_file('/usr/bin/chmod') ? '/usr/bin/chmod' : '/bin/chmod';
     $script = file_get_contents(dirname(__DIR__, 2).'/deployment/ensure-storage-permissions.sh');
+    if ($script === false) {
+        throw new RuntimeException('Unable to read the deployment permission fixture.');
+    }
     $script = str_replace(
         ['/usr/bin/chown', '/usr/bin/install', '/usr/bin/chmod'],
         [$binDirectory.'/chown', $binDirectory.'/install', $chmodBinary],
@@ -123,8 +139,8 @@ it('preserves report metadata while normalizing other files on repeated runs', f
             $process->mustRun();
             clearstatcache();
 
-            foreach ($keys as $keyType) {
-                expect(fileperms($applicationRoot.'/storage/oauth-'.$keyType.'.key') & 0777)->toBe(0640);
+            foreach ($keyPaths as $keyPath) {
+                expect(fileperms($keyPath) & 0777)->toBe(0640);
             }
             expect(fileperms($applicationRoot.'/storage/logs/example.log') & 0777)->toBe(0664);
             expect(fileperms($applicationRoot.'/storage/logs') & 07777)->toBe(02775);
@@ -133,6 +149,9 @@ it('preserves report metadata while normalizing other files on repeated runs', f
 
             foreach ($reportPaths as $path => $before) {
                 $after = stat($path);
+                if ($after === false) {
+                    throw new RuntimeException('Report fixture disappeared during deployment.');
+                }
                 expect(array_intersect_key($after, $before))->toBe($before);
             }
             if (! $existingReports) {
@@ -143,6 +162,9 @@ it('preserves report metadata while normalizing other files on repeated runs', f
     } finally {
         $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($fixtureRoot, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
         foreach ($files as $file) {
+            if (! $file instanceof SplFileInfo) {
+                throw new RuntimeException('Unexpected fixture directory entry.');
+            }
             if ($file->isDir()) {
                 rmdir($file->getPathname());
             } else {
