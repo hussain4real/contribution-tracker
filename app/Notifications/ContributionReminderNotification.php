@@ -9,8 +9,10 @@ use App\Channels\WhatsAppMessage;
 use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\User;
+use App\Support\CurrencyFormatter;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use Illuminate\Queue\Attributes\MaxExceptions;
@@ -109,6 +111,9 @@ class ContributionReminderNotification extends Notification implements ShouldQue
      */
     public function toMail(object $notifiable): MailMessage
     {
+        $balances = $this->outstandingBalances();
+        $currency = $this->contribution->family?->currency;
+
         $subject = $this->type === 'follow_up'
             ? "Follow-up: Your {$this->contribution->period_label} contribution is due today"
             : "Reminder: Your {$this->contribution->period_label} contribution is due soon";
@@ -123,6 +128,8 @@ class ContributionReminderNotification extends Notification implements ShouldQue
                 'type' => $this->type,
                 'userName' => $this->notifiableName($notifiable),
                 'familyName' => $this->familyName(),
+                'previousBalance' => CurrencyFormatter::format($balances['previous'], $currency),
+                'remainingBalance' => CurrencyFormatter::format($balances['total'], $currency),
             ]);
     }
 
@@ -133,11 +140,14 @@ class ContributionReminderNotification extends Notification implements ShouldQue
      */
     public function toArray(object $notifiable): array
     {
+        $balances = $this->outstandingBalances();
+
         return [
             'contribution_id' => $this->contribution->id,
             'family_name' => $this->familyName(),
             'period_label' => $this->contribution->period_label,
-            'amount_owed' => $this->contribution->balance,
+            'amount_owed' => $balances['total'],
+            'total_outstanding' => $balances['total'],
             'due_date' => $this->contribution->due_date->toDateString(),
             'type' => $this->type,
         ];
@@ -147,7 +157,7 @@ class ContributionReminderNotification extends Notification implements ShouldQue
      * Get the WhatsApp representation of the notification.
      *
      * Sends the approved `contribution_reminder` template with the user's name,
-     * reminder type, period, family name, and remaining balance.
+     * reminder type, period, family name, and total outstanding balance.
      */
     public function toWhatsApp(object $notifiable): WhatsAppMessage
     {
@@ -160,7 +170,7 @@ class ContributionReminderNotification extends Notification implements ShouldQue
                 $reminderType,
                 $this->contribution->period_label,
                 $this->familyName(),
-                $this->contribution->formattedBalance(),
+                $this->formattedOutstandingBalance(),
             ]);
     }
 
@@ -171,7 +181,8 @@ class ContributionReminderNotification extends Notification implements ShouldQue
     {
         $isFollowUp = $this->type === 'follow_up';
         $title = $isFollowUp ? 'Contribution due today' : 'Contribution due soon';
-        $body = "Your {$this->contribution->period_label} contribution for {$this->familyName()} has {$this->contribution->formattedBalance()} remaining.";
+        $due = $isFollowUp ? 'today' : 'soon';
+        $body = "Your {$this->contribution->period_label} contribution for {$this->familyName()} is due {$due}. Total outstanding, including previous months: {$this->formattedOutstandingBalance()}.";
 
         return (new WebPushMessage)
             ->title($title)
@@ -189,6 +200,36 @@ class ContributionReminderNotification extends Notification implements ShouldQue
                 'type' => $this->type,
             ])
             ->options(['TTL' => 60 * 60 * 24]);
+    }
+
+    /**
+     * @return array{previous: int, total: int}
+     */
+    private function outstandingBalances(): array
+    {
+        $previous = (int) Contribution::query()
+            ->where('family_id', $this->contribution->family_id)
+            ->forUser($this->contribution->user_id)
+            ->where(function (Builder $query): void {
+                $query->where('year', '<', $this->contribution->year)
+                    ->orWhere(function (Builder $query): void {
+                        $query->where('year', $this->contribution->year)
+                            ->where('month', '<', $this->contribution->month);
+                    });
+            })
+            ->with('payments')
+            ->get()
+            ->sum(fn (Contribution $contribution): int => $contribution->balance);
+
+        return [
+            'previous' => $previous,
+            'total' => $previous + $this->contribution->balance,
+        ];
+    }
+
+    private function formattedOutstandingBalance(): string
+    {
+        return CurrencyFormatter::format($this->outstandingBalances()['total'], $this->contribution->family?->currency);
     }
 
     private function notifiableName(object $notifiable): string

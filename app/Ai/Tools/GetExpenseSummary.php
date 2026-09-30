@@ -8,6 +8,7 @@ use App\Models\Expense;
 use App\Models\Family;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Support\Carbon;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 
@@ -40,7 +41,7 @@ class GetExpenseSummary implements Tool
         $baseQuery = Expense::query()
             ->where('family_id', $family->id)
             ->effective()
-            ->spentBetween($startDate, $endDate);
+            ->spentBetween(Carbon::parse($startDate)->startOfDay(), Carbon::parse($endDate)->endOfDay());
 
         $totalAmount = (clone $baseQuery)->sum('amount');
         $totalCount = (clone $baseQuery)->count();

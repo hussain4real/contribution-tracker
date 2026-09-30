@@ -69,6 +69,30 @@ it('returns zero values when no expenses exist', function () {
         ->and($result['expenses'])->toBeEmpty();
 });
 
+it('includes expenses throughout the final day of the requested date range', function (bool $useDefaultRange) {
+    $this->travelTo(now()->setDate(2026, 9, 30)->setTime(12, 0));
+
+    Expense::factory()->create([
+        'family_id' => $this->family->id,
+        'amount' => 5000,
+        'spent_at' => '2026-09-30 23:59:59',
+    ]);
+    Expense::factory()->create([
+        'family_id' => $this->family->id,
+        'amount' => 3000,
+        'spent_at' => '2026-10-01 00:00:00',
+    ]);
+
+    $request = new Request($useDefaultRange ? [] : [
+        'start_date' => '2026-09-01',
+        'end_date' => '2026-09-30',
+    ]);
+    $result = decodeToolResult((new GetExpenseSummary($this->user))->handle($request));
+
+    expect($result['total_amount'])->toBe(5000)
+        ->and($result['expense_count'])->toBe(1);
+})->with(['default current month' => true, 'explicit date range' => false]);
+
 it('does not include expenses from other families', function () {
     $otherFamily = Family::factory()->create();
 
