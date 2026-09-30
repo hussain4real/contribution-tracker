@@ -1,0 +1,20 @@
+Communication job: By the end, Miva project examiners should understand that FamilyFunds converts fragmented family-fund administration into a governed, traceable multi-tenant system, while recognising exactly which operational and predictive claims remain unverified.
+
+Primary sources
+- docs/project-report/preliminary-pages.md
+- docs/project-report/chapter-1.md
+- docs/project-report/chapter-2.md
+- docs/project-report/chapter-3.md
+- docs/project-report/chapter-4.md
+- docs/project-report/chapter-5.md
+- docs/project-report/diagrams/chapter-3-existing-system-flow.png
+- docs/project-report/diagrams/slide-05-system-architecture-full-trimmed.png
+- docs/project-report/diagrams/panels/slide-07-payment-allocation-flowchart-panel-2.png
+- public/app-icon-1024.png
+
+Evidence constraints preserved in the deck
+- All quantitative test results are local results reported for 11 August 2026.
+- Focused test runs overlap the canonical suite and are not summed into one total.
+- Commit a699a821 is a pre-change hosted baseline, not final hosted evidence.
+- No authorised private predictive CSV was available; no threshold, coefficient, confusion matrix, model metric, or populated prediction is claimed.
+- Live Paystack, messaging and AI-provider acceptance; performance/concurrency; recovery; and a fresh post-change hosted SHA remain outside the executed evidence boundary.

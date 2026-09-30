@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Actions\ScoreFamilyPaymentRisk;
 use App\Models\Contribution;
 use App\Models\Family;
 use Illuminate\Console\Attributes\Description;
@@ -18,7 +19,7 @@ class GenerateMonthlyContributions extends Command
     /**
      * Execute the console command.
      */
-    public function handle(): int
+    public function handle(ScoreFamilyPaymentRisk $scoreFamilyPaymentRisk): int
     {
         $year = (int) ($this->option('year') ?? now()->year);
         $monthOption = $this->option('month') ?? now()->month;
@@ -86,6 +87,13 @@ class GenerateMonthlyContributions extends Command
                 } else {
                     $totalSkipped++;
                 }
+            }
+
+            try {
+                $riskResult = $scoreFamilyPaymentRisk->handle($family, $year, $month);
+                $this->line("Stored {$riskResult['created']} advisory payment-risk predictions for {$family->name}.");
+            } catch (\Throwable $exception) {
+                $this->warn("Payment-risk scoring skipped for {$family->name}: {$exception->getMessage()}");
             }
         }
 

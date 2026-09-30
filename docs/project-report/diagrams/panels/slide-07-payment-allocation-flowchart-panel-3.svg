@@ -17,9 +17,9 @@
     ]]></style>
   </defs>
 <rect width="1800" height="1200" fill="#fff"/>
-<text x="900" y="72" text-anchor="middle" class="title"><tspan x="900" dy="0">Figure 3.3c: Save Results, Update Records, Notify</tspan></text>
+<text x="900" y="72" text-anchor="middle" class="title"><tspan x="900" dy="0">Figure 3.4c: Save Results, Update Records, Notify</tspan></text>
 <rect x="690" y="115" width="420" height="80" rx="40" fill="#e8f1ff" stroke="#111" stroke-width="3" />
-<text x="900" y="139" text-anchor="middle" class="label-sm"><tspan x="900" dy="0">From Figure 3.3b</tspan><tspan x="900" dy="30">persisted allocation</tspan></text>
+<text x="900" y="139" text-anchor="middle" class="label-sm"><tspan x="900" dy="0">From Figure 3.4b</tspan><tspan x="900" dy="30">persisted allocation</tspan></text>
 <rect x="635" y="270" width="530" height="120" rx="16" fill="#ecfdf3" stroke="#111" stroke-width="3" />
 <text x="900" y="314" text-anchor="middle" class="label-sm"><tspan x="900" dy="0">Persist payment records</tspan><tspan x="900" dy="30">with recorder and channel</tspan></text>
 <rect x="635" y="475" width="530" height="135" rx="16" fill="#ecfdf3" stroke="#111" stroke-width="3" />

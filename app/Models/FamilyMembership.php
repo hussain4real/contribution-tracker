@@ -79,6 +79,12 @@ class FamilyMembership extends Pivot
         return $this->hasMany(FamilyMembershipCategoryAssignment::class, 'family_membership_id', 'id');
     }
 
+    /** @return HasMany<PaymentRiskPrediction, $this> */
+    public function paymentRiskPredictions(): HasMany
+    {
+        return $this->hasMany(PaymentRiskPrediction::class, 'family_membership_id');
+    }
+
     /**
      * @param  Builder<FamilyMembership>  $query
      * @return Builder<FamilyMembership>

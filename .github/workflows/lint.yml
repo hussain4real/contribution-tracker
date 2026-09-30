@@ -22,10 +22,25 @@ jobs:
         with:
           php-version: '8.4'
 
+      - name: Setup Python and uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          python-version: '3.12'
+          enable-cache: true
+          cache-dependency-glob: ml/payment-risk/uv.lock
+
       - name: Install Dependencies
         run: |
           composer install -q --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
           npm ci
+
+      - name: Install Locked ML Dependencies
+        run: composer ml:sync
+
+      - name: Check Payment Risk ML Package
+        run: |
+          composer ml:format
+          composer ml:lint
 
       - name: Check PHP Code Style
         run: vendor/bin/pint --test

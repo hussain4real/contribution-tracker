@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Middleware;
 
 use App\Features\AiAssistant;
+use App\Features\PredictiveAnalytics;
 use App\Models\Family;
 use App\Models\FamilyCategory;
 use App\Models\FamilyMembership;
@@ -113,9 +114,7 @@ class HandleInertiaRequests extends Middleware
                 'record_payments' => $activeRole?->canRecordPayments() ?? false,
                 'generate_reports' => $activeRole?->canGenerateReports() ?? false,
             ];
-            $featureFlags = [
-                'ai_assistant' => fn () => Feature::for($user)->active(AiAssistant::class),
-            ];
+            $featureFlags = fn (): array => $this->featureFlags($user);
             $notifications = [
                 'unread_count' => fn () => $user->unreadNotifications()->count(),
                 'recent' => fn () => $user->unreadNotifications()->latest()->limit(10)->get()->map(fn ($n) => [
@@ -173,6 +172,22 @@ class HandleInertiaRequests extends Middleware
             'changelogUpdate' => $changelogUpdate,
             'webPush' => $user ? fn () => $this->webPushData($user) : null,
             'notifications' => $notifications,
+        ];
+    }
+
+    /**
+     * @return array{ai_assistant: bool, predictive_analytics: bool}
+     */
+    private function featureFlags(User $user): array
+    {
+        $values = Feature::for($user)->values([
+            AiAssistant::class,
+            PredictiveAnalytics::class,
+        ]);
+
+        return [
+            'ai_assistant' => ($values[AiAssistant::class] ?? false) !== false,
+            'predictive_analytics' => ($values[PredictiveAnalytics::class] ?? false) !== false,
         ];
     }
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Support;
 
 use App\Features\AiAssistant;
+use App\Features\PredictiveAnalytics;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
@@ -18,6 +19,11 @@ final class PlatformFeatureRegistry
             'class' => AiAssistant::class,
             'name' => 'AI Assistant',
             'description' => 'Enables the AI-powered assistant for family insights and chat.',
+        ],
+        'predictive-analytics' => [
+            'class' => PredictiveAnalytics::class,
+            'name' => 'Predictive Analytics',
+            'description' => 'Enables officer-only advisory payment-risk insights when a validated model is active.',
         ],
     ];
 

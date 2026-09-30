@@ -14,6 +14,7 @@ import { index as subscriptionIndex } from '@/actions/App/Http/Controllers/Subsc
 import { index as whatsappInboxIndex } from '@/actions/App/Http/Controllers/WhatsAppInboxController';
 import { urlIsActive } from '@/lib/utils';
 import { changelog, dashboard } from '@/routes';
+import { index as paymentRiskIndex } from '@/routes/payment-risk';
 import { edit as editProfile } from '@/routes/profile';
 import type { NavItem } from '@/types';
 import { usePage } from '@inertiajs/vue3';
@@ -31,6 +32,7 @@ import {
     Receipt,
     Rocket,
     Scale,
+    ScanSearch,
     Settings,
     Shield,
     Sparkles,
@@ -180,6 +182,16 @@ export function useAppNavigation() {
                 component: 'Reports/Index',
                 section: 'main',
             });
+
+            if (page.props.featureFlags?.predictive_analytics === true) {
+                items.push({
+                    title: 'Payment Risk',
+                    href: paymentRiskIndex(),
+                    icon: ScanSearch,
+                    component: 'PaymentRisk/Index',
+                    section: 'main',
+                });
+            }
         }
 
         if (

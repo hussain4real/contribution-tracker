@@ -19,8 +19,12 @@ class EnsureFamilySubscription
      *
      * @param  Closure(Request): (Response)  $next
      */
-    public function handle(Request $request, Closure $next, ?string $feature = null): Response
-    {
+    public function handle(
+        Request $request,
+        Closure $next,
+        ?string $feature = null,
+        ?string $planRequirement = null,
+    ): Response {
         $user = $request->user();
 
         if (! $user instanceof User) {
@@ -38,8 +42,11 @@ class EnsureFamilySubscription
 
         $plan = $family->platformPlan ?? $this->defaultFreePlan();
 
-        // If seed data is unavailable, preserve the original permissive fallback.
         if (! $plan) {
+            if ($feature !== null && $planRequirement === 'strict') {
+                return $this->featureUnavailable($request);
+            }
+
             return $next($request);
         }
 
@@ -66,14 +73,7 @@ class EnsureFamilySubscription
             $features = $plan->features;
 
             if (! in_array($feature, $features, true)) {
-                if ($request->expectsJson()) {
-                    return response()->json([
-                        'message' => 'This feature is not available on your current plan. Please upgrade.',
-                    ], 403);
-                }
-
-                return redirect()->route('subscription.index')
-                    ->with('error', 'This feature is not available on your current plan. Please upgrade.');
+                return $this->featureUnavailable($request);
             }
         }
 
@@ -107,5 +107,17 @@ class EnsureFamilySubscription
             ->where('slug', PlatformPlanCatalog::Free)
             ->where('is_active', true)
             ->first();
+    }
+
+    private function featureUnavailable(Request $request): Response
+    {
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'This feature is not available on your current plan. Please upgrade.',
+            ], 403);
+        }
+
+        return redirect()->route('subscription.index')
+            ->with('error', 'This feature is not available on your current plan. Please upgrade.');
     }
 }

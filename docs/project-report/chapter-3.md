@@ -4,7 +4,7 @@
 
 ### 3.1 Introduction to the Chapter
 
-This chapter explains the methodology used to design and develop FamilyFunds. The aim stated in Chapter One is to build an AI-enhanced multi-tenant web application for managing family contribution funds with secure access, contribution tracking, payment allocation, expense recording, reminders, and reporting. The objectives require both academic investigation and practical system development: review related work, design the system, implement the major modules, integrate controlled AI assistance, define the predictive analytics pathway, and test the system against functional and quality requirements.
+This chapter explains the methodology used to design and develop FamilyFunds. The aim stated in Chapter One is to build an AI-enhanced multi-tenant web application for managing family contribution funds with secure access, contribution tracking, payment allocation, expense recording, reminders, and reporting. The objectives require both academic investigation and practical system development: review related work, design the system, implement the major modules, integrate controlled AI assistance, implement an activation-gated logistic regression component for late-payment risk, and test the system against functional and quality requirements.
 
 The chapter therefore covers the project approach, existing-system analysis, proposed-system overview, requirements, data collection, population and sampling considerations, architecture, UML and system diagrams, database design, algorithm and model design, tools and technologies, and ethical considerations. Each methodological choice is linked to the problem: family funds need reliable records, clear responsibilities, private family workspaces, accurate payment handling, and reports that members can understand.
 
@@ -19,10 +19,10 @@ The work followed five broad stages:
 1. Problem and literature analysis, covering informal finance, existing platforms, multi-tenancy, RBAC, digital payments, AI reporting, and predictive analytics.
 2. Requirements identification, based on the problems observed in manual family fund administration and the gaps established in Chapter Two.
 3. System design, including architecture, data design, user roles, process flows, interface structure, payment allocation, and security controls.
-4. Incremental implementation, where authentication, family management, contributions, payments, expenses, reports, reminders, subscriptions, and AI features were developed in modules.
-5. Validation planning, where the critical behaviours were mapped to tests and acceptance checks, especially tenant isolation, role enforcement, payment allocation, report accuracy, and AI response control.
+4. Incremental implementation, where authentication, family management, contributions, payments, expenses, reports, reminders, subscriptions, AI features, and the predictive pipeline were developed in modules.
+5. Validation planning, where the critical behaviours were mapped to tests and acceptance checks, especially tenant isolation, role enforcement, payment allocation, report accuracy, AI response control, and predictive data/evaluation gates.
 
-This approach allows the project to remain honest about its scope. AI assistant and report-summary features are treated as implemented system features where supported by the application. Predictive analytics is treated as planned and evaluation-dependent because meaningful prediction requires sufficient historical contribution data.
+This approach allows the project to remain honest about its scope. AI assistant and report-summary features are treated as implemented system features where supported by the application. Predictive analytics uses logistic regression with training-prevalence and previous-period-late baselines, but training and activation remain evidence-dependent because meaningful prediction requires an authorised dataset with adequate history and class variation.
 
 ### 3.3 Analysis of Existing System
 
@@ -56,8 +56,10 @@ FamilyFunds resolves the problems in the existing system by moving the authorita
 | Reminders | Email, browser push, and WhatsApp-related reminder flows support follow-up. |
 | Reports | Monthly and annual reports show collections, balances, expenses, and member status. |
 | AI assistant and summaries | The assistant answers role-permitted questions and supports plain-language report summaries. |
-| Predictive analytics pathway | Historical payment data can later support default-risk indicators when enough data exists. |
+| Predictive analytics | An activation-gated logistic regression component estimates late-payment risk only after data and evaluation requirements are satisfied. |
 | Security controls | Email verification, password hashing, two-factor authentication, passkeys, signed invitations, policies, and tenant scoping protect the system. |
+
+Bank reconciliation was not part of the original requirement set above. It emerged during later Agile iterations when immutable receipts, expenses, adjustments, provider settlements, and imported bank transactions needed a governed way to be compared. Chapter Four therefore reports reconciliation as a post-design extension rather than presenting it retrospectively as an original requirement.
 
 ### 3.5 System Requirements
 
@@ -88,7 +90,7 @@ System requirements define what the system must do and the qualities it must mai
 | FR17 | Subscription management | Families shall access platform plans with member limits and feature availability. | Family Admin |
 | FR18 | AI assistant | The assistant shall answer questions using permitted family data and role-aware tools. | Authorised users |
 | FR19 | AI report summary | The system shall support plain-language summaries of financial reports. | Family Admin, Financial Secretary |
-| FR20 | Predictive analytics pathway | The system design shall support later prediction of payment behaviour where sufficient history exists. | Family Admin, Financial Secretary |
+| FR20 | Predictive analytics | Authorised officers shall receive an advisory due-date-outstanding result only from a versioned model that passed the defined gates: unavailable for zero to two mature periods, pooled non-individualised baseline for three to five, experimental logistic score for six to eleven, and standard logistic score for twelve or more; a missing, stale, corrupt, incompatible, or ineligible model shall remain unavailable. | Family Admin, Financial Secretary |
 
 #### 3.5.2 Non-Functional Requirements
 
@@ -108,6 +110,8 @@ System requirements define what the system must do and the qualities it must mai
 | NFR10 | Auditability | Financial records shall store relevant dates, amounts, users, and relationships. | Transactions can be reviewed and reconciled. |
 | NFR11 | Privacy | AI features shall use only the data needed for the user's request. | Prompts and tool calls avoid unnecessary personal exposure. |
 | NFR12 | Availability | The deployed system shall support HTTPS, queues, scheduler, and backups. | Required services are configured in deployment. |
+| NFR13 | Model governance | Predictive output shall be reproducible and activation-gated. | Dataset schema, feature version, split, coefficients, baselines, and evaluation artefacts are recorded before activation. |
+| NFR14 | Model safety | Predictive output shall be advisory, role-restricted, and honest about insufficient history. | Predictions do not trigger automatic penalties and unavailable cases show a clear reason. |
 
 #### 3.5.3 Deployment Requirements
 
@@ -122,22 +126,23 @@ System requirements define what the system must do and the qualities it must mai
 | Background processing | Queue worker and Laravel scheduler for jobs and reminders |
 | Environment configuration | `.env` variables for database, mail, Paystack, AI provider, WhatsApp-related settings, and app keys |
 | Security | HTTPS, password hashing, signed URLs, webhook validation, and restricted credentials |
+| Predictive runtime | Versioned logistic-regression training and inference components, with activation disabled until model evidence is complete |
 
 ### 3.6 Data Collection Methods
 
 This project does not rely on a formal questionnaire or invented survey data. The data used for the methodology came from four honest sources. The first source was literature and document analysis, including studies on informal finance, digital financial inclusion, SaaS multi-tenancy, RBAC, digital payments, AI reporting, and predictive analytics. The second source was observation of typical family fund administration: how members are added, how contribution amounts are agreed, how payments are announced, and how balances are reconciled. The third source was analysis of existing tools such as PiggyVest, Cowrywise, CreditClan, Lendsqr, WhatsApp, and spreadsheets. The fourth source was the system's own development artefacts: routes, controllers, models, migrations, diagrams, requirements, and test scenarios.
 
-For AI and predictive features, the relevant data is system-generated family fund data such as contribution months, due dates, payment dates, payment amounts, outstanding balances, reminder history, and report summaries. No personal data is invented for the study. Where sample data is used for testing or demonstration, it is treated as test data rather than real participant data.
+For AI and predictive features, the relevant data is system-generated family fund data such as contribution periods, obligation-creation timestamps, due dates, expected amounts, amounts paid by the due date, payment counts, and first/full-settlement timestamps. No personal data is invented for the study. Predictive training requires a separately authorised, de-identified export whose provenance, digest, time window, schema, consent basis, and point-in-time correctness can be recorded. Because the locked twelve-column export cannot encode the time-varying effect of a later financial reversal, its provenance policy also requires histories containing reversed allocations to be excluded upstream; the minimum-data gate is then applied to the remaining histories. No such private CSV is present in this repository. Where sample data is used for software testing or demonstration, it is treated as test data and is not used to support real-world model-performance claims.
 
 ### 3.7 Population and Sampling
 
 The study is mainly a system-development project, so it does not use a statistical population or probability sampling method. The relevant user population for design purposes consists of the people who normally participate in a family contribution fund: family administrators, financial secretaries, ordinary members, and the platform administrator.
 
-Validation scenarios are selected purposively because the aim is to test whether the artefact behaves correctly in the most important use cases. The selected scenarios include creating a family, inviting members, assigning roles, generating contributions, recording partial payments, initiating Paystack payments, viewing dashboards, sending reminders, generating reports, using AI assistance, and preventing cross-family access. This sampling approach is appropriate because correctness is judged by system behaviour under realistic workflows, not by generalising survey responses.
+Validation scenarios are selected purposively because the aim is to test whether the artefact behaves correctly in the most important use cases. The selected scenarios include creating a family, inviting members, assigning roles, generating contributions, recording partial payments, initiating Paystack payments, viewing dashboards, sending reminders, generating reports, using AI assistance, preventing cross-family access, rejecting invalid predictive inputs, and showing unavailable or pooled predictive states when history is insufficient. This sampling approach is appropriate because correctness is judged by system behaviour under realistic workflows, not by generalising survey responses.
 
 ### 3.8 System Architecture / Design
 
-FamilyFunds is designed as a layered, modular monolith. The frontend layer uses Vue.js and Inertia.js to present dashboards, forms, reports, settings, and AI chat screens. The application layer uses Laravel controllers, requests, services, policies, jobs, commands, and AI tools. The data layer uses PostgreSQL to store families, users, contributions, payments, expenses, adjustments, plans, notifications, passkeys, WhatsApp-related messages, and AI conversations. External services include Paystack for payments and subscriptions, mail and messaging channels for communication, and AI providers for assistant functions.
+FamilyFunds is designed as a layered, modular monolith. The frontend layer uses Vue.js and Inertia.js to present dashboards, forms, reports, settings, AI chat screens, and predictive advisory states. The application layer uses Laravel controllers, requests, services, policies, jobs, commands, and AI tools. The data layer uses PostgreSQL to store families, users, contributions, payments, expenses, adjustments, plans, notifications, passkeys, WhatsApp-related messages, AI conversations, payment-risk model metadata, and immutable predictions. A separate offline Python package validates authorised exports, trains and evaluates logistic regression, and produces a portable artefact for Laravel. External services include Paystack for payments and subscriptions, mail and messaging channels for communication, and AI providers for assistant functions.
 
 Figure 3.2 shows the high-level architecture.
 
@@ -163,7 +168,7 @@ The payment allocation process is one of the most important workflows because it
 
 ![Figure 3.4c: Payment Allocation Flowchart, Panel 3](diagrams/panels/slide-07-payment-allocation-flowchart-panel-3.png)
 
-The class-style model is represented by the main domain entities: Family, User, FamilyCategory, Contribution, Payment, Expense, FundAdjustment, PlatformPlan, PaystackTransaction, Passkey, Notification, WhatsAppMessage, AgentConversation, and AgentConversationMessage. The sequence-style processes include invitation acceptance, contribution generation, manual payment recording, Paystack payment verification, reminder sending, report generation, and AI assistant response generation.
+The class-style model is represented by the main domain entities: Family, User, FamilyCategory, Contribution, Payment, Expense, FundAdjustment, PlatformPlan, PaystackTransaction, Passkey, Notification, WhatsAppMessage, AgentConversation, AgentConversationMessage, PaymentRiskModelVersion, and PaymentRiskPrediction. The sequence-style processes include invitation acceptance, contribution generation, manual payment recording, Paystack payment verification, reminder sending, report generation, AI assistant response generation, model installation, and advisory scoring.
 
 ### 3.10 Database Design
 
@@ -192,6 +197,8 @@ Figure 3.5 shows the entity-relationship diagram.
 | `whatsapp_messages` | Stores inbound and outbound WhatsApp-related communication. | Linked to family and user where applicable. |
 | `agent_conversations` | Stores AI assistant conversation sessions. | Belongs to a user. |
 | `agent_conversation_messages` | Stores AI messages, tool calls, tool results, and metadata. | Belongs to an AI conversation. |
+| `payment_risk_model_versions` | Stores immutable model schema, checksum, training window, threshold, dataset summary, metrics, and activation state. | Has many payment-risk predictions. |
+| `payment_risk_predictions` | Stores immutable contribution-cutoff advisories, history tier, feature hash, model version, and factors. | Belongs to a family, membership, contribution, and model version. |
 
 The database design supports financial traceability by separating obligations from payments. A contribution records what a member owes for a period. A payment records money applied to that obligation. This separation is important because one incoming amount can be split across more than one contribution.
 
@@ -214,7 +221,9 @@ The main algorithm in the system is the oldest-balance-first payment allocation 
 
 The AI assistant model is designed as a tool-aware assistant. The user's role and family context are checked before tools are used. Read-only questions, such as contribution summaries or fund balances, return information from permitted records. Write-related actions, such as recording expenses or payments through an assistant tool, require explicit confirmation and role permission.
 
-The predictive analytics model is planned as a supervised classification pathway, not as an unconditional feature claim. Possible input features include payment delay, number of unpaid months, contribution category, previous partial payments, reminder count, and historical consistency. Possible output labels include "likely on time" and "likely overdue." The evaluation should use accuracy together with precision, recall, and F1-score because raw accuracy can be misleading when most members usually pay on time (Hussin Adam Khatir & Bee, 2022; Robisco & Carbó Martínez, 2022).
+The predictive component is a binary logistic regression classifier for the outcome "overdue" versus "on time," where overdue means that the system still recorded an outstanding balance at the end of the obligation's due date. The implementation uses fourteen point-in-time features: expected amount, days available before the due date, calendar month and quarter, previous mature-period count, three-period, six-period and lifetime on-time rates, prior partial-payment rate, mean and median recorded settlement delay, prior outstanding count and amount, and overdue streak. Within the locked export, “prior outstanding amount” has the reproducible meaning of the due-date residual summed only for prior obligations that were still unsettled strictly before the target cutoff; later partial amounts cannot be reconstructed from the approved columns. Every feature must be computable strictly before the target obligation's creation-time cutoff; direct identity fields and future target-period payment information are excluded.
+
+The approved evaluation is chronological: complete contribution periods are assigned 60% to training, 20% to validation, and 20% to a held-out future-like partition. Standardisation and an L2, class-balanced logistic regression are fitted on training data only. The threshold is selected on validation data by maximising overdue-class F1 subject to at least 0.70 recall, and the untouched partition is then used once for final evaluation. Logistic regression is compared with a training-prevalence baseline and a previous-period-late baseline. Accuracy is reported with balanced accuracy, overdue precision, recall and F1, ROC-AUC, PR-AUC, Brier score, bootstrap intervals, class distribution, and a confusion matrix because raw accuracy can be misleading when most members pay on time (Hussin Adam Khatir & Bee, 2022; Robisco & Carbó Martínez, 2022). Dataset schema, feature version, coefficients, intercept, decision threshold, and evaluation artefacts are versioned with the model. If the dataset lacks adequate history, both outcome classes, a valid held-out period, or improvement over the two baselines, training or activation fails closed and the interface reports that prediction is unavailable.
 
 ### 3.12 Tools and Technologies
 
@@ -234,6 +243,8 @@ The project uses tools selected for practicality, maintainability, and compatibi
 | Passwordless access | WebAuthn/passkeys | Strong browser-based authentication. |
 | Payment gateway | Paystack | Online contribution payments and subscription billing. |
 | AI integration | Laravel AI SDK | Assistant responses, tool calling, and provider integration. |
+| Predictive method | Logistic regression | Interpretable late-payment probability with activation and evidence gates. |
+| Predictive training | Python 3.12, scikit-learn, NumPy, Matplotlib | Offline validation, feature engineering, chronological training, evaluation, and evidence charts. |
 | Feature flags | Laravel Pennant | Controlled release of features such as AI assistance. |
 | Testing | Pest PHP | Automated tests for models, features, policies, payments, reports, and AI tools. |
 | Build tool | Vite | Frontend asset compilation and development server. |
@@ -253,11 +264,13 @@ The third concern is data minimisation. The system should collect only data need
 
 The fourth concern is security. Password hashing, email verification, two-factor authentication, passkeys, signed invitation links, webhook validation, HTTPS deployment, and secure environment variables are required to protect users. The design should also comply with applicable Nigerian data protection expectations, including responsible processing and protection of personal data under the Nigeria Data Protection Act 2023.
 
+The predictive component introduces a separate fairness and dignity concern. A late-payment estimate is an advisory signal for authorised officers, not a factual label about a member's character and not a basis for automatic sanctions. The interface must explain data sufficiency and model version, restrict access by role, avoid exposing another family's history, and provide an unavailable state rather than manufacturing confidence from sparse data.
+
 The fifth concern is intellectual property. The project uses open-source frameworks and libraries such as Laravel, Vue, Inertia, Tailwind CSS, and Pest according to their licences. External services such as Paystack and AI providers are used through their documented APIs and configuration requirements.
 
 ### 3.14 Summary of the Chapter
 
-This chapter described the methodology used for FamilyFunds. It adopted an applied system-development design and an Agile iterative approach because the project solves a practical problem whose requirements become clearer through design and implementation. The chapter analysed the existing manual system, introduced the proposed system, specified functional and non-functional requirements, explained the data collection method, clarified the non-survey sampling approach, and described the architecture, diagrams, database design, algorithms, tools, and ethical considerations.
+This chapter described the methodology used for FamilyFunds. It adopted an applied system-development design and an Agile iterative approach because the project solves a practical problem whose requirements become clearer through design and implementation. The chapter analysed the existing manual system, introduced the proposed system, specified functional and non-functional requirements, explained the data collection method, clarified the non-survey sampling approach, and described the architecture, diagrams, database design, algorithms, activation-gated logistic regression design, tools, and ethical considerations.
 
 The methodology shows how the project moves from the literature gap in Chapter Two to a concrete system design. Chapter Four will present how the designed modules were implemented, tested, and validated against the requirements stated in this chapter.
 

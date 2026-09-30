@@ -38,6 +38,13 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
+      - name: Setup Python and uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          python-version: '3.12'
+          enable-cache: true
+          cache-dependency-glob: ml/payment-risk/uv.lock
+
       - name: Install Node Dependencies
         run: npm ci
 
@@ -46,6 +53,9 @@ jobs:
 
       - name: Install Dependencies
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Install Locked ML Dependencies
+        run: composer ml:sync
 
       - name: Copy Environment File
         run: cp .env.example .env
@@ -60,6 +70,9 @@ jobs:
         run: |
           mkdir -p coverage
           composer test:coverage -- --ci --coverage-cobertura=coverage/cobertura.xml
+
+      - name: Test Payment Risk ML Package
+        run: composer ml:test
 
       - name: Upload Coverage Report
         if: always()

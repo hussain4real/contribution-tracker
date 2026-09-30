@@ -142,6 +142,12 @@ class Contribution extends Model
         return $this->hasMany(Payment::class);
     }
 
+    /** @return HasMany<PaymentRiskPrediction, $this> */
+    public function paymentRiskPredictions(): HasMany
+    {
+        return $this->hasMany(PaymentRiskPrediction::class);
+    }
+
     // =========================================================================
     // Scopes
     // =========================================================================
