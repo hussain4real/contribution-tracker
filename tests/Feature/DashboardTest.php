@@ -28,7 +28,9 @@ test('admin dashboard includes overdue_members with overdue contribution details
     $member = User::factory()->member()->create(['family_id' => $family->id]);
 
     // Create a current month contribution (not overdue)
-    Contribution::factory()->forUser($member)->currentMonth()->create();
+    Contribution::factory()->forUser($member)->currentMonth()->create([
+        'due_date' => now()->addDay(),
+    ]);
 
     // Create a past month contribution that is overdue (unpaid, past due date)
     $overdueContribution = Contribution::factory()->forUser($member)->forMonth(2025, 1)->create();
