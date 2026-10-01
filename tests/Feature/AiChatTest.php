@@ -425,7 +425,7 @@ test('the AI chat index loads messages for an active conversation', function () 
         );
 });
 
-test('the AI chat index clears conversation ids the user does not own', function () {
+test('the AI chat index clears conversation ids the user does not own', function (bool $otherType) {
     $user = User::factory()->create();
     $otherUser = User::factory()->create();
     $conversationId = (string) Str::uuid();
@@ -433,8 +433,8 @@ test('the AI chat index clears conversation ids the user does not own', function
     DB::table('agent_conversations')->insert([
         'id' => $conversationId,
         'user_id' => $otherUser->id,
-        'participant_type' => (new User)->getMorphClass(),
-        'participant_id' => $otherUser->id,
+        'participant_type' => $otherType ? 'another-participant-type' : $user->getMorphClass(),
+        'participant_id' => $otherType ? $user->id : $otherUser->id,
         'title' => 'Other Chat',
         'created_at' => now(),
         'updated_at' => now(),
@@ -448,7 +448,7 @@ test('the AI chat index clears conversation ids the user does not own', function
             ->where('activeConversationId', null)
             ->where('messages', [])
         );
-});
+})->with(['different user' => false, 'same ID with another type' => true]);
 
 test('the AI chat index normalizes invalid stored activity payloads', function () {
     $user = User::factory()->create();
@@ -493,7 +493,7 @@ test('the AI chat index normalizes invalid stored activity payloads', function (
         );
 });
 
-test('the AI chat index includes stored tool activity for assistant messages', function () {
+test('the AI chat index includes stored tool activity for assistant messages', function (bool $sdkHistory) {
     $user = User::factory()->create();
     $conversationId = (string) Str::uuid();
 
@@ -515,10 +515,13 @@ test('the AI chat index includes stored tool activity for assistant messages', f
         'participant_id' => $user->id,
         'agent' => 'App\\Ai\\Agents\\FamilyAssistant',
         'role' => 'assistant',
-        'steps' => '[]',
+        'steps' => $sdkHistory ? json_encode([['tool_calls' => [[
+            'id' => 'tool-call-1', 'name' => 'GetContributionSummary',
+            'arguments' => ['year' => 2026], 'result' => ['period' => 'Year 2026'],
+        ]]]], JSON_THROW_ON_ERROR) : '[]',
         'content' => 'I checked the contribution summary for you.',
         'attachments' => '[]',
-        'tool_calls' => json_encode([
+        'tool_calls' => $sdkHistory ? null : json_encode([
             [
                 'id' => 'tool-call-1',
                 'name' => 'GetContributionSummary',
@@ -527,7 +530,7 @@ test('the AI chat index includes stored tool activity for assistant messages', f
                 'reasoning_summary' => [],
             ],
         ], JSON_THROW_ON_ERROR),
-        'tool_results' => json_encode([
+        'tool_results' => $sdkHistory ? null : json_encode([
             '2' => [
                 'id' => 'tool-call-1',
                 'name' => 'GetContributionSummary',
@@ -552,7 +555,7 @@ test('the AI chat index includes stored tool activity for assistant messages', f
             ->where('messages.0.tool_results.0.id', 'tool-call-1')
             ->where('messages.0.tool_results.0.result.period', 'Year 2026')
         );
-});
+})->with(['legacy history' => false, 'SDK step history' => true]);
 
 test('the AI chat index drops malformed items from stored tool activity lists', function () {
     $user = User::factory()->create();
