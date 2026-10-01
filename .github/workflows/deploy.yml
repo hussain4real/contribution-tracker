@@ -101,9 +101,11 @@ jobs:
               if ! maintenance_state="$(timeout 30 php -r 'try { require "vendor/autoload.php"; $app = require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap(); echo $app->isDownForMaintenance() ? "active" : "inactive"; } catch (Throwable $exception) { exit(2); }' 2>/dev/null)"; then
                 return 2
               fi
+              # Known inactive state revokes earlier proof; unknown state cannot
+              # establish activation or revoke an existing, unwithdrawn confirmation.
               case "$maintenance_state" in
                 active) return 0 ;;
-                inactive) return 1 ;;
+                inactive) QUIESCED=false; return 1 ;;
                 *) return 2 ;;
               esac
             }
@@ -114,7 +116,7 @@ jobs:
               trap - EXIT INT TERM
               if [ "$MAINTENANCE_ATTEMPTED" = true ]; then
                 php artisan down --render='errors::503' --retry=60 >/dev/null 2>&1 || true
-                if [ "$QUIESCED" = true ] || maintenance_active; then
+                if maintenance_active || [ "$QUIESCED" = true ]; then
                   timeout 300 sudo -n supervisorctl stop 'queue-worker:*' >/dev/null 2>&1 || true
                   timeout 300 sudo -n supervisorctl stop ssr >/dev/null 2>&1 || true
                   timeout 300 sudo -n supervisorctl stop nightwatch >/dev/null 2>&1 || true
@@ -135,7 +137,7 @@ jobs:
               echo "Maintenance is inactive or could not be verified. Refusing deployment."
               exit 1
             fi
-            # Retain this boundary if replaced code or dependencies break later probes.
+            # Retain proof through unknown probes until inactive state or an up attempt.
             QUIESCED=true
             timeout 300 sudo -n supervisorctl stop 'queue-worker:*'
             timeout 300 sudo -n supervisorctl stop ssr
@@ -240,9 +242,11 @@ jobs:
             # Reload PHP-FPM gracefully
             drain_http_workers
 
+            # Up can remove maintenance before failing or receiving a signal.
+            # Cleanup must obtain fresh confirmation before stopping resumed consumers.
+            QUIESCED=false
             php artisan up
             curl --fail --silent --show-error https://familyfunds.app/up >/dev/null
-            QUIESCED=false
             trap - EXIT INT TERM
 
             echo "Deployment complete!"

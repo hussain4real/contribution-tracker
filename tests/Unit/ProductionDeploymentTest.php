@@ -156,6 +156,75 @@ it('leaves preexisting stopped consumers unchanged during admission failure', fu
         || ($command[0] === 'php' && $command[1] === 'artisan')))->toBeEmpty();
 })->with(['queue', 'ssr', 'nightwatch']);
 
+it('requires fresh maintenance confirmation when reopening traffic fails', function (string $scenario, bool $maintenance, bool $running, int $exit): void {
+    $result = runProductionDeploymentFaultCase($scenario);
+
+    expect($result['exit'])->toBe($exit)
+        ->and($result['maintenance'])->toBe($maintenance)
+        ->and($result['queue_running'])->toBe($running)
+        ->and($result['ssr_running'])->toBe($running)
+        ->and($result['nightwatch_running'])->toBe($running)
+        ->and($result['merged'])->toBeTrue();
+    $up = array_search(['php', 'artisan', 'up'], $result['commands'], true);
+    if ($up === false) {
+        throw new RuntimeException('Expected maintenance removal attempt.');
+    }
+    $cleanup = array_slice($result['commands'], $up + 1);
+    $stops = array_values(array_filter($cleanup, fn (array $command): bool => $command[0] === 'supervisorctl' && $command[1] === 'stop'));
+    expect($stops)->toBe($running ? [] : [
+        ['supervisorctl', 'stop', 'queue-worker:*'],
+        ['supervisorctl', 'stop', 'ssr'],
+        ['supervisorctl', 'stop', 'nightwatch'],
+    ]);
+    expect(array_filter($cleanup, fn (array $command): bool => in_array($command[0], ['git', 'composer', 'npm'], true)
+        || ($command[0] === 'php' && $command[1] === 'artisan' && in_array($command[2], ['migrate', 'up'], true))
+        || ($command[0] === 'supervisorctl' && $command[1] === 'restart')))->toBeEmpty();
+})->with([
+    'health failure with failed reentry before state' => ['health-reentry-before-state', false, true, 17],
+    'health failure with partial reentry' => ['health-reentry-after-state', true, false, 17],
+    'health failure with successful reentry without state' => ['health-reentry-no-state', false, true, 17],
+    'health failure with unknown reentry state' => ['health-reentry-probe-error', true, true, 17],
+    'health failure with timed out reentry probe' => ['health-reentry-probe-timeout', true, true, 17],
+    'health failure with early successful probe exit' => ['health-reentry-probe-empty', true, true, 17],
+    'health failure with unexpected probe output' => ['health-reentry-probe-noise', true, true, 17],
+    'health failure with failed reentry and probe' => ['health-reentry-down-and-probe-error', false, true, 17],
+    'up failure before removal' => ['up-before-state-failure', true, false, 17],
+    'up failure after removal' => ['up-after-state-failure', false, true, 17],
+    'TERM before removal' => ['term-up-before-state', true, false, 143],
+    'INT before removal' => ['int-up-before-state', true, false, 130],
+    'TERM after removal' => ['term-up-after-state', false, true, 143],
+    'INT after removal' => ['int-up-after-state', false, true, 130],
+]);
+
+it('revokes historical confirmation when maintenance is observed inactive', function (string $scenario, bool $maintenance, bool $running, int $exit): void {
+    $result = runProductionDeploymentFaultCase($scenario);
+
+    expect($result['exit'])->toBe($exit)
+        ->and($result['maintenance'])->toBe($maintenance)
+        ->and($result['queue_running'])->toBe($running)
+        ->and($result['ssr_running'])->toBe($running)
+        ->and($result['nightwatch_running'])->toBe($running)
+        ->and($result['merged'])->toBeTrue();
+    $restart = array_search(['supervisorctl', 'restart', 'nightwatch'], $result['commands'], true);
+    if ($restart === false) {
+        throw new RuntimeException('Expected resumed production consumers.');
+    }
+    $cleanup = array_slice($result['commands'], $restart + 1);
+    expect(array_filter($cleanup, fn (array $command): bool => $command === ['php', 'artisan', 'up']
+        || in_array($command[0], ['git', 'composer', 'npm'], true)))->toBeEmpty();
+    $stops = array_values(array_filter($cleanup, fn (array $command): bool => $command[0] === 'supervisorctl' && $command[1] === 'stop'));
+    expect($stops)->toBe($running ? [] : [
+        ['supervisorctl', 'stop', 'queue-worker:*'],
+        ['supervisorctl', 'stop', 'ssr'],
+        ['supervisorctl', 'stop', 'nightwatch'],
+    ]);
+})->with([
+    'explicit inactive final probe' => ['final-inactive-reentry-before-state', false, true, 1],
+    'explicit inactive proof followed by unknown cleanup probe' => ['final-inactive-reentry-probe-error', false, true, 1],
+    'unknown final probe retains unrevoked confirmation' => ['final-unknown-reentry-before-state', true, false, 2],
+    'inactive observed during failure cleanup' => ['cleanup-inactive-after-resume', false, true, 17],
+]);
+
 it('requires separate stop authorization even when consumer status access is allowed', function (): void {
     $result = runProductionDeploymentFaultCase('supervisor-stop-denied');
 
