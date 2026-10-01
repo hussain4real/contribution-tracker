@@ -20,6 +20,8 @@ with (root / "commands.jsonl").open("a") as log:
     log.write(json.dumps([name, *args]) + "\n")
 if name == "sudo":
     if args[0] == "-n": args = args[1:]
+    if scenario == "preflight-denied" and args[:2] == ["supervisorctl", "status"]: sys.exit(1)
+    if scenario == "supervisor-control-denied" and args[:2] in [["supervisorctl", "stop"], ["supervisorctl", "status"]]: sys.exit(1)
     sys.exit(subprocess.run(args).returncode)
 if name == "timeout": sys.exit(subprocess.run(args[1:]).returncode)
 if name == "git":
@@ -32,7 +34,9 @@ if name == "git":
 elif name == "php":
     if args[0] == "-r" and "isDownForMaintenance" in args[1]:
         if not (root / "maintenance").exists(): sys.exit(1)
-    elif args[1] == "down": (root / "maintenance").touch()
+    elif args[1] == "down":
+        (root / "maintenance").touch()
+        if scenario == "partial-down": sys.exit(1)
     if args[1] == "up": (root / "maintenance").unlink(missing_ok=True)
     if args[1] == "migrate" and scenario == "migration": sys.exit(1)
 elif name == "composer" and scenario == "composer": sys.exit(1)
@@ -47,15 +51,19 @@ elif name == "systemctl":
     elif args[0] == "is-active" and scenario == "inactive": sys.exit(1)
 elif name == "supervisorctl":
     action, consumer = args
-    if consumer in ["queue-worker:*", "ssr"]:
-        marker = root / ("running-queue" if consumer == "queue-worker:*" else "running-ssr")
+    if consumer in ["queue-worker:*", "ssr", "nightwatch"]:
+        marker = root / {"queue-worker:*": "running-queue", "ssr": "running-ssr", "nightwatch": "running-nightwatch"}[consumer]
         if action == "stop":
             if scenario == "queue-stop" and consumer == "queue-worker:*": sys.exit(1)
+            if scenario == "nightwatch-stop" and consumer == "nightwatch": sys.exit(1)
             marker.unlink(missing_ok=True)
-        elif action == "restart": marker.touch()
+        elif action == "restart":
+            if scenario == "nightwatch-restart" and consumer == "nightwatch": sys.exit(1)
+            marker.touch()
         elif action == "status":
-            if scenario != "empty-resume":
-                state = "STOPPED" if scenario == "resume" or not marker.exists() else "RUNNING"
+            merged = (root / "merged").exists()
+            if not (scenario == "empty-resume" and merged) and not (scenario == "nightwatch-empty-status" and consumer == "nightwatch" and merged) and scenario != "preflight-empty":
+                state = "STOPPED" if (scenario == "resume" and merged) or not marker.exists() or (scenario == "nightwatch-status" and consumer == "nightwatch" and merged) or scenario == "preflight-stopped" else "RUNNING"
                 print(consumer + " " + state)
 elif name == "curl" and scenario == "health": sys.exit(1)
 '''
@@ -68,6 +76,7 @@ with tempfile.TemporaryDirectory(prefix="contribution-deploy-") as tmp:
     (root / "proc/111/stat").write_text("111 (php-fpm8.4) S " + "0 " * 18 + "42\n")
     (root / "running-queue").touch()
     (root / "running-ssr").touch()
+    (root / "running-nightwatch").touch()
     for command in ["git", "php", "sudo", "timeout", "composer", "npm", "pgrep", "systemctl", "supervisorctl", "bash", "curl"]:
         path = bin_dir / command
         path.write_text(dispatcher)
@@ -90,6 +99,7 @@ with tempfile.TemporaryDirectory(prefix="contribution-deploy-") as tmp:
         "maintenance": (root / "maintenance").exists(),
         "queue_running": (root / "running-queue").exists(),
         "ssr_running": (root / "running-ssr").exists(),
+        "nightwatch_running": (root / "running-nightwatch").exists(),
         "merged": (root / "merged").exists(),
         "stderr": result.stderr,
     }))

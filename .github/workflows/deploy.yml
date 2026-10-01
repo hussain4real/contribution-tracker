@@ -87,6 +87,12 @@ jobs:
             fi
             git merge-base --is-ancestor HEAD "$DEPLOY_SHA"
 
+            # Verify existing noninteractive status access before taking production offline.
+            # Status access does not prove authorization to stop these consumers.
+            for consumer in 'queue-worker:*' ssr nightwatch; do
+              timeout 30 sudo -n supervisorctl status "$consumer" | awk 'NF { count++; if ($2 != "RUNNING") failed = 1 } END { exit (failed || !count) }'
+            done
+
             # Keep failed upgrades offline; never roll back a migrated database automatically.
             QUIESCED=false
             deployment_failed() {
@@ -94,9 +100,10 @@ jobs:
               trap - EXIT INT TERM
               if [ "$QUIESCED" = true ]; then
                 php artisan down --render='errors::503' --retry=60 >/dev/null 2>&1 || true
-                sudo -n supervisorctl stop 'queue-worker:*' >/dev/null 2>&1 || true
-                sudo -n supervisorctl stop ssr >/dev/null 2>&1 || true
-                echo "Deployment failed; production remains in maintenance with its consumers stopped."
+                timeout 300 sudo -n supervisorctl stop 'queue-worker:*' >/dev/null 2>&1 || true
+                timeout 300 sudo -n supervisorctl stop ssr >/dev/null 2>&1 || true
+                timeout 300 sudo -n supervisorctl stop nightwatch >/dev/null 2>&1 || true
+                echo "Deployment failed; maintenance and consumer stop cleanup attempted. Verify state before restoring traffic."
               fi
               exit "$result"
             }
@@ -104,10 +111,11 @@ jobs:
             trap 'exit 130' INT
             trap 'exit 143' TERM
 
-            php artisan down --render='errors::503' --retry=60
             QUIESCED=true
+            php artisan down --render='errors::503' --retry=60
             timeout 300 sudo -n supervisorctl stop 'queue-worker:*'
             timeout 300 sudo -n supervisorctl stop ssr
+            timeout 300 sudo -n supervisorctl stop nightwatch
 
             drain_http_workers() {
               php -r 'require "vendor/autoload.php"; $app = require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap(); exit($app->isDownForMaintenance() ? 0 : 1);'
@@ -201,8 +209,9 @@ jobs:
             sudo supervisorctl restart ssr
             sudo supervisorctl restart nightwatch
 
-            sudo supervisorctl status 'queue-worker:*' | awk 'NF { count++; if ($2 != "RUNNING") failed = 1 } END { exit (failed || !count) }'
-            sudo supervisorctl status ssr | awk 'NF { count++; if ($2 != "RUNNING") failed = 1 } END { exit (failed || !count) }'
+            timeout 30 sudo -n supervisorctl status 'queue-worker:*' | awk 'NF { count++; if ($2 != "RUNNING") failed = 1 } END { exit (failed || !count) }'
+            timeout 30 sudo -n supervisorctl status ssr | awk 'NF { count++; if ($2 != "RUNNING") failed = 1 } END { exit (failed || !count) }'
+            timeout 30 sudo -n supervisorctl status nightwatch | awk 'NF { count++; if ($2 != "RUNNING") failed = 1 } END { exit (failed || !count) }'
 
             # Reload PHP-FPM gracefully
             drain_http_workers
