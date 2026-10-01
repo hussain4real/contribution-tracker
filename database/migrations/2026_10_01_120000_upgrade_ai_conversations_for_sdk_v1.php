@@ -194,6 +194,8 @@ return new class extends AiMigration
     {
         $steps = $this->decoded($stepsJson);
         $meta = $this->decoded($metaJson);
+        $normalizedSteps = [];
+        $calls = [];
         foreach ($steps as $index => $step) {
             if (! is_array($step)) {
                 throw new RuntimeException('AI conversation steps must contain arrays.');
@@ -201,13 +203,48 @@ return new class extends AiMigration
             if (($step['provider_tool_calls'] ?? []) !== [] || ($step['replay_blocks'] ?? []) !== []) {
                 throw new RuntimeException('Preserve SDK v1 provider-tool and replay history before rolling back conversation storage.');
             }
+            if (array_diff(array_keys($step), ['content', 'tool_calls', 'reasoning', 'replay_blocks', 'provider_tool_calls']) !== []) {
+                throw new RuntimeException('Preserve SDK v1 step attributes before rolling back conversation storage.');
+            }
+            $stepCalls = $step['tool_calls'] ?? [];
+            $stepContent = $step['content'] ?? '';
             $reasoning = $step['reasoning'] ?? '';
+            if (! is_array($stepCalls) || ! array_is_list($stepCalls) || ! is_string($stepContent) || ! is_string($reasoning)) {
+                throw new RuntimeException('AI conversation steps have an invalid structure.');
+            }
+            $normalizedCalls = [];
+            foreach ($stepCalls as $call) {
+                if (! is_array($call)) {
+                    throw new RuntimeException('AI conversation tool calls must contain arrays.');
+                }
+                $namedCall = [];
+                foreach ($call as $key => $value) {
+                    if (! is_string($key)) {
+                        throw new RuntimeException('AI conversation tool call attributes must use named keys.');
+                    }
+                    $namedCall[$key] = $value;
+                }
+                $calls[] = $namedCall;
+                $normalizedCalls[] = $namedCall;
+            }
+            $normalizedSteps[] = $this->step($stepContent, $normalizedCalls, $reasoning);
             if ($reasoning !== '' && ($legacyCalls === null || $legacyResults === null || $reasoning !== ($meta['reasoning'] ?? ''))) {
                 throw new RuntimeException('Preserve SDK v1 reasoning history before rolling back conversation storage.');
             }
-            $stepContent = $step['content'] ?? '';
             if ($stepContent !== '' && ($index !== array_key_last($steps) || $stepContent !== $content)) {
                 throw new RuntimeException('Preserve intermediate SDK v1 responses before rolling back conversation storage.');
+            }
+        }
+        if ($normalizedSteps !== []) {
+            $legacyReasoning = $meta['reasoning'] ?? '';
+            if (! is_string($legacyReasoning)) {
+                throw new RuntimeException('Legacy AI reasoning must contain text.');
+            }
+            $reconstructed = $calls !== [] && $content !== ''
+                ? [$this->step('', $calls), $this->step($content, [], $legacyReasoning)]
+                : [$this->step($content, $calls, $legacyReasoning)];
+            if ($normalizedSteps !== $reconstructed) {
+                throw new RuntimeException('Preserve SDK v1 step boundaries before rolling back conversation storage.');
             }
         }
     }

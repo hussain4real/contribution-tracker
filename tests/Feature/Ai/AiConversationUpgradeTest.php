@@ -53,7 +53,7 @@ it('backfills legacy conversation ownership and tool history and preserves rollb
         'id' => $newMessage, 'conversation_id' => $newConversation,
         'participant_type' => $user->getMorphClass(), 'participant_id' => $user->id,
         'agent' => 'SummaryAgent', 'role' => 'assistant', 'content' => 'New summary',
-        'attachments' => '[]', 'steps' => json_encode([['content' => 'New summary', 'tool_calls' => [$result]]]),
+        'attachments' => '[]', 'steps' => json_encode([['content' => '', 'tool_calls' => [$result]], ['content' => 'New summary', 'tool_calls' => []]]),
         'status' => 'completed', 'usage' => json_encode(['input_tokens' => 20, 'output_tokens' => 7, 'cache_read_input_tokens' => 2, 'reasoning_tokens' => 1]), 'meta' => '[]', 'created_at' => now(), 'updated_at' => now(),
     ]);
     $migration->down();
@@ -88,7 +88,7 @@ it('refuses rollback of completed v1-only history before changing any data or sc
             'id' => 'rollback-history-'.$offset, 'conversation_id' => $conversation,
             'participant_type' => $user->getMorphClass(), 'participant_id' => $user->id,
             'agent' => 'SummaryAgent', 'role' => 'assistant', 'content' => 'Completed reply',
-            'attachments' => '[]', 'steps' => json_encode([['content' => 'Completed reply', 'tool_calls' => [], ...$extra]]),
+            'attachments' => '[]', 'steps' => json_encode($extra['steps'] ?? [['content' => 'Completed reply', 'tool_calls' => [], ...$extra]]),
             'status' => 'completed', 'usage' => '[]', 'meta' => '[]', 'created_at' => now(), 'updated_at' => now(),
         ]);
     }
@@ -109,6 +109,12 @@ it('refuses rollback of completed v1-only history before changing any data or sc
         ->and(DB::connection()->getSchemaBuilder()->getColumnListing('agent_conversation_messages'))->toBe($beforeColumns);
 })->with([
     'reasoning' => [['reasoning' => 'Private completed reasoning']],
+    'combined content and calls' => [['tool_calls' => [['id' => 'combined', 'name' => 'Summary', 'arguments' => []]]]],
+    'multiple tool rounds' => [['steps' => [
+        ['content' => '', 'tool_calls' => [['id' => 'first', 'name' => 'Summary', 'arguments' => [], 'result' => 'First']]],
+        ['content' => '', 'tool_calls' => [['id' => 'second', 'name' => 'Summary', 'arguments' => [], 'result' => 'Second']]],
+        ['content' => 'Completed reply', 'tool_calls' => []],
+    ]]],
     'provider tool history' => [['provider_tool_calls' => [['id' => 'provider-one', 'name' => 'web_search', 'result' => ['answer' => 'Preserved']]]]],
     'replay history' => [['replay_blocks' => [['type' => 'text', 'content' => 'Preserved']]]],
 ]);
