@@ -12,7 +12,7 @@ script = sys.stdin.read()
 sha = "1" * 40
 
 dispatcher = r'''#!/usr/bin/env python3
-import json, os, pathlib, subprocess, sys
+import json, os, pathlib, signal, subprocess, sys
 root = pathlib.Path(os.environ["DEPLOY_TEST_ROOT"])
 scenario = os.environ["DEPLOY_TEST_SCENARIO"]
 name, args = pathlib.Path(sys.argv[0]).name, sys.argv[1:]
@@ -24,7 +24,9 @@ if name == "sudo":
     if scenario == "supervisor-control-denied" and args[:2] in [["supervisorctl", "stop"], ["supervisorctl", "status"]]: sys.exit(1)
     if scenario == "supervisor-stop-denied" and args[:2] == ["supervisorctl", "stop"]: sys.exit(1)
     sys.exit(subprocess.run(args).returncode)
-if name == "timeout": sys.exit(subprocess.run(args[1:]).returncode)
+if name == "timeout":
+    if scenario == "probe-timeout" and args[1:3] == ["php", "-r"]: sys.exit(124)
+    sys.exit(subprocess.run(args[1:]).returncode)
 if name == "git":
     if args[:2] == ["rev-parse", "origin/main"]:
         print("2" * 40 if scenario == "stale" else "1" * 40)
@@ -34,13 +36,29 @@ if name == "git":
     elif args[:2] == ["merge", "--ff-only"]: (root / "merged").touch()
 elif name == "php":
     if args[0] == "-r" and "isDownForMaintenance" in args[1]:
-        if not (root / "maintenance").exists(): sys.exit(1)
+        if scenario in ["probe-error", "down-before-state-probe-error"] or (scenario == "postmerge-probe-error" and (root / "merged").exists()): sys.exit(2)
+        if scenario == "probe-early-exit": sys.exit(0)
+        if scenario == "probe-unexpected-output": print("unexpected"); sys.exit(0)
+        print("active" if (root / "maintenance").exists() else "inactive")
     elif args[1] == "down":
+        if scenario == "postmerge-broken-bootstrap" and (root / "merged").exists(): sys.exit(1)
+        first_down = not (root / "down-attempted").exists()
+        (root / "down-attempted").touch()
+        if scenario in ["down-before-state", "down-before-state-probe-error", "down-success-without-state", "term-before-state", "int-before-state"]:
+            if first_down and scenario in ["term-before-state", "int-before-state"]:
+                os.kill(os.getppid(), signal.SIGTERM if scenario.startswith("term") else signal.SIGINT)
+            sys.exit(0 if scenario == "down-success-without-state" else 1)
+        if scenario == "down-retry-recovers" and first_down: sys.exit(1)
         (root / "maintenance").touch()
+        if first_down and scenario in ["term-after-state", "int-after-state"]:
+            os.kill(os.getppid(), signal.SIGTERM if scenario.startswith("term") else signal.SIGINT)
+            sys.exit(1)
         if scenario == "partial-down": sys.exit(1)
     if args[1] == "up": (root / "maintenance").unlink(missing_ok=True)
     if args[1] == "migrate" and scenario == "migration": sys.exit(1)
-elif name == "composer" and scenario == "composer": sys.exit(1)
+elif name == "composer":
+    if scenario in ["composer", "postmerge-broken-bootstrap"]: sys.exit(1)
+    if scenario == "term-postmerge": os.kill(os.getppid(), signal.SIGTERM); sys.exit(1)
 elif name == "pgrep":
     if scenario != "no-workers": print("111")
 elif name == "systemctl":
@@ -78,6 +96,8 @@ with tempfile.TemporaryDirectory(prefix="contribution-deploy-") as tmp:
     (root / "running-queue").touch()
     (root / "running-ssr").touch()
     (root / "running-nightwatch").touch()
+    if scenario.startswith("initially-stopped-"):
+        (root / ("running-" + scenario.removeprefix("initially-stopped-"))).unlink()
     for command in ["git", "php", "sudo", "timeout", "composer", "npm", "pgrep", "systemctl", "supervisorctl", "bash", "curl"]:
         path = bin_dir / command
         path.write_text(dispatcher)

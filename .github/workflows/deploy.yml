@@ -94,16 +94,34 @@ jobs:
             done
 
             # Keep failed upgrades offline; never roll back a migrated database automatically.
+            maintenance_active() {
+              # Laravel supports both file and cache maintenance drivers. Only an
+              # explicit response confirms state; errors, timeouts and early exits do not.
+              local maintenance_state
+              if ! maintenance_state="$(timeout 30 php -r 'try { require "vendor/autoload.php"; $app = require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap(); echo $app->isDownForMaintenance() ? "active" : "inactive"; } catch (Throwable $exception) { exit(2); }' 2>/dev/null)"; then
+                return 2
+              fi
+              case "$maintenance_state" in
+                active) return 0 ;;
+                inactive) return 1 ;;
+                *) return 2 ;;
+              esac
+            }
+            MAINTENANCE_ATTEMPTED=false
             QUIESCED=false
             deployment_failed() {
               result=$?
               trap - EXIT INT TERM
-              if [ "$QUIESCED" = true ]; then
+              if [ "$MAINTENANCE_ATTEMPTED" = true ]; then
                 php artisan down --render='errors::503' --retry=60 >/dev/null 2>&1 || true
-                timeout 300 sudo -n supervisorctl stop 'queue-worker:*' >/dev/null 2>&1 || true
-                timeout 300 sudo -n supervisorctl stop ssr >/dev/null 2>&1 || true
-                timeout 300 sudo -n supervisorctl stop nightwatch >/dev/null 2>&1 || true
-                echo "Deployment failed; maintenance and consumer stop cleanup attempted. Verify state before restoring traffic."
+                if [ "$QUIESCED" = true ] || maintenance_active; then
+                  timeout 300 sudo -n supervisorctl stop 'queue-worker:*' >/dev/null 2>&1 || true
+                  timeout 300 sudo -n supervisorctl stop ssr >/dev/null 2>&1 || true
+                  timeout 300 sudo -n supervisorctl stop nightwatch >/dev/null 2>&1 || true
+                  echo "Deployment failed after confirmed maintenance; consumer stop cleanup attempted. Verify state before restoring traffic."
+                else
+                  echo "Maintenance could not be confirmed; consumer state left unchanged. Deployment aborted."
+                fi
               fi
               exit "$result"
             }
@@ -111,14 +129,20 @@ jobs:
             trap 'exit 130' INT
             trap 'exit 143' TERM
 
-            QUIESCED=true
+            MAINTENANCE_ATTEMPTED=true
             php artisan down --render='errors::503' --retry=60
+            if ! maintenance_active; then
+              echo "Maintenance is inactive or could not be verified. Refusing deployment."
+              exit 1
+            fi
+            # Retain this boundary if replaced code or dependencies break later probes.
+            QUIESCED=true
             timeout 300 sudo -n supervisorctl stop 'queue-worker:*'
             timeout 300 sudo -n supervisorctl stop ssr
             timeout 300 sudo -n supervisorctl stop nightwatch
 
             drain_http_workers() {
-              php -r 'require "vendor/autoload.php"; $app = require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap(); exit($app->isDownForMaintenance() ? 0 : 1);'
+              maintenance_active
               # The existing graceful reload lets old HTTP requests finish. New workers
               # serve the pre-rendered maintenance response while dependencies change.
               FPM_MASTER_PID="$(systemctl show php8.4-fpm --property=MainPID --value)"
