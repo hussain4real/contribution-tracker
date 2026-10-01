@@ -14,10 +14,10 @@ class LogPrompts
 {
     public function __construct(private string $agentClass) {}
 
+    /** @param Closure(PendingStep): StepResult $next */
     public function handle(PendingStep $step, Closure $next): StepResult
     {
-        $startTime = microtime(true);
-        $prompt = collect($step->messages)->last(fn ($message): bool => $message->role->value === 'user')?->content ?? '';
+        $prompt = collect($step->messages)->last(fn ($message): bool => $message->role->value === 'user')->content ?? '';
 
         Log::info('AI Agent prompted', [
             'agent' => $this->agentClass,

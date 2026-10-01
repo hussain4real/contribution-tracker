@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Ai\Migrations\AiMigration;
@@ -13,12 +15,13 @@ return new class extends AiMigration
     public function up(): void
     {
         $schema = Schema::connection($this->getConnection());
-        $messages = config('ai.conversations.tables.messages', 'agent_conversation_messages');
-        $conversations = config('ai.conversations.tables.conversations', 'agent_conversations');
+        $messages = Config::string('ai.conversations.tables.messages', 'agent_conversation_messages');
+        $conversations = Config::string('ai.conversations.tables.conversations', 'agent_conversations');
         $db = DB::connection($this->getConnection());
 
         $db->table($messages)->orderBy('id')->chunk(100, function ($rows): void {
             foreach ($rows as $row) {
+                /** @var object{id: string, tool_calls: ?string, tool_results: ?string, meta: ?string, usage: ?string, content: string, steps: ?string} $row */
                 $this->decoded($row->tool_calls);
                 $this->decoded($row->tool_results);
                 $this->decoded($row->meta);
@@ -48,6 +51,8 @@ return new class extends AiMigration
 
         $db->table($messages)->orderBy('id')->chunkById(100, function ($rows) use ($db, $messages): void {
             foreach ($rows as $row) {
+                /** @var object{id: string, tool_calls: ?string, tool_results: ?string, meta: ?string, usage: ?string, content: string, steps: ?string} $row */
+                /** @var array<string, int> $usage */
                 $usage = $this->decoded($row->usage);
 
                 if (array_key_exists('prompt_tokens', $usage)) {
@@ -61,20 +66,26 @@ return new class extends AiMigration
         $db->table($messages)->where('role', '!=', 'assistant')->update(['steps' => '[]']);
         $db->table($messages)->select('conversation_id')->distinct()->orderBy('conversation_id')->chunk(100, function ($conversations) use ($db, $messages) {
             foreach ($conversations as $conversation) {
+                /** @var Collection<int, object{id: string, tool_calls: ?string, tool_results: ?string, meta: ?string, usage: ?string, content: string, steps: ?string}> $rows */
                 $rows = $db->table($messages)->where('conversation_id', $conversation->conversation_id)->where('role', 'assistant')->orderBy('id')->get();
+                /** @var Collection<string, array{id: string, result?: mixed, denied?: bool, failed?: bool}> $results */
                 $results = $rows->flatMap(fn (object $row) => $this->decoded($row->tool_results))->keyBy('id');
 
                 foreach ($rows as $row) {
+                    /** @var object{id: string, tool_calls: ?string, tool_results: ?string, meta: ?string, usage: ?string, content: string, steps: ?string} $row */
+                    /** @var array{reasoning?: string} $meta */
                     $meta = $this->decoded($row->meta);
-                    $calls = collect($this->decoded($row->tool_calls))->map(function (array $call) use ($results): array {
-                        $result = $results->get($call['id'] ?? '');
+                    /** @var list<array{id: string, name: string, arguments: array<string, mixed>}> $legacyCalls */
+                    $legacyCalls = $this->decoded($row->tool_calls);
+                    $calls = array_values(collect($legacyCalls)->map(function (array $call) use ($results): array {
+                        $result = $results->get($call['id']);
 
                         return $result === null ? $call : [...$call, 'result' => $result['result'] ?? null, ...array_filter([
                             'denied' => $result['denied'] ?? false,
                             'failed' => $result['failed'] ?? false,
                         ])];
-                    })->all();
-                    $content = (string) $row->content;
+                    })->all());
+                    $content = $row->content;
                     $steps = $calls !== [] && $content !== ''
                         ? [$this->step('', $calls), $this->step($content, [], $meta['reasoning'] ?? '')]
                         : [$this->step($content, $calls, $meta['reasoning'] ?? '')];
@@ -95,8 +106,8 @@ return new class extends AiMigration
     public function down(): void
     {
         $schema = Schema::connection($this->getConnection());
-        $messages = config('ai.conversations.tables.messages', 'agent_conversation_messages');
-        $conversations = config('ai.conversations.tables.conversations', 'agent_conversations');
+        $messages = Config::string('ai.conversations.tables.messages', 'agent_conversation_messages');
+        $conversations = Config::string('ai.conversations.tables.conversations', 'agent_conversations');
         $db = DB::connection($this->getConnection());
 
         if ($db->table($messages)->where('status', '!=', 'completed')->exists()) {
@@ -114,13 +125,16 @@ return new class extends AiMigration
 
         $db->table($messages)->orderBy('id')->chunk(100, function ($rows) use ($db, $messages) {
             foreach ($rows as $row) {
+                /** @var object{id: string, tool_calls: ?string, tool_results: ?string, meta: ?string, usage: ?string, content: string, steps: ?string} $row */
                 // Preserve original historical payloads; reconstruct only messages written by the new SDK.
                 if ($row->tool_calls !== null && $row->tool_results !== null) {
                     continue;
                 }
                 $calls = [];
                 $results = [];
-                foreach ($this->decoded($row->steps) as $step) {
+                /** @var list<array{tool_calls?: list<array{id: string, name: string, arguments: array<string, mixed>, result?: mixed, denied?: bool, failed?: bool}>}> $storedSteps */
+                $storedSteps = $this->decoded($row->steps);
+                foreach ($storedSteps as $step) {
                     foreach ($step['tool_calls'] ?? [] as $call) {
                         if (array_key_exists('result', $call)) {
                             $results[] = ['id' => $call['id'], 'name' => $call['name'], 'result' => $call['result'], ...array_filter([
@@ -132,6 +146,7 @@ return new class extends AiMigration
                         $calls[] = $call;
                     }
                 }
+                /** @var array<string, int> $usage */
                 $usage = $this->decoded($row->usage);
 
                 if (array_key_exists('input_tokens', $usage)) {
@@ -159,13 +174,16 @@ return new class extends AiMigration
         });
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * @param  list<array<string, mixed>>  $calls
+     * @return array<string, mixed>
+     */
     protected function step(string $content, array $calls = [], string $reasoning = ''): array
     {
         return ['content' => $content, 'tool_calls' => $calls, 'reasoning' => $reasoning, 'replay_blocks' => [], 'provider_tool_calls' => []];
     }
 
-    /** @return array<string, mixed> */
+    /** @return array<array-key, mixed> */
     protected function decoded(?string $json): array
     {
         $decoded = json_decode($json ?? '[]', true, flags: JSON_THROW_ON_ERROR);
