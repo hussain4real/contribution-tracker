@@ -118,3 +118,46 @@ it('refuses rollback of completed v1-only history before changing any data or sc
     'provider tool history' => [['provider_tool_calls' => [['id' => 'provider-one', 'name' => 'web_search', 'result' => ['answer' => 'Preserved']]]]],
     'replay history' => [['replay_blocks' => [['type' => 'text', 'content' => 'Preserved']]]],
 ]);
+
+it('refuses conversation-wide reused call identifiers before upgrade or rollback mutations', function (bool $legacy) {
+    $user = User::factory()->create();
+    $migration = require database_path('migrations/2026_10_01_120000_upgrade_ai_conversations_for_sdk_v1.php');
+    if (! $migration instanceof AiMigration || ! method_exists($migration, 'down') || ! method_exists($migration, 'up')) {
+        throw new RuntimeException('Expected the AI conversation migration.');
+    }
+    if ($legacy) {
+        $migration->down();
+    }
+    $conversation = (string) Str::uuid7();
+    $owner = $legacy ? ['user_id' => $user->id] : ['participant_type' => $user->getMorphClass(), 'participant_id' => $user->id];
+    DB::table('agent_conversations')->insert(['id' => $conversation, 'title' => 'Ambiguous history', ...$owner, 'created_at' => now(), 'updated_at' => now()]);
+    foreach (['first', 'second'] as $offset => $value) {
+        $call = ['id' => 'reused', 'name' => 'Summary', 'arguments' => []];
+        $result = [...$call, 'result' => $value];
+        $history = $legacy
+            ? ['tool_calls' => json_encode([$call]), 'tool_results' => json_encode([$result])]
+            : ['status' => 'completed', 'steps' => json_encode([
+                ['content' => '', 'tool_calls' => [$result]],
+                ['content' => 'Completed reply', 'tool_calls' => []],
+            ])];
+        DB::table('agent_conversation_messages')->insert([
+            'id' => 'ambiguous-'.$offset, 'conversation_id' => $conversation, ...$owner, ...$history,
+            'agent' => 'SummaryAgent', 'role' => 'assistant', 'content' => 'Completed reply',
+            'attachments' => '[]', 'usage' => '[]', 'meta' => '[]', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+    }
+    $beforeMessages = DB::table('agent_conversation_messages')->orderBy('id')->get()->toJson();
+    $beforeConversations = DB::table('agent_conversations')->orderBy('id')->get()->toJson();
+    $beforeColumns = DB::connection()->getSchemaBuilder()->getColumnListing('agent_conversation_messages');
+    $mutations = [];
+    DB::listen(function (QueryExecuted $query) use (&$mutations): void {
+        if (preg_match('/^(update|insert|delete|alter|drop|create)\b/i', $query->sql)) {
+            $mutations[] = $query->sql;
+        }
+    });
+    expect(fn () => $legacy ? $migration->up() : $migration->down())->toThrow(RuntimeException::class, 'ambiguous repeated');
+    expect($mutations)->toBeEmpty()
+        ->and(DB::table('agent_conversation_messages')->orderBy('id')->get()->toJson())->toBe($beforeMessages)
+        ->and(DB::table('agent_conversations')->orderBy('id')->get()->toJson())->toBe($beforeConversations)
+        ->and(DB::connection()->getSchemaBuilder()->getColumnListing('agent_conversation_messages'))->toBe($beforeColumns);
+})->with(['legacy upgrade' => true, 'v1 rollback' => false]);

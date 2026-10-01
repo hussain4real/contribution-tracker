@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\User;
+use Illuminate\Database\Connection;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Config;
@@ -18,6 +19,7 @@ return new class extends AiMigration
         $messages = Config::string('ai.conversations.tables.messages', 'agent_conversation_messages');
         $conversations = Config::string('ai.conversations.tables.conversations', 'agent_conversations');
         $db = DB::connection($this->getConnection());
+        $this->assertUnambiguousToolHistory($db, $messages);
 
         $db->table($messages)->orderBy('id')->chunk(100, function ($rows): void {
             foreach ($rows as $row) {
@@ -109,19 +111,20 @@ return new class extends AiMigration
         $messages = Config::string('ai.conversations.tables.messages', 'agent_conversation_messages');
         $conversations = Config::string('ai.conversations.tables.conversations', 'agent_conversations');
         $db = DB::connection($this->getConnection());
+        $legacyResults = $this->assertUnambiguousToolHistory($db, $messages, true);
 
         if ($db->table($messages)->where('status', '!=', 'completed')->exists()) {
             throw new RuntimeException('Resolve incomplete AI turns before rolling back conversation storage.');
         }
 
         // Complete the read-only rollback admission scan before updating any row or schema.
-        $db->table($messages)->orderBy('id')->chunk(100, function ($rows): void {
+        $db->table($messages)->orderBy('id')->chunk(100, function ($rows) use ($legacyResults): void {
             foreach ($rows as $row) {
-                /** @var object{steps: ?string, tool_calls: ?string, tool_results: ?string, meta: ?string, usage: ?string, content: string} $row */
+                /** @var object{conversation_id: string, steps: ?string, tool_calls: ?string, tool_results: ?string, meta: ?string, usage: ?string, content: string} $row */
                 $this->decoded($row->tool_calls);
                 $this->decoded($row->tool_results);
                 $this->decoded($row->usage);
-                $this->assertLegacyRollbackHistory($row->steps, $row->tool_calls, $row->tool_results, $row->meta, $row->content);
+                $this->assertLegacyRollbackHistory($row->steps, $row->tool_calls, $row->tool_results, $row->meta, $row->content, $legacyResults['conversation:'.$row->conversation_id] ?? []);
             }
         });
 
@@ -190,7 +193,62 @@ return new class extends AiMigration
         });
     }
 
-    protected function assertLegacyRollbackHistory(?string $stepsJson, ?string $legacyCalls, ?string $legacyResults, ?string $metaJson, string $content): void
+    /** @return array<string, array<string, array<string, mixed>>> */
+    protected function assertUnambiguousToolHistory(Connection $db, string $messages, bool $useSteps = false): array
+    {
+        $seenCalls = [];
+        $results = [];
+        $db->table($messages)->orderBy('id')->chunk(100, function ($rows) use ($useSteps, &$seenCalls, &$results): void {
+            foreach ($rows as $row) {
+                /** @var object{conversation_id: string, tool_calls: ?string, tool_results: ?string, steps?: ?string} $row */
+                $conversation = 'conversation:'.$row->conversation_id;
+                $calls = $this->decoded($row->tool_calls);
+                if ($useSteps) {
+                    $calls = [];
+                    foreach ($this->decoded($row->steps ?? null) as $step) {
+                        if (! is_array($step) || ! is_array($step['tool_calls'] ?? [])) {
+                            throw new RuntimeException('AI conversation steps have an invalid structure.');
+                        }
+                        foreach ($step['tool_calls'] ?? [] as $call) {
+                            $calls[] = $call;
+                        }
+                    }
+                }
+                foreach ($calls as $call) {
+                    if (! is_array($call) || ! is_string($call['id'] ?? null)) {
+                        throw new RuntimeException('AI conversation tool calls require string identifiers.');
+                    }
+                    $key = 'call:'.$call['id'];
+                    if (isset($seenCalls[$conversation][$key])) {
+                        throw new RuntimeException('Preserve ambiguous repeated AI tool-call identifiers before changing conversation storage.');
+                    }
+                    $seenCalls[$conversation][$key] = true;
+                }
+                foreach ($this->decoded($row->tool_results) as $result) {
+                    if (! is_array($result) || ! is_string($result['id'] ?? null)) {
+                        throw new RuntimeException('AI conversation tool results require string identifiers.');
+                    }
+                    $key = 'call:'.$result['id'];
+                    $namedResult = [];
+                    foreach ($result as $name => $value) {
+                        if (! is_string($name)) {
+                            throw new RuntimeException('AI conversation tool result attributes must use named keys.');
+                        }
+                        $namedResult[$name] = $value;
+                    }
+                    if (isset($results[$conversation][$key]) && $results[$conversation][$key] !== $namedResult) {
+                        throw new RuntimeException('Preserve conflicting AI tool results before changing conversation storage.');
+                    }
+                    $results[$conversation][$key] = $namedResult;
+                }
+            }
+        });
+
+        return $results;
+    }
+
+    /** @param array<string, array<string, mixed>> $legacyResultsById */
+    protected function assertLegacyRollbackHistory(?string $stepsJson, ?string $legacyCalls, ?string $legacyResults, ?string $metaJson, string $content, array $legacyResultsById): void
     {
         $steps = $this->decoded($stepsJson);
         $meta = $this->decoded($metaJson);
@@ -233,6 +291,22 @@ return new class extends AiMigration
             }
             if ($stepContent !== '' && ($index !== array_key_last($steps) || $stepContent !== $content)) {
                 throw new RuntimeException('Preserve intermediate SDK v1 responses before rolling back conversation storage.');
+            }
+        }
+        if ($legacyCalls !== null && $legacyResults !== null) {
+            $archivedCalls = [];
+            foreach ($this->decoded($legacyCalls) as $call) {
+                if (! is_array($call) || ! is_string($call['id'] ?? null)) {
+                    throw new RuntimeException('Legacy AI calls require string identifiers.');
+                }
+                $result = $legacyResultsById['call:'.$call['id']] ?? null;
+                $archivedCalls[] = $result === null ? $call : [...$call, 'result' => $result['result'] ?? null, ...array_filter([
+                    'denied' => $result['denied'] ?? false,
+                    'failed' => $result['failed'] ?? false,
+                ])];
+            }
+            if ($calls !== $archivedCalls) {
+                throw new RuntimeException('Preserve SDK v1 changes to archived tool history before rolling back conversation storage.');
             }
         }
         if ($normalizedSteps !== []) {
