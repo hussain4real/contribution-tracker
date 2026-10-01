@@ -109,46 +109,51 @@ jobs:
             timeout 300 sudo -n supervisorctl stop 'queue-worker:*'
             timeout 300 sudo -n supervisorctl stop ssr
 
-            # The existing graceful reload lets old HTTP requests finish. New workers
-            # serve the pre-rendered maintenance response while dependencies change.
-            FPM_MASTER_PID="$(systemctl show php8.4-fpm --property=MainPID --value)"
-            if ! [[ "$FPM_MASTER_PID" =~ ^[1-9][0-9]*$ ]]; then
-              echo "Unable to identify the PHP-FPM master. Refusing deployment."
-              exit 1
-            fi
-            OLD_FPM_CHILDREN="$(pgrep -P "$FPM_MASTER_PID")"
-            if [ -z "$OLD_FPM_CHILDREN" ]; then
-              echo "Unable to identify existing PHP-FPM workers. Refusing deployment."
-              exit 1
-            fi
-            OLD_FPM_STARTS=()
-            for worker_pid in $OLD_FPM_CHILDREN; do
-              OLD_FPM_STARTS[$worker_pid]="$(awk '{print $22}' "/proc/$worker_pid/stat")"
-            done
-            sudo -n systemctl reload php8.4-fpm
-            drain_deadline=$((SECONDS + 300))
-            while true; do
-              old_workers_remaining=false
-              for worker_pid in $OLD_FPM_CHILDREN; do
-                current_start=''
-                if [ -e "/proc/$worker_pid/stat" ]; then
-                  current_start="$(awk '{print $22}' "/proc/$worker_pid/stat")"
-                  test -n "$current_start"
-                fi
-                if [ -n "$current_start" ] && [ "$current_start" = "${OLD_FPM_STARTS[$worker_pid]}" ]; then
-                  old_workers_remaining=true
-                fi
-              done
-              if [ "$old_workers_remaining" = false ]; then
-                break
-              fi
-              if [ "$SECONDS" -ge "$drain_deadline" ]; then
-                echo "Old PHP-FPM requests did not drain. Refusing deployment."
+            drain_http_workers() {
+              php -r 'require "vendor/autoload.php"; $app = require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap(); exit($app->isDownForMaintenance() ? 0 : 1);'
+              # The existing graceful reload lets old HTTP requests finish. New workers
+              # serve the pre-rendered maintenance response while dependencies change.
+              FPM_MASTER_PID="$(systemctl show php8.4-fpm --property=MainPID --value)"
+              if ! [[ "$FPM_MASTER_PID" =~ ^[1-9][0-9]*$ ]]; then
+                echo "Unable to identify the PHP-FPM master. Refusing deployment."
                 exit 1
               fi
-              sleep 1
-            done
-            systemctl is-active --quiet php8.4-fpm
+              OLD_FPM_CHILDREN="$(pgrep -P "$FPM_MASTER_PID")"
+              if [ -z "$OLD_FPM_CHILDREN" ]; then
+                echo "Unable to identify existing PHP-FPM workers. Refusing deployment."
+                exit 1
+              fi
+              OLD_FPM_STARTS=()
+              for worker_pid in $OLD_FPM_CHILDREN; do
+                OLD_FPM_STARTS[$worker_pid]="$(awk '{print $22}' "/proc/$worker_pid/stat")"
+              done
+              drain_deadline=$((SECONDS + 300))
+              timeout 300 sudo -n systemctl reload php8.4-fpm
+              while true; do
+                old_workers_remaining=false
+                for worker_pid in $OLD_FPM_CHILDREN; do
+                  current_start=''
+                  if [ -e "/proc/$worker_pid/stat" ]; then
+                    current_start="$(awk '{print $22}' "/proc/$worker_pid/stat")"
+                    test -n "$current_start"
+                  fi
+                  if [ -n "$current_start" ] && [ "$current_start" = "${OLD_FPM_STARTS[$worker_pid]}" ]; then
+                    old_workers_remaining=true
+                  fi
+                done
+                if [ "$old_workers_remaining" = false ]; then
+                  break
+                fi
+                if [ "$SECONDS" -ge "$drain_deadline" ]; then
+                  echo "Old PHP-FPM requests did not drain. Refusing deployment."
+                  exit 1
+                fi
+                sleep 1
+              done
+              systemctl is-active --quiet php8.4-fpm
+
+            }
+            drain_http_workers
 
             git merge --ff-only "$DEPLOY_SHA"
             test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
@@ -200,7 +205,7 @@ jobs:
             sudo supervisorctl status ssr | awk 'NF { count++; if ($2 != "RUNNING") failed = 1 } END { exit (failed || !count) }'
 
             # Reload PHP-FPM gracefully
-            sudo systemctl reload php8.4-fpm
+            drain_http_workers
 
             php artisan up
             curl --fail --silent --show-error https://familyfunds.app/up >/dev/null

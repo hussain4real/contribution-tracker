@@ -80,11 +80,11 @@ it('fails closed when production admission, draining, or release checks fail', f
         }
     }
 
-    if (in_array($scenario, ['stale', 'ancestry', 'queue-stop', 'no-master', 'no-workers', 'drain', 'inactive'], true)) {
+    if (in_array($scenario, ['stale', 'ancestry', 'queue-stop', 'no-master', 'no-workers', 'drain', 'reload-failure', 'inactive'], true)) {
         expect($result['merged'])->toBeFalse();
         expect(array_filter($commands, fn (array $command): bool => $command[0] === 'composer'))->toBeEmpty();
     }
-})->with(['stale', 'ancestry', 'queue-stop', 'no-master', 'no-workers', 'drain', 'inactive', 'composer', 'migration', 'resume', 'empty-resume', 'health']);
+})->with(['stale', 'ancestry', 'queue-stop', 'no-master', 'no-workers', 'drain', 'reload-failure', 'inactive', 'composer', 'migration', 'resume', 'empty-resume', 'final-drain', 'final-reload-failure', 'health']);
 
 it('resumes production only after exact checkout, migration, and consumer verification', function (): void {
     $result = runProductionDeploymentFaultCase('success');

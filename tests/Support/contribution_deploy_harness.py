@@ -30,7 +30,9 @@ if name == "git":
     elif args[0] == "merge-base" and scenario == "ancestry": sys.exit(1)
     elif args[:2] == ["merge", "--ff-only"]: (root / "merged").touch()
 elif name == "php":
-    if args[1] == "down": (root / "maintenance").touch()
+    if args[0] == "-r" and "isDownForMaintenance" in args[1]:
+        if not (root / "maintenance").exists(): sys.exit(1)
+    elif args[1] == "down": (root / "maintenance").touch()
     if args[1] == "up": (root / "maintenance").unlink(missing_ok=True)
     if args[1] == "migrate" and scenario == "migration": sys.exit(1)
 elif name == "composer" and scenario == "composer": sys.exit(1)
@@ -38,8 +40,10 @@ elif name == "pgrep":
     if scenario != "no-workers": print("111")
 elif name == "systemctl":
     if args[0] == "show": print("0" if scenario == "no-master" else "100")
-    elif args[0] == "reload" and scenario != "drain":
-        (root / "proc/111/stat").unlink(missing_ok=True)
+    elif args[0] == "reload":
+        if scenario == "reload-failure" or (scenario == "final-reload-failure" and (root / "merged").exists()): sys.exit(1)
+        if scenario != "drain" and not (scenario == "final-drain" and (root / "merged").exists()):
+            (root / "proc/111/stat").write_text("111 (php-fpm8.4) S " + "0 " * 18 + ("43\n" if not (root / "merged").exists() else "44\n"))
     elif args[0] == "is-active" and scenario == "inactive": sys.exit(1)
 elif name == "supervisorctl":
     action, consumer = args
