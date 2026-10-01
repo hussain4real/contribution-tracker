@@ -275,6 +275,11 @@ return new class extends AiMigration
                 if (! is_array($call)) {
                     throw new RuntimeException('AI conversation tool calls must contain arrays.');
                 }
+                foreach (['denied', 'failed'] as $flag) {
+                    if (array_key_exists($flag, $call) && ($call[$flag] !== true || ! array_key_exists('result', $call))) {
+                        throw new RuntimeException('Preserve SDK v1 tool-call status before rolling back conversation storage.');
+                    }
+                }
                 $namedCall = [];
                 foreach ($call as $key => $value) {
                     if (! is_string($key)) {

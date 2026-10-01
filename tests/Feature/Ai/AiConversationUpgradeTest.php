@@ -161,3 +161,83 @@ it('refuses conversation-wide reused call identifiers before upgrade or rollback
         ->and(DB::table('agent_conversations')->orderBy('id')->get()->toJson())->toBe($beforeConversations)
         ->and(DB::connection()->getSchemaBuilder()->getColumnListing('agent_conversation_messages'))->toBe($beforeColumns);
 })->with(['legacy upgrade' => true, 'v1 rollback' => false]);
+
+it('refuses unrepresentable completed tool-call status before any rollback mutation', function (array $status) {
+    $user = User::factory()->create();
+    $migration = require database_path('migrations/2026_10_01_120000_upgrade_ai_conversations_for_sdk_v1.php');
+    if (! $migration instanceof AiMigration || ! method_exists($migration, 'down')) {
+        throw new RuntimeException('Expected the AI conversation migration.');
+    }
+    $conversation = (new DatabaseConversationStore)->storeConversation($user->getMorphClass(), $user->id, 'Completed status history');
+    foreach ([[], $status] as $offset => $flags) {
+        $call = ['id' => 'status-call-'.$offset, 'name' => 'Summary', 'arguments' => [], ...$flags];
+        DB::table('agent_conversation_messages')->insert([
+            'id' => 'rollback-status-'.$offset, 'conversation_id' => $conversation,
+            'participant_type' => $user->getMorphClass(), 'participant_id' => $user->id,
+            'agent' => 'SummaryAgent', 'role' => 'assistant', 'content' => 'Completed reply',
+            'attachments' => '[]', 'steps' => json_encode([
+                ['content' => '', 'tool_calls' => [$call], 'reasoning' => '', 'replay_blocks' => [], 'provider_tool_calls' => []],
+                ['content' => 'Completed reply', 'tool_calls' => [], 'reasoning' => '', 'replay_blocks' => [], 'provider_tool_calls' => []],
+            ]),
+            'status' => 'completed', 'usage' => '[]', 'meta' => '[]', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+    }
+    $beforeMessages = DB::table('agent_conversation_messages')->orderBy('id')->get()->toJson();
+    $beforeConversations = DB::table('agent_conversations')->orderBy('id')->get()->toJson();
+    $beforeMessageColumns = DB::connection()->getSchemaBuilder()->getColumnListing('agent_conversation_messages');
+    $beforeConversationColumns = DB::connection()->getSchemaBuilder()->getColumnListing('agent_conversations');
+    $mutations = [];
+    DB::listen(function (QueryExecuted $query) use (&$mutations): void {
+        if (preg_match('/^(update|insert|delete|alter|drop|create)\b/i', $query->sql)) {
+            $mutations[] = $query->sql;
+        }
+    });
+
+    expect(fn () => $migration->down())->toThrow(RuntimeException::class, 'Preserve SDK v1 tool-call status');
+    expect($mutations)->toBeEmpty()
+        ->and(DB::table('agent_conversation_messages')->orderBy('id')->get()->toJson())->toBe($beforeMessages)
+        ->and(DB::table('agent_conversations')->orderBy('id')->get()->toJson())->toBe($beforeConversations)
+        ->and(DB::connection()->getSchemaBuilder()->getColumnListing('agent_conversation_messages'))->toBe($beforeMessageColumns)
+        ->and(DB::connection()->getSchemaBuilder()->getColumnListing('agent_conversations'))->toBe($beforeConversationColumns);
+})->with([
+    'denied without result' => [['denied' => true]],
+    'failed without result' => [['failed' => true]],
+    'false denial flag' => [['denied' => false, 'result' => null]],
+    'false failure flag' => [['failed' => false, 'result' => null]],
+    'nonboolean flag' => [['denied' => 'true', 'result' => null]],
+]);
+
+it('preserves ordinary completed tool-call results and statuses through rollback and upgrade', function (array $status) {
+    $user = User::factory()->create();
+    $migration = require database_path('migrations/2026_10_01_120000_upgrade_ai_conversations_for_sdk_v1.php');
+    if (! $migration instanceof AiMigration || ! method_exists($migration, 'down') || ! method_exists($migration, 'up')) {
+        throw new RuntimeException('Expected the AI conversation migration.');
+    }
+    $conversation = (new DatabaseConversationStore)->storeConversation($user->getMorphClass(), $user->id, 'Ordinary status history');
+    $call = ['id' => 'ordinary-call', 'name' => 'Summary', 'arguments' => [], ...$status];
+    $steps = [
+        ['content' => '', 'tool_calls' => [$call], 'reasoning' => '', 'replay_blocks' => [], 'provider_tool_calls' => []],
+        ['content' => 'Completed reply', 'tool_calls' => [], 'reasoning' => '', 'replay_blocks' => [], 'provider_tool_calls' => []],
+    ];
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'ordinary-status', 'conversation_id' => $conversation,
+        'participant_type' => $user->getMorphClass(), 'participant_id' => $user->id,
+        'agent' => 'SummaryAgent', 'role' => 'assistant', 'content' => 'Completed reply',
+        'attachments' => '[]', 'steps' => json_encode($steps), 'status' => 'completed',
+        'usage' => '[]', 'meta' => '[]', 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    $migration->down();
+    $migration->up();
+    $row = DB::table('agent_conversation_messages')->find('ordinary-status');
+    if (! is_object($row) || ! is_string($row->steps ?? null)) {
+        throw new RuntimeException('Expected the restored AI conversation history.');
+    }
+    expect(json_decode($row->steps, true, flags: JSON_THROW_ON_ERROR))->toBe($steps);
+})->with([
+    'ordinary unresolved call' => [[]],
+    'successful result' => [['result' => 'Completed']],
+    'denied result' => [['result' => 'Denied', 'denied' => true]],
+    'failed result' => [['result' => 'Failed', 'failed' => true]],
+    'explicit null denied result' => [['result' => null, 'denied' => true]],
+    'explicit null failed result' => [['result' => null, 'failed' => true]],
+]);
