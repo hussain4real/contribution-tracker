@@ -21,6 +21,8 @@ it('normalizes writable paths without changing report access or exposing Passpor
         ->toContain('find "${WRITABLE_PATHS[@]}" -path "$REPORTS_DIR" -prune -o -exec /usr/bin/chown -h deployer:www-data {} +')
         ->toContain('find "${WRITABLE_PATHS[@]}" -path "$REPORTS_DIR" -prune -o -type d -exec /usr/bin/chmod 2775 {} +')
         ->toContain('find "${WRITABLE_PATHS[@]}" -path "$REPORTS_DIR" -prune -o -path "$APP_DIR/storage/oauth-private.key" -prune -o -path "$APP_DIR/storage/oauth-public.key" -prune -o -type f -exec /usr/bin/chmod 0664 {} +')
+        ->toContain('find "$REPORTS_DIR" -type d -exec /usr/bin/chmod g+rx {} +')
+        ->toContain('find "$REPORTS_DIR" -type f -exec /usr/bin/chmod g+r {} +')
         ->toContain('if [[ ! -e "$REPORTS_DIR" && ! -L "$REPORTS_DIR" ]]; then');
 
     foreach (['private', 'public'] as $keyType) {
@@ -53,10 +55,15 @@ it('normalizes writable paths without changing report access or exposing Passpor
     }
 
     expect($setupScript)
+        ->toContain('usermod -aG www-data deployer')
         ->not->toContain('/usr/bin/chown -R deployer\\:www-data /var/www/contribution-tracker/storage')
         ->not->toContain('/usr/bin/chmod 0640 /var/www/contribution-tracker/storage/oauth-private.key')
         ->not->toContain('/usr/bin/chmod 0640 /var/www/contribution-tracker/storage/oauth-public.key')
         ->toContain('/usr/bin/install -d -o deployer -g www-data -m 2775 /var/www/contribution-tracker/storage/app/private/reports');
+
+    expect($setupScript)
+        ->toContain('deployer ALL=(root) NOPASSWD: /usr/bin/find /var/www/contribution-tracker/storage/app/private/reports -type d -exec /usr/bin/chmod g+rx {} +')
+        ->toContain('deployer ALL=(root) NOPASSWD: /usr/bin/find /var/www/contribution-tracker/storage/app/private/reports -type f -exec /usr/bin/chmod g+r {} +');
 
     expect($deployScript)->toContain('bash deployment/ensure-storage-permissions.sh "$APP_DIR"');
     expect($workflow)
@@ -107,7 +114,7 @@ it('preserves report metadata while normalizing other files on repeated runs', f
             if ($metadata === false) {
                 throw new RuntimeException('Unable to read report fixture metadata.');
             }
-            $reportPaths[$path] = array_intersect_key($metadata, array_flip(['ino', 'mode', 'uid', 'gid', 'mtime', 'ctime']));
+            $reportPaths[$path] = array_intersect_key($metadata, array_flip(['ino', 'uid', 'gid', 'mtime']));
         }
     }
 
@@ -143,7 +150,7 @@ it('preserves report metadata while normalizing other files on repeated runs', f
                 expect(fileperms($keyPath) & 0777)->toBe(0640);
             }
             expect(fileperms($applicationRoot.'/storage/logs/example.log') & 0777)->toBe(0664);
-            expect(fileperms($applicationRoot.'/storage/logs') & 07777)->toBe(02775);
+            expect(fileperms($applicationRoot.'/storage/logs') & 0777)->toBe(0775);
             expect(file_get_contents($commandLog))->not->toContain($reportsDirectory);
             expect(file_get_contents($commandLog))->toContain($applicationRoot.'/storage/logs/example.log');
 
@@ -154,9 +161,14 @@ it('preserves report metadata while normalizing other files on repeated runs', f
                 }
                 expect(array_intersect_key($after, $before))->toBe($before);
             }
+            if ($existingReports) {
+                expect(fileperms($reportsDirectory.'/22') & 0777)->toBe(0750)
+                    ->and(fileperms($reportsDirectory.'/22/nested') & 0777)->toBe(0750)
+                    ->and(fileperms($reportsDirectory.'/22/nested/report.pdf') & 0777)->toBe(0640);
+            }
             if (! $existingReports) {
                 expect(is_dir($reportsDirectory))->toBeTrue();
-                expect(fileperms($reportsDirectory) & 07777)->toBe(02775);
+                expect(fileperms($reportsDirectory) & 0777)->toBe(0775);
             }
         }
     } finally {
