@@ -18,14 +18,16 @@ done
 
 sudo /usr/bin/chown -R deployer:www-data "${WRITABLE_PATHS[@]}"
 
-# Lock down Passport's private key before traversing storage, then exclude it
-# from the broad file normalization so PHP-FPM remains read-only throughout.
-if [[ -f "$APP_DIR/storage/oauth-private.key" ]]; then
-    /usr/bin/chmod 0640 "$APP_DIR/storage/oauth-private.key"
-fi
+# Lock down Passport's keys before traversing storage, then exclude them from
+# the broad file normalization so PHP-FPM remains read-only throughout.
+for key in oauth-private.key oauth-public.key; do
+    if [[ -f "$APP_DIR/storage/$key" ]]; then
+        /usr/bin/chmod 0640 "$APP_DIR/storage/$key"
+    fi
+done
 
 sudo /usr/bin/find "${WRITABLE_PATHS[@]}" -type d -exec /usr/bin/chmod 2775 {} +
-sudo /usr/bin/find "${WRITABLE_PATHS[@]}" -path "$APP_DIR/storage/oauth-private.key" -prune -o -type f -exec /usr/bin/chmod 0664 {} +
+sudo /usr/bin/find "${WRITABLE_PATHS[@]}" \( -path "$APP_DIR/storage/oauth-private.key" -o -path "$APP_DIR/storage/oauth-public.key" \) -prune -o -type f -exec /usr/bin/chmod 0664 {} +
 
 # Report generation creates this directory on demand. Creating it here also
 # makes its ownership explicit before the backup scheduler traverses storage.
