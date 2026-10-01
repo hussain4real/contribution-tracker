@@ -6,36 +6,33 @@ namespace App\Ai\Middleware;
 
 use Closure;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
-use Laravel\Ai\Prompts\AgentPrompt;
-use Laravel\Ai\Responses\AgentResponse;
-use Laravel\Ai\Responses\StreamableAgentResponse;
+use Laravel\Ai\Gateway\StepResponse;
+use Laravel\Ai\Gateway\StepResult;
+use Laravel\Ai\PendingStep;
 
 class LogPrompts
 {
-    /**
-     * Handle the incoming prompt.
-     */
-    public function handle(AgentPrompt $prompt, Closure $next): mixed
+    public function __construct(private string $agentClass) {}
+
+    public function handle(PendingStep $step, Closure $next): StepResult
     {
+        $startTime = microtime(true);
+        $prompt = collect($step->messages)->last(fn ($message): bool => $message->role->value === 'user')?->content ?? '';
+
         Log::info('AI Agent prompted', [
-            'agent' => $prompt->agent::class,
-            'prompt' => $prompt->prompt,
+            'agent' => $this->agentClass,
+            'prompt' => $prompt,
+            'step' => $step->number,
         ]);
 
-        $response = $next($prompt);
-
-        if (! $response instanceof AgentResponse && ! $response instanceof StreamableAgentResponse) {
-            return $response;
-        }
-
-        return $response->then(function (AgentResponse $response) use ($prompt): void {
+        return $next($step)->then(function (StepResponse $response) use ($step): void {
             Log::info('AI Agent responded', [
-                'agent' => $prompt->agent::class,
-                'provider' => $response->meta->provider ?? null,
-                'model' => $response->meta->model ?? null,
-                'response_length' => Str::length($response->text ?? ''),
-                'usage' => $response->usage ?? null,
+                'agent' => $this->agentClass,
+                'provider' => $response->meta->provider,
+                'model' => $response->meta->model,
+                'response_length' => mb_strlen($response->text),
+                'usage' => $response->usage,
+                'step' => $step->number,
             ]);
         });
     }
