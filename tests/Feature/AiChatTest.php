@@ -557,6 +557,66 @@ test('the AI chat index includes stored tool activity for assistant messages', f
         );
 })->with(['legacy history' => false, 'SDK step history' => true]);
 
+test('the AI chat index projects terminal SDK tool activity without inventing results', function (array $outcome, bool $terminal) {
+    $user = User::factory()->create();
+    $conversationId = (string) Str::uuid();
+    $call = [
+        'id' => 'tool-call-status',
+        'name' => 'GetContributionSummary',
+        'arguments' => ['year' => 2026],
+        ...$outcome,
+    ];
+
+    DB::table('agent_conversations')->insert([
+        'id' => $conversationId,
+        'user_id' => $user->id,
+        'participant_type' => $user->getMorphClass(),
+        'participant_id' => $user->id,
+        'title' => 'Tool status history',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => (string) Str::uuid(),
+        'conversation_id' => $conversationId,
+        'user_id' => $user->id,
+        'participant_type' => $user->getMorphClass(),
+        'participant_id' => $user->id,
+        'agent' => FamilyAssistant::class,
+        'role' => 'assistant',
+        'status' => 'completed',
+        'content' => 'Finished turn.',
+        'steps' => json_encode([['tool_calls' => [$call]]], JSON_THROW_ON_ERROR),
+        'attachments' => '[]',
+        'tool_calls' => null,
+        'tool_results' => null,
+        'usage' => '{}',
+        'meta' => '{}',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('ai.index', ['conversation' => $conversationId]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Ai/Chat')
+            ->where('messages.0.tool_calls', [$call])
+            ->where('messages.0.tool_results', $terminal ? [$call] : [])
+        );
+})->with([
+    'denied without result' => [['denied' => true], true],
+    'failed without result' => [['failed' => true], true],
+    'successful result' => [['result' => ['period' => 'Year 2026']], true],
+    'explicit null result' => [['result' => null], true],
+    'denied null result' => [['denied' => true, 'result' => null], true],
+    'failed null result' => [['failed' => true, 'result' => null], true],
+    'ordinary pending call' => [[], false],
+    'false denial stays pending' => [['denied' => false], false],
+    'false failure stays pending' => [['failed' => false], false],
+]);
+
 test('the AI chat index drops malformed items from stored tool activity lists', function () {
     $user = User::factory()->create();
     $conversationId = (string) Str::uuid();
