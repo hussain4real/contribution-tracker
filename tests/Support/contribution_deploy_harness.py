@@ -22,6 +22,7 @@ if name == "sudo":
     if args[0] == "-n": args = args[1:]
     if scenario == "preflight-denied" and args[:2] == ["supervisorctl", "status"]: sys.exit(1)
     if scenario == "supervisor-control-denied" and args[:2] in [["supervisorctl", "stop"], ["supervisorctl", "status"]]: sys.exit(1)
+    if scenario == "supervisor-stop-denied" and args[:2] == ["supervisorctl", "stop"]: sys.exit(1)
     sys.exit(subprocess.run(args).returncode)
 if name == "timeout": sys.exit(subprocess.run(args[1:]).returncode)
 if name == "git":

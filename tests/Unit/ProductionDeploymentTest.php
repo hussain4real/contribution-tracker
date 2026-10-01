@@ -95,6 +95,19 @@ it('fails closed when production admission, draining, or release checks fail', f
     }
 })->with(['stale', 'ancestry', 'supervisor-control-denied', 'preflight-denied', 'preflight-stopped', 'preflight-empty', 'partial-down', 'queue-stop', 'nightwatch-stop', 'no-master', 'no-workers', 'drain', 'reload-failure', 'inactive', 'composer', 'migration', 'resume', 'empty-resume', 'nightwatch-restart', 'nightwatch-status', 'nightwatch-empty-status', 'final-drain', 'final-reload-failure', 'health']);
 
+it('requires separate stop authorization even when consumer status access is allowed', function (): void {
+    $result = runProductionDeploymentFaultCase('supervisor-stop-denied');
+
+    expect($result['exit'])->not->toBe(0)
+        ->and($result['maintenance'])->toBeTrue()
+        ->and($result['queue_running'])->toBeTrue()
+        ->and($result['ssr_running'])->toBeTrue()
+        ->and($result['nightwatch_running'])->toBeTrue()
+        ->and($result['merged'])->toBeFalse();
+    expect(array_filter($result['commands'], fn (array $command): bool => in_array($command[0], ['composer', 'npm'], true)
+        || ($command[0] === 'php' && $command[1] === 'artisan' && $command[2] === 'migrate')))->toBeEmpty();
+});
+
 it('resumes production only after exact checkout, migration, and consumer verification', function (): void {
     $result = runProductionDeploymentFaultCase('success');
 
