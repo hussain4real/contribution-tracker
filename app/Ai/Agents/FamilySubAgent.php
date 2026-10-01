@@ -58,7 +58,7 @@ abstract class FamilySubAgent implements Agent, CanActAsTool, HasMiddleware, Has
     public function middleware(): array
     {
         return [
-            new LogPrompts,
+            new LogPrompts($this::class),
         ];
     }
 
