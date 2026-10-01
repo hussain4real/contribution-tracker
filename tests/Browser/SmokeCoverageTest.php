@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Ai\Agents\FamilyAssistant;
 use App\Features\AiAssistant;
 use App\Models\Contribution;
 use App\Models\Expense;
@@ -13,6 +14,7 @@ use App\Models\User;
 use App\Models\WhatsAppMessage;
 use Database\Seeders\PlatformPlanSeeder;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Laravel\Pennant\Feature;
@@ -283,6 +285,56 @@ it('smokes authenticated family pages', function () {
 
     assertBrowserSmoke($page, 'Security');
     assertBrowserSmoke($page, 'Passkeys');
+});
+
+it('shows terminal SDK history tool calls as done while unresolved calls keep running', function () {
+    $admin = createBrowserAdmin(createBrowserFamily());
+    Feature::for($admin)->activate(AiAssistant::class);
+    Feature::flushCache();
+    $conversationId = (string) Str::uuid();
+    $outcomes = [
+        ['denied' => true],
+        ['failed' => true],
+        ['result' => ['period' => 'Year 2026']],
+        ['result' => null],
+        ['denied' => true, 'result' => null],
+        ['failed' => true, 'result' => null],
+        [],
+        ['denied' => false],
+        ['failed' => false],
+    ];
+    $calls = [];
+
+    foreach ($outcomes as $index => $outcome) {
+        $calls[] = ['id' => 'history-status-'.$index, 'name' => 'HistoryStatus'.$index, 'arguments' => [], ...$outcome];
+    }
+
+    DB::table('agent_conversations')->insert([
+        'id' => $conversationId, 'title' => 'Terminal tool status',
+        'user_id' => $admin->id, 'participant_type' => $admin->getMorphClass(), 'participant_id' => $admin->id,
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+    DB::table('agent_conversation_messages')->insert([
+        'id' => (string) Str::uuid(), 'conversation_id' => $conversationId,
+        'user_id' => $admin->id, 'participant_type' => $admin->getMorphClass(), 'participant_id' => $admin->id,
+        'agent' => FamilyAssistant::class, 'role' => 'assistant', 'status' => 'completed',
+        'content' => 'Persisted tool status history.', 'steps' => json_encode([['tool_calls' => $calls]], JSON_THROW_ON_ERROR),
+        'attachments' => '[]', 'tool_calls' => null, 'tool_results' => null, 'usage' => '{}', 'meta' => '{}',
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    $page = loginBrowserAs($admin)
+        ->navigate(route('ai.index', ['conversation' => $conversationId]))
+        ->assertSee('Persisted tool status history.')
+        ->click('details > summary')
+        ->assertNoJavaScriptErrors();
+
+    $statuses = $page->script(<<<'JS'
+        () => Array.from(document.querySelectorAll('details .flex.items-start.justify-between'))
+            .map((activity) => activity.querySelector(':scope > span')?.textContent?.trim())
+    JS);
+
+    expect($statuses)->toBe(['Done', 'Done', 'Done', 'Done', 'Done', 'Done', 'Running', 'Running', 'Running']);
 });
 
 it('grows the AI chat composer before scrolling', function () {

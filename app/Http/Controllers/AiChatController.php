@@ -60,6 +60,34 @@ class AiChatController extends Controller
     }
 
     /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function messageToolCalls(object $message): array
+    {
+        $calls = [];
+
+        foreach ($this->normalizeActivityPayload($this->nullableString($message->steps ?? null)) as $step) {
+            foreach ($this->normalizeActivityPayload(json_encode($step['tool_calls'] ?? [], JSON_THROW_ON_ERROR)) as $call) {
+                $calls[] = $call;
+            }
+        }
+
+        return $calls !== [] ? $calls : $this->normalizeActivityPayload($this->nullableString($message->tool_calls ?? null));
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function messageToolResults(object $message): array
+    {
+        $results = array_values(array_filter($this->messageToolCalls($message), fn (array $call): bool => array_key_exists('result', $call)
+            || ($call['denied'] ?? false) === true
+            || ($call['failed'] ?? false) === true));
+
+        return $results !== [] ? $results : $this->normalizeActivityPayload($this->nullableString($message->tool_results ?? null));
+    }
+
+    /**
      * Display the AI chat page with conversation history.
      */
     public function index(Request $request): Response
@@ -67,7 +95,8 @@ class AiChatController extends Controller
         $user = $this->user($request);
 
         $conversations = DB::table('agent_conversations')
-            ->where('user_id', $user->id)
+            ->where('participant_type', $user->getMorphClass())
+            ->where('participant_id', $user->id)
             ->orderByDesc('updated_at')
             ->limit(50)
             ->get(['id', 'title', 'updated_at']);
@@ -78,21 +107,22 @@ class AiChatController extends Controller
         if ($activeConversationId) {
             $ownsConversation = DB::table('agent_conversations')
                 ->where('id', $activeConversationId)
-                ->where('user_id', $user->id)
+                ->where('participant_type', $user->getMorphClass())
+                ->where('participant_id', $user->id)
                 ->exists();
 
             if ($ownsConversation) {
                 $messages = DB::table('agent_conversation_messages')
                     ->where('conversation_id', $activeConversationId)
                     ->orderBy('created_at')
-                    ->get(['id', 'role', 'content', 'created_at', 'tool_calls', 'tool_results'])
+                    ->get(['id', 'role', 'content', 'created_at', 'steps', 'tool_calls', 'tool_results'])
                     ->map(fn (object $message) => [
                         'id' => $message->id,
                         'role' => $message->role,
                         'content' => $message->content,
                         'created_at' => $message->created_at,
-                        'tool_calls' => $this->normalizeActivityPayload($this->nullableString($message->tool_calls ?? null)),
-                        'tool_results' => $this->normalizeActivityPayload($this->nullableString($message->tool_results ?? null)),
+                        'tool_calls' => $this->messageToolCalls($message),
+                        'tool_results' => $this->messageToolResults($message),
                     ])
                     ->toArray();
             } else {
@@ -292,7 +322,8 @@ class AiChatController extends Controller
         if ($conversationId) {
             $ownsConversation = DB::table('agent_conversations')
                 ->where('id', $conversationId)
-                ->where('user_id', $user->id)
+                ->where('participant_type', $user->getMorphClass())
+                ->where('participant_id', $user->id)
                 ->exists();
 
             if (! $ownsConversation) {
@@ -320,7 +351,8 @@ class AiChatController extends Controller
 
         $updated = DB::table('agent_conversations')
             ->where('id', $conversation)
-            ->where('user_id', $user->id)
+            ->where('participant_type', $user->getMorphClass())
+            ->where('participant_id', $user->id)
             ->update(['title' => $request->validated('title')]);
 
         if (! $updated) {
@@ -340,7 +372,8 @@ class AiChatController extends Controller
         DB::transaction(function () use ($conversation, $user) {
             $deleted = DB::table('agent_conversations')
                 ->where('id', $conversation)
-                ->where('user_id', $user->id)
+                ->where('participant_type', $user->getMorphClass())
+                ->where('participant_id', $user->id)
                 ->delete();
 
             if (! $deleted) {

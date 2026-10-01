@@ -18,6 +18,8 @@ use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Transcription;
 
 beforeEach(function () {
+    $this->withoutVite();
+
     DB::table('features')->insert([
         'name' => AiAssistant::class,
         'scope' => '',
@@ -218,6 +220,8 @@ test('users can continue an existing conversation', function () {
     DB::table('agent_conversations')->insert([
         'id' => $conversationId,
         'user_id' => $user->id,
+        'participant_type' => (new User)->getMorphClass(),
+        'participant_id' => $user->id,
         'title' => 'Test Conversation',
         'created_at' => now(),
         'updated_at' => now(),
@@ -244,6 +248,8 @@ test('users cannot access another user conversation and get a fresh one instead'
     DB::table('agent_conversations')->insert([
         'id' => $conversationId,
         'user_id' => $otherUser->id,
+        'participant_type' => (new User)->getMorphClass(),
+        'participant_id' => $otherUser->id,
         'title' => 'Other User Conversation',
         'created_at' => now(),
         'updated_at' => now(),
@@ -266,6 +272,8 @@ test('users can rename their conversation', function () {
     DB::table('agent_conversations')->insert([
         'id' => $conversationId,
         'user_id' => $user->id,
+        'participant_type' => (new User)->getMorphClass(),
+        'participant_id' => $user->id,
         'title' => 'Old Title',
         'created_at' => now(),
         'updated_at' => now(),
@@ -291,6 +299,8 @@ test('users cannot rename another user conversation', function () {
     DB::table('agent_conversations')->insert([
         'id' => $conversationId,
         'user_id' => $otherUser->id,
+        'participant_type' => (new User)->getMorphClass(),
+        'participant_id' => $otherUser->id,
         'title' => 'Other Title',
         'created_at' => now(),
         'updated_at' => now(),
@@ -315,6 +325,8 @@ test('users can delete their conversation', function () {
     DB::table('agent_conversations')->insert([
         'id' => $conversationId,
         'user_id' => $user->id,
+        'participant_type' => (new User)->getMorphClass(),
+        'participant_id' => $user->id,
         'title' => 'To Delete',
         'created_at' => now(),
         'updated_at' => now(),
@@ -324,8 +336,11 @@ test('users can delete their conversation', function () {
         'id' => (string) Str::uuid(),
         'conversation_id' => $conversationId,
         'user_id' => $user->id,
+        'participant_type' => (new User)->getMorphClass(),
+        'participant_id' => $user->id,
         'agent' => 'App\\Ai\\Agents\\FamilyAssistant',
         'role' => 'user',
+        'steps' => '[]',
         'content' => 'Hello',
         'attachments' => '[]',
         'tool_calls' => '[]',
@@ -352,6 +367,8 @@ test('users cannot delete another user conversation', function () {
     DB::table('agent_conversations')->insert([
         'id' => $conversationId,
         'user_id' => $otherUser->id,
+        'participant_type' => (new User)->getMorphClass(),
+        'participant_id' => $otherUser->id,
         'title' => 'Other Conversation',
         'created_at' => now(),
         'updated_at' => now(),
@@ -371,6 +388,8 @@ test('the AI chat index loads messages for an active conversation', function () 
     DB::table('agent_conversations')->insert([
         'id' => $conversationId,
         'user_id' => $user->id,
+        'participant_type' => (new User)->getMorphClass(),
+        'participant_id' => $user->id,
         'title' => 'My Chat',
         'created_at' => now(),
         'updated_at' => now(),
@@ -380,8 +399,11 @@ test('the AI chat index loads messages for an active conversation', function () 
         'id' => (string) Str::uuid(),
         'conversation_id' => $conversationId,
         'user_id' => $user->id,
+        'participant_type' => (new User)->getMorphClass(),
+        'participant_id' => $user->id,
         'agent' => 'App\\Ai\\Agents\\FamilyAssistant',
         'role' => 'user',
+        'steps' => '[]',
         'content' => 'Hello there',
         'attachments' => '[]',
         'tool_calls' => '[]',
@@ -403,7 +425,7 @@ test('the AI chat index loads messages for an active conversation', function () 
         );
 });
 
-test('the AI chat index clears conversation ids the user does not own', function () {
+test('the AI chat index clears conversation ids the user does not own', function (bool $otherType) {
     $user = User::factory()->create();
     $otherUser = User::factory()->create();
     $conversationId = (string) Str::uuid();
@@ -411,6 +433,8 @@ test('the AI chat index clears conversation ids the user does not own', function
     DB::table('agent_conversations')->insert([
         'id' => $conversationId,
         'user_id' => $otherUser->id,
+        'participant_type' => $otherType ? 'another-participant-type' : $user->getMorphClass(),
+        'participant_id' => $otherType ? $user->id : $otherUser->id,
         'title' => 'Other Chat',
         'created_at' => now(),
         'updated_at' => now(),
@@ -424,7 +448,7 @@ test('the AI chat index clears conversation ids the user does not own', function
             ->where('activeConversationId', null)
             ->where('messages', [])
         );
-});
+})->with(['different user' => false, 'same ID with another type' => true]);
 
 test('the AI chat index normalizes invalid stored activity payloads', function () {
     $user = User::factory()->create();
@@ -433,6 +457,8 @@ test('the AI chat index normalizes invalid stored activity payloads', function (
     DB::table('agent_conversations')->insert([
         'id' => $conversationId,
         'user_id' => $user->id,
+        'participant_type' => (new User)->getMorphClass(),
+        'participant_id' => $user->id,
         'title' => 'Invalid Payload Chat',
         'created_at' => now(),
         'updated_at' => now(),
@@ -442,8 +468,11 @@ test('the AI chat index normalizes invalid stored activity payloads', function (
         'id' => (string) Str::uuid(),
         'conversation_id' => $conversationId,
         'user_id' => $user->id,
+        'participant_type' => (new User)->getMorphClass(),
+        'participant_id' => $user->id,
         'agent' => 'App\\Ai\\Agents\\FamilyAssistant',
         'role' => 'assistant',
+        'steps' => '[]',
         'content' => 'No valid tool activity was stored.',
         'attachments' => '[]',
         'tool_calls' => '"not an array"',
@@ -464,13 +493,15 @@ test('the AI chat index normalizes invalid stored activity payloads', function (
         );
 });
 
-test('the AI chat index includes stored tool activity for assistant messages', function () {
+test('the AI chat index includes stored tool activity for assistant messages', function (bool $sdkHistory) {
     $user = User::factory()->create();
     $conversationId = (string) Str::uuid();
 
     DB::table('agent_conversations')->insert([
         'id' => $conversationId,
         'user_id' => $user->id,
+        'participant_type' => (new User)->getMorphClass(),
+        'participant_id' => $user->id,
         'title' => 'Tool Activity Chat',
         'created_at' => now(),
         'updated_at' => now(),
@@ -480,11 +511,17 @@ test('the AI chat index includes stored tool activity for assistant messages', f
         'id' => (string) Str::uuid(),
         'conversation_id' => $conversationId,
         'user_id' => $user->id,
+        'participant_type' => (new User)->getMorphClass(),
+        'participant_id' => $user->id,
         'agent' => 'App\\Ai\\Agents\\FamilyAssistant',
         'role' => 'assistant',
+        'steps' => $sdkHistory ? json_encode([['tool_calls' => [[
+            'id' => 'tool-call-1', 'name' => 'GetContributionSummary',
+            'arguments' => ['year' => 2026], 'result' => ['period' => 'Year 2026'],
+        ]]]], JSON_THROW_ON_ERROR) : '[]',
         'content' => 'I checked the contribution summary for you.',
         'attachments' => '[]',
-        'tool_calls' => json_encode([
+        'tool_calls' => $sdkHistory ? null : json_encode([
             [
                 'id' => 'tool-call-1',
                 'name' => 'GetContributionSummary',
@@ -493,7 +530,7 @@ test('the AI chat index includes stored tool activity for assistant messages', f
                 'reasoning_summary' => [],
             ],
         ], JSON_THROW_ON_ERROR),
-        'tool_results' => json_encode([
+        'tool_results' => $sdkHistory ? null : json_encode([
             '2' => [
                 'id' => 'tool-call-1',
                 'name' => 'GetContributionSummary',
@@ -518,7 +555,67 @@ test('the AI chat index includes stored tool activity for assistant messages', f
             ->where('messages.0.tool_results.0.id', 'tool-call-1')
             ->where('messages.0.tool_results.0.result.period', 'Year 2026')
         );
-});
+})->with(['legacy history' => false, 'SDK step history' => true]);
+
+test('the AI chat index projects terminal SDK tool activity without inventing results', function (array $outcome, bool $terminal) {
+    $user = User::factory()->create();
+    $conversationId = (string) Str::uuid();
+    $call = [
+        'id' => 'tool-call-status',
+        'name' => 'GetContributionSummary',
+        'arguments' => ['year' => 2026],
+        ...$outcome,
+    ];
+
+    DB::table('agent_conversations')->insert([
+        'id' => $conversationId,
+        'user_id' => $user->id,
+        'participant_type' => $user->getMorphClass(),
+        'participant_id' => $user->id,
+        'title' => 'Tool status history',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => (string) Str::uuid(),
+        'conversation_id' => $conversationId,
+        'user_id' => $user->id,
+        'participant_type' => $user->getMorphClass(),
+        'participant_id' => $user->id,
+        'agent' => FamilyAssistant::class,
+        'role' => 'assistant',
+        'status' => 'completed',
+        'content' => 'Finished turn.',
+        'steps' => json_encode([['tool_calls' => [$call]]], JSON_THROW_ON_ERROR),
+        'attachments' => '[]',
+        'tool_calls' => null,
+        'tool_results' => null,
+        'usage' => '{}',
+        'meta' => '{}',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('ai.index', ['conversation' => $conversationId]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Ai/Chat')
+            ->where('messages.0.tool_calls', [$call])
+            ->where('messages.0.tool_results', $terminal ? [$call] : [])
+        );
+})->with([
+    'denied without result' => [['denied' => true], true],
+    'failed without result' => [['failed' => true], true],
+    'successful result' => [['result' => ['period' => 'Year 2026']], true],
+    'explicit null result' => [['result' => null], true],
+    'denied null result' => [['denied' => true, 'result' => null], true],
+    'failed null result' => [['failed' => true, 'result' => null], true],
+    'ordinary pending call' => [[], false],
+    'false denial stays pending' => [['denied' => false], false],
+    'false failure stays pending' => [['failed' => false], false],
+]);
 
 test('the AI chat index drops malformed items from stored tool activity lists', function () {
     $user = User::factory()->create();
@@ -527,6 +624,8 @@ test('the AI chat index drops malformed items from stored tool activity lists', 
     DB::table('agent_conversations')->insert([
         'id' => $conversationId,
         'user_id' => $user->id,
+        'participant_type' => (new User)->getMorphClass(),
+        'participant_id' => $user->id,
         'title' => 'Malformed activity',
         'created_at' => now(),
         'updated_at' => now(),
@@ -536,8 +635,11 @@ test('the AI chat index drops malformed items from stored tool activity lists', 
         'id' => (string) Str::uuid(),
         'conversation_id' => $conversationId,
         'user_id' => $user->id,
+        'participant_type' => (new User)->getMorphClass(),
+        'participant_id' => $user->id,
         'agent' => 'App\\Ai\\Agents\\FamilyAssistant',
         'role' => 'assistant',
+        'steps' => '[]',
         'content' => 'Done',
         'attachments' => '[]',
         'tool_calls' => json_encode([
@@ -572,6 +674,8 @@ test('rename validates title is required', function () {
     DB::table('agent_conversations')->insert([
         'id' => $conversationId,
         'user_id' => $user->id,
+        'participant_type' => (new User)->getMorphClass(),
+        'participant_id' => $user->id,
         'title' => 'Test',
         'created_at' => now(),
         'updated_at' => now(),
@@ -616,7 +720,7 @@ test('the transcribe endpoint returns transcribed text', function () {
 
     $this->actingAs($user)
         ->postJson(route('ai.transcribe'), [
-            'audio' => UploadedFile::fake()->create('recording.webm', 100, 'audio/webm'),
+            'audio' => UploadedFile::fake()->createWithContent('recording.webm', str_repeat('audio', 20_480))->mimeType('audio/webm'),
         ])
         ->assertSuccessful()
         ->assertJson(['text' => 'Hello Suleiman, how are you?']);
@@ -637,7 +741,7 @@ test('the transcribe endpoint uses Gemini when it is the only configured provide
 
     $this->actingAs($user)
         ->postJson(route('ai.transcribe'), [
-            'audio' => UploadedFile::fake()->create('recording.webm', 100, 'audio/webm'),
+            'audio' => UploadedFile::fake()->createWithContent('recording.webm', str_repeat('audio', 20_480))->mimeType('audio/webm'),
         ])
         ->assertSuccessful()
         ->assertJson(['text' => 'Gemini transcript.']);
@@ -662,7 +766,7 @@ test('the transcribe endpoint respects Gemini as the configured default provider
 
     $this->actingAs($user)
         ->postJson(route('ai.transcribe'), [
-            'audio' => UploadedFile::fake()->create('recording.webm', 100, 'audio/webm'),
+            'audio' => UploadedFile::fake()->createWithContent('recording.webm', str_repeat('audio', 20_480))->mimeType('audio/webm'),
         ])
         ->assertSuccessful()
         ->assertJson(['text' => 'Gemini default transcript.']);
@@ -683,7 +787,7 @@ test('the transcribe endpoint rejects near empty recordings before calling a pro
 
     $this->actingAs($user)
         ->postJson(route('ai.transcribe'), [
-            'audio' => UploadedFile::fake()->create('recording.webm', 1, 'audio/webm'),
+            'audio' => UploadedFile::fake()->createWithContent('recording.webm', str_repeat('audio', 205))->mimeType('audio/webm'),
             'duration_seconds' => 10,
             'audio_level' => 0,
             'chunk_count' => 1,
@@ -706,7 +810,7 @@ test('the transcribe endpoint accepts small recordings when microphone level was
 
     $this->actingAs($user)
         ->postJson(route('ai.transcribe'), [
-            'audio' => UploadedFile::fake()->create('recording.webm', 1, 'audio/webm'),
+            'audio' => UploadedFile::fake()->createWithContent('recording.webm', str_repeat('audio', 205))->mimeType('audio/webm'),
             'duration_seconds' => 2,
             'audio_level' => 0.12,
             'chunk_count' => 1,
@@ -728,7 +832,7 @@ test('the transcribe endpoint returns an error when no speech is recognized', fu
 
     $this->actingAs($user)
         ->postJson(route('ai.transcribe'), [
-            'audio' => UploadedFile::fake()->create('recording.webm', 100, 'audio/webm'),
+            'audio' => UploadedFile::fake()->createWithContent('recording.webm', str_repeat('audio', 20_480))->mimeType('audio/webm'),
         ])
         ->assertUnprocessable()
         ->assertJson([
@@ -759,7 +863,7 @@ test('the transcribe endpoint normalizes uploaded recording mime types', functio
 
     $this->actingAs($user)
         ->postJson(route('ai.transcribe'), [
-            'audio' => UploadedFile::fake()->create($filename, 100, $clientMimeType),
+            'audio' => UploadedFile::fake()->createWithContent($filename, str_repeat('audio', 20_480))->mimeType($clientMimeType),
         ])
         ->assertSuccessful()
         ->assertJson(['text' => 'Normalized transcript.']);

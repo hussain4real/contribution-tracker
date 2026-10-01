@@ -4,81 +4,39 @@ declare(strict_types=1);
 
 use App\Ai\Agents\FamilyAssistant;
 use App\Ai\Middleware\LogPrompts;
-use App\Models\User;
 use Illuminate\Support\Facades\Log;
-use Laravel\Ai\Contracts\Providers\TextProvider;
-use Laravel\Ai\Prompts\AgentPrompt;
-use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Gateway\StepResponse;
+use Laravel\Ai\Gateway\StepResult;
+use Laravel\Ai\Messages\Message;
+use Laravel\Ai\PendingStep;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TextUsage;
 
-it('logs prompts and response metadata', function () {
-    $agent = new FamilyAssistant(User::factory()->create());
-    $provider = typedMock(TextProvider::class);
-    $prompt = new AgentPrompt(
-        agent: $agent,
-        prompt: 'Summarize this month',
-        attachments: [],
-        provider: $provider,
-        model: 'llama3.2',
-    );
-    $response = new AgentResponse(
-        invocationId: 'invocation-1',
-        text: 'Summary ready',
-        usage: new Usage(promptTokens: 10, completionTokens: 5),
-        meta: new Meta(provider: 'ollama', model: 'llama3.2'),
-    );
+it('logs response metadata for synchronous and streamed generation steps', function (bool $streamed) {
+    $step = new PendingStep(0, false, 'ollama', 'llama3.2', null, [new Message('user', 'Summarize this month')], [], null, null);
+    $response = new StepResponse('Summary ready', [], FinishReason::Stop, new TextUsage(inputTokens: 10, outputTokens: 5), new Meta('ollama', 'llama3.2'));
+    $source = $streamed ? (function () use ($response) {
+        yield from [];
 
-    Log::shouldReceive('info')
-        ->once()
-        ->with('AI Agent prompted', [
-            'agent' => FamilyAssistant::class,
-            'prompt' => 'Summarize this month',
-        ]);
-    Log::shouldReceive('info')
-        ->once()
-        ->with('AI Agent responded', Mockery::on(
-            fn (array $context): bool => $context['agent'] === FamilyAssistant::class
-                && $context['provider'] === 'ollama'
-                && $context['model'] === 'llama3.2'
-                && $context['response_length'] === strlen('Summary ready')
-                && $context['usage'] instanceof Usage,
-        ));
+        return $response;
+    })() : $response;
+    $result = new StepResult($source);
 
-    $result = (new LogPrompts)->handle(
-        $prompt,
-        fn (AgentPrompt $receivedPrompt): AgentResponse => tap($response, function () use ($receivedPrompt, $prompt) {
-            expect($receivedPrompt)->toBe($prompt);
-        }),
-    );
+    Log::shouldReceive('info')->once()->with('AI Agent prompted', [
+        'agent' => FamilyAssistant::class, 'prompt' => 'Summarize this month', 'step' => 0,
+    ]);
+    Log::shouldReceive('info')->once()->with('AI Agent responded', Mockery::on(
+        fn (array $context): bool => $context['agent'] === FamilyAssistant::class
+            && $context['provider'] === 'ollama' && $context['model'] === 'llama3.2'
+            && $context['response_length'] === strlen('Summary ready') && $context['usage'] instanceof TextUsage,
+    ));
 
-    expect($result)->toBe($response);
-});
+    $received = (new LogPrompts(FamilyAssistant::class))->handle($step, function (PendingStep $nextStep) use ($step, $result): StepResult {
+        expect($nextStep)->toBe($step);
 
-it('returns non-agent responses without attaching response logging', function () {
-    $agent = new FamilyAssistant(User::factory()->create());
-    $provider = typedMock(TextProvider::class);
-    $prompt = new AgentPrompt(
-        agent: $agent,
-        prompt: 'Return raw',
-        attachments: [],
-        provider: $provider,
-        model: 'llama3.2',
-    );
+        return $result;
+    });
 
-    Log::shouldReceive('info')
-        ->once()
-        ->with('AI Agent prompted', [
-            'agent' => FamilyAssistant::class,
-            'prompt' => 'Return raw',
-        ]);
-
-    $result = (new LogPrompts)->handle(
-        $prompt,
-        fn (AgentPrompt $receivedPrompt): string => tap('raw-response', function () use ($receivedPrompt, $prompt) {
-            expect($receivedPrompt)->toBe($prompt);
-        }),
-    );
-
-    expect($result)->toBe('raw-response');
-});
+    expect($received)->toBe($result)->and($received->response())->toBe($response);
+})->with([false, true]);
