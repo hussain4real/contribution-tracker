@@ -326,7 +326,7 @@ it('shows terminal SDK history tool calls as done while unresolved calls keep ru
     $page = loginBrowserAs($admin)
         ->navigate(route('ai.index', ['conversation' => $conversationId]))
         ->assertSee('Persisted tool status history.')
-        ->click('Agent activity')
+        ->click('details > summary')
         ->assertNoJavaScriptErrors();
 
     $statuses = $page->script(<<<'JS'
