@@ -80,7 +80,9 @@ class AiChatController extends Controller
      */
     private function messageToolResults(object $message): array
     {
-        $results = array_values(array_filter($this->messageToolCalls($message), fn (array $call): bool => array_key_exists('result', $call)));
+        $results = array_values(array_filter($this->messageToolCalls($message), fn (array $call): bool => array_key_exists('result', $call)
+            || ($call['denied'] ?? false) === true
+            || ($call['failed'] ?? false) === true));
 
         return $results !== [] ? $results : $this->normalizeActivityPayload($this->nullableString($message->tool_results ?? null));
     }
