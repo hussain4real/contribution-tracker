@@ -131,6 +131,9 @@ jobs:
             trap 'exit 130' INT
             trap 'exit 143' TERM
 
+            # Verify the signal-zero probe is available before taking traffic offline.
+            timeout 30 php -r 'exit(function_exists("posix_kill") && function_exists("posix_get_last_error") ? 0 : 1);'
+
             MAINTENANCE_ATTEMPTED=true
             php artisan down --render='errors::503' --retry=60
             if ! maintenance_active; then
@@ -142,6 +145,56 @@ jobs:
             timeout 300 sudo -n supervisorctl stop 'queue-worker:*'
             timeout 300 sudo -n supervisorctl stop ssr
             timeout 300 sudo -n supervisorctl stop nightwatch
+
+            probe_fpm_worker() {
+              local worker_state
+              if ! worker_state="$(timeout 30 php -r '
+                try {
+                  foreach (array_slice($argv, 1) as $pid) {
+                    if (!preg_match("/^[1-9][0-9]*$/D", $pid) || filter_var($pid, FILTER_VALIDATE_INT, ["options" => ["min_range" => 1, "max_range" => 2147483647]]) === false) {
+                      exit(2);
+                    }
+                  }
+                  $record = @file_get_contents("/proc/".$argv[1]."/stat");
+                  if ($record === false) {
+                    // Signal zero does not send a signal. Only ESRCH proves exit;
+                    // EPERM, a live PID with missing metadata, and other errors refuse.
+                    if (!@posix_kill((int) $argv[1], 0) && posix_get_last_error() === 3) {
+                      echo "exited";
+                      exit(0);
+                    }
+                    exit(2);
+                  }
+                  $end = strrpos($record, ") ");
+                  if ($end === false || !str_starts_with($record, $argv[1]." (") || !str_ends_with($record, "\n")) {
+                    exit(2);
+                  }
+                  // comm may contain whitespace or parentheses. Count fields from state.
+                  $fields = preg_split("/\s+/", trim(substr($record, $end + 2)));
+                  if ($fields === false || count($fields) < 50 || !preg_match("/^[RSDZTtXxKWPI]$/D", $fields[0])) {
+                    exit(2);
+                  }
+                  foreach (array_slice($fields, 1) as $field) {
+                    if (!preg_match("/^-?[0-9]+$/D", $field)) {
+                      exit(2);
+                    }
+                  }
+                  if ($fields[1] !== $argv[2] || !preg_match("/^[1-9][0-9]*$/D", $fields[19])) {
+                    exit(2);
+                  }
+                  echo "alive:".$fields[19];
+                } catch (\Throwable $error) {
+                  exit(2);
+                }
+              ' "$1" "$FPM_MASTER_PID")"; then
+                return 1
+              fi
+              if [[ "$worker_state" =~ ^alive:[1-9][0-9]*$ ]] || [ "$worker_state" = exited ]; then
+                printf '%s' "$worker_state"
+              else
+                return 1
+              fi
+            }
 
             drain_http_workers() {
               maintenance_active
@@ -158,24 +211,34 @@ jobs:
                 exit 1
               fi
               OLD_FPM_STARTS=()
+              tracked_workers=''
               for worker_pid in $OLD_FPM_CHILDREN; do
-                OLD_FPM_STARTS[$worker_pid]="$(awk '{print $22}' "/proc/$worker_pid/stat")"
+                if ! worker_state="$(probe_fpm_worker "$worker_pid")"; then
+                  echo "Unable to verify PHP-FPM worker identity. Refusing deployment."
+                  exit 1
+                fi
+                if [ "$worker_state" != exited ]; then
+                  OLD_FPM_STARTS[$worker_pid]="${worker_state#alive:}"
+                  tracked_workers="$tracked_workers $worker_pid"
+                fi
               done
+              OLD_FPM_CHILDREN="$tracked_workers"
               drain_deadline=$((SECONDS + 300))
               timeout 300 sudo -n systemctl reload php8.4-fpm
               while true; do
-                old_workers_remaining=false
+                remaining_workers=''
                 for worker_pid in $OLD_FPM_CHILDREN; do
-                  current_start=''
-                  if [ -e "/proc/$worker_pid/stat" ]; then
-                    current_start="$(awk '{print $22}' "/proc/$worker_pid/stat")"
-                    test -n "$current_start"
+                  if ! worker_state="$(probe_fpm_worker "$worker_pid")"; then
+                    echo "Unable to verify PHP-FPM worker identity. Refusing deployment."
+                    exit 1
                   fi
-                  if [ -n "$current_start" ] && [ "$current_start" = "${OLD_FPM_STARTS[$worker_pid]}" ]; then
-                    old_workers_remaining=true
+                  if [ "$worker_state" = "alive:${OLD_FPM_STARTS[$worker_pid]}" ]; then
+                    remaining_workers="$remaining_workers $worker_pid"
                   fi
                 done
-                if [ "$old_workers_remaining" = false ]; then
+                # Once the original identity exits, later PID reuse cannot revive it.
+                OLD_FPM_CHILDREN="$remaining_workers"
+                if [ -z "$OLD_FPM_CHILDREN" ]; then
                   break
                 fi
                 if [ "$SECONDS" -ge "$drain_deadline" ]; then
