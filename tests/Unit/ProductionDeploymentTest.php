@@ -256,7 +256,7 @@ it('resumes production only after exact checkout, migration, and consumer verifi
 
         return $index;
     };
-    $probes = array_keys(array_filter($commands, fn (array $command): bool => $command[0] === 'php' && $command[1] === '-r'));
+    $probes = array_keys(array_filter($commands, fn (array $command): bool => $command[0] === 'php' && $command[1] === '-r' && str_contains($command[2], 'isDownForMaintenance')));
     expect($probes)->toHaveCount(3);
     expect($probes[0])->toBeGreaterThan($position(['php', 'artisan', 'down', '--render=errors::503', '--retry=60']))
         ->toBeLessThan($position(['supervisorctl', 'stop', 'queue-worker:*']));
@@ -274,4 +274,66 @@ it('resumes production only after exact checkout, migration, and consumer verifi
         ->toBeLessThan($position(['supervisorctl', 'status', 'nightwatch'], true))
         ->and($position(['supervisorctl', 'status', 'nightwatch'], true))
         ->toBeLessThan($position(['php', 'artisan', 'up']));
+});
+
+it('tolerates a confirmed worker exit at either drain barrier', function (string $scenario): void {
+    $result = runProductionDeploymentFaultCase($scenario);
+
+    expect($result['exit'])->toBe(0)
+        ->and($result['merged'])->toBeTrue()
+        ->and($result['maintenance'])->toBeFalse()
+        ->and($result['queue_running'])->toBeTrue()
+        ->and($result['ssr_running'])->toBeTrue()
+        ->and($result['nightwatch_running'])->toBeTrue();
+})->with(['fpm-census-exit', 'fpm-poll-exit', 'fpm-final-census-exit', 'fpm-final-poll-exit', 'fpm-retired-pid']);
+
+it('refuses uncertain or malformed worker identity before changing the release', function (string $fault): void {
+    $result = runProductionDeploymentFaultCase('fpm-'.$fault);
+
+    expect($result['exit'])->not->toBe(0)
+        ->and($result['merged'])->toBeFalse()
+        ->and($result['maintenance'])->toBeTrue()
+        ->and($result['queue_running'])->toBeFalse()
+        ->and($result['ssr_running'])->toBeFalse()
+        ->and($result['nightwatch_running'])->toBeFalse();
+    expect(array_filter($result['commands'], fn (array $command): bool => in_array($command[0], ['composer', 'npm'], true)
+        || $command === ['php', 'artisan', 'up']))->toBeEmpty();
+})->with([
+    'census-permission', 'poll-permission', 'census-live', 'poll-live', 'census-kernel-error', 'poll-kernel-error',
+    'census-missing', 'poll-missing', 'census-empty', 'poll-empty', 'census-truncated', 'poll-truncated',
+    'census-short', 'poll-short', 'census-nonnumeric', 'poll-nonnumeric', 'census-wrong-pid', 'poll-wrong-pid',
+    'census-wrong-parent', 'poll-wrong-parent', 'census-bad-state', 'poll-bad-state',
+    'census-timeout', 'poll-timeout', 'census-failure', 'poll-failure', 'census-noise', 'poll-noise', 'comm-name',
+    'child-zero', 'child-negative', 'child-overflow', 'child-nonnumeric',
+]);
+
+it('keeps maintenance when the final drain cannot prove original workers exited', function (string $fault): void {
+    $result = runProductionDeploymentFaultCase('fpm-final-'.$fault);
+
+    expect($result['exit'])->not->toBe(0)
+        ->and($result['merged'])->toBeTrue()
+        ->and($result['maintenance'])->toBeTrue()
+        ->and($result['queue_running'])->toBeFalse()
+        ->and($result['ssr_running'])->toBeFalse()
+        ->and($result['nightwatch_running'])->toBeFalse();
+    expect(array_filter($result['commands'], fn (array $command): bool => $command === ['php', 'artisan', 'up']))->toBeEmpty();
+})->with([
+    'census-permission', 'poll-permission', 'census-live', 'poll-live', 'census-kernel-error', 'poll-kernel-error',
+    'census-missing', 'poll-missing', 'census-empty', 'poll-empty', 'census-truncated', 'poll-truncated',
+    'census-short', 'poll-short', 'census-nonnumeric', 'poll-nonnumeric', 'census-wrong-pid', 'poll-wrong-pid',
+    'census-wrong-parent', 'poll-wrong-parent', 'census-bad-state', 'poll-bad-state',
+    'census-timeout', 'poll-timeout', 'census-failure', 'poll-failure', 'census-noise', 'poll-noise', 'comm-name',
+]);
+
+it('checks POSIX availability before maintenance or consumer shutdown', function (): void {
+    $result = runProductionDeploymentFaultCase('fpm-no-posix');
+
+    expect($result['exit'])->not->toBe(0)
+        ->and($result['merged'])->toBeFalse()
+        ->and($result['maintenance'])->toBeFalse()
+        ->and($result['queue_running'])->toBeTrue()
+        ->and($result['ssr_running'])->toBeTrue()
+        ->and($result['nightwatch_running'])->toBeTrue();
+    expect(array_filter($result['commands'], fn (array $command): bool => $command === ['php', 'artisan', 'down', '--render=errors::503', '--retry=60']
+        || ($command[0] === 'supervisorctl' && $command[1] === 'stop')))->toBeEmpty();
 });

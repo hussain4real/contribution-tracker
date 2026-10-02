@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import shutil
 import sys
 import tempfile
 
@@ -25,7 +26,7 @@ if name == "sudo":
     if scenario == "supervisor-stop-denied" and args[:2] == ["supervisorctl", "stop"]: sys.exit(1)
     sys.exit(subprocess.run(args).returncode)
 if name == "timeout":
-    if scenario == "probe-timeout" and args[1:3] == ["php", "-r"]: sys.exit(124)
+    if scenario == "probe-timeout" and args[1:3] == ["php", "-r"] and "isDownForMaintenance" in args[3]: sys.exit(124)
     if scenario == "health-reentry-probe-timeout" and (root / "up-attempted").exists() and args[1:3] == ["php", "-r"]: sys.exit(124)
     sys.exit(subprocess.run(args[1:]).returncode)
 if name == "git":
@@ -34,8 +35,42 @@ if name == "git":
     elif args[:2] == ["rev-parse", "HEAD"]:
         print("1" * 40 if (root / "merged").exists() else "0" * 40)
     elif args[0] == "merge-base" and scenario == "ancestry": sys.exit(1)
-    elif args[:2] == ["merge", "--ff-only"]: (root / "merged").touch()
+    elif args[:2] == ["merge", "--ff-only"]:
+        (root / "merged").touch()
+        if scenario == "fpm-retired-pid":
+            (root / "proc/111/stat").write_text("111 (php-fpm8.4) S 100 " + "0 " * 17 + "43 " + "0 " * 29 + "0\n")
 elif name == "php":
+    if args[0] == "-r" and "file_get_contents" in args[1] and "posix_kill" in args[1]:
+        phase = "final" if (root / "merged").exists() else "initial"
+        counter = root / ("probe-count-" + phase)
+        count = int(counter.read_text()) + 1 if counter.exists() else 1
+        counter.write_text(str(count))
+        moment = ("final-" if phase == "final" else "") + ("census" if count == 1 else "poll")
+        fault = scenario.removeprefix("fpm-" + moment + "-") if scenario.startswith("fpm-" + moment + "-") else ""
+        if fault == "timeout": sys.exit(124)
+        if fault == "failure": sys.exit(2)
+        if fault == "noise": print("unexpected"); sys.exit(0)
+        model = {"unreadable": fault in ["exit", "permission", "live", "kernel-error"], "kernel_ok": fault == "live", "errno": {"exit": 3, "permission": 1, "live": 3, "kernel-error": 22}.get(fault, 0)}
+        path = root / "proc" / args[2] / "stat"
+        record = path.read_text() if path.exists() else ""
+        if fault == "empty": model["record"] = ""
+        if fault == "truncated": model["record"] = record[:record.rfind("42") + 1]
+        if fault == "short": model["record"] = "111 (php-fpm8.4) S 100 " + "0 " * 17 + "42\n"
+        if fault == "nonnumeric": model["record"] = record.replace(" 42 ", " invalid ").replace(" 43 ", " invalid ").replace(" 44 ", " invalid ")
+        if fault == "wrong-pid": model["record"] = record.replace("111 (", "112 (", 1)
+        if fault == "wrong-parent": model["record"] = record.replace(") S 100 ", ") S 101 ")
+        if fault == "bad-state": model["record"] = record.replace(") S ", ") ? ")
+        if fault == "missing": model["unreadable"] = True; model["kernel_ok"] = True
+        fixture = "namespace DeploymentProbeFixture; $GLOBALS[\"probe_model\"] = json_decode(" + json.dumps(json.dumps(model)) + ", true);"
+        fixture += r"""
+function file_get_contents($path) { $model = $GLOBALS["probe_model"]; return $model["unreadable"] ? false : ($model["record"] ?? \file_get_contents($path)); }
+function posix_kill($pid, $signal) { if ($signal !== 0 || $pid < 1) { throw new \RuntimeException("Unexpected signal"); } return $GLOBALS["probe_model"]["kernel_ok"]; }
+function posix_get_last_error() { return $GLOBALS["probe_model"]["errno"]; }
+"""
+        sys.exit(subprocess.run([os.environ["DEPLOY_TEST_REAL_PHP"], "-r", fixture + args[1], *args[2:]]).returncode)
+    if args[0] == "-r" and "function_exists" in args[1]:
+        if scenario == "fpm-no-posix": sys.exit(1)
+        sys.exit(subprocess.run([os.environ["DEPLOY_TEST_REAL_PHP"], *args]).returncode)
     if args[0] == "-r" and "isDownForMaintenance" in args[1]:
         if (root / "merged").exists() and scenario in ["final-inactive-reentry-before-state", "final-inactive-reentry-probe-error"]:
             was_inactive = (root / "final-inactive").exists()
@@ -83,8 +118,19 @@ elif name == "php":
 elif name == "composer":
     if scenario in ["composer", "postmerge-broken-bootstrap"]: sys.exit(1)
     if scenario == "term-postmerge": os.kill(os.getppid(), signal.SIGTERM); sys.exit(1)
+elif name == "awk":
+    if args[-1].endswith("/stat"):
+        phase = "final" if (root / "merged").exists() else "initial"
+        counter = root / ("awk-count-" + phase)
+        count = int(counter.read_text()) + 1 if counter.exists() else 1
+        counter.write_text(str(count))
+        moment = ("final-" if phase == "final" else "") + ("census" if count == 1 else "poll")
+        if scenario == "fpm-" + moment + "-exit": pathlib.Path(args[-1]).unlink(missing_ok=True)
+    sys.exit(subprocess.run([os.environ["DEPLOY_TEST_REAL_AWK"], *args]).returncode)
 elif name == "pgrep":
-    if scenario != "no-workers": print("111")
+    if scenario.startswith("fpm-child-"):
+        print({"zero": "0", "negative": "-1", "overflow": "99999999999999999999", "nonnumeric": "111x"}[scenario.removeprefix("fpm-child-")])
+    elif scenario != "no-workers": print("111 222" if scenario == "fpm-retired-pid" and not (root / "merged").exists() else "111")
 elif name == "systemctl":
     if args[0] == "show": print("0" if scenario == "no-master" else "100")
     elif args[0] == "reload":
@@ -94,8 +140,18 @@ elif name == "systemctl":
             sys.exit(17)
         if scenario == "reload-failure" or (scenario == "final-reload-failure" and (root / "merged").exists()): sys.exit(1)
         if scenario != "drain" and not (scenario == "final-drain" and (root / "merged").exists()):
-            (root / "proc/111/stat").write_text("111 (php-fpm8.4) S " + "0 " * 18 + ("43\n" if not (root / "merged").exists() else "44\n"))
+            start = "43" if not (root / "merged").exists() else "44"
+            comm = "php-fpm8.4"
+            if scenario == "fpm-comm-name" or (scenario == "fpm-final-comm-name" and (root / "merged").exists()):
+                start = "42" if not (root / "merged").exists() else "43"
+                comm = "php worker ) pool"
+            (root / "proc/111/stat").write_text("111 (" + comm + ") S 100 " + "0 " * 17 + start + " " + "0 " * 29 + "0\n")
+            if scenario == "fpm-retired-pid" and not (root / "merged").exists():
+                (root / "proc/222/stat").write_text("222 (php-fpm8.4) S 100 " + "0 " * 17 + "42 " + "0 " * 29 + "0\n")
     elif args[0] == "is-active" and scenario == "inactive": sys.exit(1)
+elif name == "sleep" and scenario == "fpm-retired-pid":
+    (root / "proc/111/stat").write_text("malformed reused PID\n")
+    (root / "proc/222/stat").write_text("222 (php-fpm8.4) S 100 " + "0 " * 17 + "45 " + "0 " * 29 + "0\n")
 elif name == "supervisorctl":
     action, consumer = args
     if consumer in ["queue-worker:*", "ssr", "nightwatch"]:
@@ -121,23 +177,29 @@ with tempfile.TemporaryDirectory(prefix="contribution-deploy-") as tmp:
     bin_dir = root / "bin"
     bin_dir.mkdir()
     (root / "proc/111").mkdir(parents=True)
-    (root / "proc/111/stat").write_text("111 (php-fpm8.4) S " + "0 " * 18 + "42\n")
+    (root / "proc/111/stat").write_text("111 (php-fpm8.4) S 100 " + "0 " * 17 + "42 " + "0 " * 29 + "0\n")
+    if scenario == "fpm-retired-pid":
+        (root / "proc/222").mkdir()
+        (root / "proc/222/stat").write_text("222 (php-fpm8.4) S 100 " + "0 " * 17 + "42 " + "0 " * 29 + "0\n")
     (root / "running-queue").touch()
     (root / "running-ssr").touch()
     (root / "running-nightwatch").touch()
     if scenario.startswith("initially-stopped-"):
         (root / ("running-" + scenario.removeprefix("initially-stopped-"))).unlink()
-    for command in ["git", "php", "sudo", "timeout", "composer", "npm", "pgrep", "systemctl", "supervisorctl", "bash", "curl"]:
+    for command in ["git", "php", "sudo", "timeout", "composer", "npm", "pgrep", "systemctl", "supervisorctl", "bash", "curl", "sleep", "awk"]:
         path = bin_dir / command
         path.write_text(dispatcher)
         path.chmod(0o755)
     script = script.replace("/var/www/contribution-tracker", str(root))
     script = script.replace("${{ github.sha }}", sha)
     script = script.replace("/proc/", str(root / "proc") + "/")
-    script = script.replace("drain_deadline=$((SECONDS + 300))", "drain_deadline=$SECONDS")
+    if scenario != "fpm-retired-pid":
+        script = script.replace("drain_deadline=$((SECONDS + 300))", "drain_deadline=$SECONDS")
     environment = {
         **os.environ,
         "PATH": str(bin_dir) + ":" + os.environ["PATH"],
+        "DEPLOY_TEST_REAL_PHP": shutil.which("php"),
+        "DEPLOY_TEST_REAL_AWK": shutil.which("awk"),
         "DEPLOY_TEST_ROOT": str(root),
         "DEPLOY_TEST_SCENARIO": scenario,
     }
