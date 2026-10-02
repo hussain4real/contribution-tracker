@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import argparse
 import base64
 import html
+import json
 import mimetypes
 import re
 from pathlib import Path
@@ -17,6 +19,7 @@ CHAPTERS = [
     "chapter-5.md",
 ]
 PRELIMINARY_FILE = "preliminary-pages.md"
+CAPTION_PAGE_NUMBERS: dict[str, dict[str, str]] = {}
 PRELIMINARY_SECTIONS = [
     "Declaration",
     "Certification",
@@ -77,13 +80,13 @@ TITLE_LINES = [
     "MIVA OPEN UNIVERSITY",
     "FACULTY OF COMPUTING",
     "DEPARTMENT OF SOFTWARE ENGINEERING",
-    "DESIGN AND IMPLEMENTATION OF AN AI-ENHANCED MULTI-TENANT FAMILY FUND MANAGEMENT SYSTEM WITH PREDICTIVE ANALYTICS AND INTELLIGENT REPORTING",
+    "DESIGN AND IMPLEMENTATION OF AN AI-ENHANCED MULTI-TENANT FAMILY FUND MANAGEMENT SYSTEM",
     "BY",
     "AMINU DANLADI HUSSAIN",
     "2024/A/SENG/0156",
     "A PROJECT SUBMITTED TO THE DEPARTMENT OF SOFTWARE ENGINEERING, FACULTY OF COMPUTING, MIVA OPEN UNIVERSITY, IN PARTIAL FULFILMENT OF THE REQUIREMENTS FOR THE AWARD OF THE DEGREE OF BACHELOR OF SCIENCE (B.Sc.) IN SOFTWARE ENGINEERING",
     "SUPERVISOR: DR. AYODEJI SAMUEL MAKINDE",
-    "MAY, 2026",
+    "SEPTEMBER, 2026",
 ]
 
 
@@ -265,6 +268,13 @@ def preliminary_sections() -> dict[str, list[str]]:
     if missing:
         raise ValueError(f"Missing preliminary sections: {', '.join(missing)}")
 
+    for section_name, page_numbers in CAPTION_PAGE_NUMBERS.items():
+        for index, line in enumerate(sections[section_name]):
+            if line.strip().startswith("|"):
+                cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+                if len(cells) == 3 and cells[0] in page_numbers:
+                    cells[2] = page_numbers[cells[0]]
+                    sections[section_name][index] = "| " + " | ".join(cells) + " |"
     return sections
 
 
@@ -288,7 +298,7 @@ def render_list_of_listings_table() -> str:
     return '<section class="table-block"><table>' + header + "<tbody>" + "".join(rows) + "</tbody></table></section>"
 
 
-def render_certification(lines: list[str]) -> str:
+def render_certification(lines: list[str], *, declaration: bool = False) -> str:
     narrative = next(
         (
             parse_inline_markdown(line.strip())
@@ -307,6 +317,11 @@ def render_certification(lines: list[str]) -> str:
         ["______________", "______________", "______________"],
         ["External Examiner", "Signature", "Date"],
     ]
+    if declaration:
+        rows = [
+            ["Aminu Danladi Hussain", "______________", "______________"],
+            ["Student", "Signature", "Date"],
+        ]
     table_rows = "".join(
         "<tr>" + "".join(f"<td>{html.escape(cell)}</td>" for cell in row) + "</tr>"
         for row in rows
@@ -395,7 +410,9 @@ def render_preliminary_pages() -> str:
         output.append(f"<h1>{html.escape(title.upper())}</h1>")
         lines = sections[title]
 
-        if title == "Certification":
+        if title == "Declaration":
+            output.append(render_certification(lines, declaration=True))
+        elif title == "Certification":
             output.append(render_certification(lines))
         elif title == "Table of Contents":
             output.append(render_contents(lines))
@@ -413,6 +430,17 @@ def render_preliminary_pages() -> str:
 
 
 def main() -> None:
+    global OUTPUT, CAPTION_PAGE_NUMBERS
+    parser = argparse.ArgumentParser(description="Build the self-contained FamilyFunds report HTML.")
+    parser.add_argument("--output-stem", default="corrected-chapters-1-5")
+    parser.add_argument("--pagination-json", type=Path)
+    args = parser.parse_args()
+    OUTPUT = ROOT / f"{args.output_stem}.html"
+    if args.pagination_json:
+        pagination = json.loads(args.pagination_json.read_text(encoding="utf-8"))
+        CONTENTS_PAGE_NUMBERS.update(pagination["contents"])
+        LISTING_PAGE_NUMBERS.update(pagination["listings"])
+        CAPTION_PAGE_NUMBERS = pagination["captions"]
     title_lines = "\n".join(f"<p>{html.escape(line)}</p>" for line in TITLE_LINES)
     chapters = [
         '<section class="title-page">',
@@ -430,7 +458,7 @@ def main() -> None:
 <html>
 <head>
 <meta charset="utf-8">
-<title>Corrected Chapters 1-5</title>
+<title>Aminu Danladi Hussain — Project Report</title>
 <link rel="icon" href="data:,">
 <style>
 @page {{

@@ -14,7 +14,7 @@
 
 <br/>
 
-### DESIGN AND IMPLEMENTATION OF AN AI-ENHANCED MULTI-TENANT FAMILY FUND MANAGEMENT SYSTEM WITH PREDICTIVE ANALYTICS AND INTELLIGENT REPORTING
+### DESIGN AND IMPLEMENTATION OF AN AI-ENHANCED MULTI-TENANT FAMILY FUND MANAGEMENT SYSTEM
 
 <br/>
 
@@ -34,7 +34,7 @@
 
 <br/>
 
-### MAY, 2026
+### SEPTEMBER, 2026
 
 </div>
 
@@ -42,7 +42,7 @@
 
 ## Declaration
 
-I, **Aminu Danladi Hussain** (Matriculation Number: **2024/A/SENG/0156**), declare that this report accurately presents the design, implementation, testing, and limitations of the project titled **“Design and Implementation of an AI-Enhanced Multi-Tenant Family Fund Management System with Predictive Analytics and Intelligent Reporting.”** All sources consulted have been acknowledged in the reference list, and no data, test result, model metric, or system evidence has been knowingly fabricated. Forms of technical and editorial assistance, including the limited use of generative artificial intelligence, are disclosed in Section 5.9. This report has not been submitted elsewhere for the award of another degree.
+I, **Aminu Danladi Hussain** (Matriculation Number: **2024/A/SENG/0156**), declare that this report accurately presents the design, implementation, testing, and limitations of the project titled **“Design and Implementation of an AI-Enhanced Multi-Tenant Family Fund Management System.”** All sources consulted have been acknowledged in the reference list, and no data, test result, model metric, or system evidence has been knowingly fabricated. Forms of technical and editorial assistance, including the limited use of generative artificial intelligence, are disclosed in Section 5.9. This report has not been submitted elsewhere for the award of another degree.
 
 <br/>
 
@@ -53,7 +53,7 @@ Student &emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp; Signa
 
 ## Certification
 
-This is to certify that this project titled **"Design and Implementation of an AI-Enhanced Multi-Tenant Family Fund Management System with Predictive Analytics and Intelligent Reporting"** was carried out by **Aminu Danladi Hussain** (Matriculation Number: **2024/A/SENG/0156**) of the Department of Software Engineering, Faculty of Computing, Miva Open University.
+This is to certify that this project titled **"Design and Implementation of an AI-Enhanced Multi-Tenant Family Fund Management System"** was carried out by **Aminu Danladi Hussain** (Matriculation Number: **2024/A/SENG/0156**) of the Department of Software Engineering, Faculty of Computing, Miva Open University.
 
 <br/>
 
@@ -90,9 +90,9 @@ Above all, I am grateful to **Almighty God** for the wisdom, strength, and perse
 
 ## Abstract
 
-The management of shared financial contributions within families and cooperative groups in Nigeria remains largely informal, relying on manual record-keeping methods such as spreadsheets, notebooks, and messaging platforms. These approaches are prone to errors, lack transparency, and offer no mechanism for accountability, payment reminders, or financial forecasting. While digital financial platforms exist for individual savings and formal cooperatives, no purpose-built solution addresses the unique needs of family-level fund management with role-based governance. This project presents the design and implementation of an AI-enhanced multi-tenant web-based family fund management system. The system employs a multi-tenant software architecture to provide isolated operational environments for each family group on a single platform. It implements a role-based access control model with three tiers—Administrator, Financial Secretary, and Member—to enforce appropriate permissions across fund management operations. Core modules include contribution tracking with partial payment support and an oldest-balance-first allocation algorithm, expense recording, fund balance management, and online payment processing via the Paystack payment gateway; reconciliation was added later as an audit-focused extension. The system further integrates controlled AI assistant and report-summary features through Large Language Model (LLM) technology, allowing authorised users to ask permitted questions and receive human-readable narrative summaries of financial reports. The predictive component implements an offline, leakage-aware logistic-regression training pipeline, two transparent baselines (training prevalence and previous-period lateness), a versioned portable model artefact, activation gates, and role-restricted advisory inference. The component remains activation-gated: no authorised private training CSV is present in this report package, so production-model training, held-out evaluation, populated predictive screenshots, and live predictive performance claims are recorded as not executed rather than inferred. Security is reinforced through WebAuthn passkey authentication and two-factor authentication mechanisms. The application is developed using Laravel (PHP) for the backend, Vue.js with Inertia.js for the frontend single-page application, PostgreSQL for the database, Tailwind CSS for responsive styling, and Python/scikit-learn for the offline predictive pipeline. The final local gate passed 1,421 Pest tests with 6,904 assertions and 100.0% PHP coverage, while the locked predictive package passed 66 tests with 100% statement coverage. Twenty redacted synthetic-tenant images document the principal interface journeys. Hosted, live-provider, performance, recovery, and private-data model evidence remains explicitly pending in Chapter Four.
+Informal family contribution funds often depend on notebooks, spreadsheets and messaging platforms, making it difficult to maintain consistent balances, allocate partial payments and review financial decisions. This study designed and implemented FamilyFunds, an AI-enhanced multi-tenant web application for administering shared family funds. An iterative software development approach informed requirements analysis, system design, implementation and automated testing. The application uses Laravel, Vue.js with Inertia.js and PostgreSQL. Each family operates within a logically isolated workspace, with membership-based permissions for administrators, financial secretaries and members. The system supports monthly contributions, manual payments, Paystack integration, expenses, adjustments, reminders and financial reports. An oldest-balance-first algorithm allocates partial and lump-sum payments consistently, while separate receipt and allocation records support traceability. Reconciliation was added during implementation as an audit-focused extension. AI enhancement consists of a permission-controlled assistant and narrative report-summary integration; financial calculations and authorisation remain within the application. Automated tests verified the access and confirmation controls, but live-provider response quality was not evaluated. The local verification run recorded on 15 August 2026 passed 1,421 Pest tests with 6,904 assertions and 100.0% PHP code coverage. Twenty redacted screenshots document workflows using synthetic demonstration records. These results support the implemented software paths rather than predictive accuracy or production readiness. A supplementary logistic-regression prototype was also developed, but no authorised historical dataset was available for training or held-out evaluation. Predictive analytics therefore remains future work, and no model accuracy is claimed. Hosted verification, live integrations, performance measurement and recovery testing remain outstanding. The study demonstrates how family-specific roles, consistent payment allocation and reviewable records can be combined in one application, while identifying the validation required before wider operational use.
 
-**Keywords:** Multi-Tenancy, Family Fund Management, Role-Based Access Control, Payment Allocation, Large Language Model, Logistic Regression, Payment Gateway, WebAuthn, Laravel, Vue.js, PostgreSQL
+**Keywords:** Family Fund Management, Multi-Tenancy, Role-Based Access Control, Payment Allocation, AI Assistance, Financial Reporting
 
 ---
 
@@ -185,7 +185,7 @@ The management of shared financial contributions within families and cooperative
 | 4.3 | Chapter Four Interface Evidence Register | 55 |
 | 4.4 | Testing Strategy and Evidence Sources | 74 |
 | 4.5 | Structured System Test Cases and Current Results | 76 |
-| 4.6 | Predictive Analytics Test and Evidence Matrix | 80 |
+| 4.6 | Predictive Prototype Test and Evidence Matrix | 80 |
 | 4.7 | Non-Functional Requirement Evaluation | 83 |
 | 4.8 | Predictive Training and Evaluation Evidence Status | 85 |
 | 4.9 | Objectives and Research Questions Verdict Matrix | 88 |
@@ -222,10 +222,6 @@ The management of shared financial contributions within families and cooperative
 | 4.12 | Predictive Analytics Model-Unavailable State | 70 |
 | 4.13 | Reconciliation Workspace and Seeded Settlement Candidate | 71 |
 | 4.14 | Responsive Member Dashboard at 390 Pixels | 72 |
-| 4.15 | Predictive Class Distribution | Not executed |
-| 4.16 | Logistic Regression Evaluation Curves | Not executed |
-| 4.17 | Predictive Confusion Matrix | Not executed |
-| 4.18 | Predictive Calibration and Standardised Coefficients | Not executed |
 
 ---
 
@@ -237,8 +233,8 @@ The management of shared financial contributions within families and cooperative
 | 4.2 | Oldest-Balance-First Payment Allocation | 47 |
 | 4.3 | Paystack Webhook Reference Verification | 48 |
 | 4.4 | Confirm-First AI Write Governance | 49 |
-| 4.5 | Logistic Regression Training | 52 |
-| 4.6 | Baseline Comparison and Activation Gates | 53 |
+| 4.5 | Logistic Regression Training Code for the Unevaluated Prototype | 52 |
+| 4.6 | Planned Baseline Comparison and Activation Gates | 53 |
 
 *Listings 4.5 and 4.6 show the implemented training and evaluation path. They do not represent an executed production training run or substitute for the missing authorised dataset and model evidence.*
 

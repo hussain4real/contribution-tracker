@@ -36,10 +36,10 @@ Table 1.1 compares common digital finance tools with the requirements of the pro
 | Expense and adjustment tracking | No | No | Limited | Limited | Yes |
 | Online payment support | Yes | Yes | Yes | Yes | Yes |
 | Family-readable reports | Limited | Limited | Limited | Limited | Yes |
-| AI assistant or narrative summaries | No | No | No | No | Yes |
-| Predictive analytics | No | No | No | Yes | Activation-gated logistic regression |
+| AI assistant or narrative summaries | No | No | No | No | Implemented integration; live response quality not evaluated |
+| Predictive analytics | No | No | No | Yes | Unevaluated prototype; no active model |
 
-The specific problem addressed in this study is the absence of a purpose-built, secure, and intelligent digital system for managing informal family contribution funds. Existing tools do not combine multi-tenant family separation, role-based governance, tiered contribution tracking, deterministic payment allocation, expense management, online payment support, and understandable reporting in one system. This gap exposes families to inaccurate records, weak accountability, delayed follow-up, and avoidable disputes.
+The specific problem addressed in this study is the lack of suitable digital support for managing informal family contribution funds securely and transparently. The tools reviewed do not bring together multi-tenant family separation, role-based governance, tiered contribution tracking, deterministic payment allocation, expense management, online payment support, and understandable reporting for this setting. This gap exposes families to inaccurate records, weak accountability, delayed follow-up, and avoidable disputes.
 
 ### 1.3 Aim of the Study
 
@@ -53,8 +53,10 @@ The objectives of the study are to:
 2. Design a multi-tenant family fund management system with logical data isolation, role-based access control, contribution categories, payment allocation rules, reporting, and secure user access.
 3. Implement the proposed system using Laravel, Vue.js, Inertia.js, PostgreSQL, Paystack, Laravel Fortify, Laravel AI SDK, and related development tools.
 4. Integrate AI assistant and report-summary features in a controlled way that respects role permissions and uses available family fund data.
-5. Implement an activation-gated logistic regression component that estimates whether a monthly contribution will still have a system-recorded outstanding balance at the end of its due date and evaluate it, when an authorised historical dataset is available, against training-prevalence and previous-period-late baselines using accuracy, precision, recall, F1-score, calibration, and discrimination metrics.
+5. Explore a logistic-regression extension for estimating whether a monthly contribution remains outstanding at its due date, specifying its data requirements, prototype implementation and evaluation protocol. Training and empirical validation are deferred until authorised historical data is available.
 6. Test the system against key requirements, including tenant isolation, role enforcement, payment allocation correctness, report accuracy, authentication security, and usability.
+
+Following the defence feedback, the title and scope were revised to emphasise the implemented fund-management system. “AI-enhanced” refers to the controlled assistant and report-summary integration. The original fifth objective included training and evaluating a predictor; that empirical objective was not achieved. Its revised wording identifies the completed preparatory work without treating the original objective as fully met. Predictive performance is outside the demonstrated results of this study.
 
 ### 1.5 Research Questions
 
@@ -64,7 +66,7 @@ The study is guided by the following research questions:
 2. How can multi-tenant architecture and role-based access control be applied to protect the records of separate family groups on one platform?
 3. How can partial and lump-sum payments be allocated consistently across outstanding contribution balances?
 4. To what extent can AI assistant and report-summary features improve access to understandable family fund information without exposing unauthorised data?
-5. How does logistic regression perform against training-prevalence and previous-period-late baselines when predicting whether a monthly contribution will still have a system-recorded outstanding balance at the end of its due date from authorised historical records?
+5. What data and validation requirements would be needed to evaluate a future contribution-risk predictor? The original empirical question, concerning logistic-regression performance against simple baselines, remains unanswered.
 6. How can the system be tested to confirm that it meets functional, security, reliability, and usability requirements?
 
 ### 1.7 Significance of the Study
@@ -83,7 +85,7 @@ The study covers the design and implementation of a web-based family fund manage
 
 The technical scope covers a Laravel 13 backend, Vue.js 3 frontend, Inertia.js 3 server-client bridge, PostgreSQL database, Tailwind CSS 4 styling, Laravel Fortify authentication, WebAuthn/passkeys, Paystack integration, Laravel AI SDK, Laravel Pennant feature flags, a Python 3.12/scikit-learn offline predictive package, Vite, Git, and Pest testing. The application is designed for web and mobile-browser access rather than native mobile deployment.
 
-The study does not cover cryptocurrency payments, direct bank API integration, tax computation, full double-entry accounting, regulatory management for formal cooperative societies, or multilingual interfaces. Predictive analytics is limited to an activation-gated logistic regression classifier and two transparent baselines: training prevalence and the member's previous-period-late state. The classifier may be trained and activated only when an authorised dataset passes minimum schema, history, class, and evaluation checks. The AI assistant and report-summary functions are treated as system features only where the application can ground the output in available family data and role permissions.
+The study does not cover cryptocurrency payments, direct bank API integration, tax computation, full double-entry accounting, regulatory management for formal cooperative societies, or multilingual interfaces. Predictive analytics is an exploratory extension, documented as a software prototype and a protocol for future research. No model was trained or activated using genuine historical records, and no predictive performance is claimed. The planned comparison with training-prevalence and previous-period-late baselines remains future work. The AI assistant and report-summary functions are supporting features whose access controls were tested; their live response quality and usefulness were not empirically established.
 
 ### 1.9 Limitations of the Study
 
@@ -91,7 +93,7 @@ The first limitation is internet dependency. FamilyFunds is a web application, s
 
 The second limitation is payment-channel scope. Paystack is used as the online payment gateway because the project is designed around Nigerian use. Families outside Paystack-supported contexts would need other gateways.
 
-The third limitation is data availability for prediction. No private training CSV is stored in the report package, and a new family may not have enough historical contribution records or both outcome classes for defensible evaluation. The system can still track payments and produce reports, but the predictive component must remain unavailable until its data and quality gates are satisfied. This report therefore distinguishes implementation readiness from executed training and does not invent model metrics.
+The third limitation is data availability for prediction. No authorised historical training dataset was obtained, so the study could not train a model or measure predictive performance. Synthetic demonstration records were used to exercise application workflows, including full, partial and overdue payments. Those records do not establish how a model would perform on real family payment behaviour. Training and validation remain future work; the application can track payments and produce financial reports independently of this extension.
 
 The fourth limitation concerns AI output. Large Language Models can produce fluent but inaccurate responses if they are not constrained (Kang & Liu, 2023). For this reason, AI features in FamilyFunds must be grounded in system data, limited by user permissions, and validated before they are trusted for financial decisions.
 

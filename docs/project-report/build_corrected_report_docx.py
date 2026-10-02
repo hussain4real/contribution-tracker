@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import argparse
 import html
+import json
 import re
 import struct
 import zipfile
@@ -41,6 +43,7 @@ PRELIMINARY_SECTIONS = [
 ]
 PORTRAIT_TABLE_WIDTH_DXA = 8_906
 LANDSCAPE_TABLE_WIDTH_DXA = 13_838
+CAPTION_PAGE_NUMBERS: dict[str, dict[str, str]] = {}
 
 CONTENTS_PAGE_NUMBERS = {
     "Preliminary Pages": "i",
@@ -122,13 +125,13 @@ TITLE_LINES = [
     "MIVA OPEN UNIVERSITY",
     "FACULTY OF COMPUTING",
     "DEPARTMENT OF SOFTWARE ENGINEERING",
-    "DESIGN AND IMPLEMENTATION OF AN AI-ENHANCED MULTI-TENANT FAMILY FUND MANAGEMENT SYSTEM WITH PREDICTIVE ANALYTICS AND INTELLIGENT REPORTING",
+    "DESIGN AND IMPLEMENTATION OF AN AI-ENHANCED MULTI-TENANT FAMILY FUND MANAGEMENT SYSTEM",
     "BY",
     "AMINU DANLADI HUSSAIN",
     "2024/A/SENG/0156",
     "A PROJECT SUBMITTED TO THE DEPARTMENT OF SOFTWARE ENGINEERING, FACULTY OF COMPUTING, MIVA OPEN UNIVERSITY, IN PARTIAL FULFILMENT OF THE REQUIREMENTS FOR THE AWARD OF THE DEGREE OF BACHELOR OF SCIENCE (B.Sc.) IN SOFTWARE ENGINEERING",
     "SUPERVISOR: DR. AYODEJI SAMUEL MAKINDE",
-    "MAY, 2026",
+    "SEPTEMBER, 2026",
 ]
 
 
@@ -248,6 +251,8 @@ def keep_table_row_together(row) -> None:
 
 
 def table_column_widths(rows: list[list[str]], total_width: int) -> list[int]:
+    if rows[0] == ["Feature", "PiggyVest", "Cowrywise", "CreditClan", "Lendsqr", "FamilyFunds"]:
+        return [1_900, 1_200, 1_200, 1_200, 1_100, 2_306]
     column_count = len(rows[0])
     minimum = 850 if column_count >= 7 else 700
     available = total_width - (minimum * column_count)
@@ -587,6 +592,8 @@ def add_markdown_file(document, file_name: str, *, start_on_new_page: bool = Fal
 def add_title_page(document) -> None:
     for index, line in enumerate(TITLE_LINES):
         paragraph = document.add_paragraph()
+        if index == 3:
+            paragraph.style = document.styles["Title"]
         set_paragraph_base(paragraph, WD_ALIGN_PARAGRAPH.CENTER)
         paragraph.paragraph_format.space_after = Pt(18 if index in {2, 3, 6, 7, 8} else 10)
         run = paragraph.add_run(line)
@@ -610,6 +617,13 @@ def preliminary_sections() -> dict[str, list[str]]:
     if missing:
         raise ValueError(f"Missing preliminary sections: {', '.join(missing)}")
 
+    for section_name, page_numbers in CAPTION_PAGE_NUMBERS.items():
+        for index, line in enumerate(sections[section_name]):
+            if line.strip().startswith("|"):
+                cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+                if len(cells) == 3 and cells[0] in page_numbers:
+                    cells[2] = page_numbers[cells[0]]
+                    sections[section_name][index] = "| " + " | ".join(cells) + " |"
     return sections
 
 
@@ -622,7 +636,7 @@ def add_bullet_paragraph(document, text: str) -> None:
     set_run_font(run)
 
 
-def add_certification(document, lines: list[str]) -> None:
+def add_certification(document, lines: list[str], *, declaration: bool = False) -> None:
     narrative = next(
         (
             parse_inline_markdown(line.strip())
@@ -644,6 +658,11 @@ def add_certification(document, lines: list[str]) -> None:
         ["______________", "______________", "______________"],
         ["External Examiner", "Signature", "Date"],
     ]
+    if declaration:
+        rows = [
+            ["Aminu Danladi Hussain", "______________", "______________"],
+            ["Student", "Signature", "Date"],
+        ]
     table = document.add_table(rows=len(rows), cols=3)
     set_fixed_table_geometry(table, [4_200, 2_353, 2_353], PORTRAIT_TABLE_WIDTH_DXA)
     for row_index, row in enumerate(rows):
@@ -735,7 +754,9 @@ def add_preliminary_pages(document) -> None:
             heading.paragraph_format.page_break_before = True
         lines = sections[title]
 
-        if title == "Certification":
+        if title == "Declaration":
+            add_certification(document, lines, declaration=True)
+        elif title == "Certification":
             add_certification(document, lines)
         elif title == "Table of Contents":
             add_contents(document, lines)
@@ -769,7 +790,7 @@ def listing_rows() -> list[list[str]]:
 
 def configure_styles(document) -> None:
     styles = document.styles
-    for style_name in ["Normal", "Heading 1", "Heading 2", "Heading 3", "Heading 4"]:
+    for style_name in ["Normal", "Title", "Heading 1", "Heading 2", "Heading 3", "Heading 4"]:
         style = styles[style_name]
         style.font.name = "Times New Roman"
         style.font.color.rgb = RGBColor(0, 0, 0)
@@ -829,7 +850,22 @@ def sanitize_title_borders(source: Path, destination: Path) -> None:
 
 
 def main() -> None:
+    global OUTPUT, SANITIZED_OUTPUT, CAPTION_PAGE_NUMBERS
+    parser = argparse.ArgumentParser(description="Build the formatted FamilyFunds report.")
+    parser.add_argument("--output-stem", default="corrected-chapters-1-5")
+    parser.add_argument("--pagination-json", type=Path)
+    args = parser.parse_args()
+    OUTPUT = ROOT / f"{args.output_stem}.docx"
+    SANITIZED_OUTPUT = ROOT / f"{args.output_stem}.sanitized.docx"
+    if args.pagination_json:
+        pagination = json.loads(args.pagination_json.read_text(encoding="utf-8"))
+        CONTENTS_PAGE_NUMBERS.update(pagination["contents"])
+        LISTING_PAGE_NUMBERS.update(pagination["listings"])
+        CAPTION_PAGE_NUMBERS = pagination["captions"]
     document = Document()
+    document.core_properties.title = "Design and Implementation of an AI-Enhanced Multi-Tenant Family Fund Management System"
+    document.core_properties.author = "Aminu Danladi Hussain"
+    document.core_properties.subject = "Final project report revised after defence feedback"
     configure_section(document.sections[0])
     configure_styles(document)
     add_title_page(document)

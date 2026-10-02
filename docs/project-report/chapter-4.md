@@ -6,6 +6,8 @@
 
 #### 4.1.1 Introduction to the Chapter
 
+This archiving revision reflects the defence feedback on the project's title and predictive scope. The main implementation concerns family-fund administration with controlled AI assistance. Predictive analytics is reported separately as an unevaluated prototype. The test results below retain their recorded August 2026 dates; revising the write-up does not constitute a new software test run.
+
 This chapter reports how the FamilyFunds design described in Chapter Three is represented in the application and how that representation will be validated. It separates three kinds of evidence that must not be confused. The first is **static implementation evidence**, such as a named service, policy, migration, page, or automated test in the repository. The second is **executed evidence**, such as the output of a fresh test, build, browser, performance, or security run against the final revision. The third is **external evidence**, such as a live AI-provider response, hosted deployment check, populated screenshot, or predictive-model evaluation that depends on data or services outside the source tree.
 
 The repository provides substantial static evidence for the conventional system modules and the predictive implementation pipeline. Fresh post-change evidence was executed on 15 August 2026. The canonical local quality gate passed 1,421 Pest tests with 6,904 assertions and 100.0% PHP coverage in 22.209 seconds; the same gate passed PHPStan, Pint, Prettier, ESLint, and the client and server-side-rendering builds. Its locked Python stage passed 66 machine-learning tests with 100% statement coverage. Focused checks additionally passed 138 Laravel payment-risk tests with 440 assertions and 100% coverage across the 16 payment-risk PHP files; the same 138 tests and 440 assertions passed against a disposable PostgreSQL database; five focused Chromium browser tests passed with 82 assertions; and a combined local payment-risk, subscription, and package-script check passed 171 tests with 517 assertions. These focused results overlap the canonical suite and are therefore not added into one artificial total. Twenty redacted running-system images were also captured from the synthetic development tenant and are presented as Figures 4.1a–4.14. Hosted checks, live-provider verification, performance measurements, recovery evidence, and authorised-data predictive training remain **Partially Met** or **Not Executed**. Commit `a699a821` is a pre-change hosted baseline and is not accepted as final Chapter Four evidence.
@@ -184,11 +186,13 @@ The reconciliation workspace accepts bank-transaction imports, preserves import 
 
 Provider settlements are distinguished from member receipts so that a net bank deposit is not incorrectly matched to a gross contribution. Closed-period guards prevent late mutation unless an authorised reopening process is completed. These behaviours extend the original fund-management design while maintaining its role, tenant, audit, and immutability principles.
 
-#### 4.2.6 Predictive Analytics Implementation Contract
+#### 4.2.6 Unevaluated Predictive Prototype
+
+This section documents supplementary engineering work, not an operational prediction capability. No authorised historical dataset was available, so the study produced no trained model for practical use and no empirical accuracy result. The seeded records used in the demonstration test application behaviour; they do not establish predictive performance. The following code and protocol describe the preparation completed for a possible future study.
 
 The predictive component is implemented as two connected parts. An offline Python 3.12 package accepts a separately authorised CSV and provenance file, validates them, creates point-in-time features, performs a chronological split, fits and evaluates the approved model, and emits a portable JSON artefact and checksumed evidence files. Laravel validates that artefact again, stores it on a private disk, records immutable model-version metadata, permits activation only when all gates pass, and scores family-owned contribution targets. This separation keeps private training material and Python dependencies out of web requests while allowing deterministic PHP inference.
 
-The approved predictive method is logistic regression only. The target is a binary overdue/on-time outcome for a contribution period: an obligation is overdue when the system still recorded an outstanding balance at the end of its due date. The fourteen implemented features are expected amount, days until due, calendar month and quarter, number of previous mature periods, three-period, six-period and lifetime on-time rates, previous partial-payment rate, mean and median recorded settlement delay, previous outstanding count and amount, and overdue streak. The outstanding-amount feature is operationally the due-date residual summed only for prior obligations still unsettled strictly before the scoring cutoff; this keeps offline and Laravel reconstruction identical under the locked twelve-column export. All features are constructed from data recorded strictly before the target obligation's creation-time cutoff. Direct identity attributes and target-period outcome data are excluded.
+The selected method for the prototype is logistic regression. The intended target is a binary overdue/on-time outcome for a contribution period: an obligation is overdue when the system still recorded an outstanding balance at the end of its due date. The fourteen implemented features are expected amount, days until due, calendar month and quarter, number of previous mature periods, three-period, six-period and lifetime on-time rates, previous partial-payment rate, mean and median recorded settlement delay, previous outstanding count and amount, and overdue streak. The outstanding-amount feature is operationally the due-date residual summed only for prior obligations still unsettled strictly before the scoring cutoff; this keeps offline and Laravel reconstruction identical under the locked twelve-column export. All features are constructed from data recorded strictly before the target obligation's creation-time cutoff. Direct identity attributes and target-period outcome data are excluded.
 
 The input contract is deliberately strict. The uncommitted source must be `storage/app/private/payment-risk/source/member-periods.csv` and contain exactly: `family_key`, `member_key`, `obligation_key`, `period_start`, `obligation_created_at`, `due_date`, `expected_amount_minor`, `amount_paid_by_due_minor`, `first_payment_recorded_at`, `fully_paid_recorded_at`, `payment_count_by_due`, and `is_backfilled`. The three opaque pseudonymous keys support grouping and split integrity only; they are never predictors. The CSV digest must match its provenance JSON. Provenance records whether consent, de-identification and point-in-time correctness were confirmed. Because this fixed export cannot express the time-varying effect of later reversals, it also requires the explicit `system_known_by_cutoff_no_reversed_allocations` policy: histories containing reversed allocations must be excluded upstream before the minimum-data gate is applied. Backfilled obligations, incomplete periods, PII or extra columns, contradictory payment timestamps, duplicate obligations/member-periods, negative amounts, impossible chronology, non-mature outcomes, and obligations created fewer than seven days before their due date are rejected. The default quality gates require at least 500 valid rows, 50 distinct member histories, 12 complete periods, and 100 rows in each outcome class. Synthetic provenance may exercise the software path but is always activation-ineligible and cannot support real-world performance claims. These are implemented rules, not claims about the unavailable private dataset.
 
@@ -196,7 +200,7 @@ The label and prediction cutoff are fixed before data is examined. A feature suc
 
 Chronological evaluation is required because a random row split could place later records for the same member in training while earlier records appear in testing. The implementation keeps whole contribution periods together and assigns the earliest 60% to training, the next 20% to validation, and the latest 20% to held-out evaluation. Standardisation and the class-balanced L2 logistic regression are fitted only on training data. The decision threshold is selected only on validation data by maximising overdue-class F1 subject to at least 0.70 overdue recall, with precision and threshold as deterministic tie-breakers. The latest partition is not consulted during fitting or selection.
 
-*Listing 4.5: Logistic Regression Training*
+*Listing 4.5: Logistic Regression Training Code for the Unevaluated Prototype*
 
 ```python
 scaler = StandardScaler()
@@ -224,7 +228,7 @@ held_out_probabilities = classifier.predict_proba(
 
 Two baselines are computed on the same held-out partition. The training-prevalence baseline assigns every held-out record the late-class prevalence learned from the training partition. The previous-period-late baseline predicts late when the feature snapshot contains a positive overdue streak. Evaluation records accuracy, balanced accuracy, overdue precision, recall and F1, ROC-AUC, PR-AUC, Brier score, confusion matrix, and 95% bootstrap intervals. The training package also writes confusion-matrix, ROC, precision-recall, calibration and coefficient charts. No populated chart is included in this report because the authorised dataset has not been supplied.
 
-*Listing 4.6: Baseline Comparison and Activation Gates*
+*Listing 4.6: Planned Baseline Comparison and Activation Gates*
 
 ```python
 training_prevalence = float(np.mean(split.training.targets))
@@ -408,11 +412,11 @@ The following cases cover the functional requirements and the major post-design 
 | TC-21 | Archive, retain, restore, and purge under policy | Active and archived family/member records | Archive, restore, legal hold, expired retention | Lifecycle follows retention and legal-hold rules | Archive, restore, retention, purge, legal-hold, and backup-configuration cases passed; hosted recovery drill not executed | Partially Met |
 | TC-22 | Demonstrate responsive hosted operation | Final deployed revision with populated test family | Mobile/desktop journeys, queues, scheduler, backup, `/up` and performance probes | Pages are readable, services healthy, and declared thresholds met | Focused predictive Chromium run passed 5 tests/82 assertions, including 390-pixel and dark-mode checks; hosted SHA, report screenshots, service checks, and measurements are unavailable | Partially Met |
 
-#### 4.3.3 Predictive Test and Evidence Gates
+#### 4.3.3 Prototype Tests and Deferred Predictive Evaluation
 
 The predictive cases are separated because application tests cannot substitute for a real training dataset and held-out evaluation. Each case must retain its raw configuration or machine-readable output in the final evidence package.
 
-*Table 4.6: Predictive Analytics Test and Evidence Matrix*
+*Table 4.6: Predictive Prototype Test and Evidence Matrix*
 
 | ID | Test objective | Preconditions | Input(s) | Expected output | Actual output/evidence | Status |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -462,9 +466,9 @@ The current evidence supports a cautious but stronger conclusion. The repository
 | NFR13 Model governance | Python 66-test/100%-coverage run and Laravel 138-test/440-assertion run verified provenance/schema validation, chronological training, baselines, checksumed artefact and activation gates | Versioned private dataset, executed split, model and evaluation evidence | Partially Met |
 | NFR14 Model safety | Laravel, PostgreSQL and Chromium runs verified history tiers, immutable advisory records, unavailable/pooled paths, role denial and no action side effects | Authorised active-model inference and real populated screenshot | Partially Met |
 
-#### 4.4.2 Predictive Training and Experimental Results
+#### 4.4.2 Deferred Predictive Training and Evaluation
 
-Predictive training and experimental results are **Not Executed**. This status is itself an important finding. Without the approved private predictive-training CSV, the system cannot establish record count, history length, outcome distribution, temporal partitions, baseline performance, fitted logistic-regression coefficients, or held-out quality. Generating synthetic rows solely to obtain favourable accuracy would answer a different question: whether the pipeline can recover patterns planted by the developer. It would not demonstrate prediction of real family payment behaviour.
+Predictive training and empirical evaluation were **Not Executed**. This is an incomplete objective, not a positive model finding. Without authorised historical records, the study could not establish baseline performance, fitted logistic-regression coefficients or held-out accuracy. Synthetic fixtures can verify that training code runs and scoring calculations agree, but they cannot show how accurately the proposed model would predict real family payment behaviour. Predictive validation is therefore assigned to future work.
 
 *Table 4.8: Predictive Training and Evaluation Evidence Status*
 
@@ -475,11 +479,11 @@ Predictive training and experimental results are **Not Executed**. This status i
 | Logistic regression | Configuration, threshold, coefficients, intercept and held-out metrics with intervals | No fitted private artefact or metrics produced | Not Executed |
 | Training-prevalence baseline | Same held-out metrics and confusion matrix | No private baseline result produced | Not Executed |
 | Previous-period-late baseline | Same held-out metrics and confusion matrix | No private baseline result produced | Not Executed |
-| Calibration, discrimination and error analysis | Figures 4.15–4.18, false-positive/negative review and limitations | No populated figures or error analysis produced | Not Executed |
+| Calibration, discrimination and error analysis | Evaluation curves, confusion matrix, coefficient and error review | No populated figures or error analysis produced | Not Executed |
 | Artefact and activation | Model/schema versions, checksum, evidence package and activation decision | No candidate or active artefact installed | Not Executed |
 | Inference and interface | Authorised populated result, insufficient-history state and timing | No populated screenshot or performance measurement | Not Executed |
 
-If an authorised dataset becomes available in a later revision, this subsection should add the observed class-distribution figure (Figure 4.15), evaluation curves (Figure 4.16), confusion matrix (Figure 4.17), calibration and standardised-coefficient evidence (Figure 4.18), baseline table, and error analysis. The training-prevalence baseline and previous-period-late baseline must be evaluated on the same held-out period as logistic regression. Results must not be compared across different samples or after tuning on the test partition. If logistic regression does not improve meaningfully upon the transparent baselines, FR20 should remain Partially Met or be classified Not Met, and the feature should remain inactive.
+Future evaluation would need the actual class distribution, baseline comparisons, evaluation curves, confusion matrix, calibration and coefficient evidence, and error analysis. These absent outputs are not numbered as figures in the present report. Both baselines would need to use the same untouched held-out period as logistic regression. If a future model does not pass the specified evaluation criteria, the extension should remain inactive. The current report retains the partial verdict for the original FR20 requirement.
 
 #### 4.4.3 Discussion of Results
 
@@ -491,7 +495,7 @@ The reporting and reconciliation work demonstrates the value of iterative develo
 
 The controlled AI design addresses the fourth research question only partially. Static tests and source structure show role-aware tools, family-scoped queries, and confirmation before writes. They do not establish that a configured live provider will always produce accurate, understandable language or acceptable latency. This limitation is consistent with literature warning that fluent financial text may still contain unsupported claims. Final evaluation requires authorised provider-backed examples grounded in known report data, followed by comparison of the response with the source totals. Until that occurs, live AI relevance and usefulness remain Not Executed.
 
-The fifth research question cannot yet be answered empirically. Logistic regression was selected for interpretability, and the two baselines provide meaningful reference points, but method selection is not model evidence. The absence of a private CSV prevents training and evaluation. This avoids an overclaim: a family-level prediction model may face sparse histories, class imbalance, recurring member patterns, and changes in contribution expectations. A high accuracy score could merely reproduce the majority on-time class. The final judgment must therefore consider late-class recall, precision, F1, PR-AUC, errors, and improvement over both baselines. Prediction must remain advisory even if those gates are met.
+The revised fifth research question is addressed only at the level of data requirements and evaluation design. The original question about predictive performance remains unanswered. Logistic regression and the two baselines were selected, but no authorised historical dataset was obtained for their empirical comparison. Sparse histories, class imbalance and changing contribution expectations could all affect a future result. Its evaluation would therefore need overdue-class recall, precision, F1, PR-AUC, error analysis and comparison with both baselines, alongside accuracy. No predictive benefit follows from the software test results reported here.
 
 The sixth research question is partially addressed by the clean canonical gate and the predictive-focused Python, Laravel, PostgreSQL and Chromium checks covering normal, boundary, invalid, authorisation, idempotency, immutability, and browser scenarios. Populated report screenshots, the performance run, hosted services, live integrations, and recovery evidence still prevent a complete operational claim. Honest status reporting remains preferable to importing historical counts from an earlier revision because the evidential question is whether the integrated system passes at each claimed boundary.
 
@@ -505,13 +509,13 @@ The sixth research question is partially addressed by the clean canonical gate a
 | Objective 2: Design the multi-tenant system | Chapter Three requirements, architecture, database, algorithms, and diagrams | Met for design scope |
 | Objective 3: Implement the proposed system | Broad current source, clean canonical local gate, and predictive-focused Laravel, PostgreSQL and browser evidence | Partially Met overall; local implementation gate passed, hosted evidence pending |
 | Objective 4: Integrate controlled AI | Role-aware agents/tools and static tests | Partially Met; live provider evidence pending |
-| Objective 5: Implement and evaluate logistic regression | Training, evaluation, artefact and inference implementation exists; private-data training and PRED evidence absent | Partially Met; evaluation Not Executed |
+| Objective 5: Explore a future predictive extension | Prototype and data/evaluation requirements documented; original empirical training and comparison absent | Partially Met against the original objective; evaluation Not Executed |
 | Objective 6: Test key requirements | TC evidence mapping plus clean canonical, Python, PostgreSQL and Chromium checks and twenty inspected interface images | Partially Met; external, recovery, and performance evidence pending |
 | RQ1: Required design features | Chapters Two and Three plus implementation traceability | Answered at design level |
 | RQ2: Tenant and role protection | Layered implementation plus canonical and predictive route, tenant-switching and member-denial checks | Validated in the local automated scope; hosted review pending |
 | RQ3: Consistent payment allocation | Transactional oldest-first implementation and canonical normal/boundary checks | Validated in the local automated scope |
 | RQ4: Controlled AI usefulness | Governance design and static tests, no live output | Partially answered |
-| RQ5: Logistic regression versus baselines | No authorised training/evaluation evidence | Not answered empirically |
+| RQ5: Requirements for future predictive evaluation | Data contract and validation protocol documented; no empirical model evidence | Design requirements specified; original performance question unanswered |
 | RQ6: Functional, security, reliability, and usability testing | Broad specification set plus fresh focused local and PostgreSQL/browser results; external and performance evidence absent | Partially answered |
 
 #### 4.4.5 Summary of the Chapter
