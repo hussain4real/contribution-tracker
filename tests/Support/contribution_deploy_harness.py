@@ -12,7 +12,7 @@ script = sys.stdin.read()
 sha = "1" * 40
 
 dispatcher = r'''#!/usr/bin/env python3
-import json, os, pathlib, subprocess, sys
+import json, os, pathlib, signal, subprocess, sys
 root = pathlib.Path(os.environ["DEPLOY_TEST_ROOT"])
 scenario = os.environ["DEPLOY_TEST_SCENARIO"]
 name, args = pathlib.Path(sys.argv[0]).name, sys.argv[1:]
@@ -20,8 +20,14 @@ with (root / "commands.jsonl").open("a") as log:
     log.write(json.dumps([name, *args]) + "\n")
 if name == "sudo":
     if args[0] == "-n": args = args[1:]
+    if scenario == "preflight-denied" and args[:2] == ["supervisorctl", "status"]: sys.exit(1)
+    if scenario == "supervisor-control-denied" and args[:2] in [["supervisorctl", "stop"], ["supervisorctl", "status"]]: sys.exit(1)
+    if scenario == "supervisor-stop-denied" and args[:2] == ["supervisorctl", "stop"]: sys.exit(1)
     sys.exit(subprocess.run(args).returncode)
-if name == "timeout": sys.exit(subprocess.run(args[1:]).returncode)
+if name == "timeout":
+    if scenario == "probe-timeout" and args[1:3] == ["php", "-r"]: sys.exit(124)
+    if scenario == "health-reentry-probe-timeout" and (root / "up-attempted").exists() and args[1:3] == ["php", "-r"]: sys.exit(124)
+    sys.exit(subprocess.run(args[1:]).returncode)
 if name == "git":
     if args[:2] == ["rev-parse", "origin/main"]:
         print("2" * 40 if scenario == "stale" else "1" * 40)
@@ -31,33 +37,83 @@ if name == "git":
     elif args[:2] == ["merge", "--ff-only"]: (root / "merged").touch()
 elif name == "php":
     if args[0] == "-r" and "isDownForMaintenance" in args[1]:
-        if not (root / "maintenance").exists(): sys.exit(1)
-    elif args[1] == "down": (root / "maintenance").touch()
-    if args[1] == "up": (root / "maintenance").unlink(missing_ok=True)
+        if (root / "merged").exists() and scenario in ["final-inactive-reentry-before-state", "final-inactive-reentry-probe-error"]:
+            was_inactive = (root / "final-inactive").exists()
+            (root / "final-inactive").touch()
+            (root / "maintenance").unlink(missing_ok=True)
+            if was_inactive and scenario == "final-inactive-reentry-probe-error": sys.exit(2)
+        if scenario == "final-unknown-reentry-before-state" and (root / "merged").exists(): sys.exit(2)
+        if (root / "up-attempted").exists():
+            if scenario in ["health-reentry-probe-error", "health-reentry-down-and-probe-error"]: sys.exit(2)
+            if scenario == "health-reentry-probe-empty": sys.exit(0)
+            if scenario == "health-reentry-probe-noise": print("unexpected"); sys.exit(0)
+        if scenario in ["probe-error", "down-before-state-probe-error"] or (scenario == "postmerge-probe-error" and (root / "merged").exists()): sys.exit(2)
+        if scenario == "probe-early-exit": sys.exit(0)
+        if scenario == "probe-unexpected-output": print("unexpected"); sys.exit(0)
+        print("active" if (root / "maintenance").exists() else "inactive")
+    elif args[1] == "down":
+        if (root / "final-inactive").exists() or (scenario == "final-unknown-reentry-before-state" and (root / "merged").exists()): sys.exit(19)
+        if (root / "up-attempted").exists():
+            if scenario in ["health-reentry-before-state", "health-reentry-down-and-probe-error", "up-before-state-failure", "up-after-state-failure", "term-up-before-state", "int-up-before-state", "term-up-after-state", "int-up-after-state"]: sys.exit(1)
+            if scenario == "health-reentry-no-state": sys.exit(0)
+        if scenario == "postmerge-broken-bootstrap" and (root / "merged").exists(): sys.exit(1)
+        first_down = not (root / "down-attempted").exists()
+        (root / "down-attempted").touch()
+        if scenario in ["down-before-state", "down-before-state-probe-error", "down-success-without-state", "term-before-state", "int-before-state"]:
+            if first_down and scenario in ["term-before-state", "int-before-state"]:
+                os.kill(os.getppid(), signal.SIGTERM if scenario.startswith("term") else signal.SIGINT)
+            sys.exit(0 if scenario == "down-success-without-state" else 1)
+        if scenario == "down-retry-recovers" and first_down: sys.exit(1)
+        (root / "maintenance").touch()
+        if scenario == "health-reentry-after-state" and (root / "up-attempted").exists(): sys.exit(1)
+        if first_down and scenario in ["term-after-state", "int-after-state"]:
+            os.kill(os.getppid(), signal.SIGTERM if scenario.startswith("term") else signal.SIGINT)
+            sys.exit(1)
+        if scenario == "partial-down": sys.exit(1)
+    if args[1] == "up":
+        (root / "up-attempted").touch()
+        if scenario in ["up-before-state-failure", "term-up-before-state", "int-up-before-state"]:
+            if scenario != "up-before-state-failure": os.kill(os.getppid(), signal.SIGTERM if scenario.startswith("term") else signal.SIGINT)
+            sys.exit(17)
+        (root / "maintenance").unlink(missing_ok=True)
+        if scenario in ["up-after-state-failure", "term-up-after-state", "int-up-after-state"]:
+            if scenario != "up-after-state-failure": os.kill(os.getppid(), signal.SIGTERM if scenario.startswith("term") else signal.SIGINT)
+            sys.exit(17)
     if args[1] == "migrate" and scenario == "migration": sys.exit(1)
-elif name == "composer" and scenario == "composer": sys.exit(1)
+elif name == "composer":
+    if scenario in ["composer", "postmerge-broken-bootstrap"]: sys.exit(1)
+    if scenario == "term-postmerge": os.kill(os.getppid(), signal.SIGTERM); sys.exit(1)
 elif name == "pgrep":
     if scenario != "no-workers": print("111")
 elif name == "systemctl":
     if args[0] == "show": print("0" if scenario == "no-master" else "100")
     elif args[0] == "reload":
+        if scenario == "cleanup-inactive-after-resume" and (root / "merged").exists():
+            (root / "maintenance").unlink(missing_ok=True)
+            (root / "final-inactive").touch()
+            sys.exit(17)
         if scenario == "reload-failure" or (scenario == "final-reload-failure" and (root / "merged").exists()): sys.exit(1)
         if scenario != "drain" and not (scenario == "final-drain" and (root / "merged").exists()):
             (root / "proc/111/stat").write_text("111 (php-fpm8.4) S " + "0 " * 18 + ("43\n" if not (root / "merged").exists() else "44\n"))
     elif args[0] == "is-active" and scenario == "inactive": sys.exit(1)
 elif name == "supervisorctl":
     action, consumer = args
-    if consumer in ["queue-worker:*", "ssr"]:
-        marker = root / ("running-queue" if consumer == "queue-worker:*" else "running-ssr")
+    if consumer in ["queue-worker:*", "ssr", "nightwatch"]:
+        marker = root / {"queue-worker:*": "running-queue", "ssr": "running-ssr", "nightwatch": "running-nightwatch"}[consumer]
         if action == "stop":
             if scenario == "queue-stop" and consumer == "queue-worker:*": sys.exit(1)
+            if scenario == "nightwatch-stop" and consumer == "nightwatch": sys.exit(1)
             marker.unlink(missing_ok=True)
-        elif action == "restart": marker.touch()
+        elif action == "restart":
+            if scenario == "nightwatch-restart" and consumer == "nightwatch": sys.exit(1)
+            marker.touch()
         elif action == "status":
-            if scenario != "empty-resume":
-                state = "STOPPED" if scenario == "resume" or not marker.exists() else "RUNNING"
+            merged = (root / "merged").exists()
+            if not (scenario == "empty-resume" and merged) and not (scenario == "nightwatch-empty-status" and consumer == "nightwatch" and merged) and scenario != "preflight-empty":
+                state = "STOPPED" if (scenario == "resume" and merged) or not marker.exists() or (scenario == "nightwatch-status" and consumer == "nightwatch" and merged) or scenario == "preflight-stopped" else "RUNNING"
                 print(consumer + " " + state)
 elif name == "curl" and scenario == "health": sys.exit(1)
+elif name == "curl" and scenario.startswith("health-reentry-"): sys.exit(17)
 '''
 
 with tempfile.TemporaryDirectory(prefix="contribution-deploy-") as tmp:
@@ -68,6 +124,9 @@ with tempfile.TemporaryDirectory(prefix="contribution-deploy-") as tmp:
     (root / "proc/111/stat").write_text("111 (php-fpm8.4) S " + "0 " * 18 + "42\n")
     (root / "running-queue").touch()
     (root / "running-ssr").touch()
+    (root / "running-nightwatch").touch()
+    if scenario.startswith("initially-stopped-"):
+        (root / ("running-" + scenario.removeprefix("initially-stopped-"))).unlink()
     for command in ["git", "php", "sudo", "timeout", "composer", "npm", "pgrep", "systemctl", "supervisorctl", "bash", "curl"]:
         path = bin_dir / command
         path.write_text(dispatcher)
@@ -90,6 +149,7 @@ with tempfile.TemporaryDirectory(prefix="contribution-deploy-") as tmp:
         "maintenance": (root / "maintenance").exists(),
         "queue_running": (root / "running-queue").exists(),
         "ssr_running": (root / "running-ssr").exists(),
+        "nightwatch_running": (root / "running-nightwatch").exists(),
         "merged": (root / "merged").exists(),
         "stderr": result.stderr,
     }))
