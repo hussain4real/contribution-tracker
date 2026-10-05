@@ -80,6 +80,8 @@ jobs:
             fi
 
             git fetch origin main
+            # Check the incoming revision before modifying the live checkout.
+            git show origin/main:deployment/check-report-permissions.sh | bash
             git merge --ff-only origin/main
             echo "Deploying $(git rev-parse --short HEAD)"
 

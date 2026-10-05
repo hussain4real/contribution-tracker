@@ -12,7 +12,6 @@ apt update && apt upgrade -y
 echo "=== Step 2: Create deployer user ==="
 adduser --disabled-password --gecos "" deployer
 usermod -aG sudo deployer
-usermod -aG www-data deployer
 
 # Copy root SSH keys to deployer
 mkdir -p /home/deployer/.ssh
@@ -34,12 +33,11 @@ cat > /etc/sudoers.d/familyfunds-storage-permissions << 'EOF'
 deployer ALL=(root) NOPASSWD: /usr/bin/find /var/www/contribution-tracker/storage /var/www/contribution-tracker/bootstrap/cache -path /var/www/contribution-tracker/storage/app/private/reports -prune -o -exec /usr/bin/chown -h deployer\:www-data {} +
 deployer ALL=(root) NOPASSWD: /usr/bin/find /var/www/contribution-tracker/storage /var/www/contribution-tracker/bootstrap/cache -path /var/www/contribution-tracker/storage/app/private/reports -prune -o -type d -exec /usr/bin/chmod 2775 {} +
 deployer ALL=(root) NOPASSWD: /usr/bin/find /var/www/contribution-tracker/storage /var/www/contribution-tracker/bootstrap/cache -path /var/www/contribution-tracker/storage/app/private/reports -prune -o -path /var/www/contribution-tracker/storage/oauth-private.key -prune -o -path /var/www/contribution-tracker/storage/oauth-public.key -prune -o -type f -exec /usr/bin/chmod 0664 {} +
-deployer ALL=(root) NOPASSWD: /usr/bin/find /var/www/contribution-tracker/storage/app/private/reports -type d -exec /usr/bin/chmod g+rx {} +
-deployer ALL=(root) NOPASSWD: /usr/bin/find /var/www/contribution-tracker/storage/app/private/reports -type f -exec /usr/bin/chmod g+r {} +
 deployer ALL=(root) NOPASSWD: /usr/bin/install -d -o deployer -g www-data -m 2775 /var/www/contribution-tracker/storage/app/private/reports
 EOF
 chmod 440 /etc/sudoers.d/deployer /etc/sudoers.d/familyfunds-storage-permissions
 visudo -cf /etc/sudoers.d/familyfunds-storage-permissions
+bash "$(dirname "${BASH_SOURCE[0]}")/provision-report-permissions.sh"
 
 echo "=== Step 3: Configure Firewall ==="
 ufw default deny incoming
