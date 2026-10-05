@@ -204,8 +204,9 @@ it('requires report provisioning before updating either production checkout', fu
         if (! is_string($script)) {
             throw new RuntimeException('Unable to read deployment entry point.');
         }
-        $preflight = strpos($script, 'git show origin/main:deployment/check-report-permissions.sh | bash');
-        $merge = strpos($script, 'git merge --ff-only origin/main');
+        $revision = $path === 'deployment/deploy.sh' ? 'origin/main' : '"$DEPLOY_SHA"';
+        $preflight = strpos($script, 'git show '.$revision.':deployment/check-report-permissions.sh | bash');
+        $merge = strpos($script, 'git merge --ff-only '.$revision);
         if ($preflight === false || $merge === false) {
             throw new RuntimeException('Missing deployment preflight or merge.');
         }

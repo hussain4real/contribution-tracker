@@ -164,7 +164,7 @@ class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasProvid
     public function middleware(): array
     {
         return [
-            new LogPrompts,
+            new LogPrompts($this::class),
         ];
     }
 

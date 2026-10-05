@@ -7,7 +7,7 @@ on:
 
 concurrency:
   group: production-deploy
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   test:
@@ -80,22 +80,187 @@ jobs:
             fi
 
             git fetch origin main
-            # Check the incoming revision before modifying the live checkout.
-            git show origin/main:deployment/check-report-permissions.sh | bash
-            git merge --ff-only origin/main
+            DEPLOY_SHA='${{ github.sha }}'
+            if [ "$(git rev-parse origin/main)" != "$DEPLOY_SHA" ]; then
+              echo "Production branch advanced beyond the tested commit. Refusing deployment."
+              exit 1
+            fi
+            git merge-base --is-ancestor HEAD "$DEPLOY_SHA"
+
+            # Check report access before taking production offline or changing its checkout.
+            git show "$DEPLOY_SHA":deployment/check-report-permissions.sh | bash
+
+            # Verify existing noninteractive status access before taking production offline.
+            # Status access does not prove authorization to stop these consumers.
+            for consumer in 'queue-worker:*' ssr nightwatch; do
+              timeout 30 sudo -n supervisorctl status "$consumer" | awk 'NF { count++; if ($2 != "RUNNING") failed = 1 } END { exit (failed || !count) }'
+            done
+
+            # Keep failed upgrades offline; never roll back a migrated database automatically.
+            maintenance_active() {
+              # Laravel supports both file and cache maintenance drivers. Only an
+              # explicit response confirms state; errors, timeouts and early exits do not.
+              local maintenance_state
+              if ! maintenance_state="$(timeout 30 php -r 'try { require "vendor/autoload.php"; $app = require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap(); echo $app->isDownForMaintenance() ? "active" : "inactive"; } catch (Throwable $exception) { exit(2); }' 2>/dev/null)"; then
+                return 2
+              fi
+              # Known inactive state revokes earlier proof; unknown state cannot
+              # establish activation or revoke an existing, unwithdrawn confirmation.
+              case "$maintenance_state" in
+                active) return 0 ;;
+                inactive) QUIESCED=false; return 1 ;;
+                *) return 2 ;;
+              esac
+            }
+            MAINTENANCE_ATTEMPTED=false
+            QUIESCED=false
+            deployment_failed() {
+              result=$?
+              trap - EXIT INT TERM
+              if [ "$MAINTENANCE_ATTEMPTED" = true ]; then
+                php artisan down --render='errors::503' --retry=60 >/dev/null 2>&1 || true
+                if maintenance_active || [ "$QUIESCED" = true ]; then
+                  timeout 300 sudo -n supervisorctl stop 'queue-worker:*' >/dev/null 2>&1 || true
+                  timeout 300 sudo -n supervisorctl stop ssr >/dev/null 2>&1 || true
+                  timeout 300 sudo -n supervisorctl stop nightwatch >/dev/null 2>&1 || true
+                  echo "Deployment failed after confirmed maintenance; consumer stop cleanup attempted. Verify state before restoring traffic."
+                else
+                  echo "Maintenance could not be confirmed; consumer state left unchanged. Deployment aborted."
+                fi
+              fi
+              exit "$result"
+            }
+            trap deployment_failed EXIT
+            trap 'exit 130' INT
+            trap 'exit 143' TERM
+
+            # Verify the signal-zero probe is available before taking traffic offline.
+            timeout 30 php -r 'exit(function_exists("posix_kill") && function_exists("posix_get_last_error") ? 0 : 1);'
+
+            MAINTENANCE_ATTEMPTED=true
+            php artisan down --render='errors::503' --retry=60
+            if ! maintenance_active; then
+              echo "Maintenance is inactive or could not be verified. Refusing deployment."
+              exit 1
+            fi
+            # Retain proof through unknown probes until inactive state or an up attempt.
+            QUIESCED=true
+            timeout 300 sudo -n supervisorctl stop 'queue-worker:*'
+            timeout 300 sudo -n supervisorctl stop ssr
+            timeout 300 sudo -n supervisorctl stop nightwatch
+
+            probe_fpm_worker() {
+              local worker_state
+              if ! worker_state="$(timeout 30 php -r '
+                try {
+                  foreach (array_slice($argv, 1) as $pid) {
+                    if (!preg_match("/^[1-9][0-9]*$/D", $pid) || filter_var($pid, FILTER_VALIDATE_INT, ["options" => ["min_range" => 1, "max_range" => 2147483647]]) === false) {
+                      exit(2);
+                    }
+                  }
+                  $record = @file_get_contents("/proc/".$argv[1]."/stat");
+                  if ($record === false) {
+                    // Signal zero does not send a signal. Only ESRCH proves exit;
+                    // EPERM, a live PID with missing metadata, and other errors refuse.
+                    if (!@posix_kill((int) $argv[1], 0) && posix_get_last_error() === 3) {
+                      echo "exited";
+                      exit(0);
+                    }
+                    exit(2);
+                  }
+                  $end = strrpos($record, ") ");
+                  if ($end === false || !str_starts_with($record, $argv[1]." (") || !str_ends_with($record, "\n")) {
+                    exit(2);
+                  }
+                  // comm may contain whitespace or parentheses. Count fields from state.
+                  $fields = preg_split("/\s+/", trim(substr($record, $end + 2)));
+                  if ($fields === false || count($fields) < 50 || !preg_match("/^[RSDZTtXxKWPI]$/D", $fields[0])) {
+                    exit(2);
+                  }
+                  foreach (array_slice($fields, 1) as $field) {
+                    if (!preg_match("/^-?[0-9]+$/D", $field)) {
+                      exit(2);
+                    }
+                  }
+                  if ($fields[1] !== $argv[2] || !preg_match("/^[1-9][0-9]*$/D", $fields[19])) {
+                    exit(2);
+                  }
+                  echo "alive:".$fields[19];
+                } catch (\Throwable $error) {
+                  exit(2);
+                }
+              ' "$1" "$FPM_MASTER_PID")"; then
+                return 1
+              fi
+              if [[ "$worker_state" =~ ^alive:[1-9][0-9]*$ ]] || [ "$worker_state" = exited ]; then
+                printf '%s' "$worker_state"
+              else
+                return 1
+              fi
+            }
+
+            drain_http_workers() {
+              maintenance_active
+              # The existing graceful reload lets old HTTP requests finish. New workers
+              # serve the pre-rendered maintenance response while dependencies change.
+              FPM_MASTER_PID="$(systemctl show php8.4-fpm --property=MainPID --value)"
+              if ! [[ "$FPM_MASTER_PID" =~ ^[1-9][0-9]*$ ]]; then
+                echo "Unable to identify the PHP-FPM master. Refusing deployment."
+                exit 1
+              fi
+              OLD_FPM_CHILDREN="$(pgrep -P "$FPM_MASTER_PID")"
+              if [ -z "$OLD_FPM_CHILDREN" ]; then
+                echo "Unable to identify existing PHP-FPM workers. Refusing deployment."
+                exit 1
+              fi
+              OLD_FPM_STARTS=()
+              tracked_workers=''
+              for worker_pid in $OLD_FPM_CHILDREN; do
+                if ! worker_state="$(probe_fpm_worker "$worker_pid")"; then
+                  echo "Unable to verify PHP-FPM worker identity. Refusing deployment."
+                  exit 1
+                fi
+                if [ "$worker_state" != exited ]; then
+                  OLD_FPM_STARTS[$worker_pid]="${worker_state#alive:}"
+                  tracked_workers="$tracked_workers $worker_pid"
+                fi
+              done
+              OLD_FPM_CHILDREN="$tracked_workers"
+              drain_deadline=$((SECONDS + 300))
+              timeout 300 sudo -n systemctl reload php8.4-fpm
+              while true; do
+                remaining_workers=''
+                for worker_pid in $OLD_FPM_CHILDREN; do
+                  if ! worker_state="$(probe_fpm_worker "$worker_pid")"; then
+                    echo "Unable to verify PHP-FPM worker identity. Refusing deployment."
+                    exit 1
+                  fi
+                  if [ "$worker_state" = "alive:${OLD_FPM_STARTS[$worker_pid]}" ]; then
+                    remaining_workers="$remaining_workers $worker_pid"
+                  fi
+                done
+                # Once the original identity exits, later PID reuse cannot revive it.
+                OLD_FPM_CHILDREN="$remaining_workers"
+                if [ -z "$OLD_FPM_CHILDREN" ]; then
+                  break
+                fi
+                if [ "$SECONDS" -ge "$drain_deadline" ]; then
+                  echo "Old PHP-FPM requests did not drain. Refusing deployment."
+                  exit 1
+                fi
+                sleep 1
+              done
+              systemctl is-active --quiet php8.4-fpm
+
+            }
+            drain_http_workers
+
+            git merge --ff-only "$DEPLOY_SHA"
+            test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
             echo "Deploying $(git rev-parse --short HEAD)"
 
             # Install PHP dependencies
             composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
-
-            # Generate VAPID keys once for web push notifications
-            if ! grep -Eq '^VAPID_PUBLIC_KEY=.+$' .env || ! grep -Eq '^VAPID_PRIVATE_KEY=.+$' .env; then
-              echo "Generating VAPID keys..."
-              php artisan config:clear
-              php artisan webpush:vapid --force --no-interaction
-            else
-              echo "VAPID keys already configured; skipping generation."
-            fi
 
             # Install Node dependencies and build assets
             npm ci
@@ -136,7 +301,18 @@ jobs:
             sudo supervisorctl restart ssr
             sudo supervisorctl restart nightwatch
 
+            timeout 30 sudo -n supervisorctl status 'queue-worker:*' | awk 'NF { count++; if ($2 != "RUNNING") failed = 1 } END { exit (failed || !count) }'
+            timeout 30 sudo -n supervisorctl status ssr | awk 'NF { count++; if ($2 != "RUNNING") failed = 1 } END { exit (failed || !count) }'
+            timeout 30 sudo -n supervisorctl status nightwatch | awk 'NF { count++; if ($2 != "RUNNING") failed = 1 } END { exit (failed || !count) }'
+
             # Reload PHP-FPM gracefully
-            sudo systemctl reload php8.4-fpm
+            drain_http_workers
+
+            # Up can remove maintenance before failing or receiving a signal.
+            # Cleanup must obtain fresh confirmation before stopping resumed consumers.
+            QUIESCED=false
+            php artisan up
+            curl --fail --silent --show-error https://familyfunds.app/up >/dev/null
+            trap - EXIT INT TERM
 
             echo "Deployment complete!"

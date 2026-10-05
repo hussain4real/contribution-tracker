@@ -218,6 +218,8 @@ class DemoCommunicationSeeder extends Seeder
             ['id' => $conversationId],
             [
                 'user_id' => $user->id,
+                'participant_type' => $user->getMorphClass(),
+                'participant_id' => $user->id,
                 'title' => 'Demo contribution overview',
                 'created_at' => now()->subHour(),
                 'updated_at' => now()->subMinutes(30),
@@ -235,12 +237,19 @@ class DemoCommunicationSeeder extends Seeder
                 [
                     'conversation_id' => $conversationId,
                     'user_id' => $user->id,
+                    'participant_type' => $user->getMorphClass(),
+                    'participant_id' => $user->id,
                     'agent' => 'family-assistant',
                     'role' => $role,
                     'content' => $content,
                     'attachments' => '[]',
                     'tool_calls' => '[]',
                     'tool_results' => '[]',
+                    'steps' => $role === 'assistant' ? json_encode([[
+                        'content' => $content, 'tool_calls' => [], 'reasoning' => '',
+                        'replay_blocks' => [], 'provider_tool_calls' => [],
+                    ]], JSON_THROW_ON_ERROR) : '[]',
+                    'status' => 'completed',
                     'usage' => '{}',
                     'meta' => '{"demo":true}',
                     'created_at' => now()->subMinutes($role === 'user' ? 40 : 39),
