@@ -29,6 +29,13 @@ if [[ -f "$APP_DIR/storage/oauth-public.key" ]]; then
     /usr/bin/chmod 0640 "$APP_DIR/storage/oauth-public.key"
 fi
 
+# Keep private reports inaccessible to other host users while allowing the
+# deployer-owned backup scheduler to traverse and read them through www-data.
+if [[ -d "$REPORTS_DIR" ]]; then
+    sudo /usr/bin/find "$REPORTS_DIR" -type d -exec /usr/bin/chmod g+rx {} +
+    sudo /usr/bin/find "$REPORTS_DIR" -type f -exec /usr/bin/chmod g+r {} +
+fi
+
 sudo /usr/bin/find "${WRITABLE_PATHS[@]}" -path "$REPORTS_DIR" -prune -o -type d -exec /usr/bin/chmod 2775 {} +
 sudo /usr/bin/find "${WRITABLE_PATHS[@]}" -path "$REPORTS_DIR" -prune -o -path "$APP_DIR/storage/oauth-private.key" -prune -o -path "$APP_DIR/storage/oauth-public.key" -prune -o -type f -exec /usr/bin/chmod 0664 {} +
 

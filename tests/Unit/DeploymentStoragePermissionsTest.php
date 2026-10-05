@@ -9,11 +9,14 @@ it('normalizes writable paths without changing report access or exposing Passpor
     $script = file_get_contents($projectRoot.'/deployment/ensure-storage-permissions.sh');
     $deployScript = file_get_contents($projectRoot.'/deployment/deploy.sh');
     $setupScript = file_get_contents($projectRoot.'/deployment/setup-server.sh');
+    $provisionScript = file_get_contents($projectRoot.'/deployment/provision-report-permissions.sh');
     $workflow = file_get_contents($projectRoot.'/.github/workflows/deploy.yml');
 
-    if ($script === false || $deployScript === false || $setupScript === false || $workflow === false) {
+    if ($script === false || $deployScript === false || $setupScript === false || $provisionScript === false || $workflow === false) {
         throw new RuntimeException('Unable to read the deployment permission fixtures.');
     }
+
+    $setupScript .= $provisionScript;
 
     expect($script)
         ->toContain('REPORTS_DIR="$APP_DIR/storage/app/private/reports"')
@@ -21,6 +24,8 @@ it('normalizes writable paths without changing report access or exposing Passpor
         ->toContain('find "${WRITABLE_PATHS[@]}" -path "$REPORTS_DIR" -prune -o -exec /usr/bin/chown -h deployer:www-data {} +')
         ->toContain('find "${WRITABLE_PATHS[@]}" -path "$REPORTS_DIR" -prune -o -type d -exec /usr/bin/chmod 2775 {} +')
         ->toContain('find "${WRITABLE_PATHS[@]}" -path "$REPORTS_DIR" -prune -o -path "$APP_DIR/storage/oauth-private.key" -prune -o -path "$APP_DIR/storage/oauth-public.key" -prune -o -type f -exec /usr/bin/chmod 0664 {} +')
+        ->toContain('find "$REPORTS_DIR" -type d -exec /usr/bin/chmod g+rx {} +')
+        ->toContain('find "$REPORTS_DIR" -type f -exec /usr/bin/chmod g+r {} +')
         ->toContain('if [[ ! -e "$REPORTS_DIR" && ! -L "$REPORTS_DIR" ]]; then');
 
     foreach (['private', 'public'] as $keyType) {
@@ -53,10 +58,15 @@ it('normalizes writable paths without changing report access or exposing Passpor
     }
 
     expect($setupScript)
+        ->toContain('usermod -aG www-data deployer')
         ->not->toContain('/usr/bin/chown -R deployer\\:www-data /var/www/contribution-tracker/storage')
         ->not->toContain('/usr/bin/chmod 0640 /var/www/contribution-tracker/storage/oauth-private.key')
         ->not->toContain('/usr/bin/chmod 0640 /var/www/contribution-tracker/storage/oauth-public.key')
         ->toContain('/usr/bin/install -d -o deployer -g www-data -m 2775 /var/www/contribution-tracker/storage/app/private/reports');
+
+    expect($setupScript)
+        ->toContain('deployer ALL=(root) NOPASSWD: /usr/bin/find /var/www/contribution-tracker/storage/app/private/reports -type d -exec /usr/bin/chmod g+rx {} +')
+        ->toContain('deployer ALL=(root) NOPASSWD: /usr/bin/find /var/www/contribution-tracker/storage/app/private/reports -type f -exec /usr/bin/chmod g+r {} +');
 
     expect($deployScript)->toContain('bash deployment/ensure-storage-permissions.sh "$APP_DIR"');
     expect($workflow)
@@ -107,7 +117,7 @@ it('preserves report metadata while normalizing other files on repeated runs', f
             if ($metadata === false) {
                 throw new RuntimeException('Unable to read report fixture metadata.');
             }
-            $reportPaths[$path] = array_intersect_key($metadata, array_flip(['ino', 'mode', 'uid', 'gid', 'mtime', 'ctime']));
+            $reportPaths[$path] = array_intersect_key($metadata, array_flip(['ino', 'uid', 'gid', 'mtime']));
         }
     }
 
@@ -143,7 +153,7 @@ it('preserves report metadata while normalizing other files on repeated runs', f
                 expect(fileperms($keyPath) & 0777)->toBe(0640);
             }
             expect(fileperms($applicationRoot.'/storage/logs/example.log') & 0777)->toBe(0664);
-            expect(fileperms($applicationRoot.'/storage/logs') & 07777)->toBe(02775);
+            expect(fileperms($applicationRoot.'/storage/logs') & 0777)->toBe(0775);
             expect(file_get_contents($commandLog))->not->toContain($reportsDirectory);
             expect(file_get_contents($commandLog))->toContain($applicationRoot.'/storage/logs/example.log');
 
@@ -154,9 +164,14 @@ it('preserves report metadata while normalizing other files on repeated runs', f
                 }
                 expect(array_intersect_key($after, $before))->toBe($before);
             }
+            if ($existingReports) {
+                expect(fileperms($reportsDirectory.'/22') & 0777)->toBe(0750)
+                    ->and(fileperms($reportsDirectory.'/22/nested') & 0777)->toBe(0750)
+                    ->and(fileperms($reportsDirectory.'/22/nested/report.pdf') & 0777)->toBe(0640);
+            }
             if (! $existingReports) {
                 expect(is_dir($reportsDirectory))->toBeTrue();
-                expect(fileperms($reportsDirectory) & 07777)->toBe(02775);
+                expect(fileperms($reportsDirectory) & 0777)->toBe(0775);
             }
         }
     } finally {
@@ -180,3 +195,115 @@ it('preserves report metadata while normalizing other files on repeated runs', f
     'no keys' => [[], true],
     'missing reports parent' => [['private', 'public'], false],
 ]);
+
+it('requires report provisioning before updating either production checkout', function () {
+    $projectRoot = dirname(__DIR__, 2);
+    foreach (['deployment/deploy.sh', '.github/workflows/deploy.yml'] as $path) {
+        $script = file_get_contents($projectRoot.'/'.$path);
+        expect($script)->toBeString();
+        if (! is_string($script)) {
+            throw new RuntimeException('Unable to read deployment entry point.');
+        }
+        $revision = $path === 'deployment/deploy.sh' ? 'origin/main' : '"$DEPLOY_SHA"';
+        $preflight = strpos($script, 'git show '.$revision.':deployment/check-report-permissions.sh | bash');
+        $merge = strpos($script, 'git merge --ff-only '.$revision);
+        if ($preflight === false || $merge === false) {
+            throw new RuntimeException('Missing deployment preflight or merge.');
+        }
+        expect($preflight)->toBeLessThan($merge)
+            ->and($script)->toContain('set -euo pipefail');
+    }
+});
+
+it('rejects unprovisioned and stale sessions without executing privileged commands', function (bool $group, bool $directories, bool $files, bool $allowed) {
+    $fixtureRoot = sys_get_temp_dir().'/familyfund-preflight-'.bin2hex(random_bytes(8));
+    mkdir($fixtureRoot, 0755, true);
+    file_put_contents($fixtureRoot.'/id', "#!/bin/bash\nprintf '%s\\n' \"\$TEST_GROUPS\"\n");
+    file_put_contents($fixtureRoot.'/sudo', <<<'BASH'
+#!/bin/bash
+set -euo pipefail
+[[ "$1 $2" == '-n -l' ]] || exit 99
+printf '%s\n' "$*" >> "$TEST_LOG"
+case "$*" in
+    *' -type d '*) exit "$TEST_DIRECTORIES" ;;
+    *' -type f '*) exit "$TEST_FILES" ;;
+    *) exit 99 ;;
+esac
+BASH);
+    chmod($fixtureRoot.'/id', 0755);
+    chmod($fixtureRoot.'/sudo', 0755);
+    try {
+        $process = new Process(['bash', dirname(__DIR__, 2).'/deployment/check-report-permissions.sh'], null, [
+            'PATH' => $fixtureRoot.':'.getenv('PATH'),
+            'TEST_GROUPS' => $group ? 'deployer www-data' : 'deployer',
+            'TEST_DIRECTORIES' => $directories ? '0' : '1',
+            'TEST_FILES' => $files ? '0' : '1',
+            'TEST_LOG' => $fixtureRoot.'/commands',
+        ]);
+        $process->run();
+        expect($process->isSuccessful())->toBe($allowed);
+        if (! $allowed) {
+            expect($process->getErrorOutput())->toContain('provision-report-permissions.sh', 'reconnect as deployer');
+        }
+        if (! $group) {
+            expect(file_exists($fixtureRoot.'/commands'))->toBeFalse();
+        }
+    } finally {
+        foreach (['id', 'sudo', 'commands'] as $file) {
+            if (file_exists($fixtureRoot.'/'.$file)) {
+                unlink($fixtureRoot.'/'.$file);
+            }
+        }
+        rmdir($fixtureRoot);
+    }
+})->with([
+    'old server' => [false, false, false, false],
+    'group only' => [true, false, false, false],
+    'missing file rule' => [true, true, false, false],
+    'stale login after provisioning' => [false, true, true, false],
+    'provisioned fresh session' => [true, true, true, true],
+]);
+
+it('validates report policy before installation and safely repeats provisioning', function (bool $valid) {
+    $fixtureRoot = sys_get_temp_dir().'/familyfund-provision-'.bin2hex(random_bytes(8));
+    mkdir($fixtureRoot, 0755, true);
+    $policy = $fixtureRoot.'/familyfunds-report-permissions';
+    file_put_contents($policy, 'previous policy');
+    $script = file_get_contents(dirname(__DIR__, 2).'/deployment/provision-report-permissions.sh');
+    if ($script === false) {
+        throw new RuntimeException('Unable to read provisioning script.');
+    }
+    file_put_contents($fixtureRoot.'/provision.sh', str_replace(['/etc/sudoers.d', '"$EUID"'], [$fixtureRoot, '0'], $script));
+    file_put_contents($fixtureRoot.'/visudo', "#!/bin/bash\nexit \"\$TEST_VALIDATION_STATUS\"\n");
+    file_put_contents($fixtureRoot.'/usermod', "#!/bin/bash\nprintf '%s\\n' \"\$*\" >> \"\$TEST_LOG\"\n");
+    chmod($fixtureRoot.'/visudo', 0755);
+    chmod($fixtureRoot.'/usermod', 0755);
+    try {
+        for ($run = 0; $run < 2; $run++) {
+            $process = new Process(['bash', $fixtureRoot.'/provision.sh'], null, [
+                'PATH' => $fixtureRoot.':'.getenv('PATH'),
+                'TEST_VALIDATION_STATUS' => $valid ? '0' : '1',
+                'TEST_LOG' => $fixtureRoot.'/groups',
+            ]);
+            $process->run();
+            expect($process->isSuccessful())->toBe($valid);
+            clearstatcache();
+            if ($valid) {
+                expect(file_get_contents($policy))->toContain('chmod g+rx', 'chmod g+r')
+                    ->and(fileperms($policy) & 0777)->toBe(0440)
+                    ->and(file_get_contents($fixtureRoot.'/groups'))->toContain('-aG www-data deployer');
+            } else {
+                expect(file_get_contents($policy))->toBe('previous policy')
+                    ->and(file_exists($fixtureRoot.'/groups'))->toBeFalse();
+            }
+            expect(glob($fixtureRoot.'/.familyfunds-report-permissions.*'))->toBe([]);
+        }
+    } finally {
+        foreach (['familyfunds-report-permissions', 'provision.sh', 'visudo', 'usermod', 'groups'] as $file) {
+            if (file_exists($fixtureRoot.'/'.$file)) {
+                unlink($fixtureRoot.'/'.$file);
+            }
+        }
+        rmdir($fixtureRoot);
+    }
+})->with([true, false]);

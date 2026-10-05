@@ -37,6 +37,7 @@ deployer ALL=(root) NOPASSWD: /usr/bin/install -d -o deployer -g www-data -m 277
 EOF
 chmod 440 /etc/sudoers.d/deployer /etc/sudoers.d/familyfunds-storage-permissions
 visudo -cf /etc/sudoers.d/familyfunds-storage-permissions
+bash "$(dirname "${BASH_SOURCE[0]}")/provision-report-permissions.sh"
 
 echo "=== Step 3: Configure Firewall ==="
 ufw default deny incoming
