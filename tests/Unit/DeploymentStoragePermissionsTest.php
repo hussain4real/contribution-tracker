@@ -206,9 +206,10 @@ it('requires report provisioning before updating either production checkout', fu
         }
         $preflight = strpos($script, 'git show origin/main:deployment/check-report-permissions.sh | bash');
         $merge = strpos($script, 'git merge --ff-only origin/main');
-        expect($preflight)->not->toBeFalse()
-            ->and($merge)->not->toBeFalse()
-            ->and($preflight)->toBeLessThan($merge)
+        if ($preflight === false || $merge === false) {
+            throw new RuntimeException('Missing deployment preflight or merge.');
+        }
+        expect($preflight)->toBeLessThan($merge)
             ->and($script)->toContain('set -euo pipefail');
     }
 });
