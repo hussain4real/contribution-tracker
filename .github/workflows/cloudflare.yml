@@ -29,7 +29,14 @@ jobs:
       - name: Validate accepted D1 schema and runtime module graph
         run: python3 deployment/d1-proof/cloudflare-release.py prepare
       - name: Worker behavior and isolation checks
-        run: node --test deployment/d1-proof/*.test.mjs
+        run: |
+          tests=()
+          for source in deployment/d1-proof/*.test.mjs; do
+            if [[ "$source" != deployment/d1-proof/production-preflight.test.mjs ]]; then
+              tests+=("$source")
+            fi
+          done
+          node --test "${tests[@]}"
       - name: Release and image safety checks
         run: python3 -m unittest discover -s deployment/d1-proof -p 'cloudflare_*_test.py' -v
 
@@ -74,6 +81,8 @@ jobs:
           python3 deployment/d1-proof/cloudflare-release.py prepare
           php artisan wayfinder:generate --no-interaction
           npm run build
+      - name: Review the compiled assets and runtime source
+        run: node --test deployment/d1-proof/production-preflight.test.mjs
       - name: Build and inspect unstarted runtime image
         run: >-
           python3 deployment/d1-proof/cloudflare-image.py --target "$TARGET"
