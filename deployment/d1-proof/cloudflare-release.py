@@ -96,7 +96,8 @@ def multipart(entry, sources, bindings, container=None):
     for name, content, mime in [('metadata', json.dumps(metadata).encode(), 'application/json')] + [
             (name, source, 'text/plain' if name.endswith('.php') else 'application/javascript+module')
             for name, source in sources.items()]:
-        chunks.append(('--' + boundary + '\r\nContent-Disposition: form-data; name="' + name + '"\r\nContent-Type: ' + mime + '\r\n\r\n').encode() + content + b'\r\n')
+        filename = '; filename="' + name + '"' if name != 'metadata' else ''
+        chunks.append(('--' + boundary + '\r\nContent-Disposition: form-data; name="' + name + '"' + filename + '\r\nContent-Type: ' + mime + '\r\n\r\n').encode() + content + b'\r\n')
     return b''.join(chunks) + ('--' + boundary + '--\r\n').encode(), 'multipart/form-data; boundary=' + boundary
 
 

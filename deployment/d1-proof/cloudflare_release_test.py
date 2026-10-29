@@ -50,6 +50,7 @@ class ReleaseSafetyTest(unittest.TestCase):
         metadata = json.loads(next(message.iter_parts()).get_payload(decode=True))
         self.assertEqual(metadata['keep_bindings'], ['secret_text'])
         self.assertEqual(metadata['containers'], [container])
+        self.assertEqual(list(message.iter_parts())[1].get_filename(), 'main.mjs')
         self.assertNotIn('secret value', raw.decode())
         self.assertEqual(release.script_sources(raw, mime), {'main.mjs': b'export default {}'})
 
