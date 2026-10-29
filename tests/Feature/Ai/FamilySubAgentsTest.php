@@ -34,8 +34,8 @@ use Laravel\Ai\Tools\Request as ToolRequest;
  */
 it('uses shared configuration for every family sub-agent', function (string $agentClass) {
     config([
-        'ai.agent.provider' => 'ollama',
-        'ai.agent.model' => 'llama3.2',
+        'ai.agent.provider' => 'openai',
+        'ai.agent.model' => 'gpt-6.1-terra',
     ]);
 
     $agent = makeFamilySubAgent(
@@ -43,8 +43,8 @@ it('uses shared configuration for every family sub-agent', function (string $age
         User::factory()->admin()->create(),
     );
 
-    expect($agent->provider())->toBe('ollama')
-        ->and($agent->model())->toBe('llama3.2')
+    expect($agent->provider())->toBe('openai')
+        ->and($agent->model())->toBe('gpt-6.1-terra')
         ->and($agent->maxSteps())->toBe(6)
         ->and($agent->temperature())->toBe(1.0)
         ->and($agent->timeout())->toBe(120)
@@ -56,6 +56,21 @@ it('uses shared configuration for every family sub-agent', function (string $age
         ])
         ->and($agent->providerOptions(Lab::OpenAI))->toBe([])
         ->and($agent->providerOptions('custom-provider'))->toBe([]);
+})->with('family sub agents');
+
+/**
+ * @param  class-string<FamilySubAgent>  $agentClass
+ */
+it('defaults every family sub-agent to OpenAI Terra', function (string $agentClass) {
+    config(['ai.agent' => null]);
+
+    $agent = makeFamilySubAgent(
+        classStringOf($agentClass, FamilySubAgent::class),
+        User::factory()->admin()->create(),
+    );
+
+    expect($agent->provider())->toBe('openai')
+        ->and($agent->model())->toBe('gpt-6.1-terra');
 })->with('family sub agents');
 
 it('defines tool metadata, instructions, and underlying tools', function (
