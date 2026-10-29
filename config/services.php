@@ -81,6 +81,10 @@ return [
         'app_secret' => env('WHATSAPP_APP_SECRET'),
         'rate_limit_per_minute' => (int) env('WHATSAPP_RATE_LIMIT_PER_MINUTE', 60),
         'templates' => [
+            'payment_receipt' => [
+                'name' => env('WHATSAPP_PAYMENT_RECEIPT_TEMPLATE_NAME', 'payment_receipt'),
+                'language' => env('WHATSAPP_PAYMENT_RECEIPT_TEMPLATE_LANGUAGE', 'en'),
+            ],
             'invitation' => [
                 'name' => env('WHATSAPP_INVITATION_TEMPLATE_NAME'),
                 'language' => env('WHATSAPP_INVITATION_TEMPLATE_LANGUAGE', 'en'),

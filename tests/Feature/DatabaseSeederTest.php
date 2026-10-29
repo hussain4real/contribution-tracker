@@ -31,17 +31,21 @@ use App\Models\ReportDelivery;
 use App\Models\ReportSchedule;
 use App\Models\User;
 use App\Models\WhatsAppMessage;
+use Database\Seeders\DemoLedgerSeeder;
 use Database\Seeders\DevelopmentSeeder;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 
 beforeEach(function () {
     Carbon::setTestNow('2026-07-14 12:00:00');
     Mail::fake();
+    Http::preventStrayRequests();
     Storage::fake('local');
 });
 
@@ -51,6 +55,10 @@ afterEach(function () {
 
 it('seeds every implemented product area with coherent demo scenarios', function () {
     $this->artisan('db:seed', ['--no-interaction' => true])->assertSuccessful();
+
+    Mail::assertNothingSent();
+    Http::assertNothingSent();
+    expect(config('queue.default'))->toBe('sync');
 
     expect(PlatformPlan::query()->count())->toBe(4)
         ->and(Family::query()->count())->toBe(6)
@@ -142,6 +150,11 @@ it('seeds every implemented product area with coherent demo scenarios', function
 
     Mail::assertNothingSent();
     Mail::assertNothingQueued();
+});
+
+it('restores the queue connection when demo ledger seeding fails', function () {
+    expect(fn () => app(DemoLedgerSeeder::class)->run())->toThrow(ModelNotFoundException::class);
+    expect(config('queue.default'))->toBe('sync');
 });
 
 it('is rerunnable without duplicating canonical demo data or private artifacts', function () {
