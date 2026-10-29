@@ -36,6 +36,30 @@ test('approved production integrations cannot introduce unrelated credentials or
     assert.throws(() => containerEnvironment({...config({OLLAMA_API_KEY: 'new'}), CONTAINER_ENV: JSON.stringify({...base, OLLAMA_API_KEY: 'existing'})}));
 });
 
+test('environment-specific AI secrets replace the provider without changing other integrations', () => {
+    for (const environment of ['d1-staging', 'production']) {
+        const base = {APP_ENV: environment, APP_KEY: 'existing-app-key', OPENAI_API_KEY: 'previous-key',
+            AI_AGENT_PROVIDER: 'ollama', AI_AGENT_MODEL: 'previous-model', GITHUB_RELEASES_TOKEN: 'existing-github-key'};
+        const ai = {OPENAI_API_KEY: environment + '-openai-key', OPENAI_URL: 'https://api.openai.com/v1',
+            AI_AGENT_PROVIDER: 'openai', AI_AGENT_MODEL: 'gpt-6.1-terra', AI_TRANSCRIPTION_PROVIDER: 'openai'};
+        const result = containerEnvironment({CONTAINER_ENV: JSON.stringify(base), AI_ENV: JSON.stringify(ai), SQL_GATEWAY_TOKEN: 'worker-only'});
+        assert.deepEqual(result, {...base, ...ai});
+        assert.equal(Object.hasOwn(result, 'SQL_GATEWAY_TOKEN'), false);
+    }
+    const production = {APP_ENV: 'production', D1_PRODUCTION_ENABLED: 'true'};
+    assert.equal(containerEnvironment({CONTAINER_ENV: JSON.stringify(production),
+        APPLICATION_INTEGRATION_ENV: JSON.stringify({OPENAI_API_KEY: 'previous-key'}),
+        AI_ENV: JSON.stringify({OPENAI_API_KEY: 'new-key'})}).OPENAI_API_KEY, 'new-key');
+});
+
+test('AI secrets reject malformed values and changes to unrelated application configuration', () => {
+    for (const value of [false, 'x'.repeat(4097), '[]', 'null', '{',
+        ...[{APP_KEY: 'forbidden'}, {SQL_GATEWAY_TOKEN: 'forbidden'}, {GITHUB_RELEASES_TOKEN: 'forbidden'},
+            {OPENAI_API_KEY: false}, {OPENAI_API_KEY: 'invalid\0value'}].map(JSON.stringify)]) {
+        assert.throws(() => containerEnvironment({CONTAINER_ENV: '{"APP_ENV":"production"}', AI_ENV: value}));
+    }
+});
+
 test('the real authentication origin is available only for the isolated read-only production mirror', () => {
     const config = {APP_ENV: 'production', D1_PRODUCTION_ENABLED: 'true', D1_MIGRATION_CHECKS: 'true', APP_URL: 'https://protected-preview'};
     const bindings = {CONTAINER_ENV: JSON.stringify(config), MIGRATION_AUTH_ORIGIN: 'https://familyfunds.app'};
