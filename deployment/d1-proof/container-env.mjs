@@ -53,6 +53,13 @@ export function containerEnvironment(bindings) {
         if (!extra || typeof extra !== 'object' || Array.isArray(extra) || Object.keys(extra).some(key => !allowed.has(key) || Object.hasOwn(result, key))) throw new Error('Unexpected or duplicate production integration field');
         Object.assign(result, extra);
     }
+    if (bindings.AI_ENV !== undefined) {
+        if (typeof bindings.AI_ENV !== 'string' || encoder.encode(bindings.AI_ENV).length > 4096) throw new Error('Invalid AI environment');
+        const extra = JSON.parse(bindings.AI_ENV);
+        const allowed = new Set(['OPENAI_API_KEY', 'OPENAI_URL', 'AI_AGENT_PROVIDER', 'AI_AGENT_MODEL', 'AI_TRANSCRIPTION_PROVIDER']);
+        if (!extra || typeof extra !== 'object' || Array.isArray(extra) || Object.keys(extra).some(key => !allowed.has(key))) throw new Error('Unexpected AI environment field');
+        Object.assign(result, extra);
+    }
     for (const [name, value] of Object.entries(result)) {
         if (!/^[A-Z_][A-Z0-9_]*$/.test(name) || typeof value !== 'string' || value.includes('\0') || encoder.encode(value).length > 16000) throw new Error('Invalid container environment variable');
     }
