@@ -34,8 +34,8 @@ return [
     */
 
     'agent' => [
-        'provider' => env('AI_AGENT_PROVIDER', 'ollama'),
-        'model' => env('AI_AGENT_MODEL', 'llama3.2'),
+        'provider' => env('AI_AGENT_PROVIDER', 'openai'),
+        'model' => env('AI_AGENT_MODEL', 'gpt-6.1-terra'),
     ],
 
     /*
