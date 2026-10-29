@@ -214,7 +214,7 @@ def publish(target, directory):
                        input=credentials['password'].encode(), check=True, stdout=subprocess.DEVNULL)
         metadata = directory / 'pushed-image.json'
         subprocess.run(['docker', 'buildx', 'build', '--platform', 'linux/amd64', '--provenance=false', '--output',
-                        'type=image,name=' + tag + ',push=true,oci-mediatypes=false,compression=gzip', '--metadata-file', str(metadata), str(directory)],
+                        'type=image,name=' + tag + ',push=true,oci-mediatypes=' + ('true' if target == 'staging' else 'false') + ',compression=gzip', '--metadata-file', str(metadata), str(directory)],
                        check=True)
     finally:
         subprocess.run(['docker', 'logout', 'registry.cloudflare.com'], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -236,7 +236,9 @@ def publish(target, directory):
             previous_entry = 'production-managed-worker.mjs'
         if previous_entry not in previous_sources:
             raise RuntimeError('Cannot identify the existing entry module for safe code rollback')
-        container = {'class_name': worker['class_name'], 'images': {'base': worker.get('image', image)}} if worker.get('class_name') else None
+        container = {'class_name': worker['class_name']} if worker.get('class_name') else None
+        if container and target == 'production':
+            container['images'] = {'base': worker.get('image', image)}
         if worker.get('image'):
             prepared(worker['image'])
         rollback_container = {**container, 'images': {'base': previous_image}} if container and target == 'production' else container
@@ -246,7 +248,7 @@ def publish(target, directory):
             if worker['worker'] == CONFIG[target]['worker'] and binding['name'] in ['RUNTIME_REVISION', 'CONTAINER_IMAGE']:
                 binding['text'] = name if binding['name'] == 'RUNTIME_REVISION' else image
         sources = modules(worker['entry'], image if target == 'production' else None, name)
-        body, mime = multipart(worker['entry'], sources, updated, container if target == 'production' else None)
+        body, mime = multipart(worker['entry'], sources, updated, container)
         plans.append({'path': path, 'body': body, 'mime': mime, 'old_body': old_body, 'old_mime': old_mime})
     previous_staging = None
     applied = []
