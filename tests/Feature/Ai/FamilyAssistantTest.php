@@ -18,16 +18,28 @@ use App\Models\User;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Prompts\AgentPrompt;
 
-it('uses configured provider and model values', function () {
+it('uses configured provider and model values', function (string $provider, string $model) {
     config([
-        'ai.agent.provider' => 'ollama',
-        'ai.agent.model' => 'llama3.2',
+        'ai.agent.provider' => $provider,
+        'ai.agent.model' => $model,
     ]);
 
     $agent = new FamilyAssistant(User::factory()->create());
 
-    expect($agent->provider())->toBe('ollama')
-        ->and($agent->model())->toBe('llama3.2');
+    expect($agent->provider())->toBe($provider)
+        ->and($agent->model())->toBe($model);
+})->with([
+    'openai' => ['openai', 'gpt-6.1-terra'],
+    'ollama override' => ['ollama', 'llama3.2'],
+]);
+
+it('defaults to OpenAI Terra when agent configuration is unavailable', function () {
+    config(['ai.agent' => null]);
+
+    $agent = new FamilyAssistant(User::factory()->create());
+
+    expect($agent->provider())->toBe('openai')
+        ->and($agent->model())->toBe('gpt-6.1-terra');
 });
 
 it('builds instructions for members without a family workspace', function () {

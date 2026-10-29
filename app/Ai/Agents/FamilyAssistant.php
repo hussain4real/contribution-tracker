@@ -34,9 +34,9 @@ class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasProvid
      */
     public function provider(): string
     {
-        $provider = config('ai.agent.provider', 'ollama');
+        $provider = config('ai.agent.provider', 'openai');
 
-        return is_string($provider) ? $provider : 'ollama';
+        return is_string($provider) ? $provider : 'openai';
     }
 
     /**
@@ -44,9 +44,9 @@ class FamilyAssistant implements Agent, Conversational, HasMiddleware, HasProvid
      */
     public function model(): string
     {
-        $model = config('ai.agent.model', 'llama3.2');
+        $model = config('ai.agent.model', 'gpt-6.1-terra');
 
-        return is_string($model) ? $model : 'llama3.2';
+        return is_string($model) ? $model : 'gpt-6.1-terra';
     }
 
     /**

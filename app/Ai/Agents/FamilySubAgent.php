@@ -23,16 +23,16 @@ abstract class FamilySubAgent implements Agent, CanActAsTool, HasMiddleware, Has
 
     public function provider(): string
     {
-        $provider = config('ai.agent.provider', 'ollama');
+        $provider = config('ai.agent.provider', 'openai');
 
-        return is_string($provider) ? $provider : 'ollama';
+        return is_string($provider) ? $provider : 'openai';
     }
 
     public function model(): string
     {
-        $model = config('ai.agent.model', 'llama3.2');
+        $model = config('ai.agent.model', 'gpt-6.1-terra');
 
-        return is_string($model) ? $model : 'llama3.2';
+        return is_string($model) ? $model : 'gpt-6.1-terra';
     }
 
     public function maxSteps(): int
