@@ -79,6 +79,13 @@ class ReleaseSafetyTest(unittest.TestCase):
         with patch.object(release, 'api', return_value=[{'status': {'state': 'running'}, 'image': 'expected', 'name': release.CONFIG['production']['instance_name']}]):
             self.assertTrue(release.instance_image('production', 'expected'))
 
+    def test_scheduler_backed_staging_releases_only_the_image_through_a_rollout(self):
+        with patch.object(release, 'api', return_value={}) as api:
+            release.rollout_image('/containers/applications/staging', 'repo@' + DIGEST)
+        self.assertEqual(api.call_args.args[0:2], ('POST', '/containers/applications/staging/rollouts'))
+        self.assertEqual(api.call_args.args[2]['target_configuration'], {'image': 'repo@' + DIGEST})
+        self.assertEqual(api.call_args.args[2]['strategy'], 'rolling')
+
     def test_failed_preparation_never_reaches_worker_mutation(self):
         with patch.object(release, 'api', return_value={'status': 'error'}) as api:
             with self.assertRaisesRegex(RuntimeError, 'preparation failed'):

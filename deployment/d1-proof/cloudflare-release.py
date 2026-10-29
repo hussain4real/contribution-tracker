@@ -152,6 +152,14 @@ def instance_image(target, image):
     return False
 
 
+def rollout_image(path, image):
+    return api('POST', path + '/rollouts', {
+        'description': 'FamilyFunds verified GitHub Actions image release',
+        'strategy': 'rolling', 'kind': 'full_auto', 'step_percentage': 100,
+        'target_configuration': {'image': image},
+    })
+
+
 def validate():
     if migration_fingerprint() != CONFIG['accepted_migrations_sha256']:
         raise RuntimeError('Database migrations differ from the accepted D1 schema. Review and verify the D1 migration before updating its accepted fingerprint; CI never migrates or restores production data.')
@@ -245,8 +253,8 @@ def publish(target, directory):
     try:
         if target == 'staging':
             app_path = '/containers/applications/' + CONFIG[target]['application_id']
-            previous_staging = api('GET', app_path)['configuration']
-            api('PATCH', app_path, {'configuration': {**previous_staging, 'image': image}})
+            previous_staging = api('GET', app_path)['configuration']['image']
+            rollout_image(app_path, image)
         for plan in plans:
             applied.append(plan)
             api('PUT', plan['path'], plan['body'], raw=True, content_type=plan['mime'])
@@ -270,7 +278,7 @@ def publish(target, directory):
                 failures.append(plan['path'])
         if previous_staging:
             try:
-                api('PATCH', app_path, {'configuration': previous_staging})
+                rollout_image(app_path, previous_staging)
             except Exception:
                 failures.append('staging container image')
         if failures:
