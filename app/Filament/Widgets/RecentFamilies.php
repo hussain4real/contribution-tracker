@@ -14,6 +14,11 @@ use Illuminate\Database\Eloquent\Builder;
 
 class RecentFamilies extends TableWidget
 {
+    public static function isLazy(): bool
+    {
+        return parent::isLazy() && ! config('d1-production.enabled');
+    }
+
     protected static ?string $heading = 'Recent families';
 
     public function table(Table $table): Table

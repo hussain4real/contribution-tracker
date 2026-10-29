@@ -87,6 +87,9 @@ jobs:
             fi
             git merge-base --is-ancestor HEAD "$DEPLOY_SHA"
 
+            # Check report access before taking production offline or changing its checkout.
+            git show "$DEPLOY_SHA":deployment/check-report-permissions.sh | bash
+
             # Verify existing noninteractive status access before taking production offline.
             # Status access does not prove authorization to stop these consumers.
             for consumer in 'queue-worker:*' ssr nightwatch; do

@@ -1,0 +1,10 @@
+{
+  "source": "registry.cloudflare.com/40344948b73fa9da3008958fdc3faf12/familyfunds-production:candidate-20261028-login-weur",
+  "source_image_id": "sha256:ec54e4f0d2a4967ba2a9b19138c2a12d20bf41c8736eb7830b6329209f87a40a",
+  "source_bytes": 241720129,
+  "unstarted_export": true,
+  "runtime_credentials_packaged": false,
+  "rootfs_sha256": "21e4bc4e1f14a34f4ef81a8a4707c4d1df20681cc31bb42f4cece6213804652b",
+  "tag": "registry.cloudflare.com/40344948b73fa9da3008958fdc3faf12/familyfunds-production:candidate-20261028-login-weur-flat",
+  "digest": "sha256:a3659e49a842c84310eb370f846c5ff8a3a839ec75dff4d2f5962635be200ac7"
+}

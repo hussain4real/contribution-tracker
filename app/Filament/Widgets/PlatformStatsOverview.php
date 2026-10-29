@@ -14,6 +14,16 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
 
 class PlatformStatsOverview extends StatsOverviewWidget
 {
+    public static function isLazy(): bool
+    {
+        return parent::isLazy() && ! config('d1-production.enabled');
+    }
+
+    protected function getPollingInterval(): ?string
+    {
+        return config('d1-production.enabled') ? null : parent::getPollingInterval();
+    }
+
     protected function getStats(): array
     {
         return [

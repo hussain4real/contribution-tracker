@@ -12,6 +12,11 @@ use Illuminate\Database\Eloquent\Builder;
 
 class RecentPayments extends TableWidget
 {
+    public static function isLazy(): bool
+    {
+        return parent::isLazy() && ! config('d1-production.enabled');
+    }
+
     protected static ?string $heading = 'Recent payments';
 
     public function table(Table $table): Table

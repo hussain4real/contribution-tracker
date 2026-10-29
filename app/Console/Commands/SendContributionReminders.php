@@ -12,7 +12,7 @@ use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
 
-#[Signature('contributions:remind {--day= : Day of month (25 or 28)}')]
+#[Signature('contributions:remind {--day= : Day of month (25 or 28)} {--year= : Contribution year} {--month= : Contribution month} {--family= : Specific family ID} {--after= : Contribution IDs above this cursor} {--through= : Last contribution ID in this batch}')]
 #[Description('Send contribution payment reminders to members with unpaid contributions')]
 class SendContributionReminders extends Command
 {
@@ -35,14 +35,42 @@ class SendContributionReminders extends Command
         $type = $this->reminderTypeForDay($day);
         $sentAtColumn = $this->sentAtColumnFor($type);
 
-        $year = now()->year;
-        $month = now()->month;
+        $year = filter_var($this->option('year') ?? now()->year, FILTER_VALIDATE_INT);
+        $month = filter_var($this->option('month') ?? now()->month, FILTER_VALIDATE_INT);
+        if ($year === false || $year < 1 || $month === false || $month < 1 || $month > 12) {
+            $this->error('The contribution year and month must be valid integers.');
+
+            return self::FAILURE;
+        }
+        $filters = [];
+        foreach (['family', 'after', 'through'] as $option) {
+            $value = $this->option($option);
+            if ($value !== null) {
+                $integer = filter_var($value, FILTER_VALIDATE_INT);
+                if ($integer === false || $integer < ($option === 'after' ? 0 : 1)) {
+                    $this->error('The family and contribution cursor options must be valid integers.');
+
+                    return self::FAILURE;
+                }
+                $filters[$option] = $integer;
+            }
+        }
 
         $this->info("Sending {$type} notifications for {$month}/{$year}...");
 
         $totalSent = 0;
 
-        Contribution::query()
+        $contributions = Contribution::query();
+        if (isset($filters['family'])) {
+            $contributions->where('family_id', $filters['family']);
+        }
+        if (isset($filters['after'])) {
+            $contributions->where('id', '>', $filters['after']);
+        }
+        if (isset($filters['through'])) {
+            $contributions->where('id', '<=', $filters['through']);
+        }
+        $contributions
             ->whereNull($sentAtColumn)
             ->whereHas('family', fn (Builder $query): Builder => $query->has('members'))
             ->whereHas('user.familyMemberships', function ($query): void {

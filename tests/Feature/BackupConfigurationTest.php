@@ -23,6 +23,19 @@ test('backup sources include only irreplaceable production data', function () {
     ]);
 });
 
+test('private local storage remains readable by the backup scheduler without becoming public', function () {
+    expect(config('filesystems.disks.local.permissions'))->toBe([
+        'file' => [
+            'public' => 0644,
+            'private' => 0640,
+        ],
+        'dir' => [
+            'public' => 0755,
+            'private' => 0750,
+        ],
+    ]);
+});
+
 test('backup sources exclude noisy generated and framework paths', function () {
     expect(config('backup.backup.source.files.exclude'))->toEqualCanonicalizing([
         base_path('.git'),

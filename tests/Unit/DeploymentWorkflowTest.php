@@ -6,11 +6,11 @@ use Symfony\Component\Yaml\Yaml;
 
 it('uses Node 24-compatible GitHub actions in active workflows', function () {
     $expectedActions = [
-        'deploy-staging.yml' => [
+        'deploy-staging.yml.bak' => [
             'actions/checkout@v7',
             'actions/setup-node@v7',
         ],
-        'deploy.yml' => [
+        'deploy.yml.bak' => [
             'actions/checkout@v7',
             'actions/setup-node@v7',
         ],
@@ -103,7 +103,7 @@ it('records and publishes a fresh shared TIA baseline from main', function () {
 });
 
 it('keeps deployment tests on the canonical full coverage script', function () {
-    foreach (['deploy.yml', 'deploy-staging.yml'] as $workflowName) {
+    foreach (['deploy.yml.bak', 'deploy-staging.yml.bak'] as $workflowName) {
         $workflow = file_get_contents(__DIR__.'/../../.github/workflows/'.$workflowName);
 
         if ($workflow === false) {
@@ -116,7 +116,7 @@ it('keeps deployment tests on the canonical full coverage script', function () {
 });
 
 it('deploys staging automatically and supports manual dispatch', function () {
-    $workflow = Yaml::parseFile(__DIR__.'/../../.github/workflows/deploy-staging.yml');
+    $workflow = Yaml::parseFile(__DIR__.'/../../.github/workflows/deploy-staging.yml.bak');
 
     if (! is_array($workflow)) {
         throw new RuntimeException('Expected the staging deployment workflow to be valid YAML.');

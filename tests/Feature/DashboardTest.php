@@ -40,10 +40,11 @@ test('admin dashboard includes overdue_members with overdue contribution details
     $response->assertSuccessful();
     $response->assertInertia(fn (Assert $page) => $page
         ->component('Dashboard/Index')
-        ->has('overdue_members')
-        ->where('overdue_members.0.name', $member->name)
-        ->where('overdue_members.0.contribution_id', $overdueContribution->id)
-        ->where('overdue_members.0.balance', $overdueContribution->expected_amount)
+        ->missing('overdue_members')
+        ->reloadOnly('overdue_members', fn (Assert $reload) => $reload
+            ->where('overdue_members.0.name', $member->name)
+            ->where('overdue_members.0.contribution_id', $overdueContribution->id)
+            ->where('overdue_members.0.balance', $overdueContribution->expected_amount))
     );
 });
 
@@ -60,8 +61,21 @@ test('admin dashboard overdue_members is empty when no overdue contributions exi
     $response->assertSuccessful();
     $response->assertInertia(fn (Assert $page) => $page
         ->component('Dashboard/Index')
-        ->has('overdue_members', 0)
+        ->missing('overdue_members')
+        ->reloadOnly('overdue_members', fn (Assert $reload) => $reload->has('overdue_members', 0))
     );
+});
+
+test('members cannot request the optional officer overdue details', function () {
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->create(['family_id' => $family->id]);
+    Contribution::factory()->forUser($member)->forMonth(2025, 1)->create();
+
+    $this->actingAs($member)->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('personal')
+            ->missing('overdue_members')
+            ->reload(only: 'overdue_members', callback: fn (Assert $reload) => $reload->missing('overdue_members')));
 });
 
 test('member_statuses accrued_balance sums outstanding across all months', function () {

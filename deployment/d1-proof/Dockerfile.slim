@@ -1,0 +1,29 @@
+FROM webdevops/php-apache:8.4@sha256:d140d812f5685a1b708632d8b39ebe8a9137acf67dd56dd0e08839abf6b3e21e AS production-vendor
+WORKDIR /build
+COPY composer.json composer.lock ./
+COPY vendor ./vendor
+COPY app ./app
+COPY database ./database
+RUN composer install --no-dev --no-scripts --no-interaction --no-progress --classmap-authoritative
+
+FROM webdevops/php-nginx:8.5-alpine@sha256:bf6423510df9dad65be5deaac70a6ac6659f3d7d4b69c22537585ea833bdaecf
+RUN apk add --no-cache font-dejavu
+WORKDIR /var/www/html
+COPY --from=production-vendor /build/vendor ./vendor
+COPY app ./app
+COPY bootstrap ./bootstrap
+COPY config ./config
+COPY database ./database
+COPY deployment/d1-proof ./deployment/d1-proof
+COPY public ./public
+COPY resources ./resources
+COPY routes ./routes
+COPY artisan composer.json composer.lock ./
+RUN rm -rf bootstrap/cache/*.php public/hot public/storage deployment/d1-proof/__pycache__ && mkdir -p storage/app/private storage/app/public storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs bootstrap/cache /run/nginx && D1_STAGING_ENABLED=false DB_CONNECTION=sqlite DB_DATABASE=:memory: APP_ENV=production php artisan view:cache --no-interaction && chown -R application:application storage bootstrap/cache && chmod 755 deployment/d1-proof/container-slim-entrypoint.sh
+COPY deployment/d1-proof/container-nginx.conf /etc/nginx/nginx.conf
+COPY deployment/d1-proof/container-supervisor.conf /etc/supervisord.conf
+COPY deployment/d1-proof/container-fpm.conf /usr/local/etc/php-fpm.conf
+RUN printf 'auto_prepend_file=/var/www/html/deployment/d1-proof/autoload.php\nmemory_limit=256M\nupload_max_filesize=16M\npost_max_size=16M\nmax_execution_time=60\nexpose_php=Off\nopcache.enable=1\nopcache.validate_timestamps=0\nopcache.memory_consumption=192\nopcache.max_accelerated_files=30000\n' > /usr/local/etc/php/conf.d/zz-familyfunds.ini
+ENV APP_ENV=d1-staging APP_DEBUG=false APP_NAME="FamilyFunds D1 Staging" APP_URL=https://d1-staging.familyfunds.app D1_STAGING_ENABLED=true D1_STAGING_DATABASE=familyfunds-d1-web-staging D1_STAGING_URL=https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev DB_CONNECTION=d1-staging SESSION_DRIVER=file SESSION_SECURE_COOKIE=true CACHE_STORE=file MAIL_MAILER=array QUEUE_CONNECTION=d1-staging NIGHTWATCH_ENABLED=false INERTIA_SSR_ENABLED=false FPM_PM_MAX_CHILDREN=16 LOG_CHANNEL=stderr
+ENTRYPOINT ["/var/www/html/deployment/d1-proof/container-slim-entrypoint.sh"]
+EXPOSE 80

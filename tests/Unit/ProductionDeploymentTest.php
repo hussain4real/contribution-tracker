@@ -10,7 +10,7 @@ use Symfony\Component\Yaml\Yaml;
  */
 function runProductionDeploymentFaultCase(string $scenario): array
 {
-    $script = Yaml::parseFile(__DIR__.'/../../.github/workflows/deploy.yml');
+    $script = Yaml::parseFile(__DIR__.'/../../.github/workflows/deploy.yml.bak');
     foreach (['jobs', 'deploy', 'steps', 0, 'with', 'script'] as $key) {
         if (! is_array($script) || ! array_key_exists($key, $script)) {
             throw new RuntimeException('Missing production deployment script.');

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { show as showContribution } from '@/actions/App/Http/Controllers/ContributionController';
 import StatusBadge from '@/components/contributions/StatusBadge.vue';
+import { Button } from '@/components/ui/button';
 import {
     Dialog,
     DialogContent,
@@ -8,6 +9,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useCurrencyFormatter } from '@/lib/currency';
 import { Link } from '@inertiajs/vue3';
 
@@ -24,9 +26,13 @@ export interface OverdueMember {
     contribution_id: number;
 }
 
-defineProps<{
-    members: OverdueMember[];
-}>();
+export type OverdueContent =
+    | { kind: 'loading' }
+    | { kind: 'failed' }
+    | { kind: 'ready'; members: OverdueMember[] };
+
+defineProps<{ content: OverdueContent }>();
+defineEmits<{ retry: [] }>();
 
 const isOpen = defineModel<boolean>('isOpen');
 
@@ -81,84 +87,114 @@ const categoryColors: Record<string, string> = {
                     Overdue Members
                 </DialogTitle>
                 <DialogDescription>
-                    {{ members.length }} overdue
-                    {{
-                        members.length === 1 ? 'contribution' : 'contributions'
-                    }}
-                    requiring attention.
+                    <template v-if="content.kind === 'ready'">
+                        {{ content.members.length }} overdue
+                        {{
+                            content.members.length === 1
+                                ? 'contribution'
+                                : 'contributions'
+                        }}
+                        requiring attention.
+                    </template>
+                    <template v-else
+                        >Review contributions past their due date.</template
+                    >
                 </DialogDescription>
             </DialogHeader>
 
             <div class="max-h-[60vh] overflow-y-auto">
                 <div
-                    v-if="members.length === 0"
-                    class="py-8 text-center text-neutral-500 dark:text-neutral-400"
+                    v-if="content.kind === 'loading'"
+                    role="status"
+                    class="flex flex-col gap-3"
                 >
-                    No overdue contributions. Great job!
+                    <span class="sr-only">Loading overdue contributions…</span>
+                    <Skeleton v-for="row in 3" :key="row" class="h-20 w-full" />
                 </div>
-
-                <div v-else class="flex flex-col gap-3">
-                    <Link
-                        v-for="member in members"
-                        :key="`${member.id}-${member.month}-${member.year}`"
-                        :href="
-                            showContribution({
-                                contribution: member.contribution_id,
-                            }).url
-                        "
-                        class="group flex items-center justify-between rounded-lg border border-neutral-200 p-4 transition-all duration-200 hover:border-red-200 hover:bg-red-50/50 hover:shadow-sm dark:border-neutral-700 dark:hover:border-red-800 dark:hover:bg-red-900/10"
+                <div
+                    v-else-if="content.kind === 'failed'"
+                    role="alert"
+                    class="flex flex-col items-center gap-3 py-8"
+                >
+                    <p>Could not load overdue contributions.</p>
+                    <Button variant="outline" @click="$emit('retry')"
+                        >Try again</Button
                     >
-                        <div class="flex flex-col gap-1.5">
-                            <div class="flex items-center gap-2">
-                                <span
-                                    class="font-medium text-neutral-900 group-hover:text-red-700 dark:text-neutral-100 dark:group-hover:text-red-400"
-                                >
-                                    {{ member.name }}
-                                </span>
-                                <span
-                                    v-if="
-                                        member.category_label || member.category
-                                    "
-                                    class="rounded-full px-2 py-0.5 text-xs font-medium"
-                                    :class="
-                                        (member.category
-                                            ? categoryColors[member.category]
-                                            : null) ??
-                                        'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300'
-                                    "
-                                >
-                                    {{
-                                        member.category_label ??
-                                        formatCategory(member.category)
-                                    }}
-                                </span>
-                            </div>
-                            <div
-                                class="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400"
-                            >
-                                <span>{{
-                                    formatMonth(member.month, member.year)
-                                }}</span>
-                                <span>&middot;</span>
-                                <StatusBadge status="overdue" />
-                            </div>
-                        </div>
-
-                        <div class="flex flex-col items-end gap-1">
-                            <span
-                                class="text-sm font-semibold text-red-600 dark:text-red-400"
-                            >
-                                {{ formatCurrency(member.balance) }}
-                            </span>
-                            <span
-                                v-if="member.total_paid > 0"
-                                class="text-xs text-neutral-500 dark:text-neutral-400"
-                            >
-                                {{ formatCurrency(member.total_paid) }} paid
-                            </span>
-                        </div>
-                    </Link>
                 </div>
+                <template v-else>
+                    <div
+                        v-if="content.members.length === 0"
+                        class="py-8 text-center text-neutral-500 dark:text-neutral-400"
+                    >
+                        No overdue contributions. Great job!
+                    </div>
+
+                    <div v-else class="flex flex-col gap-3">
+                        <Link
+                            v-for="member in content.members"
+                            :key="`${member.id}-${member.month}-${member.year}`"
+                            :href="
+                                showContribution({
+                                    contribution: member.contribution_id,
+                                }).url
+                            "
+                            class="group flex items-center justify-between rounded-lg border border-neutral-200 p-4 transition-all duration-200 hover:border-red-200 hover:bg-red-50/50 hover:shadow-sm dark:border-neutral-700 dark:hover:border-red-800 dark:hover:bg-red-900/10"
+                        >
+                            <div class="flex flex-col gap-1.5">
+                                <div class="flex items-center gap-2">
+                                    <span
+                                        class="font-medium text-neutral-900 group-hover:text-red-700 dark:text-neutral-100 dark:group-hover:text-red-400"
+                                    >
+                                        {{ member.name }}
+                                    </span>
+                                    <span
+                                        v-if="
+                                            member.category_label ||
+                                            member.category
+                                        "
+                                        class="rounded-full px-2 py-0.5 text-xs font-medium"
+                                        :class="
+                                            (member.category
+                                                ? categoryColors[
+                                                      member.category
+                                                  ]
+                                                : null) ??
+                                            'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300'
+                                        "
+                                    >
+                                        {{
+                                            member.category_label ??
+                                            formatCategory(member.category)
+                                        }}
+                                    </span>
+                                </div>
+                                <div
+                                    class="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400"
+                                >
+                                    <span>{{
+                                        formatMonth(member.month, member.year)
+                                    }}</span>
+                                    <span>&middot;</span>
+                                    <StatusBadge status="overdue" />
+                                </div>
+                            </div>
+
+                            <div class="flex flex-col items-end gap-1">
+                                <span
+                                    class="text-sm font-semibold text-red-600 dark:text-red-400"
+                                >
+                                    {{ formatCurrency(member.balance) }}
+                                </span>
+                                <span
+                                    v-if="member.total_paid > 0"
+                                    class="text-xs text-neutral-500 dark:text-neutral-400"
+                                >
+                                    {{ formatCurrency(member.total_paid) }} paid
+                                </span>
+                            </div>
+                        </Link>
+                    </div>
+                </template>
             </div>
         </DialogContent>
     </Dialog>

@@ -12,7 +12,9 @@ APP_DIR="/var/www/contribution-tracker"
 cd "$APP_DIR"
 
 echo "Pulling latest changes..."
-git pull origin main
+git fetch origin main
+git show origin/main:deployment/check-report-permissions.sh | bash
+git merge --ff-only origin/main
 
 echo "Installing PHP dependencies..."
 composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader

@@ -14,6 +14,17 @@ use App\Models\User;
 use Livewire\Livewire;
 
 describe('Platform Dashboard', function () {
+    it('renders the complete D1 production overview in the initial document with writes still blocked', function (bool $migrationChecks): void {
+        config(['d1-production.enabled' => true, 'd1-production.migration_checks' => $migrationChecks]);
+        $family = Family::factory()->create();
+        $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
+
+        $this->actingAs($superAdmin)->get(Dashboard::getUrl())
+            ->assertOk()->assertSee('Total families')->assertSee('Total users')
+            ->assertSee('Recent families')->assertSee('Recent payments')->assertDontSee('Loading...')
+            ->assertDontSee('wire:poll');
+    })->with([true, false]);
+
     it('allows super admin to access the Filament dashboard', function () {
         $family = Family::factory()->create();
         $superAdmin = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
