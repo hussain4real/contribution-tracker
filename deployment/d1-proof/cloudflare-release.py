@@ -198,31 +198,52 @@ def publish(target, directory):
         raise RuntimeError('Deployments are limited to their configured branch')
     if not release['unstarted_export'] or release['runtime_credentials_packaged']:
         raise RuntimeError('Image credential inspection did not pass')
+    if os.environ.get('GITHUB_ACTIONS') != 'true' or not os.environ.get('DOCKER_CONFIG'):
+        raise RuntimeError('Publishing requires the isolated GitHub Actions Docker configuration')
     with (directory / 'rootfs.tar').open('rb') as source:
         if hashlib.file_digest(source, 'sha256').hexdigest() != release['rootfs_sha256']:
             raise RuntimeError('Image artifact checksum mismatch')
+    if target == 'staging':
+        with (directory / 'original-image.tar').open('rb') as source:
+            if hashlib.file_digest(source, 'sha256').hexdigest() != release.get('image_archive_sha256'):
+                raise RuntimeError('Original staging image archive checksum mismatch')
+        staging_source = 'familyfunds-ci:' + revision
+        subprocess.run(['docker', 'image', 'load', '--input', str(directory / 'original-image.tar')],
+                       check=True, stdout=subprocess.DEVNULL)
+        actual = subprocess.check_output(['docker', 'image', 'inspect', staging_source, '--format', '{{.Id}}'], text=True).strip()
+        if not re.fullmatch(r'sha256:[a-f0-9]{64}', actual) or actual != release.get('source_image_id'):
+            raise RuntimeError('Loaded staging image differs from the inspected build')
     public_checks(target)
     name = 'github-' + revision[:12]
     tag = 'registry.cloudflare.com/' + ACCOUNT + '/' + CONFIG[target]['image_repository'] + ':' + revision
-    if os.environ.get('GITHUB_ACTIONS') != 'true' or not os.environ.get('DOCKER_CONFIG'):
-        raise RuntimeError('Publishing requires the isolated GitHub Actions Docker configuration')
     credentials = api('POST', '/containers/registries/registry.cloudflare.com/credentials', {'expiration_minutes': 60, 'permissions': ['pull', 'push']})
     try:
         if os.environ.get('GITHUB_ACTIONS') == 'true':
             print('::add-mask::' + credentials['password'], flush=True)
         subprocess.run(['docker', 'login', credentials['registry_host'], '--username', credentials['username'], '--password-stdin'],
                        input=credentials['password'].encode(), check=True, stdout=subprocess.DEVNULL)
-        metadata = directory / 'pushed-image.json'
-        subprocess.run(['docker', 'buildx', 'build', '--platform', 'linux/amd64', '--provenance=false', '--output',
-                        'type=image,name=' + tag + ',push=true,oci-mediatypes=' + ('true' if target == 'staging' else 'false') + ',compression=gzip', '--metadata-file', str(metadata), str(directory)],
-                       check=True)
+        if target == 'staging':
+            subprocess.run(['docker', 'tag', staging_source, tag], check=True)
+            subprocess.run(['docker', 'push', tag], check=True)
+            digests = json.loads(subprocess.check_output(['docker', 'image', 'inspect', tag, '--format', '{{json .RepoDigests}}'], text=True))
+            prefix = tag.rsplit(':', 1)[0] + '@'
+            matches = [value.removeprefix(prefix) for value in digests if value.startswith(prefix)]
+            if len(matches) != 1:
+                raise RuntimeError('Registry did not attest one staging image digest')
+            digest = matches[0]
+        else:
+            metadata = directory / 'pushed-image.json'
+            subprocess.run(['docker', 'buildx', 'build', '--platform', 'linux/amd64', '--provenance=false', '--output',
+                            'type=image,name=' + tag + ',push=true,oci-mediatypes=false,compression=gzip', '--metadata-file', str(metadata), str(directory)],
+                           check=True)
+            digest = json.loads(metadata.read_text())['containerimage.digest']
     finally:
         subprocess.run(['docker', 'logout', 'registry.cloudflare.com'], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    digest = json.loads(metadata.read_text())['containerimage.digest']
     if not re.fullmatch(r'sha256:[a-f0-9]{64}', digest):
         raise RuntimeError('Registry returned an invalid immutable image digest')
     image = tag.rsplit(':', 1)[0] + '@' + digest
-    prepared(image)
+    if target == 'production':
+        prepared(image)
     plans = []
     for worker in CONFIG[target]['companions'] + [CONFIG[target]]:
         path = '/workers/scripts/' + worker['worker']
@@ -288,12 +309,14 @@ def publish(target, directory):
         raise RuntimeError('Deployment failed; previous code/image restored. No database rollback or request replay was attempted.') from None
     result = {'target': target, 'revision': revision, 'runtime_revision': name, 'image': image,
               'prepared': True, 'native_image_verified': True, 'laravel_login_verified': True,
+              'managed_image_preparation': target == 'production',
+              'original_image_layers_preserved': target == 'staging',
               'application_secrets_exported': False, 'database_migrations_run': False}
     (directory / 'deployment.json').write_text(json.dumps(result, indent=2) + '\n')
     print(json.dumps(result))
     if os.environ.get('GITHUB_STEP_SUMMARY'):
         with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
-            summary.write(f'FamilyFunds {target}: `{revision}`\n\nImage: `{image}`\n\nImage preparation, native running image and Laravel login checks passed. Application secrets stayed in Cloudflare.\n')
+            summary.write(f'FamilyFunds {target}: `{revision}`\n\nImage: `{image}`\n\nTarget-specific image packaging, native running image and Laravel login checks passed. Application secrets stayed in Cloudflare.\n')
 
 
 def main():
