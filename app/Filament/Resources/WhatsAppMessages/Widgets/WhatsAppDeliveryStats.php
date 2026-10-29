@@ -12,6 +12,11 @@ use Illuminate\Database\Eloquent\Builder;
 
 class WhatsAppDeliveryStats extends StatsOverviewWidget
 {
+    public static function isLazy(): bool
+    {
+        return parent::isLazy() && ! (config('d1-production.enabled') && config('d1-production.migration_checks'));
+    }
+
     protected ?string $pollingInterval = '15s';
 
     protected function getStats(): array

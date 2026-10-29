@@ -23,6 +23,7 @@ parameters:
 
     bootstrapFiles:
         - vendor/autoload.php
+        - deployment/d1-proof/autoload.php
 
     excludePaths:
         - bootstrap/cache

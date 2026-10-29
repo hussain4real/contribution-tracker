@@ -8,7 +8,10 @@ import AccountDetails from '@/components/AccountDetails.vue';
 import AggregateStats from '@/components/contributions/AggregateStats.vue';
 import StatusBadge from '@/components/contributions/StatusBadge.vue';
 import MemberContributionStatus from '@/components/dashboard/MemberContributionStatus.vue';
-import type { OverdueMember } from '@/components/dashboard/OverdueMembersModal.vue';
+import type {
+    OverdueContent,
+    OverdueMember,
+} from '@/components/dashboard/OverdueMembersModal.vue';
 import OverdueMembersModal from '@/components/dashboard/OverdueMembersModal.vue';
 import RecentPayments from '@/components/dashboard/RecentPayments.vue';
 import SummaryCards from '@/components/dashboard/SummaryCards.vue';
@@ -21,7 +24,7 @@ import { Head, Link, router, usePoll } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
 // Auto-refresh dashboard every 30 seconds (T052)
-usePoll(30000);
+usePoll(30000, { except: ['overdue_members'] });
 
 // Props types
 interface Summary {
@@ -110,6 +113,36 @@ const isAdminView = computed(() => !!props.summary);
 // Generate contributions
 const generating = ref(false);
 const showOverdueModal = ref(false);
+const overdueLoadState = ref<'idle' | 'loading' | 'ready' | 'failed'>('idle');
+const overdueContent = computed<OverdueContent>(() =>
+    overdueLoadState.value === 'ready'
+        ? { kind: 'ready', members: props.overdue_members ?? [] }
+        : {
+              kind:
+                  overdueLoadState.value === 'idle'
+                      ? 'loading'
+                      : overdueLoadState.value,
+          },
+);
+
+function openOverdueMembers() {
+    showOverdueModal.value = true;
+    if (overdueLoadState.value === 'loading') {
+        return;
+    }
+    overdueLoadState.value = 'loading';
+    router.reload({
+        only: ['overdue_members'],
+        onSuccess: () => {
+            overdueLoadState.value = 'ready';
+        },
+        onFinish: () => {
+            if (overdueLoadState.value === 'loading') {
+                overdueLoadState.value = 'failed';
+            }
+        },
+    });
+}
 
 function generateContributions() {
     generating.value = true;
@@ -206,7 +239,7 @@ function formatCategory(category: string | null): string {
                     :collection-rate="summary.current_month_collection_rate"
                     :monthly-breakdown="summary.monthly_breakdown"
                     :can-record-payments="can_record_payments ?? false"
-                    @overdue-click="showOverdueModal = true"
+                    @overdue-click="openOverdueMembers"
                 />
 
                 <div class="grid gap-6 lg:grid-cols-2">
@@ -467,9 +500,10 @@ function formatCategory(category: string | null): string {
         </div>
 
         <OverdueMembersModal
-            v-if="overdue_members"
+            v-if="isAdminView"
             v-model:is-open="showOverdueModal"
-            :members="overdue_members"
+            :content="overdueContent"
+            @retry="openOverdueMembers"
         />
     </AppLayout>
 </template>

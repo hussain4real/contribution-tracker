@@ -1,0 +1,149 @@
+name: FamilyFunds Cloudflare
+
+on:
+  pull_request:
+    branches: [main, cloudflare-staging]
+  push:
+    branches: [main, cloudflare-staging]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: familyfunds-cloudflare-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  runtime:
+    name: Cloudflare runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+      - name: Validate accepted D1 schema and runtime module graph
+        run: python3 deployment/d1-proof/cloudflare-release.py prepare
+      - name: Worker behavior and isolation checks
+        run: |
+          tests=()
+          for source in deployment/d1-proof/*.test.mjs; do
+            if [[ "$source" != deployment/d1-proof/production-preflight.test.mjs ]]; then
+              tests+=("$source")
+            fi
+          done
+          node --test "${tests[@]}"
+      - name: Release and image safety checks
+        run: python3 -m unittest discover -s deployment/d1-proof -p 'cloudflare_*_test.py' -v
+
+  application-tests:
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/tests.yml
+
+  application-quality:
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/lint.yml
+
+  build:
+    name: Cloudflare build
+    needs: [runtime, application-tests, application-quality]
+    if: >-
+      always() && !cancelled() && needs.runtime.result == 'success' &&
+      (github.event_name == 'pull_request' ||
+      (needs.application-tests.result == 'success' && needs.application-quality.result == 'success'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TARGET: ${{ (github.base_ref == 'cloudflare-staging' || github.ref_name == 'cloudflare-staging') && 'staging' || 'production' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@d52fc211a0436f8839a587b3b5b8efddab4744ea
+        with:
+          php-version: '8.5'
+          tools: composer:v2
+          coverage: none
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Prepare credential-free application build
+        run: |
+          cp .env.example .env
+          composer install --no-interaction --prefer-dist --optimize-autoloader
+          php artisan key:generate --no-interaction
+          npm ci
+          python3 deployment/d1-proof/cloudflare-release.py prepare
+          php artisan wayfinder:generate --no-interaction
+          npm run build
+      - name: Review the compiled assets and runtime source
+        run: node --test deployment/d1-proof/production-preflight.test.mjs
+      - name: Build and inspect unstarted runtime image
+        run: >-
+          python3 deployment/d1-proof/cloudflare-image.py --target "$TARGET"
+          --revision "$GITHUB_SHA" --output "$RUNNER_TEMP/familyfunds-image"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: familyfunds-runtime-${{ github.sha }}
+          path: ${{ runner.temp }}/familyfunds-image/
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
+  deploy:
+    name: Deploy Cloudflare
+    needs: [runtime, application-tests, application-quality, build]
+    if: >-
+      always() && !cancelled() && github.event_name != 'pull_request' &&
+      needs.runtime.result == 'success' && needs.build.result == 'success' &&
+      needs.application-tests.result == 'success' && needs.application-quality.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment:
+      name: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+      url: ${{ github.ref_name == 'main' && 'https://familyfunds.app' || 'https://d1-staging.familyfunds.app' }}
+    env:
+      TARGET: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+    steps:
+      - name: Reject unconfigured branch
+        run: |
+          case "$GITHUB_REF" in
+            refs/heads/main|refs/heads/cloudflare-staging) ;;
+            *) echo 'Deploy only the configured main or cloudflare-staging branch.'; exit 1 ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Require the exact tested branch tip
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tip="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$GITHUB_REF_NAME" --jq .object.sha)"
+          test "$tip" = "$GITHUB_SHA"
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: familyfunds-runtime-${{ github.sha }}
+          path: ${{ runner.temp }}/familyfunds-image
+      - name: Isolate Docker credentials for this deployment job
+        run: echo "DOCKER_CONFIG=$RUNNER_TEMP/familyfunds-docker" >> "$GITHUB_ENV"
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - name: Publish prepared image, preserve secrets and verify release
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          STAGING_BASIC_AUTHORIZATION: ${{ secrets.STAGING_BASIC_AUTHORIZATION }}
+        run: >-
+          python3 deployment/d1-proof/cloudflare-release.py publish --target "$TARGET"
+          --artifact "$RUNNER_TEMP/familyfunds-image"
+      - name: Preserve deployment receipt
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: familyfunds-deployment-${{ github.sha }}
+          path: ${{ runner.temp }}/familyfunds-image/deployment.json
+          retention-days: 30
+          if-no-files-found: error
