@@ -96,10 +96,13 @@ class ReleaseSafetyTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)
             (path / 'rootfs.tar').write_bytes(b'inspected image')
+            (path / 'original-image.tar').write_bytes(b'inspected original image')
             (path / 'release.json').write_text(json.dumps({'target': 'staging', 'revision': SHA, 'unstarted_export': True,
-                                                        'runtime_credentials_packaged': False, 'rootfs_sha256': hashlib.sha256(b'inspected image').hexdigest()}))
+                                                        'runtime_credentials_packaged': False, 'rootfs_sha256': hashlib.sha256(b'inspected image').hexdigest(),
+                                                        'image_archive_sha256': hashlib.sha256(b'inspected original image').hexdigest(), 'source_image_id': DIGEST}))
             old_raw, old_mime = release.multipart('container-worker.mjs', {'container-worker.mjs': b'old reviewed code'}, [], None)
             writes = []
+            commands = []
 
             def api(method, url, data=None, **kwargs):
                 if 'credentials' in url:
@@ -120,16 +123,36 @@ class ReleaseSafetyTest(unittest.TestCase):
                 raise AssertionError('Unexpected or database API call: ' + url)
 
             def command(args, **kwargs):
-                if args[:3] == ['docker', 'buildx', 'build']:
-                    self.assertIn('oci-mediatypes=true', args[args.index('--output') + 1])
-                    (path / 'pushed-image.json').write_text(json.dumps({'containerimage.digest': DIGEST}))
+                commands.append(args)
 
-            with patch.dict(os.environ, {'GITHUB_SHA': SHA, 'GITHUB_REF': 'refs/heads/cloudflare-staging', 'GITHUB_ACTIONS': 'true', 'DOCKER_CONFIG': directory}), patch.object(release, 'validate'), patch.object(release, 'public_checks'), patch.object(release, 'prepared'), patch.object(release, 'rollout_image'), patch.object(release, 'api', side_effect=api), patch.object(release.subprocess, 'run', side_effect=command), contextlib.redirect_stdout(io.StringIO()):
+            def output(args, **kwargs):
+                return DIGEST if args[-1] == '{{.Id}}' else json.dumps([
+                    'registry.cloudflare.com/' + release.ACCOUNT + '/familyfunds-d1-staging@' + DIGEST])
+
+            with patch.dict(os.environ, {'GITHUB_SHA': SHA, 'GITHUB_REF': 'refs/heads/cloudflare-staging', 'GITHUB_ACTIONS': 'true', 'DOCKER_CONFIG': directory}), patch.object(release, 'validate'), patch.object(release, 'public_checks'), patch.object(release, 'prepared') as prepared, patch.object(release, 'rollout_image'), patch.object(release, 'api', side_effect=api), patch.object(release.subprocess, 'run', side_effect=command), patch.object(release.subprocess, 'check_output', side_effect=output), contextlib.redirect_stdout(io.StringIO()):
                 with self.assertRaisesRegex(RuntimeError, 'previous code/image restored'):
                     release.publish('staging', path)
+                prepared.assert_not_called()
             self.assertEqual(len(writes), 2)
+            self.assertTrue(any(args[:3] == ['docker', 'image', 'load'] for args in commands))
+            self.assertTrue(any(args[:2] == ['docker', 'push'] for args in commands))
+            self.assertFalse(any('buildx' in args for args in commands))
             for metadata in writes:
                 self.assertEqual(metadata['containers'], [{'class_name': 'FamilyFundsWebStagingContainer'}])
+
+    def test_modified_original_staging_archive_is_refused_before_credentials_or_docker(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            (path / 'rootfs.tar').write_bytes(b'inspected image')
+            (path / 'original-image.tar').write_bytes(b'changed after inspection')
+            (path / 'release.json').write_text(json.dumps({'target': 'staging', 'revision': SHA, 'unstarted_export': True,
+                                                        'runtime_credentials_packaged': False, 'rootfs_sha256': hashlib.sha256(b'inspected image').hexdigest(),
+                                                        'image_archive_sha256': hashlib.sha256(b'inspected original image').hexdigest()}))
+            with patch.dict(os.environ, {'GITHUB_SHA': SHA, 'GITHUB_REF': 'refs/heads/cloudflare-staging', 'GITHUB_ACTIONS': 'true', 'DOCKER_CONFIG': directory}), patch.object(release, 'validate'), patch.object(release, 'api') as api, patch.object(release.subprocess, 'run') as run:
+                with self.assertRaisesRegex(RuntimeError, 'archive checksum mismatch'):
+                    release.publish('staging', path)
+                api.assert_not_called()
+                run.assert_not_called()
 
     def test_feature_branches_and_mismatched_artifacts_never_get_deploy_credentials(self):
         with tempfile.TemporaryDirectory() as directory:

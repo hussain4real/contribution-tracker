@@ -78,6 +78,12 @@ def main():
         digest = hashlib.file_digest(source, 'sha256').hexdigest()
     result = {'target': args.target, 'revision': args.revision, 'rootfs_sha256': digest,
               'unstarted_export': True, 'runtime_credentials_packaged': False}
+    if args.target == 'staging':
+        archive = args.output / 'original-image.tar'
+        run('docker', 'image', 'save', '--output', str(archive), image)
+        with archive.open('rb') as source:
+            result['image_archive_sha256'] = hashlib.file_digest(source, 'sha256').hexdigest()
+        result['source_image_id'] = inspected['Id']
     (args.output / 'release.json').write_text(json.dumps(result, indent=2) + '\n')
     print(json.dumps(result))
 
