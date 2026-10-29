@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentSource;
+use App\Jobs\SendPaymentReceipt;
 use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\FamilyMembership;
@@ -156,6 +157,14 @@ class PaymentAllocationService
 
             if ($remainingAmount !== 0) {
                 throw new InvalidArgumentException('The payment exceeds the six-month advance-payment limit.');
+            }
+
+            if ($source !== PaymentSource::Backfill) {
+                SendPaymentReceipt::dispatch($batch->id, $member->id, 'mail');
+
+                if ($member->hasVerifiedWhatsApp()) {
+                    SendPaymentReceipt::dispatch($batch->id, $member->id, 'whatsapp');
+                }
             }
 
             return $batch->load('allocations');

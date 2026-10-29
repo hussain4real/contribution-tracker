@@ -11,9 +11,56 @@ use App\Models\Expense;
 use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
+use Filament\Facades\Filament;
 use Livewire\Livewire;
 
 describe('Platform Dashboard', function () {
+    it('does not expose family navigation before authentication', function () {
+        $navigation = Filament::getPanel('platform')->getNavigationItems()[0];
+        expect($navigation->isVisible())->toBeFalse()->and($navigation->getUrl())->toBeNull();
+    });
+
+    it('links a super admin to their selected family dashboard', function () {
+        $family = Family::factory()->create();
+        $selected = Family::factory()->create();
+        $user = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
+        $user->ensureFamilyMembership($selected);
+        $user->forceFill(['current_family_id' => $selected->id])->save();
+
+        $this->actingAs($user)->get(Dashboard::getUrl())
+            ->assertOk()->assertSee('Family dashboard')
+            ->assertSee(route('dashboard', ['current_family' => $selected->slug]), false);
+    });
+
+    it('falls back to an actual membership when the selected family is inaccessible', function () {
+        $family = Family::factory()->create();
+        $outsiderFamily = Family::factory()->create();
+        $user = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
+        $user->forceFill(['current_family_id' => $outsiderFamily->id])->save();
+
+        $this->actingAs($user)->get(Dashboard::getUrl())
+            ->assertOk()->assertSee('Family dashboard')
+            ->assertSee(route('dashboard', ['current_family' => $family->slug]), false)
+            ->assertDontSee(route('dashboard', ['current_family' => $outsiderFamily->slug]), false);
+    });
+
+    it('hides the family link without an active family membership', function (bool $archived) {
+        $user = User::factory()->admin()->superAdmin()->create(['family_id' => null]);
+        if ($archived) {
+            $family = Family::factory()->create();
+            $user->ensureFamilyMembership($family)->forceFill(['archived_at' => now()])->save();
+        }
+
+        $this->actingAs($user)->get(Dashboard::getUrl())->assertOk()->assertDontSee('Family dashboard');
+    })->with([false, true]);
+
+    it('hides the family link when the family itself is archived', function () {
+        $family = Family::factory()->create(['archived_at' => now()]);
+        $user = User::factory()->admin()->superAdmin()->create(['family_id' => $family->id]);
+
+        $this->actingAs($user)->get(Dashboard::getUrl())->assertOk()->assertDontSee('Family dashboard');
+    });
+
     it('renders the complete D1 production overview in the initial document with writes still blocked', function (bool $migrationChecks): void {
         config(['d1-production.enabled' => true, 'd1-production.migration_checks' => $migrationChecks]);
         $family = Family::factory()->create();

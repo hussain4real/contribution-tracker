@@ -25,6 +25,7 @@ use App\Models\User;
 use App\Services\PaymentAllocationService;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Config;
 use LogicException;
 
 class DemoLedgerSeeder extends Seeder
@@ -40,6 +41,18 @@ class DemoLedgerSeeder extends Seeder
     ) {}
 
     public function run(): void
+    {
+        $queueConnection = Config::string('queue.default');
+        config(['queue.default' => 'null']);
+
+        try {
+            $this->seedLedger();
+        } finally {
+            config(['queue.default' => $queueConnection]);
+        }
+    }
+
+    private function seedLedger(): void
     {
         $family = Family::query()->where('slug', 'demo-family')->firstOrFail();
         $finance = User::query()->where('email', 'finance@family.test')->firstOrFail();
