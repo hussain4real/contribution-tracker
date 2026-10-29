@@ -29,8 +29,8 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: 8.4
-          ini-values: max_execution_time=0
+          php-version: '8.5'
+          ini-values: max_execution_time=0, zend.assertions=1
           tools: composer:v2
           coverage: xdebug
 
@@ -59,7 +59,9 @@ jobs:
         run: npm run build
 
       - name: Record TIA Baseline
-        run: composer test:coverage:tia:fresh
+        run: |
+          php -r 'if (ini_get("zend.assertions") !== "1") { fwrite(STDERR, "PHP assertions must run during CI.\n"); exit(1); }'
+          composer test:coverage:tia:fresh
 
       - name: Resolve TIA Baseline Path
         id: baseline
