@@ -121,6 +121,7 @@ class ReleaseSafetyTest(unittest.TestCase):
 
             def command(args, **kwargs):
                 if args[:3] == ['docker', 'buildx', 'build']:
+                    self.assertIn('oci-mediatypes=true', args[args.index('--output') + 1])
                     (path / 'pushed-image.json').write_text(json.dumps({'containerimage.digest': DIGEST}))
 
             with patch.dict(os.environ, {'GITHUB_SHA': SHA, 'GITHUB_REF': 'refs/heads/cloudflare-staging', 'GITHUB_ACTIONS': 'true', 'DOCKER_CONFIG': directory}), patch.object(release, 'validate'), patch.object(release, 'public_checks'), patch.object(release, 'prepared'), patch.object(release, 'rollout_image'), patch.object(release, 'api', side_effect=api), patch.object(release.subprocess, 'run', side_effect=command), contextlib.redirect_stdout(io.StringIO()):
@@ -166,6 +167,7 @@ class ReleaseSafetyTest(unittest.TestCase):
 
             def command(args, **kwargs):
                 if args[:3] == ['docker', 'buildx', 'build']:
+                    self.assertIn('oci-mediatypes=false', args[args.index('--output') + 1])
                     (path / 'pushed-image.json').write_text(json.dumps({'containerimage.digest': DIGEST}))
 
             with patch.dict(release.CONFIG, {'production': target}), patch.dict(os.environ, {'GITHUB_SHA': SHA, 'GITHUB_REF': 'refs/heads/main', 'GITHUB_ACTIONS': 'true', 'DOCKER_CONFIG': directory}), patch.object(release, 'validate'), patch.object(release, 'checked_bindings', return_value=settings['bindings']), patch.object(release, 'public_checks'), patch.object(release, 'prepared'), patch.object(release, 'api', side_effect=api), patch.object(release.subprocess, 'run', side_effect=command), contextlib.redirect_stdout(io.StringIO()):

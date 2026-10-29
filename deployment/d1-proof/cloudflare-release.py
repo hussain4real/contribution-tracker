@@ -214,7 +214,7 @@ def publish(target, directory):
                        input=credentials['password'].encode(), check=True, stdout=subprocess.DEVNULL)
         metadata = directory / 'pushed-image.json'
         subprocess.run(['docker', 'buildx', 'build', '--platform', 'linux/amd64', '--provenance=false', '--output',
-                        'type=image,name=' + tag + ',push=true,oci-mediatypes=false,compression=gzip', '--metadata-file', str(metadata), str(directory)],
+                        'type=image,name=' + tag + ',push=true,oci-mediatypes=' + ('true' if target == 'staging' else 'false') + ',compression=gzip', '--metadata-file', str(metadata), str(directory)],
                        check=True)
     finally:
         subprocess.run(['docker', 'logout', 'registry.cloudflare.com'], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
