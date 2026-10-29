@@ -33,6 +33,7 @@ jobs:
           php-version: '8.5'
           tools: composer:v2
           coverage: xdebug
+          ini-values: zend.assertions=1
 
       - name: Setup Node
         uses: actions/setup-node@v7
@@ -60,6 +61,7 @@ jobs:
 
       - name: Tests
         run: |
+          php -r 'if (ini_get("zend.assertions") !== "1") { fwrite(STDERR, "PHP assertions must run during CI.\n"); exit(1); }'
           mkdir -p coverage
           composer test:coverage -- --ci --coverage-cobertura=coverage/cobertura.xml
 

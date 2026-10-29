@@ -20,7 +20,9 @@ final class D1ProductionConnection extends D1StagingConnection
             return DB::connection('d1-staging-snapshot')->transaction(fn (): mixed => $callback($this));
         }
 
-        return app(D1StagingRuntime::class)->run(fn (): mixed => $callback($this));
+        return app(D1StagingRuntime::class)->run(
+            fn (): mixed => DB::connection('d1-staging-snapshot')->transaction(fn (): mixed => $callback($this)),
+        );
     }
 
     /**

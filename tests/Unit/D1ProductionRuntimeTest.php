@@ -286,6 +286,18 @@ it('commits deferred transaction closures through the same fenced financial plan
     expect(fn () => DB::beginTransaction())->toThrow(LogicException::class);
 });
 
+it('rolls back every standalone transaction write when its callback throws', function (): void {
+    expect(fn () => DB::transaction(function (): void {
+        DB::table('contributions')->where('id', 1)->update(['amount' => 55]);
+        DB::table('contributions')->where('id', 2)->delete();
+
+        throw new RuntimeException('synthetic failed financial transaction');
+    }))->toThrow(RuntimeException::class, 'synthetic failed financial transaction');
+
+    expect(DB::table('contributions')->orderBy('id')->pluck('amount')->all())->toBe([10, 20])
+        ->and(config('d1-production.planning'))->toBeFalse();
+});
+
 it('puts platform OAuth and MCP request work inside the transaction planner', function (string $path): void {
     $middleware = app(D1ProductionRequest::class);
     $response = $middleware->handle(Request::create($path, 'POST'), function (): Response {
