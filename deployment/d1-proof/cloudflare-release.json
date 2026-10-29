@@ -1,0 +1,44 @@
+{
+  "account_id": "40344948b73fa9da3008958fdc3faf12",
+  "compatibility_date": "2026-10-27",
+  "production": {
+    "branch": "main",
+    "worker": "familyfunds-production-managed",
+    "entry": "cloudflare-production-entry.mjs",
+    "class_name": "FamilyFundsManagedProductionContainer",
+    "application_id": "31b06ddf691645c58266f6ef63f68daa",
+    "instance_name": "familyfunds-production-weur-v1",
+    "image_repository": "familyfunds-production",
+    "dockerfile": "Dockerfile.production",
+    "url": "https://familyfunds.app",
+    "companions": [
+      {
+        "worker": "familyfunds-production-offsite",
+        "entry": "production-offsite-worker.mjs",
+        "class_name": "FamilyFundsOffsiteContainer",
+        "image": "registry.cloudflare.com/40344948b73fa9da3008958fdc3faf12/familyfunds-production@sha256:ccf5f0f3cc2b0935e7edea5354ab431cc35e57c77f31f46b2ffe8b9c8c960a2c"
+      },
+      {
+        "worker": "familyfunds-production-maintenance",
+        "entry": "production-migration-maintenance-entry.mjs"
+      },
+      {
+        "worker": "familyfunds-hostname-redirects",
+        "entry": "production-hostname-redirects.mjs"
+      }
+    ]
+  },
+  "staging": {
+    "branch": "cloudflare-staging",
+    "worker": "familyfunds-d1-web-v2",
+    "entry": "container-worker.mjs",
+    "class_name": "FamilyFundsWebStagingContainer",
+    "application_id": "a034af23-f6cf-4c1f-95ee-1099b787b9de",
+    "instance_name": "isolated-staging",
+    "image_repository": "familyfunds-d1-staging",
+    "dockerfile": "Dockerfile.slim",
+    "url": "https://d1-staging.familyfunds.app",
+    "companions": []
+  },
+  "accepted_migrations_sha256": "41030db19fc50e7d60c54dca72743f7b7277e62cc28872367d79d7f93c66c5b9"
+}

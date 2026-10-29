@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Enums\ReconciliationPeriodStatus;
+use App\Exceptions\ClosedFinancialPeriod;
 use App\Models\Family;
 use App\Models\ReconciliationPeriod;
 use DateTimeInterface;
 use Illuminate\Support\Carbon;
-use InvalidArgumentException;
 
 class ReconciliationPeriodGuard
 {
@@ -25,7 +25,7 @@ class ReconciliationPeriodGuard
             ->exists();
 
         if ($isClosed) {
-            throw new InvalidArgumentException('This date belongs to a closed reconciliation period. Reopen the period before making changes.');
+            throw new ClosedFinancialPeriod('This date belongs to a closed reconciliation period. Reopen the period before making changes.');
         }
     }
 }

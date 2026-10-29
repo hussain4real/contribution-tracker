@@ -1,11 +1,13 @@
 name: linter
 
 on:
+  workflow_call:
   pull_request:
     branches:
       - develop
       - main
       - staging
+      - cloudflare-staging
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -20,7 +22,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.4'
+          php-version: '8.5'
 
       - name: Install Dependencies
         run: |

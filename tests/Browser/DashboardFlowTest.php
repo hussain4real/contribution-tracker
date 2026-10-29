@@ -9,6 +9,8 @@ declare(strict_types=1);
  */
 
 use App\Models\Contribution;
+use Laravel\Passkeys\Actions\VerifyPasskey;
+use Mockery\MockInterface;
 
 describe('Dashboard Flow (Browser)', function () {
     beforeEach(function () {
@@ -47,6 +49,16 @@ describe('Dashboard Flow (Browser)', function () {
             ->assertNoJavaScriptErrors();
     });
 
+    it('loads overdue contribution details when the officer opens the modal', function () {
+        Contribution::factory()->forUser($this->member)->forMonth(2025, 1)->create();
+
+        loginBrowserAs($this->admin)
+            ->click('Overdue Members')
+            ->assertSee('requiring attention.')
+            ->assertSee('Jan 2025')
+            ->assertNoJavaScriptErrors();
+    });
+
     it('member dashboard shows personal status', function () {
         loginBrowserAs($this->member)
             ->assertSee('Dashboard')
@@ -69,6 +81,53 @@ describe('Dashboard Flow (Browser)', function () {
 
         loginBrowserAs($platformAdmin)
             ->assertSee('Platform Overview')
+            ->assertNoJavaScriptErrors();
+    });
+
+    it('passkey login completes a full page platform visit and preserves the authenticated session', function () {
+        config(['d1-production.enabled' => true, 'd1-production.migration_checks' => false]);
+        $platformAdmin = createBrowserSuperAdmin(null, [
+            'family_id' => null,
+            'current_family_id' => null,
+        ]);
+        $passkey = createTestPasskeyFor($platformAdmin);
+        $this->mock(VerifyPasskey::class, function (MockInterface $mock) use ($passkey): void {
+            $mock->shouldReceive('__invoke')->once()->andReturn($passkey);
+        });
+
+        $credential = json_encode(fakePasskeyAssertionPayload(), JSON_THROW_ON_ERROR);
+        $page = visit('/login');
+        $page->script(<<<JS
+            () => {
+                const credential = {$credential};
+                const buffer = (value) => Uint8Array.from(atob(value.replace(/-/g, '+').replace(/_/g, '/')), character => character.charCodeAt(0)).buffer;
+                Object.defineProperty(navigator.credentials, 'get', {value: async () => ({
+                    id: credential.id,
+                    rawId: buffer(credential.rawId),
+                    type: 'public-key',
+                    response: Object.fromEntries(Object.entries(credential.response).map(([key, value]) => [key, buffer(value)])),
+                    getClientExtensionResults: () => ({}),
+                    authenticatorAttachment: 'platform',
+                })});
+            }
+            JS);
+
+        $page->click('@passkey-login-button')
+            ->assertPathIs('/platform')
+            ->assertSee('Platform Overview')
+            ->assertSee('Total families')
+            ->assertSee('Recent families')
+            ->assertSee('Recent payments')
+            ->assertDontSee('Loading...')
+            ->assertNoJavaScriptErrors()
+            ->assertScript('document.querySelector("iframe[srcdoc]") === null')
+            ->assertScript('Array.from(document.querySelectorAll("*")).every(element => Array.from(element.attributes).every(attribute => !attribute.name.startsWith("wire:poll")))');
+
+        $asset = $page->script('async () => { const script = document.querySelector("script[src*=\"/livewire-\"]"); const url = new URL(script.src); const response = await fetch(url.pathname + url.search); return {status: response.status, javascript: response.headers.get("Content-Type").includes("javascript")}; }');
+        expect($asset)->toBe(['status' => 200, 'javascript' => true]);
+
+        $page->navigate('/platform/users')
+            ->assertSee('Users')
             ->assertNoJavaScriptErrors();
     });
 });

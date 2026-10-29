@@ -1,0 +1,13 @@
+.git
+.env*
+.codex
+.agents
+storage
+node_modules
+tests
+vendor/pestphp/pest-plugin-browser/.temp
+vendor/pestphp/pest/.temp
+bootstrap/cache/*.php
+public/hot
+public/storage
+deployment/d1-proof/__pycache__

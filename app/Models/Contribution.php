@@ -28,6 +28,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $month
  * @property int $year
  * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $reminder_sent_at
+ * @property \Illuminate\Support\Carbon|null $follow_up_sent_at
  * @property Carbon $due_date
  * @property PaymentStatus $status
  * @property string $period_label

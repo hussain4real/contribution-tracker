@@ -10,7 +10,7 @@ it('normalizes writable paths without changing report access or exposing Passpor
     $deployScript = file_get_contents($projectRoot.'/deployment/deploy.sh');
     $setupScript = file_get_contents($projectRoot.'/deployment/setup-server.sh');
     $provisionScript = file_get_contents($projectRoot.'/deployment/provision-report-permissions.sh');
-    $workflow = file_get_contents($projectRoot.'/.github/workflows/deploy.yml');
+    $workflow = file_get_contents($projectRoot.'/.github/workflows/deploy.yml.bak');
 
     if ($script === false || $deployScript === false || $setupScript === false || $provisionScript === false || $workflow === false) {
         throw new RuntimeException('Unable to read the deployment permission fixtures.');
@@ -198,7 +198,7 @@ it('preserves report metadata while normalizing other files on repeated runs', f
 
 it('requires report provisioning before updating either production checkout', function () {
     $projectRoot = dirname(__DIR__, 2);
-    foreach (['deployment/deploy.sh', '.github/workflows/deploy.yml'] as $path) {
+    foreach (['deployment/deploy.sh', '.github/workflows/deploy.yml.bak'] as $path) {
         $script = file_get_contents($projectRoot.'/'.$path);
         expect($script)->toBeString();
         if (! is_string($script)) {

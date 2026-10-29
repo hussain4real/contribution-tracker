@@ -3,7 +3,6 @@ import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
-import { router } from '@inertiajs/vue3';
 import { usePasskeyVerify } from '@laravel/passkeys/vue';
 import { KeyRound } from '@lucide/vue';
 
@@ -17,7 +16,7 @@ const props = defineProps<Props>();
 
 const { verify, isLoading, error, isSupported } = usePasskeyVerify({
     onSuccess: (response) => {
-        router.visit(response.redirect ?? '/');
+        window.location.assign(response.redirect ?? '/');
     },
 });
 </script>

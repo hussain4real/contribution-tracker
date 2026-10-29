@@ -234,7 +234,7 @@ class PaymentAllocationService
         }
 
         $lastContribution = $contributions->reverse()->firstOrFail();
-        $cursor = Carbon::createFromDate($lastContribution->year, $lastContribution->month, 1)->addMonth();
+        $cursor = Carbon::createFromDate($lastContribution->year, $lastContribution->month, 1)->startOfMonth()->addMonth();
         $maximumAdvanceDate = now()->addMonths(6)->startOfMonth();
 
         while ($remainingAmount > 0 && $cursor->lte($maximumAdvanceDate)) {
