@@ -92,6 +92,44 @@ class ReleaseSafetyTest(unittest.TestCase):
                 release.prepared('repo@' + DIGEST)
             self.assertEqual(api.call_args.args[1], '/containers/image-preparations')
 
+    def test_staging_deployment_and_rollback_both_preserve_container_enablement(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            (path / 'rootfs.tar').write_bytes(b'inspected image')
+            (path / 'release.json').write_text(json.dumps({'target': 'staging', 'revision': SHA, 'unstarted_export': True,
+                                                        'runtime_credentials_packaged': False, 'rootfs_sha256': hashlib.sha256(b'inspected image').hexdigest()}))
+            old_raw, old_mime = release.multipart('container-worker.mjs', {'container-worker.mjs': b'old reviewed code'}, [], None)
+            writes = []
+
+            def api(method, url, data=None, **kwargs):
+                if 'credentials' in url:
+                    return {'password': 'synthetic', 'username': 'synthetic', 'registry_host': 'registry.cloudflare.com'}
+                if url.endswith('/settings'):
+                    return {'bindings': []}
+                if method == 'GET' and '/containers/applications/' in url:
+                    return {'configuration': {'image': 'old@' + DIGEST}}
+                if method == 'GET':
+                    return old_raw, old_mime
+                if method == 'PUT':
+                    message = release.email.parser.BytesParser(policy=release.email.policy.default).parsebytes(
+                        ('Content-Type: ' + kwargs['content_type'] + '\r\n\r\n').encode() + data)
+                    writes.append(json.loads(next(message.iter_parts()).get_payload(decode=True)))
+                    if len(writes) == 1:
+                        raise RuntimeError('simulated unknown update outcome')
+                    return {}
+                raise AssertionError('Unexpected or database API call: ' + url)
+
+            def command(args, **kwargs):
+                if args[:3] == ['docker', 'buildx', 'build']:
+                    (path / 'pushed-image.json').write_text(json.dumps({'containerimage.digest': DIGEST}))
+
+            with patch.dict(os.environ, {'GITHUB_SHA': SHA, 'GITHUB_REF': 'refs/heads/cloudflare-staging', 'GITHUB_ACTIONS': 'true', 'DOCKER_CONFIG': directory}), patch.object(release, 'validate'), patch.object(release, 'public_checks'), patch.object(release, 'prepared'), patch.object(release, 'rollout_image'), patch.object(release, 'api', side_effect=api), patch.object(release.subprocess, 'run', side_effect=command), contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(RuntimeError, 'previous code/image restored'):
+                    release.publish('staging', path)
+            self.assertEqual(len(writes), 2)
+            for metadata in writes:
+                self.assertEqual(metadata['containers'], [{'class_name': 'FamilyFundsWebStagingContainer'}])
+
     def test_feature_branches_and_mismatched_artifacts_never_get_deploy_credentials(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)
