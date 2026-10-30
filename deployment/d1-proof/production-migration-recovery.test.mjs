@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import {webcrypto} from 'node:crypto';
+import {createHash, webcrypto} from 'node:crypto';
 import {readFileSync} from 'node:fs';
+import {DatabaseSync} from 'node:sqlite';
 import test from 'node:test';
 import {runInNewContext} from 'node:vm';
-import {listProductionObjects, productionBackupPrefix, BACKUP_PREFIX} from './production-backup.mjs';
+import {listProductionObjects, openProductionBackup, productionBackupPrefix, productionBackupSlot, sealProductionBackup, BACKUP_PREFIX} from './production-backup.mjs';
 
 function bucket(initial = {}) {
     const data = new Map(Object.entries(initial));
@@ -14,7 +15,7 @@ function bucket(initial = {}) {
         async put(key, value) { data.set(key, value); }, async delete(key) { data.delete(key); }};
 }
 
-function fixture(overrides = {}) {
+function fixture(overrides = {}, clock = Date) {
     const source = readFileSync(new URL('./production-migration-recovery.mjs', import.meta.url), 'utf8')
         .replace(/^import .*;\n/gm, '').replace('export async function ', 'async function ').replace('export class ', 'class ');
     const env = {MIGRATION_RECOVERY_ENABLED: 'true', DATABASE_NAME: 'familyfunds-production', ENABLED: 'false', BACKUPS_ENABLED: 'false', OFFSITE_ENABLED: 'false',
@@ -24,7 +25,7 @@ function fixture(overrides = {}) {
         BACKUP_FILES: bucket({[BACKUP_PREFIX + 'd1/2026-10-27.json.aes-gcm']: 'old encrypted synthetic'}),
         RECOVERY_DB: {prepare: () => ({first: async () => ({n: 1})})}, ...overrides};
     const Recovery = runInNewContext(source + '\nProductionMigrationRecovery', {WorkerEntrypoint: class {constructor(env) {this.env = env;}},
-        crypto: webcrypto, TextEncoder, TextDecoder, Date, Set, BACKUP_PREFIX, listProductionObjects, productionBackupPrefix,
+        crypto: webcrypto, TextEncoder, TextDecoder, Date: clock, Set, BACKUP_PREFIX, listProductionObjects, openProductionBackup, productionBackupPrefix, productionBackupSlot,
         createProductionBackup: async (_env, _at, checkpoint) => ({key: productionBackupPrefix(checkpoint) + 'd1/fixture'})});
     return {env, recovery: new Recovery(env)};
 }
@@ -35,6 +36,75 @@ test('actual-data recovery refuses active schedulers and wrong snapshot identiti
         const f = fixture(change);
         await assert.rejects(f.recovery.run('archive-synthetic'));
         assert.equal(f.env.BACKUP_FILES.data.size, 1);
+    }
+});
+
+test('an isolated synthetic checkpoint restores tables, sequence values and verified files', async () => {
+    const db = new DatabaseSync(':memory:');
+    const target = {
+        prepare(sql) {
+            const statement = {sql, values: [], bind(...values) { this.values = values; return this; },
+                async all() { return {results: db.prepare(sql).all(...this.values)}; },
+                async first() { return db.prepare(sql).get(...this.values); }};
+            return statement;
+        },
+        async batch(statements) {
+            db.exec('BEGIN');
+            try {
+                const results = [];
+                for (const statement of statements) results.push(await statement.all());
+                db.exec('COMMIT');
+                return results;
+            } catch (error) {
+                db.exec('ROLLBACK');
+                throw error;
+            }
+        },
+    };
+    const checkpoint = 'cutover-20261030t180000z';
+    const capturedAt = new Date('2026-10-30T18:00:00Z');
+    class FixedDate extends Date {
+        constructor(...args) { super(...(args.length ? args : [capturedAt.valueOf()])); }
+    }
+    const secret = 'base64:' + Buffer.alloc(32, 7).toString('base64');
+    const names = ['families', 'users', ...Array.from({length: 53}, (_, index) => `fixture_${index}`)];
+    const tables = Object.fromEntries(names.map(name => [name, []]));
+    tables.families = Array.from({length: 44}, (_, index) => ({id: index + 1}));
+    tables.users = Array.from({length: 66}, (_, index) => ({id: index + 1}));
+    const schema = names.map(name => ({type: 'table', name, sql: `create table "${name}" (id integer primary key autoincrement)`}));
+    schema.push({type: 'index', name: 'fixture_users_index', sql: 'create index fixture_users_index on users(id)'});
+    schema.push({type: 'trigger', name: 'fixture_users_trigger', sql: 'create trigger fixture_users_trigger after insert on users begin select 1; end'});
+    const sequences = [{name: 'families', seq: 100}, {name: 'users', seq: 200}];
+    const backups = bucket();
+    const application = bucket({'private/existing.txt': 'keep'});
+    const files = [];
+    for (let index = 0; index < 7; index++) {
+        const bytes = new TextEncoder().encode(`synthetic file ${index}`);
+        const sha256 = createHash('sha256').update(bytes).digest('hex');
+        const backupKey = productionBackupPrefix(checkpoint) + `files/${sha256}.json.aes-gcm`;
+        await backups.put(backupKey, JSON.stringify(await sealProductionBackup(bytes, secret, `file:${sha256}`)));
+        files.push({bytes: bytes.length, sha256, backup_key: backupKey});
+    }
+    const snapshot = {schema, tables, sequences, files};
+    const backupKey = productionBackupPrefix(checkpoint) + `d1/${productionBackupSlot(capturedAt)}.json.aes-gcm`;
+    await backups.put(backupKey, JSON.stringify(await sealProductionBackup(new TextEncoder().encode(JSON.stringify(snapshot)), secret, 'database')));
+    const f = fixture({RECOVERY_DB: target, BACKUP_FILES: backups, APPLICATION_FILES: application, BACKUP_KEY: secret}, FixedDate);
+
+    try {
+        const result = await f.recovery.run('restore', checkpoint);
+        assert.equal(result.status, 'passed');
+        assert.equal(result.tables.length, 55);
+        assert.equal(result.files.length, 7);
+        assert.equal(result.integrity, 'ok');
+        assert.equal(result.tamper_rejected, true);
+        assert.deepEqual(db.prepare('select name,seq from sqlite_sequence order by name').all().map(row => ({...row})), sequences);
+        assert.equal(db.prepare('select count(*) n from families').get().n, 44);
+        assert.equal(db.prepare('select count(*) n from users').get().n, 66);
+        assert.equal(db.prepare("select count(*) n from sqlite_master where name in ('fixture_users_index','fixture_users_trigger')").get().n, 2);
+        assert.deepEqual([...application.data.keys()], ['private/existing.txt']);
+        await assert.rejects(f.recovery.run('restore', checkpoint), /must be empty/);
+    } finally {
+        db.close();
     }
 });
 
