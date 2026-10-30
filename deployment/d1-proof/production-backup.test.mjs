@@ -148,6 +148,42 @@ test('a cutover checkpoint refuses file inventory changes during capture', async
     assert.equal(f.objects.has(BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/d1/' + productionBackupSlot(at) + '.json.aes-gcm'), false);
 });
 
+test('a cutover checkpoint refuses an unreadable encrypted file before publishing its database', async () => {
+    const f = fixture();
+    const put = f.env.BACKUP_FILES.put;
+    f.env.BACKUP_FILES.put = async (key, value, options) => {
+        const stored = await put(key, value, options);
+        if (key.includes('/files/')) {
+            const envelope = JSON.parse(value);
+            envelope.ciphertext = (envelope.ciphertext[0] === 'A' ? 'B' : 'A') + envelope.ciphertext.slice(1);
+            f.objects.get(key).bytes = Buffer.from(JSON.stringify(envelope));
+        }
+        return stored;
+    };
+    const checkpoint = 'cutover-20261027t140003z';
+
+    await assert.rejects(createProductionBackup(f.env, at, checkpoint));
+    assert.equal(f.objects.has(BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/d1/' + productionBackupSlot(at) + '.json.aes-gcm'), false);
+});
+
+test('a cutover checkpoint reports an unreadable published database instead of success', async () => {
+    const f = fixture();
+    const put = f.env.BACKUP_FILES.put;
+    f.env.BACKUP_FILES.put = async (key, value, options) => {
+        const stored = await put(key, value, options);
+        if (key.includes('/d1/')) {
+            const envelope = JSON.parse(value);
+            envelope.ciphertext = (envelope.ciphertext[0] === 'A' ? 'B' : 'A') + envelope.ciphertext.slice(1);
+            f.objects.get(key).bytes = Buffer.from(JSON.stringify(envelope));
+        }
+        return stored;
+    };
+    const checkpoint = 'cutover-20261027t140004z';
+
+    await assert.rejects(createProductionBackup(f.env, at, checkpoint));
+    assert.equal(f.objects.has(BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/d1/' + productionBackupSlot(at) + '.json.aes-gcm'), true);
+});
+
 test("a database-referenced missing file prevents publishing a successful backup", async () => {
     const f = fixture(); f.appObjects.delete("private/reports/fixture.pdf");
     await assert.rejects(() => createProductionBackup(f.env, at), /missing/);

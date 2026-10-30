@@ -128,6 +128,14 @@ export async function createProductionBackup(env, at, checkpoint = null) {
             const envelope = await sealProductionBackup(bytes, env.BACKUP_KEY, "file:" + sha256);
             await env.BACKUP_FILES.put(blobKey, JSON.stringify(envelope), {onlyIf: {etagDoesNotMatch: "*"}, httpMetadata: {contentType: "application/octet-stream"}});
         }
+        if (checkpoint !== null) {
+            const stored = await env.BACKUP_FILES.get(blobKey);
+            if (!stored || stored.size > 24_000_000) throw new Error('Production checkpoint file is missing or excessive');
+            const envelope = JSON.parse(await stored.text());
+            if (envelope.kind !== 'file:' + sha256) throw new Error('Production checkpoint file identity differs');
+            const restored = await openProductionBackup(envelope, env.BACKUP_KEY);
+            if (restored.length !== bytes.length || await digest(restored) !== sha256) throw new Error('Production checkpoint file differs');
+        }
         captured.files.push({path: file.key, bytes: bytes.length, sha256, backup_key: blobKey});
     }
     for (const table of ["report_artifacts", "reconciliation_imports"]) {
@@ -154,6 +162,14 @@ export async function createProductionBackup(env, at, checkpoint = null) {
     const verified = await openProductionBackup(envelope, env.BACKUP_KEY);
     if (await digest(verified) !== await digest(bytes)) throw new Error("Production backup verification failed");
     const stored = await env.BACKUP_FILES.put(objectKey, JSON.stringify(envelope), {onlyIf: {etagDoesNotMatch: "*"}, httpMetadata: {contentType: "application/octet-stream"}, customMetadata: {captured_at: captured.captured_at, plaintext_sha256: envelope.sha256}});
+    if (checkpoint !== null && stored) {
+        const published = await env.BACKUP_FILES.get(objectKey);
+        if (!published || published.size > 12_000_000) throw new Error('Production checkpoint database is missing or excessive');
+        const publishedEnvelope = JSON.parse(await published.text());
+        if (publishedEnvelope.kind !== 'database') throw new Error('Production checkpoint database identity differs');
+        const restored = await openProductionBackup(publishedEnvelope, env.BACKUP_KEY);
+        if (await digest(restored) !== await digest(bytes)) throw new Error('Production checkpoint database differs');
+    }
     return {status: stored ? "created" : "already_present", key: objectKey, tables: Object.keys(captured.tables).length, files: captured.files.length};
 }
 
