@@ -22,6 +22,7 @@ use Illuminate\Queue\Attributes\MaxExceptions;
 use Illuminate\Queue\Attributes\Timeout;
 use Illuminate\Queue\Attributes\Tries;
 use Illuminate\Queue\Middleware\RateLimited;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use NotificationChannels\WebPush\WebPushChannel;
 use NotificationChannels\WebPush\WebPushMessage;
 use Throwable;
@@ -213,11 +214,16 @@ class ContributionReminderNotification extends Notification implements ShouldQue
     public function middleware(object $notifiable, string $channel): array
     {
         $this->activeChannel = $channel;
-        if ($channel !== WhatsAppChannel::class) {
-            return [];
+        $middleware = [];
+        $deliveryId = $this->deliveryIds[$channel] ?? null;
+        if ($deliveryId !== null) {
+            $middleware[] = (new WithoutOverlapping("contribution-reminder:{$deliveryId}"))->releaseAfter(90)->expireAfter(180);
+        }
+        if ($channel === WhatsAppChannel::class) {
+            $middleware[] = (new RateLimited('whatsapp-notifications'))->releaseAfter(60);
         }
 
-        return [(new RateLimited('whatsapp-notifications'))->releaseAfter(60)];
+        return $middleware;
     }
 
     /**

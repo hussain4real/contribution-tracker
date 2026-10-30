@@ -107,6 +107,37 @@ it('does not send an accepted reminder again if its job is replayed', function (
     expect(ContributionReminderDelivery::sole()->status)->toBe('accepted');
 });
 
+it('does not send a reminder twice when queued executions overlap', function () {
+    config(['queue.default' => 'database', 'queue.connections.database.connection' => null,
+        'services.whatsapp.access_token' => 'test-token', 'services.whatsapp.phone_number_id' => 'test-id']);
+    Http::fake(['graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.overlap']]])]);
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->withVerifiedWhatsApp('+2348012345678')->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
+    app(QueueContributionReminder::class)->queue($member, (new ContributionReminderNotification($contribution))->onlyChannels(['whatsapp']));
+    $queuedJob = (array) DB::table('jobs')->first();
+    unset($queuedJob['id']);
+    DB::table('jobs')->insert($queuedJob);
+    $overlapped = false;
+    Event::listen(NotificationSending::class, function () use (&$overlapped): void {
+        if (! $overlapped) {
+            $overlapped = true;
+            $this->artisan('queue:work', ['connection' => 'database', '--once' => true, '--sleep' => 0])->assertSuccessful();
+        }
+    });
+
+    $this->artisan('queue:work', ['connection' => 'database', '--once' => true, '--sleep' => 0])->assertSuccessful();
+
+    expect($overlapped)->toBeTrue();
+    Http::assertSentCount(1);
+    expect(ContributionReminderDelivery::sole()->status)->toBe('accepted');
+    expect(DB::table('jobs')->count())->toBe(1);
+    $this->travel(91)->seconds();
+    $this->artisan('queue:work', ['connection' => 'database', '--once' => true, '--sleep' => 0])->assertSuccessful();
+    Http::assertSentCount(1);
+    expect(DB::table('jobs')->count())->toBe(0);
+});
+
 it('records an unconfirmed WhatsApp attempt when the provider request fails', function () {
     config(['queue.default' => 'database', 'queue.connections.database.connection' => null,
         'services.whatsapp.access_token' => 'test-token', 'services.whatsapp.phone_number_id' => 'test-id']);
