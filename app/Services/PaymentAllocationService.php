@@ -95,20 +95,6 @@ class PaymentAllocationService
             $replaces,
             $expectedAllocations,
         ): PaymentBatch {
-            $existing = PaymentBatch::query()
-                ->where('family_id', $family->id)
-                ->where('idempotency_key', $idempotencyKey)
-                ->with('allocations')
-                ->first();
-
-            if ($existing instanceof PaymentBatch) {
-                if ($expectedAllocations !== null) {
-                    $this->verifyReviewedReplay($existing, $member, $amount, $paidAt, $recordedBy, $method, $reference, $notes, $expectedAllocations);
-                }
-
-                return $existing;
-            }
-
             $lockedFamily = Family::query()->lockForUpdate()->findOrFail($family->id);
             $existing = PaymentBatch::query()->where('family_id', $family->id)
                 ->where('idempotency_key', $idempotencyKey)->with('allocations')->first();
