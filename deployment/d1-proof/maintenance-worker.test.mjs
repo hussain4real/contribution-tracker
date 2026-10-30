@@ -286,6 +286,31 @@ test('checkpoint rejects a changed application file inventory before publishing 
     assert.equal(objects.get('private/reports/second.csv'), 'second');
 });
 
+test('checkpoint rejects a database change made while its application files are copied', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+        for (let i = 0; i < 40; i++) db.exec(`create table fixture_${i} (id integer primary key autoincrement)`);
+        const {env, objects, checkpointObjects} = backupFixture();
+        env.DB = {prepare: sql => ({sql, all: async () => ({results: db.prepare(sql).all()})}),
+            batch: async statements => statements.map(statement => ({results: db.prepare(statement.sql).all()}))};
+        env.STAGING_BACKUP_ONLY_ENABLED = 'true';
+        objects.set('private/reports/fixture.csv', 'synthetic');
+        const get = env.STAGING_FILES.get;
+        env.STAGING_FILES.get = async (...args) => {
+            const result = await get(...args);
+            db.exec('insert into fixture_0 (id) values (1)');
+            return result;
+        };
+
+        const checkpoint = 'cutover-20261030t202100z';
+        await assert.rejects(new StagingBackupOnly(env).create(checkpoint), /database changed during checkpoint/i);
+        assert.equal(checkpointObjects.has('private/staging-backups/d1-web/checkpoints/' + checkpoint + '.json.aes-gcm'), false);
+        assert.equal(db.prepare('select count(*) n from fixture_0').get().n, 1);
+    } finally {
+        db.close();
+    }
+});
+
 test("an integrity failure prevents publishing a backup", async () => {
     const {env, objects, corrupt} = backupFixture();
     corrupt();

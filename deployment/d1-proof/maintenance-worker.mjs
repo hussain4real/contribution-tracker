@@ -148,7 +148,18 @@ async function createBackup(env, at, checkpoint = null) {
     if (result[tables.length + 1].results.length !== 0 || result[tables.length + 2].results[0]?.quick_check !== "ok") throw new Error("Staging backup integrity check failed");
     const snapshot = {version: 1, database: DATABASE, captured_at: new Date().toISOString(), schema: before,
         tables: Object.fromEntries(tables.map((name, i) => [name, result[i].results])), sequences: result[tables.length].results};
-    if (checkpoint !== null) snapshot.files = await checkpointFiles(env, snapshot, checkpoint);
+    if (checkpoint !== null) {
+        if (encoder.encode(JSON.stringify(snapshot)).length > 20_000_000) throw new Error('Staging backup exceeds size budget');
+        snapshot.files = await checkpointFiles(env, snapshot, checkpoint);
+        const after = await env.DB.batch([
+            ...tables.map(name => env.DB.prepare(`select * from "${name}"`)),
+            env.DB.prepare("select name,seq from sqlite_sequence order by name"), env.DB.prepare(schemaSql),
+        ]);
+        const canonical = rows => JSON.stringify(rows.map(row => JSON.stringify(Object.keys(row).sort().map(key => [key, row[key]]))).sort());
+        if (JSON.stringify(before) !== JSON.stringify(after[tables.length + 1].results)
+            || canonical(snapshot.sequences) !== canonical(after[tables.length].results)
+            || tables.some((name, i) => canonical(snapshot.tables[name]) !== canonical(after[i].results))) throw new Error('Staging database changed during checkpoint');
+    }
     const sealed = await sealBackup(snapshot, env.BACKUP_APP_KEY);
     const stored = await destination.put(objectKey, JSON.stringify(sealed.envelope), {
         onlyIf: {etagDoesNotMatch: "*"}, httpMetadata: {contentType: "application/octet-stream"},
