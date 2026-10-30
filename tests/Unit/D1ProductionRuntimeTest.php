@@ -91,6 +91,8 @@ beforeEach(function (): void {
 it('uses production drivers and private storage without enabling the staging profile or delivery', function (): void {
     expect(DB::getDefaultConnection())->toBe('d1')
         ->and(config('session.encrypt'))->toBeTrue()
+        ->and(config('session.lifetime'))->toBe(10080)
+        ->and(config('session.expire_on_close'))->toBeFalse()
         ->and(config('cache.default'))->toBe('d1')
         ->and(config('filesystems.disks.local.bucket'))->toBe(D1RuntimeProfile::PRODUCTION_BUCKET)
         ->and(config('filesystems.disks.public.visibility'))->toBe('private')

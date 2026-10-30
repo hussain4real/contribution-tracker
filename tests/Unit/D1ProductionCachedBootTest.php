@@ -81,6 +81,8 @@ echo json_encode([
     'rate_limiter' => get_class(app(Illuminate\Cache\RateLimiter::class)),
     'mfa_limiter_registered' => app(Illuminate\Cache\RateLimiter::class)->limiter('two-factor') !== null,
     'session' => get_class(Illuminate\Support\Facades\Session::driver()->getHandler()),
+    'session_lifetime' => config('session.lifetime'),
+    'session_expire_on_close' => config('session.expire_on_close'),
     'queue' => get_class(Illuminate\Support\Facades\Queue::connection()),
     'bucket' => config('filesystems.disks.local.bucket'), 'staging_enabled' => config('d1-staging.enabled'),
     'mail' => config('mail.default'),
@@ -98,6 +100,8 @@ PHP;
                 'rate_limiter' => 'FamilyFunds\\D1Staging\\D1RuntimeRateLimiter',
                 'mfa_limiter_registered' => true,
                 'session' => 'FamilyFunds\\D1Staging\\D1StagingSessionHandler',
+                'session_lifetime' => 10080,
+                'session_expire_on_close' => false,
                 'queue' => 'FamilyFunds\\D1Staging\\D1StagingQueue',
                 'bucket' => 'familyfunds-production-private', 'staging_enabled' => false, 'mail' => 'array',
             ]);
