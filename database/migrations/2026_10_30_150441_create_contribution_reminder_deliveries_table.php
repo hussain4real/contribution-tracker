@@ -24,7 +24,7 @@ return new class extends Migration
             $table->timestamp('accepted_at')->nullable();
             $table->timestamp('failed_at')->nullable();
             $table->timestamps();
-            $table->index(['contribution_id', 'created_at']);
+            $table->index(['contribution_id', 'created_at'], 'reminder_deliveries_contribution_created_idx');
         });
     }
 
