@@ -111,6 +111,8 @@ function togglePayments() {
         <div v-if="contribution.payments.length > 0" class="mt-4">
             <button
                 @click="togglePayments"
+                :aria-expanded="showPayments"
+                :aria-label="`${showPayments ? 'Hide' : 'Show'} ${contribution.payments.length} payment${contribution.payments.length === 1 ? '' : 's'} for ${contribution.period_label}`"
                 class="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
             >
                 <component

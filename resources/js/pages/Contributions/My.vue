@@ -266,6 +266,7 @@ const { formatCurrency } = useCurrencyFormatter();
                         </div>
                         <Button variant="outline" as-child
                             ><a
+                                :aria-label="`Download receipt #${receipt.receipt_number}`"
                                 :href="
                                     PaymentReceiptController({
                                         payment_batch: receipt.id,
