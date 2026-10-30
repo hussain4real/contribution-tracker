@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+    index as paymentsIndex,
     review,
     store,
 } from '@/actions/App/Http/Controllers/PaymentController';
@@ -20,7 +21,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { useCurrencyFormatter } from '@/lib/currency';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
-import { Form, Head, useHttp } from '@inertiajs/vue3';
+import { Form, Head, Link, useHttp } from '@inertiajs/vue3';
 import { computed, nextTick, ref, watch } from 'vue';
 
 interface Member {
@@ -148,6 +149,8 @@ const reviewRequest = useHttp<
 const reviewed = ref<ReviewResult | null>(null);
 const reviewHeading = ref<HTMLHeadingElement | null>(null);
 const reviewError = ref('');
+const paymentResponsePending = ref(false);
+const paymentUnconfirmed = ref(false);
 const reviewInputs = () => ({
     member_id: props.member.id,
     amount: amount.value,
@@ -237,7 +240,19 @@ async function reviewPayment(): Promise<void> {
                 :action="store()"
                 class="space-y-6"
                 :on-before="() => reviewed !== null"
-                @error="reviewed = null"
+                @start="paymentResponsePending = true"
+                @success="
+                    paymentResponsePending = false;
+                    paymentUnconfirmed = false;
+                "
+                @error="
+                    paymentResponsePending = false;
+                    reviewed = null;
+                "
+                @finish="
+                    if (paymentResponsePending) paymentUnconfirmed = true;
+                    paymentResponsePending = false;
+                "
                 #default="{
                     errors,
                     validate,
@@ -453,6 +468,17 @@ async function reviewPayment(): Promise<void> {
                     {{ reviewError }}
                 </p>
                 <InputError :message="errors.review" />
+                <p
+                    v-if="paymentUnconfirmed"
+                    role="alert"
+                    class="text-sm text-red-600"
+                >
+                    We couldn't confirm whether this payment was recorded.
+                    <Link :href="paymentsIndex().url" class="underline">
+                        Check Payments for the receipt
+                    </Link>
+                    before recording another payment.
+                </p>
                 <div class="flex items-center gap-4">
                     <Button
                         v-if="!reviewed"
