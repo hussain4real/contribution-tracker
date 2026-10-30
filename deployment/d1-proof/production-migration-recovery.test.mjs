@@ -12,10 +12,10 @@ function bucket(initial = {}) {
         async list({prefix}) { return {objects: [...data.keys()].filter(key => key.startsWith(prefix)).map(key => ({key})), truncated: false}; },
         async get(key) { const value = data.get(key); if (value === undefined) return null; const bytes = typeof value === 'string' ? new TextEncoder().encode(value) : value;
             return {size: bytes.length, arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), text: async () => new TextDecoder().decode(bytes)}; },
-        async put(key, value) { data.set(key, value); }, async delete(key) { data.delete(key); }};
+        async put(key, value, options = {}) { if (options.onlyIf?.etagDoesNotMatch === '*' && data.has(key)) return null; data.set(key, value); return {key}; }, async delete(key) { data.delete(key); }};
 }
 
-function fixture(overrides = {}, clock = Date) {
+function fixture(overrides = {}, clock = Date, cryptography = webcrypto) {
     const source = readFileSync(new URL('./production-migration-recovery.mjs', import.meta.url), 'utf8')
         .replace(/^import .*;\n/gm, '').replace('export async function ', 'async function ').replace('export class ', 'class ');
     const env = {MIGRATION_RECOVERY_ENABLED: 'true', DATABASE_NAME: 'familyfunds-production', ENABLED: 'false', BACKUPS_ENABLED: 'false', OFFSITE_ENABLED: 'false',
@@ -25,7 +25,7 @@ function fixture(overrides = {}, clock = Date) {
         BACKUP_FILES: bucket({[BACKUP_PREFIX + 'd1/2026-10-27.json.aes-gcm']: 'old encrypted synthetic'}),
         RECOVERY_DB: {prepare: () => ({first: async () => ({n: 1})})}, ...overrides};
     const Recovery = runInNewContext(source + '\nProductionMigrationRecovery', {WorkerEntrypoint: class {constructor(env) {this.env = env;}},
-        crypto: webcrypto, TextEncoder, TextDecoder, Date: clock, Set, BACKUP_PREFIX, listProductionObjects, openProductionBackup, productionBackupPrefix, productionBackupSlot,
+        crypto: cryptography, TextEncoder, TextDecoder, Date: clock, Set, BACKUP_PREFIX, listProductionObjects, openProductionBackup, productionBackupPrefix, productionBackupSlot,
         createProductionBackup: async (_env, _at, checkpoint) => ({key: productionBackupPrefix(checkpoint) + 'd1/fixture'})});
     return {env, recovery: new Recovery(env)};
 }
@@ -41,7 +41,7 @@ test('actual-data recovery refuses active schedulers and wrong snapshot identiti
 
 test('an isolated synthetic checkpoint restores tables, sequence values and verified files', async () => {
     const db = new DatabaseSync(':memory:');
-    const target = {
+    const makeTarget = db => ({
         prepare(sql) {
             const statement = {sql, values: [], bind(...values) { this.values = values; return this; },
                 async all() { return {results: db.prepare(sql).all(...this.values)}; },
@@ -60,7 +60,8 @@ test('an isolated synthetic checkpoint restores tables, sequence values and veri
                 throw error;
             }
         },
-    };
+    });
+    const target = makeTarget(db);
     const checkpoint = 'cutover-20261030t180000z';
     const capturedAt = new Date('2026-10-30T18:00:00Z');
     class FixedDate extends Date {
@@ -88,9 +89,18 @@ test('an isolated synthetic checkpoint restores tables, sequence values and veri
     const snapshot = {schema, tables, sequences, files};
     const backupKey = productionBackupPrefix(checkpoint) + `d1/${productionBackupSlot(capturedAt)}.json.aes-gcm`;
     await backups.put(backupKey, JSON.stringify(await sealProductionBackup(new TextEncoder().encode(JSON.stringify(snapshot)), secret, 'database')));
-    const f = fixture({RECOVERY_DB: target, BACKUP_FILES: backups, APPLICATION_FILES: application, BACKUP_KEY: secret}, FixedDate);
+    const runId = '11111111-1111-4111-8111-111111111111';
+    const f = fixture({RECOVERY_DB: target, BACKUP_FILES: backups, APPLICATION_FILES: application, BACKUP_KEY: secret}, FixedDate,
+        {subtle: webcrypto.subtle, randomUUID: () => runId});
 
     try {
+        const conflictPath = `migration-recovery/actual-20261027/${runId}/${files[0].sha256}`;
+        application.data.set(conflictPath, 'existing recovery evidence');
+        await assert.rejects(f.recovery.run('restore', checkpoint), /recovery file already exists/i);
+        assert.equal(application.data.get(conflictPath), 'existing recovery evidence');
+        assert.equal(db.prepare("select count(*) n from sqlite_master where type='table' and name not glob 'sqlite_*'").get().n, 0);
+        application.data.delete(conflictPath);
+
         const result = await f.recovery.run('restore', checkpoint);
         assert.equal(result.status, 'passed');
         assert.equal(result.tables.length, 55);
@@ -103,6 +113,34 @@ test('an isolated synthetic checkpoint restores tables, sequence values and veri
         assert.equal(db.prepare("select count(*) n from sqlite_master where name in ('fixture_users_index','fixture_users_trigger')").get().n, 2);
         assert.deepEqual([...application.data.keys()], ['private/existing.txt']);
         await assert.rejects(f.recovery.run('restore', checkpoint), /must be empty/);
+
+        const racingDb = new DatabaseSync(':memory:');
+        try {
+            const racingBucket = bucket();
+            const put = racingBucket.put;
+            racingBucket.put = async (key, value, options) => {
+                racingBucket.data.set(key, 'competing recovery evidence');
+                return put(key, value, options);
+            };
+            const racing = fixture({RECOVERY_DB: makeTarget(racingDb), BACKUP_FILES: backups, APPLICATION_FILES: racingBucket, BACKUP_KEY: secret}, FixedDate,
+                {subtle: webcrypto.subtle, randomUUID: () => runId});
+            await assert.rejects(racing.recovery.run('restore', checkpoint), /recovery file already exists/i);
+            assert.equal(racingBucket.data.get(conflictPath), 'competing recovery evidence');
+        } finally {
+            racingDb.close();
+        }
+
+        const failedDb = new DatabaseSync(':memory:');
+        try {
+            const failedBucket = bucket();
+            failedBucket.get = async () => null;
+            const failed = fixture({RECOVERY_DB: makeTarget(failedDb), BACKUP_FILES: backups, APPLICATION_FILES: failedBucket, BACKUP_KEY: secret}, FixedDate,
+                {subtle: webcrypto.subtle, randomUUID: () => runId});
+            await assert.rejects(failed.recovery.run('restore', checkpoint), /missing or excessive bounded recovery object/i);
+            assert.equal(failedBucket.data.size, 0);
+        } finally {
+            failedDb.close();
+        }
     } finally {
         db.close();
     }

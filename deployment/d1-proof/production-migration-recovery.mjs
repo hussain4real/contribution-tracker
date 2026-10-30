@@ -92,6 +92,11 @@ export class ProductionMigrationRecovery extends WorkerEntrypoint {
         if (snapshot.tables.users?.length !== 66 || snapshot.tables.families?.length !== 44 || snapshot.files.length !== 7) throw new Error('Unexpected actual recovery snapshot');
         const names = Object.keys(snapshot.tables);
         if (names.length !== 55 || names.some(name => !/^[a-z_][a-z0-9_]*$/.test(name))) throw new Error('Unexpected recovery tables');
+        const recoveryPrefix = RECOVERY + crypto.randomUUID() + '/';
+        for (const file of snapshot.files) {
+            if (typeof file.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(file.sha256)) throw new Error('Invalid recovery file digest');
+            if (await this.env.APPLICATION_FILES.head(recoveryPrefix + file.sha256)) throw new Error('Recovery file already exists');
+        }
         const statements = [this.env.RECOVERY_DB.prepare('pragma defer_foreign_keys=on')];
         for (const item of snapshot.schema.filter(item => item.type === 'table')) statements.push(this.env.RECOVERY_DB.prepare(item.sql));
         for (const name of names) {
@@ -127,11 +132,15 @@ export class ProductionMigrationRecovery extends WorkerEntrypoint {
             const sealed = await boundedObject(this.env.BACKUP_FILES, file.backup_key);
             const bytes = await openProductionBackup(JSON.parse(new TextDecoder().decode(sealed.bytes)), this.env.BACKUP_KEY);
             if (bytes.length !== file.bytes || await digest(bytes) !== file.sha256) throw new Error('Decrypted actual file differs');
-            const path = RECOVERY + file.sha256;
-            await this.env.APPLICATION_FILES.put(path, bytes);
-            const restored = await boundedObject(this.env.APPLICATION_FILES, path);
-            if (await digest(restored.bytes) !== file.sha256) throw new Error('Restored actual file differs');
-            await this.env.APPLICATION_FILES.delete(path);
+            const path = recoveryPrefix + file.sha256;
+            const created = await this.env.APPLICATION_FILES.put(path, bytes, {onlyIf: {etagDoesNotMatch: '*'}});
+            if (!created) throw new Error('Recovery file already exists');
+            try {
+                const restored = await boundedObject(this.env.APPLICATION_FILES, path);
+                if (await digest(restored.bytes) !== file.sha256) throw new Error('Restored actual file differs');
+            } finally {
+                await this.env.APPLICATION_FILES.delete(path);
+            }
             files.push({bytes: bytes.length, sha256: file.sha256});
         }
         let tamperRejected = false;
