@@ -107,6 +107,9 @@ it('refuses to record a payment when the notification queue uses a different dat
 });
 
 it('keeps a receipt retry available if its job cannot be queued', function () {
+    if (DB::connection()->getDriverName() !== 'sqlite') {
+        $this->markTestSkipped('This queue failure simulation uses an SQLite trigger.');
+    }
     $batch = recordReceiptPayment($this);
     $delivery = $batch->receiptDeliveries()->where('channel', 'mail')->firstOrFail();
     $delivery->update(['status' => 'failed', 'failed_at' => now()]);
@@ -123,6 +126,9 @@ it('keeps a receipt retry available if its job cannot be queued', function () {
 });
 
 it('does not queue a receipt retry if its delivery status changes concurrently', function () {
+    if (DB::connection()->getDriverName() !== 'sqlite') {
+        $this->markTestSkipped('This status race simulation uses an SQLite trigger.');
+    }
     $batch = recordReceiptPayment($this);
     $delivery = $batch->receiptDeliveries()->where('channel', 'mail')->firstOrFail();
     $delivery->update(['status' => 'failed', 'failed_at' => now()]);
