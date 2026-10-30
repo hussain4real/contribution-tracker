@@ -150,7 +150,7 @@ final class D1StagingRuntime
         $directory = config(D1RuntimeProfile::key('read_snapshot_path'));
         $database = config(D1RuntimeProfile::key('database'));
         if (! is_string($directory) || ! is_string($database)
-            || (! is_dir($directory) && ! mkdir($directory, 0700, true) && ! is_dir($directory))) {
+            || (! is_dir($directory) && ! @mkdir($directory, 0700, true) && ! is_dir($directory))) {
             throw new RuntimeException('Could not prepare the private staging read cache.');
         }
         $path = $directory.'/'.hash('sha256', $database.':'.$familyId).'.sqlite';
