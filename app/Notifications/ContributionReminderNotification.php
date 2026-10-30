@@ -103,20 +103,20 @@ class ContributionReminderNotification extends Notification implements ShouldQue
         if ($membership === null) {
             return [];
         }
-        $preferences = $membership->reminder_channels ?? ['mail', 'whatsapp', 'webpush'];
-        $familyChannels = $this->contribution->family?->reminderSettingsForMonth(now('UTC')->format('Y-m'))['channels']
-            ?? ['mail', 'whatsapp', 'webpush'];
-        $preferences = array_values(array_intersect($preferences, $familyChannels));
         $family = $this->contribution->family;
-        if ($family instanceof Family) {
-            $family->loadMissing('platformPlan');
-            $plan = $family->platformPlan ?? PlatformPlan::query()->where('slug', PlatformPlanCatalog::Free)->where('is_active', true)->first();
-            if ($plan instanceof PlatformPlan) {
-                $features = ['mail' => PlatformPlanCatalog::EmailReminders, 'whatsapp' => PlatformPlanCatalog::WhatsappReminders, 'webpush' => PlatformPlanCatalog::WebPushReminders];
-                $preferences = array_values(array_filter($preferences, fn (string $channel): bool => isset($features[$channel]) && in_array($features[$channel], $plan->features, true)));
-                if ($plan->isPaid() && in_array($family->subscription_status, ['cancelled', 'past_due'], true)) {
-                    $preferences = [];
-                }
+        if (! $family instanceof Family) {
+            return [];
+        }
+        $preferences = $membership->reminder_channels ?? ['mail', 'whatsapp', 'webpush'];
+        $familyChannels = $family->reminderSettingsForMonth(now('UTC')->format('Y-m'))['channels'];
+        $preferences = array_values(array_intersect($preferences, $familyChannels));
+        $family->loadMissing('platformPlan');
+        $plan = $family->platformPlan ?? PlatformPlan::query()->where('slug', PlatformPlanCatalog::Free)->where('is_active', true)->first();
+        if ($plan instanceof PlatformPlan) {
+            $features = ['mail' => PlatformPlanCatalog::EmailReminders, 'whatsapp' => PlatformPlanCatalog::WhatsappReminders, 'webpush' => PlatformPlanCatalog::WebPushReminders];
+            $preferences = array_values(array_filter($preferences, fn (string $channel): bool => isset($features[$channel]) && in_array($features[$channel], $plan->features, true)));
+            if ($plan->isPaid() && in_array($family->subscription_status, ['cancelled', 'past_due'], true)) {
+                $preferences = [];
             }
         }
         $allowed = ['database'];

@@ -9,6 +9,7 @@ use App\Models\ContributionReminderDelivery;
 use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
+use App\Models\WhatsAppMessage;
 use App\Notifications\ContributionReminderNotification;
 use App\Services\QueueContributionReminder;
 use Illuminate\Http\Client\Request;
@@ -163,4 +164,95 @@ it('rejects retries when the member has disabled the reminder channel', function
         ->assertRedirect()->assertSessionHas('error');
     expect($delivery->fresh()?->status)->toBe('failed');
     Notification::assertNothingSent();
+});
+
+it('shows a provider-reported WhatsApp failure and retries only that reminder', function () {
+    Notification::fake();
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->withVerifiedWhatsApp('+2348012345678')->create(['family_id' => $family->id]);
+    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
+    WhatsAppMessage::factory()->create(['wa_message_id' => 'wamid.reminder-failed', 'status' => 'failed',
+        'error_code' => '131000', 'error_message' => 'private provider detail']);
+    $delivery = ContributionReminderDelivery::factory()->create(['contribution_id' => $contribution->id,
+        'channel' => 'whatsapp', 'status' => 'accepted', 'provider_message_id' => 'wamid.reminder-failed']);
+
+    $response = $this->actingAs($officer)->get(route('contributions.show', ['current_family' => $family->slug, 'contribution' => $contribution]));
+    $response->assertOk()->assertInertia(fn (Assert $page) => $page
+        ->where('reminder_deliveries.0.status', 'failed')
+        ->where('reminder_deliveries.0.failure_reason', 'WhatsApp reported delivery error 131000.')
+        ->where('reminder_deliveries.0.can_retry', true));
+    $response->assertDontSee('private provider detail');
+    $this->actingAs($officer)->post(route('reminder-deliveries.retry', ['current_family' => $family->slug, 'delivery' => $delivery->id]))
+        ->assertRedirect()->assertSessionHas('success');
+    expect($delivery->fresh()?->status)->toBe('queued')->and($delivery->fresh()?->provider_message_id)->toBeNull();
+    Notification::assertSentToTimes($member, ContributionReminderNotification::class, 1);
+});
+
+it('does not expose unsafe provider failure details in reminder history', function () {
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
+    WhatsAppMessage::factory()->create(['wa_message_id' => 'wamid.unsafe', 'status' => 'failed',
+        'error_code' => 'secret-code', 'error_message' => 'private provider detail']);
+    ContributionReminderDelivery::factory()->create(['contribution_id' => $contribution->id,
+        'channel' => 'whatsapp', 'status' => 'accepted', 'provider_message_id' => 'wamid.unsafe']);
+
+    $response = $this->actingAs($officer)->get(route('contributions.show', ['current_family' => $family->slug, 'contribution' => $contribution]));
+    $response->assertOk()->assertInertia(fn (Assert $page) => $page
+        ->where('reminder_deliveries.0.failure_reason', 'WhatsApp reported that delivery failed.'));
+    $response->assertDontSee('secret-code')->assertDontSee('private provider detail');
+});
+
+it('shows a queued reminder without a failure reason', function () {
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
+    ContributionReminderDelivery::factory()->create(['contribution_id' => $contribution->id, 'channel' => 'mail', 'status' => 'queued']);
+
+    $this->actingAs($officer)->get(route('contributions.show', ['current_family' => $family->slug, 'contribution' => $contribution]))
+        ->assertOk()->assertInertia(fn (Assert $page) => $page
+        ->where('reminder_deliveries.0.status', 'queued')
+        ->where('reminder_deliveries.0.failure_reason', null)
+        ->where('reminder_deliveries.0.can_retry', false));
+});
+
+it('queues a browser reminder retry without changing the contribution', function () {
+    Notification::fake();
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 1000]);
+    $delivery = ContributionReminderDelivery::factory()->create(['contribution_id' => $contribution->id, 'channel' => 'webpush', 'status' => 'failed']);
+    $this->actingAs($officer)->post(route('reminder-deliveries.retry', ['current_family' => $family->slug, 'delivery' => $delivery->id]))
+        ->assertRedirect()->assertSessionHas('success');
+    expect($delivery->fresh()?->status)->toBe('queued')->and($contribution->fresh()?->balance)->toBe(1000);
+});
+
+it('does not queue a reminder retry if its delivery status changes concurrently', function () {
+    Notification::fake();
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
+    $delivery = ContributionReminderDelivery::factory()->create(['contribution_id' => $contribution->id, 'channel' => 'mail', 'status' => 'failed']);
+    DB::statement("create trigger simulate_reminder_status_race before update on contribution_reminder_deliveries when old.status = 'failed' and new.status = 'queued' begin update contribution_reminder_deliveries set status='accepted' where id=old.id; select raise(ignore); end");
+
+    $this->actingAs($officer)->post(route('reminder-deliveries.retry', ['current_family' => $family->slug, 'delivery' => $delivery->id]))
+        ->assertRedirect()->assertSessionHas('error', 'Delivery status changed. Refresh and check it before retrying.');
+    expect($delivery->fresh()?->status)->toBe('accepted');
+    Notification::assertNothingSent();
+});
+
+it('marks a browser reminder unavailable when the member has no subscription', function () {
+    config(['queue.default' => 'database', 'queue.connections.database.connection' => null]);
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
+    app(QueueContributionReminder::class)->queue($member, (new ContributionReminderNotification($contribution))->onlyChannels(['webpush']));
+
+    $this->artisan('queue:work', ['connection' => 'database', '--once' => true, '--sleep' => 0])->assertSuccessful();
+    expect(ContributionReminderDelivery::sole()->status)->toBe('unavailable');
 });

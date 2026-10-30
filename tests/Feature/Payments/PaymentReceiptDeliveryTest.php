@@ -99,6 +99,13 @@ it('rolls back a payment if its receipt jobs cannot be queued', function () {
         ->and(DB::table('jobs')->count())->toBe(0);
 });
 
+it('refuses to record a payment when the notification queue uses a different database', function () {
+    config(['queue.connections.database.connection' => 'different-database']);
+
+    expect(fn () => recordReceiptPayment($this))->toThrow(RuntimeException::class, 'require the database queue on the application database');
+    expect(PaymentBatch::count())->toBe(0)->and(DB::table('jobs')->count())->toBe(0);
+});
+
 it('keeps a receipt retry available if its job cannot be queued', function () {
     $batch = recordReceiptPayment($this);
     $delivery = $batch->receiptDeliveries()->where('channel', 'mail')->firstOrFail();
@@ -111,6 +118,20 @@ it('keeps a receipt retry available if its job cannot be queued', function () {
     ])))->toThrow(QueryException::class);
 
     expect($delivery->fresh()?->status)->toBe('failed')
+        ->and(PaymentBatch::count())->toBe(1)
+        ->and(DB::table('jobs')->count())->toBe(2);
+});
+
+it('does not queue a receipt retry if its delivery status changes concurrently', function () {
+    $batch = recordReceiptPayment($this);
+    $delivery = $batch->receiptDeliveries()->where('channel', 'mail')->firstOrFail();
+    $delivery->update(['status' => 'failed', 'failed_at' => now()]);
+    DB::statement("create trigger simulate_receipt_status_race before update on payment_receipt_deliveries when old.status = 'failed' and new.status = 'queued' begin update payment_receipt_deliveries set status='accepted' where id=old.id; select raise(ignore); end");
+
+    $this->actingAs($this->recorder)->post(route('payment-receipt-deliveries.retry', [
+        'current_family' => $this->family->slug, 'delivery' => $delivery->id,
+    ]))->assertRedirect()->assertSessionHas('error', 'Delivery status changed. Refresh and check it before retrying.');
+    expect($delivery->fresh()?->status)->toBe('accepted')
         ->and(PaymentBatch::count())->toBe(1)
         ->and(DB::table('jobs')->count())->toBe(2);
 });
@@ -187,6 +208,11 @@ it('allows an officer to retry an unconfirmed receipt once without changing the 
     $delivery = $batch->receiptDeliveries()->where('channel', 'mail')->firstOrFail();
     $delivery->update(['status' => 'failed', 'failed_at' => now()]);
     $url = route('payment-receipt-deliveries.retry', ['current_family' => $this->family->slug, 'delivery' => $delivery->id]);
+
+    $this->actingAs($this->recorder)->get(route('payments.index', ['current_family' => $this->family->slug]))
+        ->assertOk()->assertInertia(fn (Assert $page) => $page
+        ->where('receipts.0.deliveries.0.status', 'unconfirmed')
+        ->where('receipts.0.deliveries.0.failure_reason', 'The delivery attempt did not complete. Check the recipient details and provider before retrying.'));
 
     $this->actingAs($this->member)->post($url)->assertForbidden();
     $otherFamily = Family::factory()->create();

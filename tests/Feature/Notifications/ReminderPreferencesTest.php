@@ -81,3 +81,53 @@ it('does not use reminder channels excluded from the family plan', function () {
     $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
     expect((new ContributionReminderNotification($contribution))->via($member))->toBe(['mail', 'database']);
 });
+
+it('does not send reminders on disabled WhatsApp or browser channels', function (string $channel, string $routeName, string $error) {
+    Notification::fake();
+    $family = Family::factory()->create();
+    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    $member = User::factory()->member()->employed()->withVerifiedWhatsApp('+2348012345678')->create(['family_id' => $family->id]);
+    if ($channel === 'webpush') {
+        $member->updatePushSubscription('https://example.test/push', 'key', 'token', 'aes128gcm');
+    }
+    $member->membershipForFamily($family)?->update(['reminder_channels' => []]);
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
+
+    $this->actingAs($officer)->post(route($routeName, ['current_family' => $family->slug, 'contribution' => $contribution]))
+        ->assertRedirect()->assertSessionHas('error', $error);
+    Notification::assertNothingSent();
+})->with([
+    ['whatsapp', 'contributions.whatsapp-reminder', 'This member has disabled WhatsApp contribution reminders.'],
+    ['webpush', 'contributions.web-push-reminder', 'This member has disabled browser contribution reminders.'],
+]);
+
+it('suppresses optional reminders when a paid family subscription is past due', function () {
+    $plan = PlatformPlan::create(['name' => 'Paid', 'slug' => 'paid-test', 'price' => 1000,
+        'max_members' => null, 'features' => ['email_reminders', 'whatsapp_reminders', 'web_push_reminders'], 'is_active' => true, 'sort_order' => 0]);
+    $family = Family::factory()->create(['platform_plan_id' => $plan->id, 'subscription_status' => 'past_due']);
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
+    expect((new ContributionReminderNotification($contribution))->via($member))->toBe(['database']);
+});
+
+it('does not send reminder details to a non-member or unsupported recipient', function () {
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $outsider = User::factory()->member()->create();
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
+    $notification = new ContributionReminderNotification($contribution);
+
+    expect($notification->via(new stdClass))->toBe([])
+        ->and($notification->via($outsider))->toBe([])
+        ->and($notification->shouldSend(new stdClass, 'mail'))->toBeFalse();
+});
+
+it('does not choose reminder channels when the contribution family is unavailable', function () {
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
+    $notification = new ContributionReminderNotification($contribution);
+    $contribution->setRelation('family', null);
+
+    expect($notification->via($member))->toBe([]);
+});

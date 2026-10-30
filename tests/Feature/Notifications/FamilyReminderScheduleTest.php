@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Notifications\ContributionReminderNotification;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Notification;
+use Inertia\Testing\AssertableInertia as Assert;
 
 it('allows a family admin to configure reminder days time and channels', function () {
     $this->travelTo(Carbon::parse('2026-10-03 12:00:00', 'UTC'));
@@ -20,6 +21,9 @@ it('allows a family admin to configure reminder days time and channels', functio
     $this->actingAs($admin)->put($url, [...$settings, 'follow_up_day' => 9])->assertSessionHasErrors('follow_up_day');
     $this->actingAs($admin)->put($url, $settings)->assertRedirect()->assertSessionHasNoErrors();
     expect($family->fresh()?->reminder_settings)->toMatchArray([...$settings, 'effective_from' => '2026-11']);
+    $this->actingAs($admin)->get(route('family.settings', ['current_family' => $family->slug]))
+        ->assertOk()->assertInertia(fn (Assert $page) => $page->where('reminderSettings.reminder_day', 10)
+        ->where('reminderSettings.effective_from', '2026-11'));
     expect($family->fresh()?->reminderSettingsForMonth('2026-10')['reminder_day'])->toBe(25)
         ->and($family->fresh()?->reminderSettingsForMonth('2026-11')['reminder_day'])->toBe(10);
     $this->travelTo(Carbon::parse('2026-11-03 12:00:00', 'UTC'));
@@ -48,4 +52,23 @@ it('sends configured reminders after their UTC boundaries without duplicate sche
     $this->travelTo(Carbon::parse('2026-10-20 14:35:00', 'UTC'));
     $this->artisan('contributions:dispatch-due-reminders')->assertSuccessful();
     Notification::assertSentToTimes($member, ContributionReminderNotification::class, 2);
+});
+
+it('rejects invalid persisted reminder schedules instead of sending at an unexpected time', function (array $settings) {
+    $family = Family::factory()->create(['reminder_settings' => $settings]);
+
+    expect(fn () => $family->reminderSettingsForMonth('2026-10'))
+        ->toThrow(UnexpectedValueException::class, 'Invalid family contribution reminder settings.');
+})->with([
+    [['effective_from' => '2026-01', 'reminder_day' => 29, 'follow_up_day' => 28, 'time' => '08:00', 'channels' => ['mail']]],
+    [['effective_from' => '2026-01', 'reminder_day' => 10, 'follow_up_day' => 20, 'time' => '08:00', 'channels' => ['unknown']]],
+]);
+
+it('ignores malformed historical revisions when choosing an effective reminder schedule', function () {
+    $family = Family::factory()->create(['reminder_settings' => [
+        'effective_from' => '2026-11', 'reminder_day' => 10, 'follow_up_day' => 20,
+        'time' => '08:00', 'channels' => ['mail'], 'history' => ['invalid', ['reminder_day' => 5]],
+    ]]);
+
+    expect($family->reminderSettingsForMonth('2026-10')['reminder_day'])->toBe(25);
 });

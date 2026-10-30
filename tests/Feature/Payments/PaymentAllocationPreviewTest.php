@@ -10,6 +10,7 @@ use App\Models\PaymentBatch;
 use App\Models\User;
 use App\Services\PaymentAllocationPreview;
 use App\Services\PaymentAllocationService;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -62,6 +63,20 @@ it('rejects amounts beyond the advance limit without creating entries', function
     expect(Contribution::count())->toBe(0)->and(PaymentBatch::count())->toBe(0);
 });
 
+it('rejects a non-positive preview and a future period without a contribution category', function () {
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->create(['family_id' => $family->id, 'category' => null, 'family_category_id' => null]);
+    $membership = $member->membershipForFamily($family);
+    assert($membership instanceof FamilyMembership);
+    $membership->update(['family_category_id' => null]);
+
+    expect(fn () => app(PaymentAllocationPreview::class)->preview($member, $family, $membership, 0))
+        ->toThrow(InvalidArgumentException::class, 'at least one whole currency unit');
+    expect(fn () => app(PaymentAllocationPreview::class)->preview($member, $family, $membership, 1000))
+        ->toThrow(InvalidArgumentException::class, 'no contribution category');
+    expect(PaymentBatch::count())->toBe(0);
+});
+
 it('reviews and posts the same allocations and safely replays the reviewed request', function () {
     Queue::fake();
     $family = Family::factory()->create();
@@ -100,6 +115,41 @@ it('does not record a payment submitted without review', function () {
         'member_id' => $member->id, 'amount' => 1000, 'paid_at' => now()->toDateString(),
         'idempotency_key' => (string) Str::uuid(),
     ])->assertSessionHasErrors('review');
+    expect(PaymentBatch::count())->toBe(0);
+});
+
+it('rejects a review without an idempotency key or beyond the allocation limit', function () {
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    $url = route('payments.review', ['current_family' => $family->slug]);
+    $data = ['member_id' => $member->id, 'amount' => 1000, 'paid_at' => now()->toDateString(), 'method' => 'cash'];
+
+    $this->actingAs($officer)->postJson($url, $data)->assertUnprocessable()->assertJsonValidationErrors('idempotency_key');
+    $this->actingAs($officer)->postJson($url, [...$data, 'amount' => 999999, 'idempotency_key' => (string) Str::uuid()])
+        ->assertUnprocessable()->assertJsonValidationErrors('amount');
+    expect(PaymentBatch::count())->toBe(0);
+});
+
+it('rejects a malformed allocation inside a valid review token', function () {
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
+    $data = ['member_id' => $member->id, 'amount' => 1000, 'paid_at' => now()->toDateString(),
+        'method' => 'cash', 'idempotency_key' => (string) Str::uuid()];
+    $token = $this->actingAs($officer)->postJson(route('payments.review', ['current_family' => $family->slug]), $data)->assertOk()->json('token');
+    if (! is_string($token)) {
+        throw new RuntimeException('Payment review did not return a token.');
+    }
+    $payload = json_decode(Crypt::decryptString($token), true, flags: JSON_THROW_ON_ERROR);
+    if (! is_array($payload)) {
+        throw new RuntimeException('Payment review token did not contain an object.');
+    }
+    $payload['allocations'] = [['year' => 'invalid']];
+    $data['review_token'] = Crypt::encryptString(json_encode($payload, JSON_THROW_ON_ERROR));
+
+    $this->actingAs($officer)->post(route('payments.store', ['current_family' => $family->slug]), $data)->assertSessionHasErrors('review');
     expect(PaymentBatch::count())->toBe(0);
 });
 

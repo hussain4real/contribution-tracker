@@ -38,6 +38,13 @@ describe('My Contributions', function () {
             );
     });
 
+    it('shows no next contribution when the member has nothing outstanding', function () {
+        $this->actingAs($this->member)->get(route('contributions.my'))
+            ->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('next_contribution', null)
+            ->where('personal_stats.total_outstanding', 0));
+    });
+
     it('shows member contributions with correct structure', function () {
         $contribution = Contribution::factory()
             ->forUser($this->member)
