@@ -12,9 +12,12 @@ use App\Models\ReportArtifact;
 use App\Models\User;
 use App\Services\PaymentAllocationService;
 use App\Services\ReportArtifactService;
+use App\Services\WhatsAppService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Mail\Mailables\Attachment;
+use Illuminate\Pipeline\Pipeline;
+use Illuminate\Queue\Middleware\RateLimited;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -186,6 +189,28 @@ it('does not resend an accepted receipt if a job is replayed', function () {
     Mail::assertSent(PaymentReceiptMail::class, 1);
 });
 
+it('does not send the same receipt concurrently', function () {
+    $batch = recordReceiptPayment($this);
+    $first = new SendPaymentReceipt($batch->id, $this->member->id, 'mail');
+    $second = (new SendPaymentReceipt($batch->id, $this->member->id, 'mail'))->withFakeQueueInteractions();
+    $artifacts = app(ReportArtifactService::class);
+    $mock = Mockery::mock(ReportArtifactService::class)->makePartial();
+    $mock->shouldReceive('receipt')->once()->andReturnUsing(function (Family $family, PaymentBatch $payment, ?User $member) use ($second, $artifacts): ReportArtifact {
+        app(Pipeline::class)->send($second)->through($second->middleware())
+            ->then(fn (SendPaymentReceipt $job) => $job->handle($artifacts, app(WhatsAppService::class)));
+
+        return $artifacts->receipt($family, $payment, $member);
+    });
+
+    app(Pipeline::class)->send($first)->through($first->middleware())
+        ->then(fn (SendPaymentReceipt $job) => $job->handle($mock, app(WhatsAppService::class)));
+    $second->assertReleased(90);
+    app(Pipeline::class)->send($second)->through($second->middleware())
+        ->then(fn (SendPaymentReceipt $job) => $job->handle($artifacts, app(WhatsAppService::class)));
+
+    Mail::assertSent(PaymentReceiptMail::class, 1);
+});
+
 it('shows provider-confirmed WhatsApp delivery without claiming email delivery', function () {
     Http::fake(['graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.receipt']]])]);
     $batch = recordReceiptPayment($this);
@@ -348,8 +373,8 @@ it('skips receipts for missing or archived payment recipients', function (string
 it('backs off retries and reports exhausted receipt delivery without recipient details', function () {
     $job = new SendPaymentReceipt(123, $this->member->id, 'whatsapp');
     expect($job->backoff())->toBe([60, 300, 900])
-        ->and($job->middleware())->toHaveCount(1)
-        ->and((new SendPaymentReceipt(123, $this->member->id, 'mail'))->middleware())->toBe([]);
+        ->and(collect($job->middleware())->filter(fn (object $middleware): bool => $middleware instanceof RateLimited))->toHaveCount(1)
+        ->and(collect((new SendPaymentReceipt(123, $this->member->id, 'mail'))->middleware())->filter(fn (object $middleware): bool => $middleware instanceof RateLimited))->toBeEmpty();
     Log::shouldReceive('error')->once()->with('Payment receipt delivery failed', [
         'payment_batch_id' => 123, 'channel' => 'whatsapp', 'error' => 'Delivery unavailable',
     ]);

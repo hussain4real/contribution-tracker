@@ -15,6 +15,7 @@ use App\Support\CurrencyFormatter;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\Middleware\RateLimited;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -48,9 +49,12 @@ class SendPaymentReceipt implements ShouldQueue
     /** @return list<object> */
     public function middleware(): array
     {
-        return $this->channel === 'whatsapp'
-            ? [(new RateLimited('whatsapp-notifications'))->releaseAfter(60)]
-            : [];
+        $middleware = [(new WithoutOverlapping("{$this->paymentBatchId}:{$this->channel}"))->releaseAfter(90)->expireAfter(180)];
+        if ($this->channel === 'whatsapp') {
+            $middleware[] = (new RateLimited('whatsapp-notifications'))->releaseAfter(60);
+        }
+
+        return $middleware;
     }
 
     public function failed(?Throwable $exception): void
