@@ -286,6 +286,16 @@ test('checkpoint rejects a changed application file inventory before publishing 
     assert.equal(objects.get('private/reports/second.csv'), 'second');
 });
 
+test('checkpoint rejects an incomplete or repeating file inventory cursor', async () => {
+    const {env, checkpointObjects} = backupFixture();
+    env.STAGING_BACKUP_ONLY_ENABLED = 'true';
+    for (const page of [{objects: [], truncated: true}, {objects: [], truncated: true, cursor: 'same'}]) {
+        env.STAGING_FILES.list = async () => page;
+        await assert.rejects(new StagingBackupOnly(env).create('cutover-20261030t202200z'), /incomplete.*file inventory/i);
+    }
+    assert.equal(checkpointObjects.size, 0);
+});
+
 test('checkpoint rejects a database change made while its application files are copied', async () => {
     const db = new DatabaseSync(':memory:');
     try {

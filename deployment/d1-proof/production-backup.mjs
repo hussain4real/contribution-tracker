@@ -46,10 +46,13 @@ export function productionBackupSlot(at) {
 
 export async function listProductionObjects(bucket, prefix) {
     const objects = [];
+    const cursors = new Set();
     let cursor;
     do {
         const page = await bucket.list({prefix, limit: 1000, cursor});
         objects.push(...page.objects);
+        if (page.truncated && (!page.cursor || cursors.has(page.cursor))) throw new Error('Incomplete production object listing');
+        if (page.truncated) cursors.add(page.cursor);
         cursor = page.truncated ? page.cursor : undefined;
     } while (cursor);
     return objects;
@@ -111,6 +114,7 @@ export async function createProductionBackup(env, at, checkpoint = null) {
     const objectKey = prefix + "d1/" + productionBackupSlot(at) + ".json.aes-gcm";
     if (await env.BACKUP_FILES.head(objectKey)) return {status: "already_present", key: objectKey};
     const captured = await snapshot(env);
+    if (checkpoint !== null && encoder.encode(JSON.stringify(captured)).length > 8_000_000) throw new Error("Production database backup exceeds memory budget");
     const files = [...await listProductionObjects(env.APPLICATION_FILES, "private/"), ...await listProductionObjects(env.APPLICATION_FILES, "public/")]
         .filter(object => !object.key.startsWith(BACKUP_PREFIX) && !object.key.startsWith("private/webhook-inbox/"));
     for (const file of files) {
@@ -132,6 +136,17 @@ export async function createProductionBackup(env, at, checkpoint = null) {
             const path = (row.disk === "public" ? "public/" : "private/") + row.path;
             if (!captured.files.some(file => file.path === path)) throw new Error("A database-referenced file is missing from the backup");
         }
+    }
+    if (checkpoint !== null) {
+        const currentFiles = [...await listProductionObjects(env.APPLICATION_FILES, "private/"), ...await listProductionObjects(env.APPLICATION_FILES, "public/")]
+            .filter(object => !object.key.startsWith(BACKUP_PREFIX) && !object.key.startsWith("private/webhook-inbox/"));
+        const inventory = values => JSON.stringify(values.map(item => [item.key, item.etag, item.size]).sort());
+        if (inventory(files) !== inventory(currentFiles)) throw new Error('Production file inventory changed during checkpoint');
+        const current = await snapshot(env);
+        const canonical = rows => JSON.stringify(rows.map(row => JSON.stringify(Object.keys(row).sort().map(key => [key, row[key]]))).sort());
+        if (JSON.stringify(captured.schema) !== JSON.stringify(current.schema)
+            || canonical(captured.sequences) !== canonical(current.sequences)
+            || Object.keys(captured.tables).some(name => !current.tables[name] || canonical(captured.tables[name]) !== canonical(current.tables[name]))) throw new Error('Production database changed during checkpoint');
     }
     const bytes = encoder.encode(JSON.stringify(captured));
     if (bytes.length > 8_000_000) throw new Error("Production database backup exceeds memory budget");

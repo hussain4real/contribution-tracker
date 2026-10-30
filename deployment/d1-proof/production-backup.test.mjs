@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {BACKUP_PREFIX, cleanProductionBackups, createProductionBackup, openProductionBackup, productionBackupSlot, productionRetention, sealProductionBackup} from "./production-backup.mjs";
+import {BACKUP_PREFIX, cleanProductionBackups, createProductionBackup, listProductionObjects, openProductionBackup, productionBackupSlot, productionRetention, sealProductionBackup} from "./production-backup.mjs";
 
 const secret = "base64:" + Buffer.alloc(32, 7).toString("base64");
 const at = new Date("2026-10-26T05:00:00Z");
@@ -22,6 +22,11 @@ test("production database and file backups authenticate identity, content and th
 test("production backup slots follow the existing 02:30 Qatar schedule", () => {
     assert.equal(productionBackupSlot(new Date("2026-10-25T23:29:59Z")), "2026-10-25");
     assert.equal(productionBackupSlot(new Date("2026-10-25T23:30:00Z")), "2026-10-26");
+});
+
+test('production backup rejects a truncated object listing without a continuation cursor', async () => {
+    await assert.rejects(listProductionObjects({list: async () => ({objects: [], truncated: true})}, 'private/'), /incomplete.*listing/i);
+    await assert.rejects(listProductionObjects({list: async () => ({objects: [], truncated: true, cursor: 'same'})}, 'private/'), /incomplete.*listing/i);
 });
 
 test("retention keeps daily history then eight weeks then six additional months and always the latest", () => {
@@ -112,6 +117,35 @@ test('cutover checkpoints capture fresh data without replacing an immutable dail
     assert.ok(snapshot.files[0].backup_key.includes('/checkpoints/cutover-20261027t140000z/files/'));
     assert.equal((await createProductionBackup(f.env, at, 'cutover-20261027t140000z')).status, 'already_present');
     await assert.rejects(() => createProductionBackup(f.env, at, '../escape'));
+});
+
+test('a cutover checkpoint refuses database changes during file capture', async () => {
+    const f = fixture();
+    const batch = f.env.DB.batch;
+    let calls = 0;
+    f.env.DB.batch = async statements => {
+        const result = await batch(statements);
+        if (++calls === 2) result[0].results = [{id: 2}];
+        return result;
+    };
+    const checkpoint = 'cutover-20261027t140001z';
+
+    await assert.rejects(createProductionBackup(f.env, at, checkpoint), /database changed during checkpoint/i);
+    assert.equal(f.objects.has(BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/d1/' + productionBackupSlot(at) + '.json.aes-gcm'), false);
+});
+
+test('a cutover checkpoint refuses file inventory changes during capture', async () => {
+    const f = fixture();
+    const get = f.env.APPLICATION_FILES.get;
+    f.env.APPLICATION_FILES.get = async (...args) => {
+        const object = await get(...args);
+        f.appObjects.set('private/reports/added.pdf', {bytes: Buffer.from('new fixture'), etag: 'new-etag', uploaded: at});
+        return object;
+    };
+    const checkpoint = 'cutover-20261027t140002z';
+
+    await assert.rejects(createProductionBackup(f.env, at, checkpoint), /file inventory changed during checkpoint/i);
+    assert.equal(f.objects.has(BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/d1/' + productionBackupSlot(at) + '.json.aes-gcm'), false);
 });
 
 test("a database-referenced missing file prevents publishing a successful backup", async () => {

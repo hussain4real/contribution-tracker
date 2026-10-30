@@ -82,11 +82,13 @@ function checkpointBucket(env) {
 async function stagingFiles(bucket) {
     const objects = [];
     for (const prefix of ['private/', 'public/']) {
+        const cursors = new Set();
         let cursor;
         do {
             const page = await bucket.list({prefix, ...(cursor ? {cursor} : {})});
             objects.push(...page.objects.filter(item => !item.key.startsWith(BACKUP_PREFIX)));
-            if (objects.length > 2000 || (page.truncated && !page.cursor)) throw new Error('Excessive or incomplete staging file inventory');
+            if (objects.length > 2000 || (page.truncated && (!page.cursor || cursors.has(page.cursor)))) throw new Error('Excessive or incomplete staging file inventory');
+            if (page.truncated) cursors.add(page.cursor);
             cursor = page.truncated ? page.cursor : null;
         } while (cursor);
     }
