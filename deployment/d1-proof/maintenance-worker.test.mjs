@@ -4,9 +4,9 @@ import {readFileSync} from "node:fs";
 import {test} from "node:test";
 import {runInNewContext} from "node:vm";
 
-const source = readFileSync(new URL("./maintenance-worker.mjs", import.meta.url), "utf8").replace("export default ", "const handler = ");
-const {handler, calendarTasks, sealBackup, backupKey, createBackup, backupSlot} = runInNewContext(source + "\n({handler, calendarTasks, sealBackup, backupKey, createBackup, backupSlot})", {
-    crypto: webcrypto, TextEncoder, TextDecoder, Response, btoa, atob, console,
+const source = readFileSync(new URL("./maintenance-worker.mjs", import.meta.url), "utf8").replace(/^import .*;\n/gm, "").replace("export default ", "const handler = ").replace("export class ", "class ");
+const {handler, StagingBackupOnly, calendarTasks, sealBackup, backupKey, createBackup, backupSlot} = runInNewContext(source + "\n({handler, StagingBackupOnly, calendarTasks, sealBackup, backupKey, createBackup, backupSlot})", {
+    WorkerEntrypoint: class {constructor(env) { this.env = env; }}, crypto: webcrypto, TextEncoder, TextDecoder, Response, btoa, atob, console,
 });
 const secret = "base64:" + Buffer.alloc(32, 7).toString("base64");
 
@@ -17,7 +17,7 @@ function backupFixture() {
     let reads = 0;
     const env = {
         DATABASE_NAME: "familyfunds-d1-web-staging", ENABLED: "true", MAINTENANCE_FAMILY_ID: "50", PURGE_FAMILY_ID: "51", BACKUP_APP_KEY: secret,
-        STAGING_FILES: {head: async key => objects.has(key), put: async (key, body) => { objects.set(key, body); return {key}; }},
+        STAGING_FILES: {head: async key => objects.has(key), put: async (key, body, options) => { if (options.onlyIf?.etagDoesNotMatch === '*' && objects.has(key)) return null; objects.set(key, body); return {key}; }},
         DB: {
             prepare: sql => ({sql, all: async () => { reads++; return {results: schema}; }}),
             batch: async statements => statements.map(statement => ({results: statement.sql.startsWith("select *") ? [{id: 1, body: "private fixture"}]
@@ -78,6 +78,44 @@ test("a durable daily snapshot is reused without recapturing or waking PHP", asy
     assert.equal(objects.size, 1);
     assert.equal(reads(), 1);
     assert.equal(first.tables, 40);
+});
+
+test("backup-only checkpoints create fresh snapshots without scheduling tasks or overwriting a checkpoint", async () => {
+    const {env, objects} = backupFixture();
+    const service = new StagingBackupOnly(env);
+    const checkpoint = 'cutover-20261030t194500z';
+    await assert.rejects(service.create(checkpoint), /disabled/i);
+    env.STAGING_BACKUP_ONLY_ENABLED = 'true';
+    for (const value of [null, '../other', '2026-10-30']) await assert.rejects(service.create(value), /checkpoint/i);
+    env.DATABASE_NAME = 'familyfunds-production';
+    await assert.rejects(service.create(checkpoint), /disabled/i);
+    env.DATABASE_NAME = 'familyfunds-d1-web-staging';
+    assert.equal(objects.size, 0);
+
+    const result = await service.create(checkpoint);
+    assert.equal(result.status, 'created');
+    assert.equal(result.key, 'private/staging-backups/d1-web/checkpoints/' + checkpoint + '.json.aes-gcm');
+    assert.equal(objects.size, 1);
+    const envelope = JSON.parse(objects.get(result.key));
+    const options = {name: 'AES-GCM', iv: Buffer.from(envelope.iv, 'base64'), additionalData: new TextEncoder().encode('FamilyFunds staging backup v1:familyfunds-d1-web-staging')};
+    const snapshot = JSON.parse(new TextDecoder().decode(await webcrypto.subtle.decrypt(options, await backupKey(secret), Buffer.from(envelope.ciphertext, 'base64'))));
+    assert.equal(snapshot.database, 'familyfunds-d1-web-staging');
+    assert.equal(Object.keys(snapshot.tables).length, 40);
+    await assert.rejects(service.create(checkpoint), /already exists/i);
+    assert.equal(objects.size, 1);
+});
+
+test('a competing checkpoint is preserved when it appears after the initial check', async () => {
+    const {env, objects} = backupFixture();
+    env.STAGING_BACKUP_ONLY_ENABLED = 'true';
+    const put = env.STAGING_FILES.put;
+    env.STAGING_FILES.put = async (key, body, options) => {
+        objects.set(key, 'competing checkpoint');
+        return put(key, body, options);
+    };
+
+    await assert.rejects(new StagingBackupOnly(env).create('cutover-20261030t194500z'), /already exists/i);
+    assert.equal([...objects.values()][0], 'competing checkpoint');
 });
 
 test("an integrity failure prevents publishing a backup", async () => {

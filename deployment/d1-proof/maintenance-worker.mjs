@@ -1,3 +1,5 @@
+import {WorkerEntrypoint} from 'cloudflare:workers';
+
 const DATABASE = "familyfunds-d1-web-staging";
 const BACKUP_PREFIX = "private/staging-backups/d1-web/";
 const encoder = new TextEncoder();
@@ -64,9 +66,13 @@ async function sealBackup(snapshot, secret) {
         bytes: bytes.length, sha256: Array.from(new Uint8Array(hash), n => n.toString(16).padStart(2, "0")).join("")};
 }
 
-async function createBackup(env, at) {
-    const objectKey = BACKUP_PREFIX + at.toISOString().slice(0, 10) + ".json.aes-gcm";
-    if (await env.STAGING_FILES.head(objectKey)) return {status: "already_present", key: objectKey};
+async function createBackup(env, at, checkpoint = null) {
+    if (checkpoint !== null && (typeof checkpoint !== 'string' || !/^cutover-[0-9]{8}t[0-9]{6}z$/.test(checkpoint))) throw new Error('Invalid staging checkpoint');
+    const objectKey = BACKUP_PREFIX + (checkpoint === null ? at.toISOString().slice(0, 10) : 'checkpoints/' + checkpoint) + ".json.aes-gcm";
+    if (await env.STAGING_FILES.head(objectKey)) {
+        if (checkpoint !== null) throw new Error('Staging checkpoint already exists');
+        return {status: "already_present", key: objectKey};
+    }
     const schemaSql = "select type,name,tbl_name,sql from sqlite_master where sql is not null and name not glob 'sqlite_*' and name not glob 'd1_*' and name not glob '_cf_*' order by type,name";
     const before = (await env.DB.prepare(schemaSql).all()).results;
     const tables = before.filter(item => item.type === "table").map(item => item.name);
@@ -85,7 +91,17 @@ async function createBackup(env, at) {
         onlyIf: {etagDoesNotMatch: "*"}, httpMetadata: {contentType: "application/octet-stream"},
         customMetadata: {database: DATABASE, plaintext_sha256: sealed.sha256, captured_at: snapshot.captured_at},
     });
+    if (!stored && checkpoint !== null) throw new Error('Staging checkpoint already exists');
     return {status: stored ? "created" : "already_present", key: objectKey, plaintext_bytes: sealed.bytes, sha256: sealed.sha256, tables: tables.length};
+}
+
+export class StagingBackupOnly extends WorkerEntrypoint {
+    async create(checkpoint) {
+        if (this.env.STAGING_BACKUP_ONLY_ENABLED !== 'true') throw new Error('Staging backup-only operation is disabled');
+        target(this.env);
+        if (typeof checkpoint !== 'string' || !/^cutover-[0-9]{8}t[0-9]{6}z$/.test(checkpoint)) throw new Error('Invalid staging checkpoint');
+        return createBackup(this.env, new Date(), checkpoint);
+    }
 }
 
 export default {
@@ -134,3 +150,4 @@ export default {
         }
     },
 };
+
