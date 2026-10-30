@@ -13,8 +13,10 @@ use App\Models\WhatsAppMessage;
 use App\Notifications\ContributionReminderNotification;
 use App\Services\QueueContributionReminder;
 use Illuminate\Http\Client\Request;
+use Illuminate\Notifications\Events\NotificationSending;
 use Illuminate\Notifications\SendQueuedNotifications;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -129,6 +131,26 @@ it('marks the correct channel unconfirmed when a queued notification exhausts re
     $notification->middleware($member, 'mail');
     (new SendQueuedNotifications(collect([$member]), $notification, ['mail']))->failed(new RuntimeException('Transport unavailable'));
     expect($mail->fresh()?->displayStatus())->toBe('unconfirmed')->and($whatsapp->fresh()?->status)->toBe('queued');
+});
+
+it('marks a reminder unconfirmed after the queue exhausts delivery exceptions', function () {
+    config(['queue.default' => 'database', 'queue.connections.database.connection' => null]);
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
+    app(QueueContributionReminder::class)->queue($member, (new ContributionReminderNotification($contribution))->onlyChannels(['mail']));
+    Event::listen(NotificationSending::class, function (): never {
+        throw new RuntimeException('Synthetic transport failure');
+    });
+
+    for ($attempt = 0; $attempt < 3; $attempt++) {
+        $this->artisan('queue:work', ['connection' => 'database', '--once' => true, '--sleep' => 0])->assertSuccessful();
+        $this->travel(20)->seconds();
+    }
+
+    expect(ContributionReminderDelivery::sole()->displayStatus())->toBe('unconfirmed');
+    expect(DB::table('jobs')->count())->toBe(0);
+    expect(DB::table('failed_jobs')->count())->toBe(1);
 });
 
 it('shows officers reminder failures and lets them retry once without altering balances', function () {
