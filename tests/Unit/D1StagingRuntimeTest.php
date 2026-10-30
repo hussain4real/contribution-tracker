@@ -383,6 +383,25 @@ it('preserves a read WhatsApp receipt when an older callback runs through D1', f
     expect(stagingSqlValue($pdo, "select status from whatsapp_messages where wa_message_id='wamid.fixture'"))->toBe('read');
 });
 
+it('queues an early WhatsApp status retry through the D1 runtime', function (): void {
+    $pdo = stagingSqlFixture();
+    foreach (['queue text', 'payload text', 'attempts integer', 'reserved_at integer', 'available_at integer', 'created_at integer'] as $column) {
+        $pdo->exec('alter table jobs add column '.$column);
+    }
+    $pdo->exec('create table whatsapp_messages (id integer primary key autoincrement, wa_message_id text, status text, error_code text, error_message text, read_at text, created_at text, updated_at text)');
+    D1StagingRuntime::install();
+    config(['queue.default' => 'd1-staging', 'queue.connections.d1-staging' => ['driver' => 'd1-staging', 'queue' => 'default']]);
+    Queue::extend('d1-staging', fn (): D1StagingConnector => new D1StagingConnector);
+
+    (new D1StagingRuntime)->run(function (): void {
+        (new ProcessWhatsAppWebhook(['entry' => [['changes' => [[
+            'field' => 'messages', 'value' => ['statuses' => [['id' => 'wamid.early', 'status' => 'delivered']]],
+        ]]]]]))->handle();
+    });
+
+    expect(stagingSqlValue($pdo, 'select count(*) from jobs'))->toBe(1);
+});
+
 it('fences an expired owner without deleting its replacement lease', function (): void {
     $pdo = stagingSqlFixture();
     $runtime = new D1StagingRuntime;

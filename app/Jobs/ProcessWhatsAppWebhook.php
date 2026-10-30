@@ -24,10 +24,15 @@ class ProcessWhatsAppWebhook implements ShouldQueue
 {
     use Queueable;
 
+    public int $statusRetryAttempt = 0;
+
     /**
      * @param  array<string, mixed>  $payload
      */
-    public function __construct(public array $payload) {}
+    public function __construct(public array $payload, int $statusRetryAttempt = 0)
+    {
+        $this->statusRetryAttempt = $statusRetryAttempt;
+    }
 
     public function handle(): void
     {
@@ -86,10 +91,13 @@ class ProcessWhatsAppWebhook implements ShouldQueue
         }
 
         try {
-            DB::transaction(function () use ($waMessageId, $newStatus, $status): void {
+            $found = DB::transaction(function () use ($waMessageId, $newStatus, $status): bool {
                 $message = WhatsAppMessage::query()->where('wa_message_id', $waMessageId)->lockForUpdate()->first();
-                if (! $message || $this->isOlderDeliveryStatus($message->status, $newStatus)) {
-                    return;
+                if (! $message) {
+                    return false;
+                }
+                if ($this->isOlderDeliveryStatus($message->status, $newStatus)) {
+                    return true;
                 }
 
                 $errors = $status['errors'] ?? [];
@@ -107,7 +115,19 @@ class ProcessWhatsAppWebhook implements ShouldQueue
                     'error_message' => is_scalar($errorMessage) ? (string) $errorMessage : $message->error_message,
                     'read_at' => $readAt,
                 ]);
+
+                return true;
             });
+
+            if (! $found) {
+                $delays = [10, 30, 120];
+                if (isset($delays[$this->statusRetryAttempt])) {
+                    self::dispatch(['entry' => [['changes' => [['field' => 'messages', 'value' => ['statuses' => [$status]]]]]]], $this->statusRetryAttempt + 1)
+                        ->delay(now()->addSeconds($delays[$this->statusRetryAttempt]));
+                } else {
+                    Log::warning('WhatsApp status could not be matched to an outbound message', ['wa_message_id' => $waMessageId]);
+                }
+            }
         } catch (Throwable $e) {
             Log::warning('Failed to update outbound WhatsApp status', [
                 'wa_message_id' => $waMessageId,
