@@ -25,7 +25,7 @@ import {
     ReceiptText,
     Sparkles,
 } from '@lucide/vue';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 type NotificationStatus = 'all' | 'unread' | 'read';
 type NotificationType = 'all' | 'reminder' | 'follow_up';
@@ -80,6 +80,19 @@ const props = defineProps<Props>();
 const reminderPreferences = useForm({
     channels: [...(props.reminderChannels ?? ['mail', 'whatsapp', 'webpush'])],
 });
+const reminderSaveUnconfirmed = ref(false);
+
+function saveReminderPreferences(): void {
+    reminderSaveUnconfirmed.value = false;
+    reminderPreferences.put(updateReminderPreferences.url(), {
+        preserveScroll: true,
+        onNetworkError: () => {
+            reminderSaveUnconfirmed.value = true;
+
+            return false;
+        },
+    });
+}
 const { formatCurrency } = useCurrencyFormatter({
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
@@ -304,12 +317,7 @@ function toDate(dateString?: string | null): Date | null {
                     </p>
                     <form
                         class="mt-3 space-y-3"
-                        @submit.prevent="
-                            reminderPreferences.put(
-                                updateReminderPreferences.url(),
-                                { preserveScroll: true },
-                            )
-                        "
+                        @submit.prevent="saveReminderPreferences"
                     >
                         <fieldset class="flex flex-wrap gap-4">
                             <legend class="sr-only">Reminder channels</legend>
@@ -338,6 +346,14 @@ function toDate(dateString?: string | null): Date | null {
                                 Browser notifications</label
                             >
                         </fieldset>
+                        <p
+                            v-if="reminderSaveUnconfirmed"
+                            role="alert"
+                            class="text-sm text-red-600"
+                        >
+                            We couldn't confirm your preferences were saved.
+                            Check your connection and try again.
+                        </p>
                         <p
                             v-if="reminderPreferences.errors.channels"
                             role="alert"
