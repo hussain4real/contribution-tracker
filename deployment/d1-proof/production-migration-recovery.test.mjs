@@ -67,6 +67,9 @@ test('an isolated synthetic checkpoint restores tables, sequence values and veri
     class FixedDate extends Date {
         constructor(...args) { super(...(args.length ? args : [capturedAt.valueOf()])); }
     }
+    class FollowingDay extends Date {
+        constructor(...args) { super(...(args.length ? args : [capturedAt.valueOf() + 86400000])); }
+    }
     const secret = 'base64:' + Buffer.alloc(32, 7).toString('base64');
     const names = ['families', 'users', ...Array.from({length: 53}, (_, index) => `fixture_${index}`)];
     const tables = Object.fromEntries(names.map(name => [name, []]));
@@ -90,10 +93,20 @@ test('an isolated synthetic checkpoint restores tables, sequence values and veri
     const backupKey = productionBackupPrefix(checkpoint) + `d1/${productionBackupSlot(capturedAt)}.json.aes-gcm`;
     await backups.put(backupKey, JSON.stringify(await sealProductionBackup(new TextEncoder().encode(JSON.stringify(snapshot)), secret, 'database')));
     const runId = '11111111-1111-4111-8111-111111111111';
-    const f = fixture({RECOVERY_DB: target, BACKUP_FILES: backups, APPLICATION_FILES: application, BACKUP_KEY: secret}, FixedDate,
+    const f = fixture({RECOVERY_DB: target, BACKUP_FILES: backups, APPLICATION_FILES: application, BACKUP_KEY: secret}, FollowingDay,
         {subtle: webcrypto.subtle, randomUUID: () => runId});
 
     try {
+        const original = backups.data.get(backupKey);
+        backups.data.delete(backupKey);
+        await assert.rejects(f.recovery.run('restore', checkpoint), /exactly one production database snapshot/i);
+        backups.data.set(backupKey, original);
+        const duplicateKey = productionBackupPrefix(checkpoint) + 'd1/2026-10-31.json.aes-gcm';
+        backups.data.set(duplicateKey, original);
+        await assert.rejects(f.recovery.run('restore', checkpoint), /exactly one production database snapshot/i);
+        assert.equal(db.prepare("select count(*) n from sqlite_master where type='table' and name not glob 'sqlite_*'").get().n, 0);
+        backups.data.delete(duplicateKey);
+
         const conflictPath = `migration-recovery/actual-20261027/${runId}/${files[0].sha256}`;
         application.data.set(conflictPath, 'existing recovery evidence');
         await assert.rejects(f.recovery.run('restore', checkpoint), /recovery file already exists/i);

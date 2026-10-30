@@ -1,5 +1,5 @@
 import {WorkerEntrypoint} from 'cloudflare:workers';
-import {createProductionBackup, openProductionBackup, productionBackupSlot, productionBackupPrefix, BACKUP_PREFIX, listProductionObjects} from './production-backup.mjs';
+import {createProductionBackup, openProductionBackup, productionBackupPrefix, BACKUP_PREFIX, listProductionObjects} from './production-backup.mjs';
 
 const ARCHIVE = 'migration-archive/synthetic-20261027/';
 const RECOVERY = 'migration-recovery/actual-20261027/';
@@ -86,7 +86,10 @@ export class ProductionMigrationRecovery extends WorkerEntrypoint {
         if (this.env.RECOVERY_NAME !== 'familyfunds-production-migration-recovery') throw new Error('Wrong actual recovery target');
         const existing = await this.env.RECOVERY_DB.prepare("select count(*) n from sqlite_master where type='table' and name not glob 'sqlite_*' and name not glob '_cf_*'").first();
         if (existing.n !== 0) throw new Error('Actual recovery target must be empty; never replay restore');
-        const stored = await boundedObject(this.env.BACKUP_FILES, productionBackupPrefix(checkpoint) + 'd1/' + productionBackupSlot(new Date()) + '.json.aes-gcm');
+        const prefix = productionBackupPrefix(checkpoint) + 'd1/';
+        const snapshots = await listProductionObjects(this.env.BACKUP_FILES, prefix);
+        if (snapshots.length !== 1 || !snapshots[0].key.startsWith(prefix) || !/^\d{4}-\d{2}-\d{2}\.json\.aes-gcm$/.test(snapshots[0].key.slice(prefix.length))) throw new Error('Checkpoint must contain exactly one production database snapshot');
+        const stored = await boundedObject(this.env.BACKUP_FILES, snapshots[0].key);
         const envelope = JSON.parse(new TextDecoder().decode(stored.bytes));
         const snapshot = JSON.parse(new TextDecoder().decode(await openProductionBackup(envelope, this.env.BACKUP_KEY)));
         if (snapshot.tables.users?.length !== 66 || snapshot.tables.families?.length !== 44 || snapshot.files.length !== 7) throw new Error('Unexpected actual recovery snapshot');
