@@ -14,9 +14,12 @@ final class D1RuntimeClient
 {
     private readonly Closure $transport;
 
-    public function __construct(private readonly string $url, private readonly string $token, private readonly string $database)
+    public function __construct(private readonly string $url, private readonly string $token, private readonly string $database, private readonly int $timeout = 30)
     {
         D1RuntimeProfile::assertTarget($database, $url, $token);
+        if ($timeout < 1 || $timeout > 30) {
+            throw new RuntimeException('D1 transport timeout must be between one and thirty seconds.');
+        }
         $this->transport = Closure::fromCallable(Utils::chooseHandler());
     }
 
@@ -30,7 +33,7 @@ final class D1RuntimeClient
             throw new RuntimeException('Unknown D1 transport operation.');
         }
         $started = microtime(true);
-        $response = Http::withToken($this->token)->acceptJson()->connectTimeout(5)->timeout(30)
+        $response = Http::withToken($this->token)->acceptJson()->connectTimeout(5)->timeout($this->timeout)
             ->setHandler($this->transport)->post($this->url.$path, $body);
         if (config(D1RuntimeProfile::key('startup_profile'))) {
             config([D1RuntimeProfile::key('profile_transport') => [
