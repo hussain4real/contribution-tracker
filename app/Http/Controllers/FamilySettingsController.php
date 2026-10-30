@@ -53,10 +53,7 @@ class FamilySettingsController extends Controller
                 'has_paystack_subaccount' => $family->hasPaystackSubaccount(),
             ],
             'categories' => $categories,
-            'reminderSettings' => $family->reminder_settings ?? [
-                'reminder_day' => 25, 'follow_up_day' => 28, 'time' => '08:00',
-                'channels' => ['mail', 'whatsapp', 'webpush'],
-            ],
+            'reminderSettings' => $family->reminder_settings ?? Family::DEFAULT_REMINDER_SETTINGS,
         ]);
     }
 

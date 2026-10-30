@@ -2,9 +2,14 @@
 
 declare(strict_types=1);
 
+use App\Jobs\SendPaymentReceipt;
+use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\User;
 use App\Services\PaymentAllocationService;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 
 it('requires a family context before allocating payments', function () {
     $member = User::factory()->member()->employed()->create();
@@ -30,6 +35,29 @@ it('requires the member to belong to the active family', function () {
         paidAt: now(),
         recordedBy: $recorder,
     ))->toThrow(InvalidArgumentException::class, 'The selected member does not belong to the active family.');
+});
+
+it('uses a contribution created after its initial list without creating a duplicate', function () {
+    Queue::fake([SendPaymentReceipt::class]);
+    $family = Family::factory()->create();
+    $recorder = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $inserted = false;
+    DB::listen(function (QueryExecuted $query) use (&$inserted, $member): void {
+        if (! $inserted && str_contains($query->sql, 'from "contributions"') && str_contains($query->sql, 'order by "year"')) {
+            $inserted = true;
+            Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
+        }
+    });
+
+    $batch = app(PaymentAllocationService::class)->createBatch(
+        member: $member, amount: 1000, paidAt: now(), recordedBy: $recorder, family: $family,
+    );
+
+    expect($inserted)->toBeTrue()
+        ->and(Contribution::query()->where('user_id', $member->id)->count())->toBe(1)
+        ->and($batch->allocations->sole()->contribution_id)->toBe(Contribution::query()->where('user_id', $member->id)->sole()->id);
+    Queue::assertPushed(SendPaymentReceipt::class, 1);
 });
 
 it('allocates through the sixth advance month regardless of the current time of day', function (int $hour): void {

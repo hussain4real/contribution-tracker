@@ -52,6 +52,8 @@ use LogicException;
  */
 class Family extends Model
 {
+    public const DEFAULT_REMINDER_SETTINGS = ['reminder_day' => 25, 'follow_up_day' => 28, 'time' => '08:00', 'channels' => ['mail', 'whatsapp', 'webpush']];
+
     /** @use HasFactory<FamilyFactory> */
     use HasFactory;
 
@@ -118,7 +120,7 @@ class Family extends Model
     /** @return array{reminder_day: int, follow_up_day: int, time: string, channels: list<string>} */
     public function reminderSettingsForMonth(string $month): array
     {
-        $defaults = ['reminder_day' => 25, 'follow_up_day' => 28, 'time' => '08:00', 'channels' => ['mail', 'whatsapp', 'webpush']];
+        $defaults = self::DEFAULT_REMINDER_SETTINGS;
         $settings = $this->reminder_settings;
         if (! is_array($settings)) {
             return $defaults;

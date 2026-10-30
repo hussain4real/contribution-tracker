@@ -139,13 +139,18 @@ class ContributionController extends Controller
             && (! $plan?->isPaid() || ! in_array($family->subscription_status, ['cancelled', 'past_due'], true))
             && $family->hasBankDetails() && filled(config('services.paystack.public_key'));
 
-        return Inertia::render('Contributions/My', [
-            'member_id' => $user->id,
-            'next_contribution' => $nextContribution ? [
+        $nextContributionDetails = null;
+        if ($nextContribution !== null) {
+            $nextContributionDetails = [
                 'period_label' => $nextContribution->period_label,
                 'due_date' => $nextContribution->due_date->toDateString(),
                 'balance' => $nextContribution->balance,
-            ] : null,
+            ];
+        }
+
+        return Inertia::render('Contributions/My', [
+            'member_id' => $user->id,
+            'next_contribution' => $nextContributionDetails,
             'receipts' => $receipts,
             'online_payments_available' => $onlinePaymentsAvailable,
             'statement_period' => [
