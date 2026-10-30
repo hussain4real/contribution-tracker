@@ -2,8 +2,15 @@
 
 declare(strict_types=1);
 
+use App\Actions\ReversePaymentBatch;
 use App\Jobs\ProcessWhatsAppWebhook;
 use App\Jobs\SendPaymentReceipt;
+use App\Models\Contribution;
+use App\Models\Family;
+use App\Models\FamilyMembership;
+use App\Models\User;
+use App\Services\PaymentAllocationPreview;
+use App\Services\PaymentAllocationService;
 use FamilyFunds\D1Staging\D1StagingConnection;
 use FamilyFunds\D1Staging\D1StagingConnector;
 use FamilyFunds\D1Staging\D1StagingRuntime;
@@ -16,6 +23,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 pest()->extend(TestCase::class);
@@ -263,6 +271,14 @@ function stagingSqlFixture(?Closure $afterBatch = null): PDO
     $pdo->exec('create table "contributions" ("id" integer primary key autoincrement, "family_id" integer not null references families(id), "amount" integer not null)');
     $pdo->exec("insert into families values (1,'First'),(2,'Second')");
     $pdo->exec('insert into contributions values(1,1,10),(2,2,20)');
+    connectStagingSqlFixture($pdo, $afterBatch);
+
+    return $pdo;
+}
+
+/** @param (Closure(PDO, list<array{sql: string, params: list<scalar|null>}>): void)|null $afterBatch */
+function connectStagingSqlFixture(PDO $pdo, ?Closure $afterBatch = null): void
+{
     Http::fake(function (Request $request) use ($pdo, $afterBatch): PromiseInterface {
         $body = $request->data();
         /** @var list<array{sql: string, params: list<scalar|null>}> $batch */
@@ -292,7 +308,6 @@ function stagingSqlFixture(?Closure $afterBatch = null): PDO
     config(['database.connections.d1-staging' => ['driver' => 'd1-staging'], 'database.default' => 'd1-staging']);
     D1StagingRuntime::install();
 
-    return $pdo;
 }
 
 it('isolates a family snapshot and reserves globally distinct identifiers', function (): void {
@@ -360,6 +375,62 @@ it('commits a receipt job and financial write together through the D1 queue', fu
     }, 1);
     expect(stagingSqlValue($pdo, 'select count(*) from jobs'))->toBe(1)
         ->and(stagingSqlValue($pdo, 'select amount from contributions where id=1'))->toBe(99);
+});
+
+it('allocates payments and queues receipts through the D1 runtime using current balances', function (): void {
+    config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
+    DB::purge('sqlite');
+    $this->artisan('migrate', ['--database' => 'sqlite', '--force' => true])->assertSuccessful();
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
+    $pdo = DB::connection('sqlite')->getPdo();
+    connectStagingSqlFixture($pdo);
+    config(['queue.default' => 'd1-staging', 'queue.connections.d1-staging' => ['driver' => 'd1-staging', 'queue' => 'default']]);
+    Queue::extend('d1-staging', fn (): D1StagingConnector => new D1StagingConnector);
+    $runtime = new D1StagingRuntime;
+
+    $first = $runtime->run(fn () => app(PaymentAllocationService::class)->createBatch(
+        member: $member, amount: 3000, paidAt: now(), recordedBy: $officer, family: $family, idempotencyKey: 'd1-first',
+    ), $family->id, $officer->id);
+    $replayed = $runtime->run(fn () => app(PaymentAllocationService::class)->createBatch(
+        member: $member, amount: 3000, paidAt: now(), recordedBy: $officer, family: $family, idempotencyKey: 'd1-first',
+    ), $family->id, $officer->id);
+    expect($replayed->id)->toBe($first->id)
+        ->and(stagingSqlValue($pdo, 'select count(*) from jobs'))->toBe(1);
+    $review = $runtime->run(function () use ($member, $family): array {
+        $membership = $member->membershipForFamily($family);
+        if (! $membership instanceof FamilyMembership) {
+            throw new RuntimeException('The synthetic member has no family membership.');
+        }
+
+        return app(PaymentAllocationPreview::class)->preview($member, $family, $membership, 2000);
+    }, $family->id, $officer->id);
+    $runtime->run(fn () => app(PaymentAllocationService::class)->createBatch(
+        member: $member, amount: 2000, paidAt: now(), recordedBy: $officer, family: $family, idempotencyKey: 'd1-second',
+    ), $family->id, $officer->id);
+
+    expect(stagingSqlValue($pdo, 'select sum(amount) from payments where contribution_id='.$contribution->id))->toBe(4000)
+        ->and(stagingSqlValue($pdo, 'select sum(amount) from payments'))->toBe(5000)
+        ->and(stagingSqlValue($pdo, 'select count(*) from payment_batches'))->toBe(2)
+        ->and(stagingSqlValue($pdo, 'select count(*) from jobs'))->toBe(2);
+
+    expect(fn () => $runtime->run(fn () => app(PaymentAllocationService::class)->createBatch(
+        member: $member, amount: 2000, paidAt: now(), recordedBy: $officer, family: $family,
+        idempotencyKey: 'd1-stale-review', expectedAllocations: $review['allocations'],
+    ), $family->id, $officer->id))->toThrow(ValidationException::class);
+    expect(stagingSqlValue($pdo, 'select count(*) from payment_batches'))->toBe(2)
+        ->and(stagingSqlValue($pdo, 'select count(*) from jobs'))->toBe(2);
+
+    $runtime->run(fn () => app(ReversePaymentBatch::class)->handle($first, $officer, 'Synthetic reversal'), $family->id, $officer->id);
+    $runtime->run(fn () => app(PaymentAllocationService::class)->createBatch(
+        member: $member, amount: 1000, paidAt: now(), recordedBy: $officer, family: $family, idempotencyKey: 'd1-third',
+    ), $family->id, $officer->id);
+
+    expect(stagingSqlValue($pdo, 'select sum(payments.amount) from payments where contribution_id='.$contribution->id." and not exists (select 1 from financial_reversals where reversible_type='payment_batch' and reversible_id=payments.payment_batch_id)"))->toBe(2000)
+        ->and(stagingSqlValue($pdo, 'select count(*) from financial_reversals'))->toBe(1)
+        ->and(stagingSqlValue($pdo, 'select count(*) from payment_batches'))->toBe(3);
 });
 
 it('preserves a read WhatsApp receipt when an older callback runs through D1', function (): void {
