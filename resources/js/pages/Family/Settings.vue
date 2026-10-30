@@ -7,6 +7,7 @@ import {
     storeCategory,
     update,
     updateCategory,
+    updateReminderSettings,
 } from '@/actions/App/Http/Controllers/FamilySettingsController';
 import Heading from '@/components/Heading.vue';
 import HeadingSmall from '@/components/HeadingSmall.vue';
@@ -17,7 +18,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatCurrencyAmount } from '@/lib/currency';
 import { type BreadcrumbItem } from '@/types';
-import { Form, Head, router } from '@inertiajs/vue3';
+import { Form, Head, router, useForm } from '@inertiajs/vue3';
 import { Check, ChevronsUpDown, Pencil, Plus, Trash2 } from '@lucide/vue';
 import {
     ComboboxAnchor,
@@ -45,6 +46,12 @@ interface Category {
 }
 
 interface Props {
+    reminderSettings?: {
+        reminder_day: number;
+        follow_up_day: number;
+        time: string;
+        channels: string[];
+    };
     family?: {
         id: number;
         name: string;
@@ -70,6 +77,17 @@ const props = withDefaults(defineProps<Props>(), {
         bank_code: null,
     }),
     categories: () => [],
+    reminderSettings: () => ({
+        reminder_day: 25,
+        follow_up_day: 28,
+        time: '08:00',
+        channels: ['mail', 'whatsapp', 'webpush'],
+    }),
+});
+
+const reminders = useForm({
+    ...props.reminderSettings,
+    channels: [...props.reminderSettings.channels],
 });
 
 const banksList = ref<Bank[]>([]);
@@ -159,6 +177,121 @@ function cancelEdit(): void {
                 title="Family Settings"
                 description="Manage your family group settings, categories, and contribution amounts."
             />
+
+            <section
+                aria-labelledby="family-reminders-heading"
+                class="space-y-4"
+            >
+                <h2 id="family-reminders-heading" class="text-lg font-semibold">
+                    Contribution reminders
+                </h2>
+                <p class="text-sm text-muted-foreground">
+                    Choose two days of the month and a time in UTC. Changes take
+                    effect next month; reminders already queued keep the current
+                    month's schedule.
+                </p>
+                <form
+                    class="space-y-4"
+                    @submit.prevent="
+                        reminders.put(updateReminderSettings.url(), {
+                            preserveScroll: true,
+                        })
+                    "
+                >
+                    <div class="grid gap-4 sm:grid-cols-3">
+                        <div class="grid gap-2">
+                            <Label for="reminder-day">First reminder day</Label
+                            ><Input
+                                id="reminder-day"
+                                v-model.number="reminders.reminder_day"
+                                type="number"
+                                min="1"
+                                max="28"
+                                required
+                            /><InputError
+                                :message="reminders.errors.reminder_day"
+                            />
+                        </div>
+                        <div class="grid gap-2">
+                            <Label for="follow-up-day">Follow-up day</Label
+                            ><Input
+                                id="follow-up-day"
+                                v-model.number="reminders.follow_up_day"
+                                type="number"
+                                min="1"
+                                max="28"
+                                required
+                            /><InputError
+                                :message="reminders.errors.follow_up_day"
+                            />
+                        </div>
+                        <div class="grid gap-2">
+                            <Label for="reminder-time">Time (UTC)</Label
+                            ><Input
+                                id="reminder-time"
+                                v-model="reminders.time"
+                                type="time"
+                                required
+                            /><InputError :message="reminders.errors.time" />
+                        </div>
+                    </div>
+                    <fieldset class="flex flex-wrap gap-4">
+                        <legend class="mb-2 text-sm font-medium">
+                            Family reminder channels
+                        </legend>
+                        <label class="flex items-center gap-2"
+                            ><input
+                                v-model="reminders.channels"
+                                type="checkbox"
+                                value="mail"
+                            />
+                            Email</label
+                        >
+                        <label class="flex items-center gap-2"
+                            ><input
+                                v-model="reminders.channels"
+                                type="checkbox"
+                                value="whatsapp"
+                            />
+                            WhatsApp</label
+                        >
+                        <label class="flex items-center gap-2"
+                            ><input
+                                v-model="reminders.channels"
+                                type="checkbox"
+                                value="webpush"
+                            />
+                            Browser notifications</label
+                        >
+                    </fieldset>
+                    <p class="text-sm text-muted-foreground">
+                        Members can opt out of these channels. Availability
+                        depends on the family plan and the member's contact
+                        setup. In-app reminders remain available.
+                    </p>
+                    <div
+                        class="rounded-lg border bg-muted/30 p-4"
+                        aria-label="Example email reminder"
+                    >
+                        <p class="text-sm font-semibold">
+                            Example email reminder
+                        </p>
+                        <p class="mt-2 text-sm">
+                            Hi [member name], your [month] contribution for
+                            {{ family.name }} is due on [due date]. Your
+                            remaining balance includes any earlier unpaid
+                            contributions.
+                        </p>
+                        <p class="mt-1 text-xs text-muted-foreground">
+                            The actual message includes the member's balance and
+                            a link to their contributions.
+                        </p>
+                    </div>
+                    <Button type="submit" :disabled="reminders.processing"
+                        >Save reminder settings</Button
+                    >
+                </form>
+            </section>
 
             <!-- General Settings -->
             <section>

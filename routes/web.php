@@ -8,6 +8,7 @@ use App\Http\Controllers\ChangelogController;
 use App\Http\Controllers\ChangelogSeenController;
 use App\Http\Controllers\ContributionController;
 use App\Http\Controllers\ContributionEmailReminderController;
+use App\Http\Controllers\ContributionReminderDeliveryRetryController;
 use App\Http\Controllers\ContributionWebPushReminderController;
 use App\Http\Controllers\ContributionWhatsAppReminderController;
 use App\Http\Controllers\DashboardController;
@@ -24,6 +25,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentBatchReversalController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PaymentReceiptController;
+use App\Http\Controllers\PaymentReceiptDeliveryRetryController;
 use App\Http\Controllers\PaystackWebhookController;
 use App\Http\Controllers\PlatformAdminController;
 use App\Http\Controllers\PricingController;
@@ -136,6 +138,7 @@ Route::prefix('{current_family}')
 
         // Notifications
         Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
+        Route::put('notifications/reminder-preferences', [NotificationController::class, 'updateReminderPreferences'])->name('notifications.reminder-preferences');
         Route::patch('notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
         Route::post('notifications/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('notifications.mark-all-read');
 
@@ -186,16 +189,21 @@ Route::prefix('{current_family}')
         Route::post('contributions/{contribution}/web-push-reminder', [ContributionWebPushReminderController::class, 'send'])
             ->middleware(['subscription:'.PlatformPlanCatalog::WebPushReminders, 'throttle:10,1'])
             ->name('contributions.web-push-reminder');
+        Route::post('reminder-deliveries/{delivery}/retry', ContributionReminderDeliveryRetryController::class)
+            ->middleware('throttle:10,1')->name('reminder-deliveries.retry');
 
         // Payments
         Route::get('payments', [PaymentController::class, 'index'])->name('payments.index');
         Route::get('members/{member}/payments/create', [PaymentController::class, 'create'])->name('payments.create');
         Route::post('payments', [PaymentController::class, 'store'])->name('payments.store')
             ->middleware([HandlePrecognitiveRequests::class]);
+        Route::post('payments/review', [PaymentController::class, 'review'])->name('payments.review');
         Route::post('payment-batches/{payment_batch}/reverse', PaymentBatchReversalController::class)
             ->name('payment-batches.reverse');
         Route::get('payment-batches/{payment_batch}/receipt', PaymentReceiptController::class)
             ->name('payment-batches.receipt');
+        Route::post('payment-receipt-deliveries/{delivery}/retry', PaymentReceiptDeliveryRetryController::class)
+            ->middleware('throttle:10,1')->name('payment-receipt-deliveries.retry');
 
         // Member Self-Pay (Paystack)
         Route::middleware('subscription:'.PlatformPlanCatalog::OnlinePayments)->group(function () {
@@ -262,6 +270,7 @@ Route::prefix('{current_family}')
         Route::prefix('family')->name('family.')->group(function () {
             Route::get('settings', [FamilySettingsController::class, 'edit'])->name('settings');
             Route::put('settings', [FamilySettingsController::class, 'update'])->name('settings.update');
+            Route::put('reminder-settings', [FamilySettingsController::class, 'updateReminderSettings'])->name('reminder-settings.update');
             Route::post('categories', [FamilySettingsController::class, 'storeCategory'])->name('categories.store');
             Route::put('categories/{category}', [FamilySettingsController::class, 'updateCategory'])->name('categories.update');
             Route::delete('categories/{category}', [FamilySettingsController::class, 'destroyCategory'])->name('categories.destroy');

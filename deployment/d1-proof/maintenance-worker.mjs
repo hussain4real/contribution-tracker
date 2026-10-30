@@ -10,12 +10,19 @@ function target(env) {
     return {family, purge};
 }
 
-function calendarTasks(at, families) {
+function calendarTasks(at, families, raw = null) {
     const month = at.toISOString().slice(0, 7);
     const tasks = [{id: `generate:${month}`, kind: "generate", family_id: families.family, at: `${month}-01T00:00:00.000Z`}];
-    for (const day of [25, 28]) {
-        const due = `${month}-${day}T08:00:00.000Z`;
-        if (new Date(due) <= at) tasks.push({id: `remind${day}:${month}`, kind: `remind${day}`, family_id: families.family, at: due});
+    const settings = raw ? JSON.parse(raw) : null;
+    const revisions = settings ? [...(Array.isArray(settings.history) ? settings.history : []), settings] : [];
+    const configured = revisions.filter(revision => revision && typeof revision.effective_from === 'string' && month >= revision.effective_from)
+        .sort((a, b) => b.effective_from.localeCompare(a.effective_from))[0];
+    const first = configured ? configured.reminder_day : 25, second = configured ? configured.follow_up_day : 28;
+    const time = configured ? configured.time : '08:00';
+    if (!Number.isInteger(first) || first < 1 || first > 28 || !Number.isInteger(second) || second <= first || second > 28 || typeof time !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new Error('Invalid family reminder schedule');
+    for (const [kind, day] of [['remind25', first], ['remind28', second]]) {
+        const due = `${month}-${String(day).padStart(2, '0')}T${time}:00.000Z`;
+        if (new Date(due) <= at) tasks.push({id: `${kind}:${month}`, kind, family_id: families.family, at: due});
     }
     const day = new Date(at);
     day.setUTCHours(1, 30, 0, 0);
@@ -90,7 +97,8 @@ export default {
         if (!Number.isFinite(at.getTime()) || at > actual) throw new Error("Invalid maintenance proof time");
         const backup = await createBackup(env, backupSlot(actual));
         console.log(JSON.stringify({event: "staging_backup", ...backup}));
-        const tasks = calendarTasks(at, families);
+        const family = await env.DB.prepare('select reminder_settings from families where id=?').bind(families.family).first();
+        const tasks = calendarTasks(at, families, family?.reminder_settings ?? null);
         const reports = await env.DB.prepare("select count(*) as due from report_schedules where family_id=43 and name like 'D1-SCHEDULE-UAT-%' and is_active=1 and next_run_at<=datetime('now')").first();
         if (Number(reports?.due) > 0) {
             const minute = new Date(Math.floor(actual.getTime() / 300000) * 300000).toISOString();

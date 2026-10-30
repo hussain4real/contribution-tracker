@@ -6,11 +6,13 @@ namespace App\Console\Commands;
 
 use App\Models\Contribution;
 use App\Notifications\ContributionReminderNotification;
+use App\Services\QueueContributionReminder;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 #[Signature('contributions:remind {--day= : Day of month (25 or 28)} {--year= : Contribution year} {--month= : Contribution month} {--family= : Specific family ID} {--after= : Contribution IDs above this cursor} {--through= : Last contribution ID in this batch}')]
 #[Description('Send contribution payment reminders to members with unpaid contributions')]
@@ -115,10 +117,12 @@ class SendContributionReminders extends Command
         return (bool) Cache::lock(
             $this->reminderLockKey($contribution, $sentAtColumn),
             self::REMINDER_DELIVERY_LOCK_SECONDS,
-        )->get(function () use ($contribution, $sentAtColumn, $type): bool {
+        )->get(fn (): bool => DB::transaction(function () use ($contribution, $sentAtColumn, $type): bool {
             $freshContribution = Contribution::query()
                 ->whereKey($contribution->id)
                 ->whereNull($sentAtColumn)
+                ->incomplete()
+                ->lockForUpdate()
                 ->with(['user', 'family', 'payments'])
                 ->first();
 
@@ -128,11 +132,12 @@ class SendContributionReminders extends Command
 
             $sentAt = now();
 
-            $freshContribution->user->notify(new ContributionReminderNotification($freshContribution, $type));
+            $notification = new ContributionReminderNotification($freshContribution, $type);
+            app(QueueContributionReminder::class)->queue($freshContribution->user, $notification);
             $freshContribution->forceFill([$sentAtColumn => $sentAt])->save();
 
             return true;
-        });
+        }));
     }
 
     private function reminderLockKey(Contribution $contribution, string $sentAtColumn): string

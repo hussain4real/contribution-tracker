@@ -24,7 +24,7 @@ describe('Advance Payments (FR-018)', function () {
         $nextMonth = now()->addMonth();
 
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 4000,
                 'paid_at' => now()->toDateString(),
@@ -44,7 +44,7 @@ describe('Advance Payments (FR-018)', function () {
         $nextMonth = now()->addMonth();
 
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 4000,
                 'paid_at' => now()->toDateString(),
@@ -97,7 +97,7 @@ describe('Advance Payments (FR-018)', function () {
         $sixMonthsAhead = now()->addMonths(6);
 
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 4000,
                 'paid_at' => now()->toDateString(),
@@ -133,7 +133,7 @@ describe('Advance Payments (FR-018)', function () {
     it('allows paying for multiple months at once using balance-first', function () {
         // Pay for 3 months in advance
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 12000, // ₦12,000 = 3 months
                 'paid_at' => now()->toDateString(),

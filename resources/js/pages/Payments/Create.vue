@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { store } from '@/actions/App/Http/Controllers/PaymentController';
+import {
+    review,
+    store,
+} from '@/actions/App/Http/Controllers/PaymentController';
 import StatusBadge from '@/components/contributions/StatusBadge.vue';
 import HeadingSmall from '@/components/HeadingSmall.vue';
 import InputError from '@/components/InputError.vue';
@@ -17,8 +20,8 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { useCurrencyFormatter } from '@/lib/currency';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
-import { Form, Head } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { Form, Head, useHttp } from '@inertiajs/vue3';
+import { computed, nextTick, ref, watch } from 'vue';
 
 interface Member {
     id: number;
@@ -104,6 +107,83 @@ const targetMonth = computed(() => {
     const [, month] = selectedMonth.value.split('-');
     return parseInt(month);
 });
+
+interface ReviewResult {
+    allocations: {
+        year: number;
+        month: number;
+        period: string;
+        amount: number;
+    }[];
+    outstanding: number;
+    advance: number;
+    possible_duplicate: boolean;
+    token: string;
+}
+
+const reviewRequest = useHttp<
+    {
+        member_id: number;
+        amount: string;
+        paid_at: string;
+        method: string;
+        reference: string | null;
+        notes: string | null;
+        target_year: number | null;
+        target_month: number | null;
+        idempotency_key: string;
+    },
+    ReviewResult
+>({
+    member_id: props.member.id,
+    amount: '',
+    paid_at: '',
+    method: '',
+    reference: null,
+    notes: null,
+    target_year: null,
+    target_month: null,
+    idempotency_key: props.idempotencyKey,
+});
+const reviewed = ref<ReviewResult | null>(null);
+const reviewHeading = ref<HTMLHeadingElement | null>(null);
+const reviewError = ref('');
+const reviewInputs = () => ({
+    member_id: props.member.id,
+    amount: amount.value,
+    paid_at: paidAt.value,
+    method: method.value,
+    reference: reference.value.trim() || null,
+    notes: notes.value.trim() || null,
+    target_year: targetYear.value,
+    target_month: targetMonth.value,
+    idempotency_key: props.idempotencyKey,
+});
+watch([amount, paidAt, method, reference, notes, selectedMonth], () => {
+    reviewed.value = null;
+    reviewError.value = '';
+});
+
+async function reviewPayment(): Promise<void> {
+    const input = reviewInputs();
+    const fingerprint = JSON.stringify(input);
+    Object.assign(reviewRequest, input);
+    reviewError.value = '';
+    try {
+        const result = await reviewRequest.post(review.url());
+        if (fingerprint === JSON.stringify(reviewInputs())) {
+            reviewed.value = result;
+            await nextTick();
+            reviewHeading.value?.focus();
+        }
+    } catch {
+        reviewError.value =
+            Object.values(reviewRequest.errors)
+                .flat()
+                .find((error) => typeof error === 'string') ??
+            'Could not review this payment. Check the details and try again.';
+    }
+}
 </script>
 
 <template>
@@ -156,6 +236,8 @@ const targetMonth = computed(() => {
             <Form
                 :action="store()"
                 class="space-y-6"
+                :on-before="() => reviewed !== null"
+                @error="reviewed = null"
                 #default="{
                     errors,
                     validate,
@@ -165,6 +247,12 @@ const targetMonth = computed(() => {
                 }"
             >
                 <input type="hidden" name="member_id" :value="member.id" />
+                <input
+                    v-if="reviewed"
+                    type="hidden"
+                    name="review_token"
+                    :value="reviewed.token"
+                />
                 <input
                     type="hidden"
                     name="idempotency_key"
@@ -315,8 +403,69 @@ const targetMonth = computed(() => {
                 </div>
 
                 <!-- Submit Button -->
+                <section
+                    v-if="reviewed"
+                    class="rounded-lg border p-4"
+                    aria-labelledby="review-heading"
+                >
+                    <h2
+                        id="review-heading"
+                        ref="reviewHeading"
+                        tabindex="-1"
+                        class="font-semibold"
+                    >
+                        Review payment
+                    </h2>
+                    <p class="mt-2 text-sm">
+                        {{ member.name }} · {{ formatAmount(Number(amount)) }} ·
+                        {{
+                            paymentMethods.find((item) => item.value === method)
+                                ?.label
+                        }}
+                        · {{ paidAt }}
+                    </p>
+                    <ul class="mt-3 space-y-1 text-sm">
+                        <li
+                            v-for="allocation in reviewed.allocations"
+                            :key="`${allocation.year}-${allocation.month}`"
+                        >
+                            {{ allocation.period }}:
+                            {{ formatAmount(allocation.amount) }}
+                        </li>
+                    </ul>
+                    <p
+                        v-if="reviewed.advance > 0"
+                        class="mt-3 text-sm text-amber-700 dark:text-amber-300"
+                    >
+                        {{ formatAmount(reviewed.advance) }} exceeds recorded
+                        outstanding contributions and will be applied in
+                        advance.
+                    </p>
+                    <p
+                        v-if="reviewed.possible_duplicate"
+                        class="mt-3 text-sm text-amber-700 dark:text-amber-300"
+                    >
+                        This reference is already used by another receipt. Check
+                        for a duplicate before recording.
+                    </p>
+                </section>
+                <p v-if="reviewError" role="alert" class="text-sm text-red-600">
+                    {{ reviewError }}
+                </p>
+                <InputError :message="errors.review" />
                 <div class="flex items-center gap-4">
-                    <Button type="submit" :disabled="processing">
+                    <Button
+                        v-if="!reviewed"
+                        type="button"
+                        :disabled="reviewRequest.processing"
+                        @click="reviewPayment"
+                        >{{
+                            reviewRequest.processing
+                                ? 'Preparing review...'
+                                : 'Review payment'
+                        }}</Button
+                    >
+                    <Button v-else type="submit" :disabled="processing">
                         {{ processing ? 'Recording...' : 'Record Payment' }}
                     </Button>
 

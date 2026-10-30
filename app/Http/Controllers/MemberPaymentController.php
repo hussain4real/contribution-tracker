@@ -232,9 +232,9 @@ class MemberPaymentController extends Controller
                 return redirect()->route('pay.index')->with('success', 'Payment successful! Your contributions have been updated.');
             }
 
-            return redirect()->route('pay.index')->with('error', 'Payment was verified but could not be posted. Support has been notified.');
+            return redirect()->route('pay.index')->with('error', 'Payment was verified but not recorded. Contact your family admin before trying again.');
         } catch (Throwable) {
-            return redirect()->route('pay.index')->with('error', 'Could not verify payment. Your payment will be confirmed shortly.');
+            return redirect()->route('pay.index')->with('error', 'Could not confirm your payment. Check your payment history or contact your family admin before trying again.');
         }
     }
 

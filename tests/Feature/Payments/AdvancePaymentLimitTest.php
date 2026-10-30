@@ -19,7 +19,7 @@ describe('Advance Payment Limit (FR-018)', function () {
         $sevenMonthsAhead = now()->addMonths(7);
 
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 4000,
                 'paid_at' => now()->toDateString(),
@@ -33,7 +33,7 @@ describe('Advance Payment Limit (FR-018)', function () {
         $yearAhead = now()->addYear();
 
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 4000,
                 'paid_at' => now()->toDateString(),
@@ -47,7 +47,7 @@ describe('Advance Payment Limit (FR-018)', function () {
         $exactlySixMonths = now()->addMonths(6);
 
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 4000,
                 'paid_at' => now()->toDateString(),
@@ -62,7 +62,7 @@ describe('Advance Payment Limit (FR-018)', function () {
         $pastMonth = now()->subMonth();
 
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 4000,
                 'paid_at' => now()->toDateString(),

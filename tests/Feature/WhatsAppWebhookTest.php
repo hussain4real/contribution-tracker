@@ -246,6 +246,37 @@ describe('ProcessWhatsAppWebhook job', function () {
         expect($message->status)->toBe('delivered');
     });
 
+    it('preserves confirmed delivery when older status callbacks arrive later', function () {
+        $message = WhatsAppMessage::factory()->create([
+            'wa_message_id' => 'wamid.out-of-order', 'direction' => 'outbound', 'status' => 'sent',
+        ]);
+        $sendStatus = function (string $status): void {
+            (new ProcessWhatsAppWebhook(['entry' => [['changes' => [[
+                'field' => 'messages', 'value' => ['statuses' => [['id' => 'wamid.out-of-order', 'status' => $status]]],
+            ]]]]]))->handle();
+        };
+
+        $sendStatus('delivered');
+        $sendStatus('sent');
+        $sendStatus('failed');
+        expect($message->fresh()?->status)->toBe('delivered');
+        $sendStatus('read');
+        $sendStatus('delivered');
+        $sendStatus('sent');
+        expect($message->fresh()?->status)->toBe('read');
+    });
+
+    it('allows confirmed delivery to supersede a previous failure', function () {
+        $message = WhatsAppMessage::factory()->create([
+            'wa_message_id' => 'wamid.late-delivered', 'direction' => 'outbound', 'status' => 'failed',
+        ]);
+        (new ProcessWhatsAppWebhook(['entry' => [['changes' => [[
+            'field' => 'messages', 'value' => ['statuses' => [['id' => 'wamid.late-delivered', 'status' => 'delivered']]],
+        ]]]]]))->handle();
+
+        expect($message->fresh()?->status)->toBe('delivered');
+    });
+
     it('records the provider timestamp when an outbound message is read', function () {
         $readAt = now()->subMinute()->startOfSecond();
         $message = WhatsAppMessage::factory()->create([

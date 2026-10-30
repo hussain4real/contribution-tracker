@@ -18,6 +18,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
 class PaymentAllocationService
@@ -49,6 +50,7 @@ class PaymentAllocationService
         )->allocations;
     }
 
+    /** @param list<array{year: int, month: int, period: string, amount: int}>|null $expectedAllocations */
     public function createBatch(
         User $member,
         int $amount,
@@ -63,6 +65,7 @@ class PaymentAllocationService
         ?string $reference = null,
         ?string $idempotencyKey = null,
         ?PaymentBatch $replaces = null,
+        ?array $expectedAllocations = null,
     ): PaymentBatch {
         $family ??= $recordedBy->currentFamily ?? $recordedBy->family;
 
@@ -90,6 +93,7 @@ class PaymentAllocationService
             $reference,
             $idempotencyKey,
             $replaces,
+            $expectedAllocations,
         ): PaymentBatch {
             $existing = PaymentBatch::query()
                 ->where('family_id', $family->id)
@@ -98,10 +102,23 @@ class PaymentAllocationService
                 ->first();
 
             if ($existing instanceof PaymentBatch) {
+                if ($expectedAllocations !== null) {
+                    $this->verifyReviewedReplay($existing, $member, $amount, $paidAt, $recordedBy, $method, $reference, $notes, $expectedAllocations);
+                }
+
                 return $existing;
             }
 
             $lockedFamily = Family::query()->lockForUpdate()->findOrFail($family->id);
+            $existing = PaymentBatch::query()->where('family_id', $family->id)
+                ->where('idempotency_key', $idempotencyKey)->with('allocations')->first();
+            if ($existing instanceof PaymentBatch) {
+                if ($expectedAllocations !== null) {
+                    $this->verifyReviewedReplay($existing, $member, $amount, $paidAt, $recordedBy, $method, $reference, $notes, $expectedAllocations);
+                }
+
+                return $existing;
+            }
             $membership = FamilyMembership::query()
                 ->where('family_id', $lockedFamily->id)
                 ->where('user_id', $member->id)
@@ -159,7 +176,27 @@ class PaymentAllocationService
                 throw new InvalidArgumentException('The payment exceeds the six-month advance-payment limit.');
             }
 
+            if ($expectedAllocations !== null) {
+                $actualAllocations = $batch->allocations()->with('contribution')->get()->map(function (Payment $payment): array {
+                    $contribution = $payment->contribution;
+                    if (! $contribution instanceof Contribution) {
+                        throw new InvalidArgumentException('The payment allocation has no contribution.');
+                    }
+
+                    return ['year' => $contribution->year, 'month' => $contribution->month,
+                        'period' => $contribution->period_label, 'amount' => $payment->amount];
+                })->all();
+                if ($actualAllocations !== $expectedAllocations) {
+                    throw ValidationException::withMessages(['review' => 'Contribution balances changed. Review the payment again before recording it.']);
+                }
+            }
+
             if ($source !== PaymentSource::Backfill) {
+                $batch->receiptDeliveries()->create(['channel' => 'mail', 'status' => 'queued']);
+                $batch->receiptDeliveries()->create([
+                    'channel' => 'whatsapp',
+                    'status' => $member->hasVerifiedWhatsApp() ? 'queued' : 'unavailable',
+                ]);
                 SendPaymentReceipt::dispatch($batch->id, $member->id, 'mail');
 
                 if ($member->hasVerifiedWhatsApp()) {
@@ -169,6 +206,27 @@ class PaymentAllocationService
 
             return $batch->load('allocations');
         }, 3);
+    }
+
+    /** @param list<array{year: int, month: int, period: string, amount: int}> $expectedAllocations */
+    private function verifyReviewedReplay(PaymentBatch $batch, User $member, int $amount, DateTimeInterface|string $paidAt, User $recordedBy, PaymentMethod $method, ?string $reference, ?string $notes, array $expectedAllocations): void
+    {
+        $matches = $batch->membership?->user_id === $member->id && $batch->total_amount === $amount
+            && $batch->paid_at->toDateString() === Carbon::parse($paidAt)->toDateString()
+            && $batch->recorded_by === $recordedBy->id && $batch->method === $method
+            && $batch->reference === $reference && $batch->notes === $notes;
+        $actual = $batch->allocations()->with('contribution')->get()->map(function (Payment $payment): array {
+            $contribution = $payment->contribution;
+            if (! $contribution instanceof Contribution) {
+                throw new InvalidArgumentException('The payment allocation has no contribution.');
+            }
+
+            return ['year' => $contribution->year, 'month' => $contribution->month,
+                'period' => $contribution->period_label, 'amount' => $payment->amount];
+        })->all();
+        if (! $matches || $actual !== $expectedAllocations) {
+            throw ValidationException::withMessages(['review' => 'This payment request key was already used for different details.']);
+        }
     }
 
     private function allocateToContributions(

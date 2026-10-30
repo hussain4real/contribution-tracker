@@ -37,6 +37,7 @@ use LogicException;
  * @property-read FamilyMembership|null $membership
  * @property-read User|null $recorder
  * @property-read Collection<int, Payment> $allocations
+ * @property-read Collection<int, PaymentReceiptDelivery> $receiptDeliveries
  * @property-read PaystackTransaction|null $paystackTransaction
  * @property-read FinancialReversal|null $reversal
  */
@@ -97,6 +98,12 @@ class PaymentBatch extends Model
     public function allocations(): HasMany
     {
         return $this->hasMany(Payment::class);
+    }
+
+    /** @return HasMany<PaymentReceiptDelivery, $this> */
+    public function receiptDeliveries(): HasMany
+    {
+        return $this->hasMany(PaymentReceiptDelivery::class)->orderBy('channel');
     }
 
     /** @return HasOne<PaystackTransaction, $this> */

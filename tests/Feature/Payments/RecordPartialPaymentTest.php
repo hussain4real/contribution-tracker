@@ -27,7 +27,7 @@ describe('Record Partial Payment', function () {
             ->create();
 
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 2000, // ₦2,000 of ₦4,000
                 'paid_at' => now()->toDateString(),
@@ -54,7 +54,7 @@ describe('Record Partial Payment', function () {
 
         // First partial payment - ₦1,000
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 1000,
                 'paid_at' => now()->toDateString(),
@@ -69,7 +69,7 @@ describe('Record Partial Payment', function () {
 
         // Second partial payment - ₦1,500
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 1500,
                 'paid_at' => now()->toDateString(),
@@ -85,7 +85,7 @@ describe('Record Partial Payment', function () {
 
         // Third payment - remaining ₦1,500
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 1500,
                 'paid_at' => now()->toDateString(),

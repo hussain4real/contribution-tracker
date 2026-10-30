@@ -141,7 +141,7 @@ describe('Record Full Payment', function () {
             ->create();
 
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 4000, // ₦4,000 full payment
                 'paid_at' => now()->toDateString(),
@@ -183,12 +183,12 @@ describe('Record Full Payment', function () {
             ]);
 
         $this->actingAs($financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $member->id,
                 'amount' => 100,
                 'paid_at' => now()->toDateString(),
             ])
-            ->assertRedirect(route('dashboard'))
+            ->assertRedirectContains('/payments?receipt=')
             ->assertSessionHas('success', "Receipt #1: QAR 100.00 recorded for {$member->name}.");
     });
 
@@ -202,7 +202,7 @@ describe('Record Full Payment', function () {
             ->create();
 
         $this->actingAs($admin)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 4000,
                 'paid_at' => now()->toDateString(),
@@ -222,7 +222,7 @@ describe('Record Full Payment', function () {
         expect($contribution->status)->not->toBe(PaymentStatus::Paid);
 
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 4000,
                 'paid_at' => now()->toDateString(),
@@ -235,13 +235,13 @@ describe('Record Full Payment', function () {
 
     it('validates required fields', function () {
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [])
+            ->postReviewedPayment(route('payments.store'), [])
             ->assertSessionHasErrors(['member_id', 'amount', 'paid_at']);
     });
 
     it('validates amount is positive', function () {
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => -100,
                 'paid_at' => now()->toDateString(),
@@ -255,7 +255,7 @@ describe('Record Full Payment', function () {
         ]);
 
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $member->id,
                 'amount' => 1000,
                 'paid_at' => now()->toDateString(),
@@ -265,7 +265,7 @@ describe('Record Full Payment', function () {
 
     it('validates paid_at is a valid date', function () {
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 1000,
                 'paid_at' => 'invalid-date',
@@ -302,12 +302,12 @@ describe('Record Full Payment', function () {
         ]);
 
         $this->actingAs($financialSecretary)
-            ->post("/{$primaryFamily->slug}/payments", [
+            ->postReviewedPayment("/{$primaryFamily->slug}/payments", [
                 'member_id' => $member->id,
                 'amount' => MemberCategory::Employed->monthlyAmount(),
                 'paid_at' => now()->toDateString(),
             ])
-            ->assertRedirect("/{$primaryFamily->slug}/dashboard");
+            ->assertRedirectContains("/{$primaryFamily->slug}/payments?receipt=");
 
         expect($primaryContribution->refresh()->status)->toBe(PaymentStatus::Paid)
             ->and($secondaryContribution->refresh()->total_paid)->toBe(0);

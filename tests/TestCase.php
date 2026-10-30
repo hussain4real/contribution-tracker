@@ -22,6 +22,7 @@ use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Mockery\MockInterface;
 use Symfony\Component\HttpFoundation\Response;
@@ -88,6 +89,28 @@ abstract class TestCase extends BaseTestCase
         }
 
         return $this;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return TestResponse<Response>
+     */
+    public function postReviewedPayment(string $url, array $data): TestResponse
+    {
+        $data['idempotency_key'] ??= (string) Str::uuid();
+        $reviewUrl = preg_replace('~/payments(?:\?.*)?$~', '/payments/review', $url);
+        if (! is_string($reviewUrl) || $reviewUrl === $url) {
+            throw new \InvalidArgumentException('The payment URL cannot be reviewed.');
+        }
+        $review = $this->postJson($reviewUrl, $data);
+        if ($review->baseResponse->isServerError()) {
+            $review->assertSuccessful();
+        }
+        if ($review->baseResponse->isSuccessful()) {
+            $data['review_token'] = $review->json('token');
+        }
+
+        return $this->post($url, $data);
     }
 
     /**

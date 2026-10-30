@@ -22,6 +22,7 @@ use Illuminate\Support\Carbon;
  * @property Role $role
  * @property MemberCategory|null $category
  * @property int|null $family_category_id
+ * @property list<string>|null $reminder_channels
  * @property Carbon|null $archived_at
  * @property int|null $archived_by
  * @property string|null $archive_reason
@@ -39,6 +40,7 @@ use Illuminate\Support\Carbon;
     'role',
     'category',
     'family_category_id',
+    'reminder_channels',
     'archived_at',
     'archived_by',
     'archive_reason',
@@ -209,6 +211,7 @@ class FamilyMembership extends Pivot
             'role' => Role::class,
             'category' => MemberCategory::class,
             'archived_at' => 'datetime',
+            'reminder_channels' => 'array',
         ];
     }
 }

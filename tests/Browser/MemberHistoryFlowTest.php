@@ -25,7 +25,7 @@ describe('Member History Flow', function () {
 
         $page->click('My Contributions')
             ->assertPathIs("/{$this->family->slug}/contributions/my")
-            ->assertSee('My Contribution History');
+            ->assertSee('My money');
     });
 
     it('member can view contribution details with payments', function () {

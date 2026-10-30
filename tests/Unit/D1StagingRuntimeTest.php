@@ -2,7 +2,10 @@
 
 declare(strict_types=1);
 
+use App\Jobs\ProcessWhatsAppWebhook;
+use App\Jobs\SendPaymentReceipt;
 use FamilyFunds\D1Staging\D1StagingConnection;
+use FamilyFunds\D1Staging\D1StagingConnector;
 use FamilyFunds\D1Staging\D1StagingRuntime;
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Database\QueryException;
@@ -11,6 +14,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -94,6 +98,42 @@ it('shares a read snapshot between members while reading fresh committed amounts
     expect($runtime->runReadOnly(fn () => DB::table('contributions')->sum('amount'), 1, 11))->toBe(70);
     $pdo->exec("update family_members set role='member' where user_id=11");
     expect($runtime->runReadOnly(fn () => DB::table('family_members')->where('user_id', 11)->value('role'), 1, 11))->toBe('member');
+});
+
+it('limits receipt delivery snapshots to the selected family', function (): void {
+    $pdo = stagingReadCacheFixture();
+    $pdo->exec('create table "payment_batches" ("id" integer primary key, "family_id" integer, foreign key("family_id") references "families"("id"))');
+    $pdo->exec('create table "payment_receipt_deliveries" ("id" integer primary key, "payment_batch_id" integer, "status" text, foreign key("payment_batch_id") references "payment_batches"("id"))');
+    $pdo->exec('insert into payment_batches values (1,1),(2,2)');
+    $pdo->exec("insert into payment_receipt_deliveries values (1,1,'queued'),(2,2,'accepted')");
+    D1StagingRuntime::installReadCache();
+
+    $statuses = (new D1StagingRuntime)->runReadOnly(
+        fn () => DB::table('payment_receipt_deliveries')->pluck('status')->all(), 1, 10,
+    );
+
+    expect($statuses)->toBe(['queued']);
+});
+
+it('installs identifier reservations and read invalidation for new delivery tables', function (): void {
+    $pdo = stagingSqlFixture();
+    $pdo->exec('create table payment_batches (id integer primary key autoincrement, family_id integer not null references families(id))');
+    $pdo->exec('create table payment_receipt_deliveries (id integer primary key autoincrement, payment_batch_id integer not null references payment_batches(id))');
+    $pdo->exec('create table contribution_reminder_deliveries (id integer primary key autoincrement, contribution_id integer not null references contributions(id))');
+    D1StagingRuntime::install();
+    D1StagingRuntime::installReadCache();
+
+    expect(stagingSqlValue($pdo, "select count(*) from d1_staging_sequences where name in ('payment_receipt_deliveries','contribution_reminder_deliveries')"))->toBe(2)
+        ->and(stagingSqlValue($pdo, "select count(*) from sqlite_master where type='trigger' and (name glob 'd1_read_revision_payment_receipt_deliveries_*' or name glob 'd1_read_revision_contribution_reminder_deliveries_*')"))->toBe(6);
+
+    $before = stagingSqlValue($pdo, 'select revision from d1_staging_read_revision where id=1');
+    if (! is_int($before)) {
+        throw new RuntimeException('Invalid read-cache revision');
+    }
+    $pdo->exec('insert into payment_batches (id,family_id) values (1,1)');
+    $pdo->exec('insert into payment_receipt_deliveries (payment_batch_id) values (1)');
+    $pdo->exec('insert into contribution_reminder_deliveries (contribution_id) values (1)');
+    expect(stagingSqlValue($pdo, 'select revision from d1_staging_read_revision where id=1'))->toBe($before + 3);
 });
 
 it('captures a cold read with two remote batches and still sees the next committed amount', function (): void {
@@ -269,6 +309,78 @@ it('isolates a family snapshot and reserves globally distinct identifiers', func
     expect(count(array_unique($ids)))->toBe(2)
         ->and(stagingSqlValue($pdo, 'select count(*) from contributions'))->toBe(4)
         ->and(stagingSqlValue($pdo, 'select count(*) from d1_staging_leases'))->toBe(0);
+});
+
+it('keeps a nested queue insert and reminder marker together when the transaction fails', function (): void {
+    $pdo = stagingSqlFixture();
+    $runtime = new D1StagingRuntime;
+    $runtime->run(function (): void {
+        try {
+            DB::transaction(function (): void {
+                DB::table('jobs')->insert(['lease_token' => 'reminder-job']);
+                DB::table('contributions')->where('id', 1)->update(['amount' => 99]);
+                throw new RuntimeException('Simulated interruption');
+            });
+        } catch (RuntimeException $exception) {
+            expect($exception->getMessage())->toBe('Simulated interruption');
+        }
+    }, 1);
+    expect(stagingSqlValue($pdo, 'select count(*) from jobs'))->toBe(0)
+        ->and(stagingSqlValue($pdo, 'select amount from contributions where id=1'))->toBe(10);
+});
+
+it('commits a receipt job and financial write together through the D1 queue', function (): void {
+    $pdo = stagingSqlFixture();
+    foreach (['queue text', 'payload text', 'attempts integer', 'reserved_at integer', 'available_at integer', 'created_at integer'] as $column) {
+        $pdo->exec('alter table jobs add column '.$column);
+    }
+    config(['queue.default' => 'd1-staging', 'queue.connections.d1-staging' => ['driver' => 'd1-staging', 'queue' => 'default']]);
+    Queue::extend('d1-staging', fn (): D1StagingConnector => new D1StagingConnector);
+    $runtime = new D1StagingRuntime;
+
+    $runtime->run(function (): void {
+        try {
+            DB::transaction(function (): void {
+                DB::table('contributions')->where('id', 1)->update(['amount' => 99]);
+                SendPaymentReceipt::dispatch(1, 10, 'mail');
+                throw new RuntimeException('Simulated interruption');
+            });
+        } catch (RuntimeException $exception) {
+            expect($exception->getMessage())->toBe('Simulated interruption');
+        }
+    }, 1);
+    expect(stagingSqlValue($pdo, 'select count(*) from jobs'))->toBe(0)
+        ->and(stagingSqlValue($pdo, 'select amount from contributions where id=1'))->toBe(10);
+
+    $runtime->run(function (): void {
+        DB::transaction(function (): void {
+            DB::table('contributions')->where('id', 1)->update(['amount' => 99]);
+            SendPaymentReceipt::dispatch(1, 10, 'mail');
+        });
+    }, 1);
+    expect(stagingSqlValue($pdo, 'select count(*) from jobs'))->toBe(1)
+        ->and(stagingSqlValue($pdo, 'select amount from contributions where id=1'))->toBe(99);
+});
+
+it('preserves a read WhatsApp receipt when an older callback runs through D1', function (): void {
+    $pdo = stagingSqlFixture();
+    $pdo->exec('create table whatsapp_messages (id integer primary key autoincrement, wa_message_id text, status text, error_code text, error_message text, read_at text, created_at text, updated_at text)');
+    $pdo->exec("insert into whatsapp_messages (wa_message_id,status) values ('wamid.fixture','sent')");
+    D1StagingRuntime::install();
+    $runtime = new D1StagingRuntime;
+    $runtime->run(function (): void {
+        (new ProcessWhatsAppWebhook(['entry' => [['changes' => [[
+            'field' => 'messages', 'value' => ['statuses' => [['id' => 'wamid.fixture', 'status' => 'read']]],
+        ]]]]]))->handle();
+    });
+    expect(stagingSqlValue($pdo, "select status from whatsapp_messages where wa_message_id='wamid.fixture'"))->toBe('read');
+    $runtime->run(function (): void {
+        (new ProcessWhatsAppWebhook(['entry' => [['changes' => [[
+            'field' => 'messages', 'value' => ['statuses' => [['id' => 'wamid.fixture', 'status' => 'sent']]],
+        ]]]]]))->handle();
+    });
+
+    expect(stagingSqlValue($pdo, "select status from whatsapp_messages where wa_message_id='wamid.fixture'"))->toBe('read');
 });
 
 it('fences an expired owner without deleting its replacement lease', function (): void {

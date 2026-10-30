@@ -48,9 +48,12 @@ describe('Payment Recording Flow (Browser)', function () {
         expect($page->script('() => document.querySelector("form")?.getAttribute("method")'))
             ->toBe('post');
 
-        $page->script('() => document.querySelector("button[type=submit]")?.click()');
-
-        $page->wait(0.5);
+        $page->click('Review payment')
+            ->assertSee('Record Payment')
+            ->assertSee($this->contribution->period_label.':');
+        expect($page->script('() => document.activeElement?.id'))->toBe('review-heading');
+        $page->click('button[type="submit"]')
+            ->assertSee('Receipt #1: ₦4,000.00 recorded for John Doe.');
 
         expect($this->contribution->refresh()->isPaid())->toBeTrue();
 

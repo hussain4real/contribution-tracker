@@ -38,6 +38,15 @@ test("calendar tasks catch up missed monthly work and respect reminder boundarie
     assert.equal(calendarTasks(new Date("2026-10-01T00:05:00Z"), f).at(-1).at, "2026-09-30T01:30:00.000Z");
 });
 
+test('staging calendar uses the configured reminder days and UTC time', () => {
+    const families = {family: 50, purge: 51};
+    const settings = JSON.stringify({reminder_day: 10, follow_up_day: 20, time: '14:35', effective_from: '2026-10'});
+    const before = Array.from(calendarTasks(new Date('2026-10-10T14:34:59Z'), families, settings), task => task.kind);
+    const at = Array.from(calendarTasks(new Date('2026-10-10T14:35:00Z'), families, settings), task => task.kind);
+    assert.deepEqual(before, ['generate', 'purge']);
+    assert.deepEqual(at, ['generate', 'remind25', 'purge']);
+});
+
 test("daily backups catch up the latest 02:30 Asia Qatar slot", () => {
     assert.equal(backupSlot(new Date("2026-10-25T23:29:59Z")).toISOString().slice(0, 10), "2026-10-25");
     assert.equal(backupSlot(new Date("2026-10-25T23:30:00Z")).toISOString().slice(0, 10), "2026-10-26");

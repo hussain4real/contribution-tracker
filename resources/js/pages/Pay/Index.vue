@@ -244,7 +244,9 @@ const payWithPaystack = async () => {
             },
         });
     } catch {
-        toast.error('An error occurred. Please try again.');
+        toast.error(
+            'Could not confirm your payment. Check your payment history or contact your family admin before trying again.',
+        );
         processing.value = false;
     }
 };

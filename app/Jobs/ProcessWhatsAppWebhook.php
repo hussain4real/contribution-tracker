@@ -86,34 +86,44 @@ class ProcessWhatsAppWebhook implements ShouldQueue
         }
 
         try {
-            $message = WhatsAppMessage::query()->where('wa_message_id', $waMessageId)->first();
+            DB::transaction(function () use ($waMessageId, $newStatus, $status): void {
+                $message = WhatsAppMessage::query()->where('wa_message_id', $waMessageId)->lockForUpdate()->first();
+                if (! $message || $this->isOlderDeliveryStatus($message->status, $newStatus)) {
+                    return;
+                }
 
-            if (! $message) {
-                return;
-            }
+                $errors = $status['errors'] ?? [];
+                $firstError = is_array($errors) && isset($errors[0]) && is_array($errors[0]) ? $errors[0] : null;
+                $errorCode = $firstError['code'] ?? null;
+                $errorMessage = $firstError['title'] ?? $firstError['message'] ?? null;
+                $timestamp = $status['timestamp'] ?? null;
+                $readAt = $newStatus === 'read' && is_numeric($timestamp)
+                    ? now()->createFromTimestamp((int) $timestamp)
+                    : $message->read_at;
 
-            $errors = $status['errors'] ?? [];
-            $firstError = is_array($errors) && isset($errors[0]) && is_array($errors[0]) ? $errors[0] : null;
-
-            $errorCode = $firstError['code'] ?? null;
-            $errorMessage = $firstError['title'] ?? $firstError['message'] ?? null;
-            $timestamp = $status['timestamp'] ?? null;
-            $readAt = $newStatus === 'read' && is_numeric($timestamp)
-                ? now()->createFromTimestamp((int) $timestamp)
-                : $message->read_at;
-
-            $message->update([
-                'status' => $newStatus,
-                'error_code' => is_scalar($errorCode) ? (string) $errorCode : $message->error_code,
-                'error_message' => is_scalar($errorMessage) ? (string) $errorMessage : $message->error_message,
-                'read_at' => $readAt,
-            ]);
+                $message->update([
+                    'status' => $newStatus,
+                    'error_code' => is_scalar($errorCode) ? (string) $errorCode : $message->error_code,
+                    'error_message' => is_scalar($errorMessage) ? (string) $errorMessage : $message->error_message,
+                    'read_at' => $readAt,
+                ]);
+            });
         } catch (Throwable $e) {
             Log::warning('Failed to update outbound WhatsApp status', [
                 'wa_message_id' => $waMessageId,
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    private function isOlderDeliveryStatus(string $current, string $incoming): bool
+    {
+        return match ($incoming) {
+            'sent' => in_array($current, ['failed', 'delivered', 'read'], true),
+            'failed' => in_array($current, ['delivered', 'read'], true),
+            'delivered' => $current === 'read',
+            default => false,
+        };
     }
 
     /**

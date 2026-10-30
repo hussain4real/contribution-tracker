@@ -95,7 +95,8 @@ describe('Manual WhatsApp contribution reminder', function () {
 
         $this->actingAs($admin)
             ->post("/contributions/{$contribution->id}/whatsapp-reminder")
-            ->assertRedirect();
+            ->assertRedirect()
+            ->assertSessionHas('success', "WhatsApp reminder queued for {$member->name}.");
 
         Notification::assertSentTo(
             $member,

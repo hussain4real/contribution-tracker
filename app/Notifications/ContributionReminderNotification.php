@@ -7,9 +7,12 @@ namespace App\Notifications;
 use App\Channels\WhatsAppChannel;
 use App\Channels\WhatsAppMessage;
 use App\Models\Contribution;
+use App\Models\ContributionReminderDelivery;
 use App\Models\Family;
+use App\Models\PlatformPlan;
 use App\Models\User;
 use App\Support\CurrencyFormatter;
+use App\Support\PlatformPlanCatalog;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\Eloquent\Builder;
@@ -21,6 +24,7 @@ use Illuminate\Queue\Attributes\Tries;
 use Illuminate\Queue\Middleware\RateLimited;
 use NotificationChannels\WebPush\WebPushChannel;
 use NotificationChannels\WebPush\WebPushMessage;
+use Throwable;
 
 #[Tries(5)]
 #[Timeout(60)]
@@ -35,6 +39,19 @@ class ContributionReminderNotification extends Notification implements ShouldQue
      * @var array<int, string>|null
      */
     protected ?array $channels = null;
+
+    /** @var array<string, int> */
+    private array $deliveryIds = [];
+
+    private ?string $activeChannel = null;
+
+    /** @param array<string, int> $deliveries */
+    public function trackDeliveries(array $deliveries): self
+    {
+        $this->deliveryIds = $deliveries;
+
+        return $this;
+    }
 
     /**
      * Create a new notification instance.
@@ -79,7 +96,113 @@ class ContributionReminderNotification extends Notification implements ShouldQue
      */
     public function via(object $notifiable): array
     {
-        return $this->channels ?? ['mail', 'database', WhatsAppChannel::class, WebPushChannel::class];
+        if (! $notifiable instanceof User) {
+            return [];
+        }
+        $membership = $notifiable->membershipForFamilyId($this->contribution->family_id);
+        if ($membership === null) {
+            return [];
+        }
+        $preferences = $membership->reminder_channels ?? ['mail', 'whatsapp', 'webpush'];
+        $familyChannels = $this->contribution->family?->reminderSettingsForMonth(now('UTC')->format('Y-m'))['channels']
+            ?? ['mail', 'whatsapp', 'webpush'];
+        $preferences = array_values(array_intersect($preferences, $familyChannels));
+        $family = $this->contribution->family;
+        if ($family instanceof Family) {
+            $family->loadMissing('platformPlan');
+            $plan = $family->platformPlan ?? PlatformPlan::query()->where('slug', PlatformPlanCatalog::Free)->where('is_active', true)->first();
+            if ($plan instanceof PlatformPlan) {
+                $features = ['mail' => PlatformPlanCatalog::EmailReminders, 'whatsapp' => PlatformPlanCatalog::WhatsappReminders, 'webpush' => PlatformPlanCatalog::WebPushReminders];
+                $preferences = array_values(array_filter($preferences, fn (string $channel): bool => isset($features[$channel]) && in_array($features[$channel], $plan->features, true)));
+                if ($plan->isPaid() && in_array($family->subscription_status, ['cancelled', 'past_due'], true)) {
+                    $preferences = [];
+                }
+            }
+        }
+        $allowed = ['database'];
+        foreach ($preferences as $preference) {
+            $allowed[] = match ($preference) {
+                'whatsapp' => WhatsAppChannel::class,
+                'webpush' => WebPushChannel::class,
+                default => $preference,
+            };
+        }
+
+        return array_values(array_intersect($this->channels ?? ['mail', 'database', WhatsAppChannel::class, WebPushChannel::class], $allowed));
+    }
+
+    public function shouldSend(object $notifiable, string $channel): bool
+    {
+        $deliveryId = $this->deliveryIds[$channel] ?? null;
+        if ($deliveryId !== null && ! ContributionReminderDelivery::query()->whereKey($deliveryId)->where('status', 'queued')->exists()) {
+            return false;
+        }
+
+        if (! $notifiable instanceof User) {
+            $this->updateDelivery($channel, ['status' => 'unavailable']);
+
+            return false;
+        }
+
+        $contribution = Contribution::query()
+            ->whereKey($this->contribution->id)
+            ->where('user_id', $notifiable->id)
+            ->incomplete()
+            ->with(['family', 'payments'])
+            ->first();
+
+        if (! $contribution || ! $contribution->family || $contribution->family->isArchived()
+            || ! $notifiable->membershipForFamily($contribution->family)) {
+            $this->updateDelivery($channel, ['status' => 'unavailable']);
+
+            return false;
+        }
+
+        $this->contribution = $contribution;
+
+        if (! in_array($channel, $this->via($notifiable), true)) {
+            $this->updateDelivery($channel, ['status' => 'unavailable']);
+
+            return false;
+        }
+        $this->updateDelivery($channel, ['attempted_at' => now()]);
+
+        return true;
+    }
+
+    public function afterSending(object $notifiable, string $channel, mixed $response): void
+    {
+        if ($channel === WhatsAppChannel::class) {
+            $id = is_array($response) && is_string($response['wa_message_id'] ?? null) ? $response['wa_message_id'] : null;
+            $status = $response === null ? 'unavailable' : (is_array($response) && ($response['success'] ?? false) === true && $id !== null ? 'accepted' : 'failed');
+            $this->updateDelivery($channel, ['status' => $status, 'provider_message_id' => $id,
+                'accepted_at' => $status === 'accepted' ? now() : null, 'failed_at' => $status === 'failed' ? now() : null]);
+
+            return;
+        }
+        if ($notifiable instanceof User && (($channel === 'mail' && blank($notifiable->email))
+            || ($channel === WebPushChannel::class && ! $notifiable->pushSubscriptions()->exists()))) {
+            $this->updateDelivery($channel, ['status' => 'unavailable']);
+
+            return;
+        }
+        $this->updateDelivery($channel, ['status' => $channel === WebPushChannel::class ? 'submitted' : 'accepted', 'accepted_at' => now()]);
+    }
+
+    public function failed(?Throwable $exception): void
+    {
+        if ($this->activeChannel !== null) {
+            $this->updateDelivery($this->activeChannel, ['status' => 'failed', 'failed_at' => now()]);
+        }
+    }
+
+    /** @param array<string, mixed> $attributes */
+    private function updateDelivery(string $channel, array $attributes): void
+    {
+        $id = $this->deliveryIds[$channel] ?? null;
+        if ($id !== null) {
+            ContributionReminderDelivery::query()->whereKey($id)->where('status', 'queued')->update($attributes);
+        }
     }
 
     /**
@@ -89,6 +212,7 @@ class ContributionReminderNotification extends Notification implements ShouldQue
      */
     public function middleware(object $notifiable, string $channel): array
     {
+        $this->activeChannel = $channel;
         if ($channel !== WhatsAppChannel::class) {
             return [];
         }
@@ -115,8 +239,8 @@ class ContributionReminderNotification extends Notification implements ShouldQue
         $currency = $this->contribution->family?->currency;
 
         $subject = $this->type === 'follow_up'
-            ? "Follow-up: Your {$this->contribution->period_label} contribution is due today"
-            : "Reminder: Your {$this->contribution->period_label} contribution is due soon";
+            ? "Follow-up: Your {$this->contribution->period_label} contribution"
+            : "Reminder: Your {$this->contribution->period_label} contribution";
 
         return (new MailMessage)
             ->subject($subject)
@@ -180,9 +304,9 @@ class ContributionReminderNotification extends Notification implements ShouldQue
     public function toWebPush(object $notifiable, Notification $notification): WebPushMessage
     {
         $isFollowUp = $this->type === 'follow_up';
-        $title = $isFollowUp ? 'Contribution due today' : 'Contribution due soon';
-        $due = $isFollowUp ? 'today' : 'soon';
-        $body = "Your {$this->contribution->period_label} contribution for {$this->familyName()} is due {$due}. Total outstanding, including previous months: {$this->formattedOutstandingBalance()}.";
+        $title = $isFollowUp ? 'Contribution follow-up' : 'Contribution reminder';
+        $due = $this->contribution->due_date->toFormattedDateString();
+        $body = "Your {$this->contribution->period_label} contribution for {$this->familyName()} is due on {$due}. Total outstanding, including previous months: {$this->formattedOutstandingBalance()}.";
 
         return (new WebPushMessage)
             ->title($title)

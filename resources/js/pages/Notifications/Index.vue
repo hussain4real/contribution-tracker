@@ -3,6 +3,7 @@ import {
     index,
     markAllAsRead,
     markAsRead,
+    updateReminderPreferences,
 } from '@/actions/App/Http/Controllers/NotificationController';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,7 +11,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { useCurrencyFormatter } from '@/lib/currency';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import {
     AlertTriangle,
     Bell,
@@ -69,12 +70,16 @@ interface NotificationFilters {
 }
 
 interface Props {
+    reminderChannels?: string[];
     notificationFeed?: PaginatedNotifications;
     notificationSummary?: NotificationSummary;
     notificationFilters?: NotificationFilters;
 }
 
 const props = defineProps<Props>();
+const reminderPreferences = useForm({
+    channels: [...(props.reminderChannels ?? ['mail', 'whatsapp', 'webpush'])],
+});
 const { formatCurrency } = useCurrencyFormatter({
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
@@ -204,15 +209,17 @@ function notificationMessage(notification: NotificationItem): string {
         const totalOutstanding = formatMoney(
             notification.data.total_outstanding,
         );
-        const due = isFollowUp(notification) ? 'today' : 'soon';
-        return `${period} contribution is due ${due}. Total outstanding, including previous months: ${totalOutstanding}.`;
+        const due = notification.data.due_date
+            ? ` on ${notification.data.due_date}`
+            : '';
+        return `${period} contribution is due${due}. Total outstanding, including previous months: ${totalOutstanding}.`;
     }
 
     if (isFollowUp(notification)) {
-        return `${period} contribution of ${amount} is due today.`;
+        return `${period} contribution of ${amount} is due${notification.data.due_date ? ` on ${notification.data.due_date}` : ''}.`;
     }
 
-    return `${period} contribution of ${amount} is coming due.`;
+    return `${period} contribution of ${amount} is due${notification.data.due_date ? ` on ${notification.data.due_date}` : ''}.`;
 }
 
 function notificationTone(notification: NotificationItem): string {
@@ -283,6 +290,68 @@ function toDate(dateString?: string | null): Date | null {
             <div
                 class="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8"
             >
+                <section
+                    class="rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900"
+                    aria-labelledby="reminder-preferences-heading"
+                >
+                    <h2 id="reminder-preferences-heading" class="font-semibold">
+                        Contribution reminder preferences
+                    </h2>
+                    <p class="mt-1 text-sm text-muted-foreground">
+                        Choose how this family can send you contribution
+                        reminders. In-app reminders remain available. Receipts
+                        are sent separately.
+                    </p>
+                    <form
+                        class="mt-3 space-y-3"
+                        @submit.prevent="
+                            reminderPreferences.put(
+                                updateReminderPreferences.url(),
+                                { preserveScroll: true },
+                            )
+                        "
+                    >
+                        <fieldset class="flex flex-wrap gap-4">
+                            <legend class="sr-only">Reminder channels</legend>
+                            <label class="flex items-center gap-2"
+                                ><input
+                                    v-model="reminderPreferences.channels"
+                                    type="checkbox"
+                                    value="mail"
+                                />
+                                Email</label
+                            >
+                            <label class="flex items-center gap-2"
+                                ><input
+                                    v-model="reminderPreferences.channels"
+                                    type="checkbox"
+                                    value="whatsapp"
+                                />
+                                WhatsApp</label
+                            >
+                            <label class="flex items-center gap-2"
+                                ><input
+                                    v-model="reminderPreferences.channels"
+                                    type="checkbox"
+                                    value="webpush"
+                                />
+                                Browser notifications</label
+                            >
+                        </fieldset>
+                        <p
+                            v-if="reminderPreferences.errors.channels"
+                            role="alert"
+                            class="text-sm text-red-600"
+                        >
+                            {{ reminderPreferences.errors.channels }}
+                        </p>
+                        <Button
+                            type="submit"
+                            :disabled="reminderPreferences.processing"
+                            >Save preferences</Button
+                        >
+                    </form>
+                </section>
                 <section
                     class="border-b border-neutral-200 pb-5 dark:border-neutral-800"
                 >

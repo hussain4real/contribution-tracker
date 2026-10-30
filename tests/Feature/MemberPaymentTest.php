@@ -613,7 +613,7 @@ it('reports when a verified callback cannot yet be posted to the ledger', functi
     $this->actingAs($member)
         ->get(route('pay.callback', ['reference' => 'TXN_UNPOSTED']))
         ->assertRedirect(route('pay.index'))
-        ->assertSessionHas('error', 'Payment was verified but could not be posted. Support has been notified.');
+        ->assertSessionHas('error', 'Payment was verified but not recorded. Contact your family admin before trying again.');
 });
 
 it('records only the settlement shortfall as a Paystack fee expense', function () {
@@ -714,7 +714,7 @@ it('rejects successful callbacks when the verified gross amount does not match',
     $this->actingAs($member)
         ->get(route('pay.callback', ['reference' => 'TXN_BAD_AMOUNT']))
         ->assertRedirect(route('pay.index'))
-        ->assertSessionHas('error', 'Could not verify payment. Your payment will be confirmed shortly.');
+        ->assertSessionHas('error', 'Could not confirm your payment. Check your payment history or contact your family admin before trying again.');
 
     expect($transaction->refresh()->status)->toBe(TransactionStatus::Failed)
         ->and(Payment::where('contribution_id', $contribution->id)->exists())->toBeFalse();
@@ -816,7 +816,7 @@ it('shows an error for failed callback verification statuses', function () {
         ->assertSessionHas('error', 'Payment was not successful. Please try again.');
 });
 
-it('shows pending confirmation when callback verification throws', function () {
+it('explains an uncertain outcome when callback verification throws', function () {
     Http::fake([
         'api.paystack.co/transaction/verify/TXN_ERROR' => Http::response(['message' => 'Gateway down'], 500),
     ]);
@@ -834,5 +834,5 @@ it('shows pending confirmation when callback verification throws', function () {
     $this->actingAs($member)
         ->get(route('pay.callback', ['reference' => 'TXN_ERROR']))
         ->assertRedirect(route('pay.index'))
-        ->assertSessionHas('error', 'Could not verify payment. Your payment will be confirmed shortly.');
+        ->assertSessionHas('error', 'Could not confirm your payment. Check your payment history or contact your family admin before trying again.');
 });
