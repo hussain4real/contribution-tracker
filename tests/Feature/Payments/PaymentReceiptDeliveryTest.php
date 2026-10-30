@@ -194,16 +194,21 @@ it('does not send the same receipt concurrently', function () {
     $first = new SendPaymentReceipt($batch->id, $this->member->id, 'mail');
     $second = (new SendPaymentReceipt($batch->id, $this->member->id, 'mail'))->withFakeQueueInteractions();
     $artifacts = app(ReportArtifactService::class);
-    $mock = Mockery::mock(ReportArtifactService::class)->makePartial();
-    $mock->shouldReceive('receipt')->once()->andReturnUsing(function (Family $family, PaymentBatch $payment, ?User $member) use ($second, $artifacts): ReportArtifact {
-        app(Pipeline::class)->send($second)->through($second->middleware())
-            ->then(fn (SendPaymentReceipt $job) => $job->handle($artifacts, app(WhatsAppService::class)));
+    $interleaved = new class($artifacts, $second) extends ReportArtifactService
+    {
+        public function __construct(private readonly ReportArtifactService $artifacts, private readonly SendPaymentReceipt $second) {}
 
-        return $artifacts->receipt($family, $payment, $member);
-    });
+        public function receipt(Family $family, PaymentBatch $batch, ?User $requester = null): ReportArtifact
+        {
+            app(Pipeline::class)->send($this->second)->through($this->second->middleware())
+                ->then(fn (SendPaymentReceipt $job) => $job->handle($this->artifacts, app(WhatsAppService::class)));
+
+            return $this->artifacts->receipt($family, $batch, $requester);
+        }
+    };
 
     app(Pipeline::class)->send($first)->through($first->middleware())
-        ->then(fn (SendPaymentReceipt $job) => $job->handle($mock, app(WhatsAppService::class)));
+        ->then(fn (SendPaymentReceipt $job) => $job->handle($interleaved, app(WhatsAppService::class)));
     $second->assertReleased(90);
     app(Pipeline::class)->send($second)->through($second->middleware())
         ->then(fn (SendPaymentReceipt $job) => $job->handle($artifacts, app(WhatsAppService::class)));
