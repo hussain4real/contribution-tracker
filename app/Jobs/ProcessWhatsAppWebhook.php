@@ -133,6 +133,8 @@ class ProcessWhatsAppWebhook implements ShouldQueue
                 'wa_message_id' => $waMessageId,
                 'error' => $e->getMessage(),
             ]);
+
+            throw $e;
         }
     }
 
