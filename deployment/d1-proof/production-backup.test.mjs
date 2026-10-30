@@ -115,7 +115,8 @@ test('cutover checkpoints capture fresh data without replacing an immutable dail
     assert.equal(f.objects.get(daily.key).bytes.toString(), old);
     const snapshot = JSON.parse(new TextDecoder().decode(await openProductionBackup(JSON.parse(f.objects.get(checkpoint.key).bytes), secret)));
     assert.ok(snapshot.files[0].backup_key.includes('/checkpoints/cutover-20261027t140000z/files/'));
-    assert.equal((await createProductionBackup(f.env, at, 'cutover-20261027t140000z')).status, 'already_present');
+    await assert.rejects(createProductionBackup(f.env, at, 'cutover-20261027t140000z'), /checkpoint already exists/i);
+    await assert.rejects(createProductionBackup(f.env, new Date('2026-10-27T05:00:00Z'), 'cutover-20261027t140000z'), /checkpoint already exists/i);
     await assert.rejects(() => createProductionBackup(f.env, at, '../escape'));
 });
 
@@ -164,6 +165,7 @@ test('a cutover checkpoint refuses an unreadable encrypted file before publishin
 
     await assert.rejects(createProductionBackup(f.env, at, checkpoint));
     assert.equal(f.objects.has(BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/d1/' + productionBackupSlot(at) + '.json.aes-gcm'), false);
+    await assert.rejects(createProductionBackup(f.env, at, checkpoint), /checkpoint already exists/i);
 });
 
 test('a cutover checkpoint reports an unreadable published database instead of success', async () => {
@@ -182,6 +184,21 @@ test('a cutover checkpoint reports an unreadable published database instead of s
 
     await assert.rejects(createProductionBackup(f.env, at, checkpoint));
     assert.equal(f.objects.has(BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/d1/' + productionBackupSlot(at) + '.json.aes-gcm'), true);
+    await assert.rejects(createProductionBackup(f.env, at, checkpoint), /checkpoint already exists/i);
+});
+
+test('a racing cutover checkpoint cannot replace or report another snapshot as new', async () => {
+    const f = fixture();
+    const put = f.env.BACKUP_FILES.put;
+    f.env.BACKUP_FILES.put = async (key, value, options) => {
+        if (key.includes('/d1/')) f.objects.set(key, {bytes: Buffer.from('competing checkpoint'), etag: 'other', uploaded: at});
+        return put(key, value, options);
+    };
+    const checkpoint = 'cutover-20261027t140005z';
+    const key = BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/d1/' + productionBackupSlot(at) + '.json.aes-gcm';
+
+    await assert.rejects(createProductionBackup(f.env, at, checkpoint), /checkpoint already exists/i);
+    assert.equal(f.objects.get(key).bytes.toString(), 'competing checkpoint');
 });
 
 test("a database-referenced missing file prevents publishing a successful backup", async () => {

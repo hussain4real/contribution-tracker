@@ -112,7 +112,11 @@ export async function createProductionBackup(env, at, checkpoint = null) {
     if (env.DATABASE_NAME !== DATABASE || env.BACKUPS_ENABLED !== "true") throw new Error("Production backups are disabled");
     const prefix = productionBackupPrefix(checkpoint);
     const objectKey = prefix + "d1/" + productionBackupSlot(at) + ".json.aes-gcm";
-    if (await env.BACKUP_FILES.head(objectKey)) return {status: "already_present", key: objectKey};
+    if (checkpoint !== null && (await listProductionObjects(env.BACKUP_FILES, prefix)).length) throw new Error('Production checkpoint already exists');
+    if (await env.BACKUP_FILES.head(objectKey)) {
+        if (checkpoint !== null) throw new Error('Production checkpoint already exists');
+        return {status: "already_present", key: objectKey};
+    }
     const captured = await snapshot(env);
     if (checkpoint !== null && encoder.encode(JSON.stringify(captured)).length > 8_000_000) throw new Error("Production database backup exceeds memory budget");
     const files = [...await listProductionObjects(env.APPLICATION_FILES, "private/"), ...await listProductionObjects(env.APPLICATION_FILES, "public/")]
@@ -162,6 +166,7 @@ export async function createProductionBackup(env, at, checkpoint = null) {
     const verified = await openProductionBackup(envelope, env.BACKUP_KEY);
     if (await digest(verified) !== await digest(bytes)) throw new Error("Production backup verification failed");
     const stored = await env.BACKUP_FILES.put(objectKey, JSON.stringify(envelope), {onlyIf: {etagDoesNotMatch: "*"}, httpMetadata: {contentType: "application/octet-stream"}, customMetadata: {captured_at: captured.captured_at, plaintext_sha256: envelope.sha256}});
+    if (checkpoint !== null && !stored) throw new Error('Production checkpoint already exists');
     if (checkpoint !== null && stored) {
         const published = await env.BACKUP_FILES.get(objectKey);
         if (!published || published.size > 12_000_000) throw new Error('Production checkpoint database is missing or excessive');
