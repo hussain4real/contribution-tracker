@@ -13,12 +13,15 @@ const secret = "base64:" + Buffer.alloc(32, 7).toString("base64");
 
 function backupFixture() {
     const objects = new Map();
+    const recoveryObjects = new Map();
+    const recoveryMetadata = new Map();
     const schema = Array.from({length: 40}, (_, i) => ({type: "table", name: "table_" + i, tbl_name: "table_" + i, sql: "create table table_" + i + "(id integer)"}));
     let badIntegrity = false;
     let reads = 0;
     const env = {
         DATABASE_NAME: "familyfunds-d1-web-staging", ENABLED: "true", MAINTENANCE_FAMILY_ID: "50", PURGE_FAMILY_ID: "51", BACKUP_APP_KEY: secret,
-        STAGING_FILES: {head: async key => objects.has(key), list: async ({prefix}) => ({objects: [...objects].filter(([key]) => key.startsWith(prefix)).map(([key, value]) => ({key, size: new TextEncoder().encode(value).length, etag: 'fixture-etag'})), truncated: false}), get: async key => { const value = objects.get(key); if (value === undefined) return null; const bytes = new TextEncoder().encode(value); return {size: bytes.length, etag: 'fixture-etag', body: true, arrayBuffer: async () => bytes.buffer}; }, put: async (key, body, options) => { if (options.onlyIf?.etagDoesNotMatch === '*' && objects.has(key)) return null; objects.set(key, body); return {key}; }},
+        RECOVERY_FILES: {list: async () => ({objects: [...recoveryObjects.keys()].map(key => ({key})), truncated: false}), put: async (key, bytes, options) => { if (options.onlyIf?.etagDoesNotMatch === '*' && recoveryObjects.has(key)) return null; recoveryObjects.set(key, bytes); recoveryMetadata.set(key, options); return {key}; }, get: async key => { const bytes = recoveryObjects.get(key); const metadata = recoveryMetadata.get(key); return bytes === undefined ? null : {size: bytes.length, httpMetadata: {contentLanguage: undefined, ...metadata?.httpMetadata}, customMetadata: metadata?.customMetadata, arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)}; }},
+        STAGING_FILES: {head: async key => objects.has(key), list: async ({prefix}) => ({objects: [...objects].filter(([key]) => key.startsWith(prefix)).map(([key, value]) => ({key, size: new TextEncoder().encode(value).length, etag: 'fixture-etag'})), truncated: false}), get: async key => { const value = objects.get(key); if (value === undefined) return null; const bytes = new TextEncoder().encode(value); return {size: bytes.length, etag: 'fixture-etag', body: true, httpMetadata: key.startsWith('private/reports/') ? {contentType: 'text/csv'} : {}, customMetadata: key.startsWith('private/reports/') ? {kind: 'synthetic'} : {}, arrayBuffer: async () => bytes.buffer}; }, put: async (key, body, options) => { if (options.onlyIf?.etagDoesNotMatch === '*' && objects.has(key)) return null; objects.set(key, body); return {key}; }},
         DB: {
             prepare: sql => ({sql, all: async () => { reads++; return {results: schema}; }}),
             batch: async statements => statements.map(statement => ({results: statement.sql.startsWith("select *") ? [{id: 1, body: "private fixture"}]
@@ -26,7 +29,7 @@ function backupFixture() {
                     : statement.sql === "pragma quick_check" ? [{quick_check: "ok"}] : schema})),
         },
     };
-    return {env, objects, reads: () => reads, corrupt: () => { badIntegrity = true; }};
+    return {env, objects, recoveryObjects, recoveryMetadata, reads: () => reads, corrupt: () => { badIntegrity = true; }};
 }
 
 test("calendar tasks catch up missed monthly work and respect reminder boundaries", () => {
@@ -158,7 +161,7 @@ test('an isolated empty recovery database restores and verifies a checkpoint wit
         source.exec("insert into fixture_0 (id,name) values (8,'synthetic')");
         source.exec('create table d1_staging_read_revision (id integer primary key, revision integer); insert into d1_staging_read_revision values (1,4)');
         source.exec('create trigger d1_read_revision_fixture_0_insert after insert on fixture_0 begin update d1_staging_read_revision set revision=revision+1 where id=1; end');
-        const {env, objects} = backupFixture();
+        const {env, objects, recoveryObjects, recoveryMetadata} = backupFixture();
         env.DB = adapter(source);
         env.RECOVERY_DB = adapter(recovered);
         env.STAGING_BACKUP_ONLY_ENABLED = 'true';
@@ -172,6 +175,11 @@ test('an isolated empty recovery database restores and verifies a checkpoint wit
         env.STAGING_RECOVERY_NAME = 'familyfunds-production';
         await assert.rejects(restore.restore(checkpoint), /wrong staging recovery target/i);
         env.STAGING_RECOVERY_NAME = 'familyfunds-d1-staging-recovery';
+        env.STAGING_RECOVERY_BUCKET_NAME = 'familyfunds-d1-staging-recovery-files';
+        recoveryObjects.set('private/existing', new TextEncoder().encode('keep'));
+        await assert.rejects(restore.restore(checkpoint), /recovery bucket must be empty/i);
+        assert.equal(new TextDecoder().decode(recoveryObjects.get('private/existing')), 'keep');
+        recoveryObjects.clear();
         const key = 'private/staging-backups/d1-web/checkpoints/' + checkpoint + '.json.aes-gcm';
         const original = objects.get(key);
         const envelope = JSON.parse(original);
@@ -193,11 +201,30 @@ test('an isolated empty recovery database restores and verifies a checkpoint wit
         assert.equal(result.status, 'passed');
         assert.equal(result.tables, 41);
         assert.equal(result.files, 1);
+        assert.equal(new TextDecoder().decode(recoveryObjects.get('private/reports/synthetic.csv')), 'synthetic report contents');
+        assert.equal(recoveryMetadata.get('private/reports/synthetic.csv').httpMetadata.contentType, 'text/csv');
+        assert.equal(recoveryMetadata.get('private/reports/synthetic.csv').customMetadata.kind, 'synthetic');
+        assert.equal(objects.get('private/reports/synthetic.csv'), 'synthetic report contents');
         assert.equal(recovered.prepare('select name from fixture_0 where id=8').get().name, 'synthetic');
         recovered.exec("insert into fixture_0(name) values ('next')");
         assert.equal(recovered.prepare('select revision from d1_staging_read_revision where id=1').get().revision, 5);
         assert.equal(recovered.prepare("select seq from sqlite_sequence where name='fixture_0'").get().seq, 9);
         await assert.rejects(restore.restore(checkpoint), /empty/i);
+
+        const racing = new DatabaseSync(':memory:');
+        try {
+            recoveryObjects.clear();
+            env.RECOVERY_DB = adapter(racing);
+            const put = env.RECOVERY_FILES.put;
+            env.RECOVERY_FILES.put = async (path, bytes, options) => {
+                recoveryObjects.set(path, new TextEncoder().encode('competing object'));
+                return put(path, bytes, options);
+            };
+            await assert.rejects(restore.restore(checkpoint), /recovery file already exists/i);
+            assert.equal(new TextDecoder().decode(recoveryObjects.get('private/reports/synthetic.csv')), 'competing object');
+        } finally {
+            racing.close();
+        }
     } finally {
         source.close();
         recovered.close();

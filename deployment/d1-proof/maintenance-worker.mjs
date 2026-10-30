@@ -111,7 +111,8 @@ async function checkpointFiles(env, snapshot, checkpoint) {
             if (!await env.STAGING_FILES.put(backupKey, JSON.stringify(sealed.envelope), {onlyIf: {etagDoesNotMatch: '*'}, httpMetadata: {contentType: 'application/octet-stream'}})) throw new Error('Staging checkpoint file already exists');
             captured.add(sha256);
         }
-        manifest.push({path: item.key, bytes: bytes.length, sha256, backup_key: backupKey});
+        manifest.push({path: item.key, bytes: bytes.length, sha256, backup_key: backupKey,
+            http_metadata: object.httpMetadata ?? {}, custom_metadata: object.customMetadata ?? {}});
     }
     const current = await stagingFiles(env.STAGING_FILES);
     const before = JSON.stringify(objects.map(item => [item.key, item.etag, item.size]).sort());
@@ -164,17 +165,21 @@ export class StagingRecoveryOnly extends WorkerEntrypoint {
     async restore(checkpoint) {
         if (this.env.STAGING_RESTORE_ONLY_ENABLED !== 'true') throw new Error('Staging recovery is disabled');
         target(this.env);
-        if (this.env.STAGING_RECOVERY_NAME !== 'familyfunds-d1-staging-recovery' || !this.env.RECOVERY_DB) throw new Error('Wrong staging recovery target');
+        if (this.env.STAGING_RECOVERY_NAME !== 'familyfunds-d1-staging-recovery' || !this.env.RECOVERY_DB || this.env.STAGING_RECOVERY_BUCKET_NAME !== 'familyfunds-d1-staging-recovery-files' || !this.env.RECOVERY_FILES) throw new Error('Wrong staging recovery target');
         if (typeof checkpoint !== 'string' || !/^cutover-[0-9]{8}t[0-9]{6}z$/.test(checkpoint)) throw new Error('Invalid staging checkpoint');
         const existing = await this.env.RECOVERY_DB.prepare("select count(*) n from sqlite_master where type='table' and name not glob 'sqlite_*' and name not glob '_cf_*'").first();
         if (existing.n !== 0) throw new Error('Staging recovery target must be empty');
+        const existingFiles = await this.env.RECOVERY_FILES.list({limit: 1});
+        if (existingFiles.objects.length || existingFiles.truncated) throw new Error('Staging recovery bucket must be empty');
         const object = await this.env.STAGING_FILES.get(BACKUP_PREFIX + 'checkpoints/' + checkpoint + '.json.aes-gcm');
         if (!object || object.size > 28_000_000) throw new Error('Missing or excessive staging checkpoint');
         const snapshot = await openBackup(JSON.parse(new TextDecoder().decode(await object.arrayBuffer())), this.env.BACKUP_APP_KEY);
         if (snapshot.version !== 1 || snapshot.database !== DATABASE || !Array.isArray(snapshot.schema) || !Array.isArray(snapshot.sequences) || !Array.isArray(snapshot.files) || !snapshot.tables || typeof snapshot.tables !== 'object' || Array.isArray(snapshot.tables)) throw new Error('Invalid staging checkpoint contents');
         if (snapshot.files.length > 2000) throw new Error('Excessive staging checkpoint files');
-        for (const file of snapshot.files) {
-            if (typeof file.path !== 'string' || !/^(private|public)\//.test(file.path) || typeof file.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(file.sha256) || !Number.isSafeInteger(file.bytes) || file.bytes < 0 || file.bytes > 10_000_000 || file.backup_key !== BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/files/' + file.sha256 + '.json.aes-gcm') throw new Error('Invalid staging checkpoint file');
+        const seenPaths = new Set();
+        const readFile = async file => {
+            if (typeof file.path !== 'string' || !/^(private|public)\//.test(file.path) || /\.\.|\\/.test(file.path) || file.path.startsWith(BACKUP_PREFIX) || typeof file.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(file.sha256) || !Number.isSafeInteger(file.bytes) || file.bytes < 0 || file.bytes > 10_000_000 || file.backup_key !== BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/files/' + file.sha256 + '.json.aes-gcm') throw new Error('Invalid staging checkpoint file');
+            if (!file.http_metadata || typeof file.http_metadata !== 'object' || Array.isArray(file.http_metadata) || !file.custom_metadata || typeof file.custom_metadata !== 'object' || Array.isArray(file.custom_metadata) || Object.values(file.custom_metadata).some(value => typeof value !== 'string') || Object.entries(file.http_metadata).some(([key, value]) => !['contentType', 'contentLanguage', 'contentDisposition', 'contentEncoding', 'cacheControl', 'cacheExpiry'].includes(key) || typeof value !== 'string' || (key === 'cacheExpiry' && !Number.isFinite(Date.parse(value))))) throw new Error('Invalid staging checkpoint file metadata');
             const stored = await this.env.STAGING_FILES.get(file.backup_key);
             if (!stored || stored.size > 28_000_000) throw new Error('Missing or excessive staging checkpoint file');
             const contents = await openBackup(JSON.parse(new TextDecoder().decode(await stored.arrayBuffer())), this.env.BACKUP_APP_KEY);
@@ -182,6 +187,12 @@ export class StagingRecoveryOnly extends WorkerEntrypoint {
             const bytes = Uint8Array.from(atob(contents.contents), c => c.charCodeAt(0));
             const sha256 = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), n => n.toString(16).padStart(2, '0')).join('');
             if (bytes.length !== file.bytes || sha256 !== file.sha256) throw new Error('Staging checkpoint file differs');
+            return bytes;
+        };
+        for (const file of snapshot.files) {
+            if (seenPaths.has(file.path)) throw new Error('Duplicate staging checkpoint file');
+            seenPaths.add(file.path);
+            await readFile(file);
         }
         const names = Object.keys(snapshot.tables);
         const validName = name => typeof name === 'string' && /^[a-z_][a-z0-9_]*$/i.test(name);
@@ -216,6 +227,18 @@ export class StagingRecoveryOnly extends WorkerEntrypoint {
         if (canonical(sequences) !== canonical(snapshot.sequences)) throw new Error('Staging restored sequences differ');
         const schema = (await this.env.RECOVERY_DB.prepare("select type,name,tbl_name,sql from sqlite_master where sql is not null and name not glob 'sqlite_*' and (name not glob 'd1_*' or name glob 'd1_staging_*' or name glob 'd1_read_revision_*') and name not glob '_cf_*' order by type,name").all()).results;
         if (canonical(schema) !== canonical(snapshot.schema)) throw new Error('Staging restored schema differs');
+        for (const file of snapshot.files) {
+            const bytes = await readFile(file);
+            const httpMetadata = {...file.http_metadata};
+            if (httpMetadata.cacheExpiry) httpMetadata.cacheExpiry = new Date(httpMetadata.cacheExpiry);
+            if (!await this.env.RECOVERY_FILES.put(file.path, bytes, {onlyIf: {etagDoesNotMatch: '*'}, httpMetadata, customMetadata: file.custom_metadata})) throw new Error('Staging recovery file already exists');
+            const restored = await this.env.RECOVERY_FILES.get(file.path);
+            if (!restored || restored.size !== file.bytes) throw new Error('Staging recovery file differs');
+            const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', await restored.arrayBuffer())), n => n.toString(16).padStart(2, '0')).join('');
+            if (hash !== file.sha256) throw new Error('Staging recovery file differs');
+            const ordered = value => JSON.stringify(Object.entries(value).filter(([, item]) => item !== undefined).sort(([a], [b]) => a.localeCompare(b)));
+            if (ordered(restored.httpMetadata ?? {}) !== ordered(file.http_metadata) || ordered(restored.customMetadata ?? {}) !== ordered(file.custom_metadata)) throw new Error('Staging recovery file metadata differs');
+        }
         return {status: 'passed', tables: names.length, sequences: sequences.length, files: snapshot.files.length, integrity: 'ok'};
     }
 }
