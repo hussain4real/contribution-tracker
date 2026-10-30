@@ -18,7 +18,7 @@ function backupFixture() {
     let reads = 0;
     const env = {
         DATABASE_NAME: "familyfunds-d1-web-staging", ENABLED: "true", MAINTENANCE_FAMILY_ID: "50", PURGE_FAMILY_ID: "51", BACKUP_APP_KEY: secret,
-        STAGING_FILES: {head: async key => objects.has(key), get: async key => { const value = objects.get(key); if (value === undefined) return null; const bytes = new TextEncoder().encode(value); return {size: bytes.length, arrayBuffer: async () => bytes.buffer}; }, put: async (key, body, options) => { if (options.onlyIf?.etagDoesNotMatch === '*' && objects.has(key)) return null; objects.set(key, body); return {key}; }},
+        STAGING_FILES: {head: async key => objects.has(key), list: async ({prefix}) => ({objects: [...objects].filter(([key]) => key.startsWith(prefix)).map(([key, value]) => ({key, size: new TextEncoder().encode(value).length, etag: 'fixture-etag'})), truncated: false}), get: async key => { const value = objects.get(key); if (value === undefined) return null; const bytes = new TextEncoder().encode(value); return {size: bytes.length, etag: 'fixture-etag', body: true, arrayBuffer: async () => bytes.buffer}; }, put: async (key, body, options) => { if (options.onlyIf?.etagDoesNotMatch === '*' && objects.has(key)) return null; objects.set(key, body); return {key}; }},
         DB: {
             prepare: sql => ({sql, all: async () => { reads++; return {results: schema}; }}),
             batch: async statements => statements.map(statement => ({results: statement.sql.startsWith("select *") ? [{id: 1, body: "private fixture"}]
@@ -162,6 +162,7 @@ test('an isolated empty recovery database restores and verifies a checkpoint wit
         env.DB = adapter(source);
         env.RECOVERY_DB = adapter(recovered);
         env.STAGING_BACKUP_ONLY_ENABLED = 'true';
+        objects.set('private/reports/synthetic.csv', 'synthetic report contents');
         const service = new StagingBackupOnly(env);
         const checkpoint = 'cutover-20261030t200001z';
         await service.create(checkpoint);
@@ -179,10 +180,19 @@ test('an isolated empty recovery database restores and verifies a checkpoint wit
         await assert.rejects(restore.restore(checkpoint));
         assert.equal(recovered.prepare("select count(*) n from sqlite_master where type='table' and name not glob 'sqlite_*'").get().n, 0);
         objects.set(key, original);
+        const fileKey = [...objects.keys()].find(item => item.includes('/files/'));
+        const originalFile = objects.get(fileKey);
+        const fileEnvelope = JSON.parse(originalFile);
+        fileEnvelope.ciphertext = (fileEnvelope.ciphertext[0] === 'A' ? 'B' : 'A') + fileEnvelope.ciphertext.slice(1);
+        objects.set(fileKey, JSON.stringify(fileEnvelope));
+        await assert.rejects(restore.restore(checkpoint));
+        assert.equal(recovered.prepare("select count(*) n from sqlite_master where type='table' and name not glob 'sqlite_*'").get().n, 0);
+        objects.set(fileKey, originalFile);
 
         const result = await restore.restore(checkpoint);
         assert.equal(result.status, 'passed');
         assert.equal(result.tables, 41);
+        assert.equal(result.files, 1);
         assert.equal(recovered.prepare('select name from fixture_0 where id=8').get().name, 'synthetic');
         recovered.exec("insert into fixture_0(name) values ('next')");
         assert.equal(recovered.prepare('select revision from d1_staging_read_revision where id=1').get().revision, 5);
@@ -192,6 +202,53 @@ test('an isolated empty recovery database restores and verifies a checkpoint wit
         source.close();
         recovered.close();
     }
+});
+
+test('checkpoint refuses a missing referenced application file before publishing anything', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+        for (let i = 0; i < 39; i++) db.exec(`create table fixture_${i} (id integer primary key autoincrement)`);
+        db.exec("create table report_artifacts (id integer primary key autoincrement, disk text, path text); insert into report_artifacts (disk,path) values ('local','reports/missing.csv')");
+        const {env, objects} = backupFixture();
+        env.DB = {prepare: sql => ({sql, all: async () => ({results: db.prepare(sql).all()})}),
+            batch: async statements => statements.map(statement => ({results: db.prepare(statement.sql).all()}))};
+        env.STAGING_BACKUP_ONLY_ENABLED = 'true';
+
+        await assert.rejects(new StagingBackupOnly(env).create('cutover-20261030t200003z'), /referenced file.*missing/i);
+        assert.equal(objects.size, 0);
+    } finally {
+        db.close();
+    }
+});
+
+test('checkpoint encrypts application files', async () => {
+    const {env, objects} = backupFixture();
+    env.STAGING_BACKUP_ONLY_ENABLED = 'true';
+    objects.set('private/reports/synthetic.csv', 'synthetic report contents');
+
+    const result = await new StagingBackupOnly(env).create('cutover-20261030t200004z');
+    assert.equal(result.files, 1);
+    const encrypted = [...objects.entries()].filter(([key]) => key.includes('/files/'));
+    assert.equal(encrypted.length, 1);
+    assert.doesNotMatch(encrypted[0][1], /synthetic report contents/);
+});
+
+test('checkpoint rejects a changed application file inventory before publishing the database snapshot', async () => {
+    const {env, objects} = backupFixture();
+    env.STAGING_BACKUP_ONLY_ENABLED = 'true';
+    objects.set('private/reports/first.csv', 'first');
+    const get = env.STAGING_FILES.get;
+    env.STAGING_FILES.get = async (...args) => {
+        const result = await get(...args);
+        objects.set('private/reports/second.csv', 'second');
+        return result;
+    };
+
+    const checkpoint = 'cutover-20261030t200005z';
+    await assert.rejects(new StagingBackupOnly(env).create(checkpoint), /inventory changed/i);
+    assert.equal(objects.has('private/staging-backups/d1-web/checkpoints/' + checkpoint + '.json.aes-gcm'), false);
+    assert.equal(objects.get('private/reports/first.csv'), 'first');
+    assert.equal(objects.get('private/reports/second.csv'), 'second');
 });
 
 test("an integrity failure prevents publishing a backup", async () => {

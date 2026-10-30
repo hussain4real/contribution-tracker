@@ -66,6 +66,60 @@ async function sealBackup(snapshot, secret) {
         bytes: bytes.length, sha256: Array.from(new Uint8Array(hash), n => n.toString(16).padStart(2, "0")).join("")};
 }
 
+async function openBackup(envelope, secret) {
+    if (envelope.version !== 1 || envelope.database !== DATABASE || typeof envelope.iv !== 'string' || typeof envelope.ciphertext !== 'string') throw new Error('Invalid staging checkpoint envelope');
+    const decode = value => Uint8Array.from(atob(value), c => c.charCodeAt(0));
+    const bytes = await crypto.subtle.decrypt({name: 'AES-GCM', iv: decode(envelope.iv), additionalData: encoder.encode(`FamilyFunds staging backup v1:${DATABASE}`)}, await backupKey(secret), decode(envelope.ciphertext));
+    if (bytes.byteLength > 20_000_000) throw new Error('Excessive staging checkpoint');
+    return JSON.parse(new TextDecoder().decode(bytes));
+}
+
+async function stagingFiles(bucket) {
+    const objects = [];
+    for (const prefix of ['private/', 'public/']) {
+        let cursor;
+        do {
+            const page = await bucket.list({prefix, ...(cursor ? {cursor} : {})});
+            objects.push(...page.objects.filter(item => !item.key.startsWith(BACKUP_PREFIX)));
+            if (objects.length > 2000 || (page.truncated && !page.cursor)) throw new Error('Excessive or incomplete staging file inventory');
+            cursor = page.truncated ? page.cursor : null;
+        } while (cursor);
+    }
+    return objects;
+}
+
+async function checkpointFiles(env, snapshot, checkpoint) {
+    const objects = await stagingFiles(env.STAGING_FILES);
+    const paths = new Set(objects.map(item => item.key));
+    for (const name of ['report_artifacts', 'reconciliation_imports']) {
+        for (const row of snapshot.tables[name] ?? []) {
+            if (!['local', 'public'].includes(row.disk) || typeof row.path !== 'string' || /(^\/|\.\.|\\)/.test(row.path)) throw new Error('Invalid staging file reference');
+            if (!paths.has((row.disk === 'public' ? 'public/' : 'private/') + row.path)) throw new Error('A referenced file is missing from staging');
+        }
+    }
+    if (objects.some(item => item.size > 10_000_000) || objects.reduce((sum, item) => sum + item.size, 0) > 64_000_000) throw new Error('Staging files exceed checkpoint size budget');
+    const manifest = [], captured = new Set();
+    for (const item of objects) {
+        const object = await env.STAGING_FILES.get(item.key, {onlyIf: {etagMatches: item.etag}});
+        if (!object || !('body' in object) || object.etag !== item.etag) throw new Error('Staging file changed during checkpoint');
+        const bytes = new Uint8Array(await object.arrayBuffer());
+        if (bytes.length !== item.size) throw new Error('Staging file size changed during checkpoint');
+        const sha256 = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), n => n.toString(16).padStart(2, '0')).join('');
+        const backupKey = BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/files/' + sha256 + '.json.aes-gcm';
+        if (!captured.has(sha256)) {
+            const sealed = await sealBackup({kind: 'file', sha256, contents: base64(bytes)}, env.BACKUP_APP_KEY);
+            if (!await env.STAGING_FILES.put(backupKey, JSON.stringify(sealed.envelope), {onlyIf: {etagDoesNotMatch: '*'}, httpMetadata: {contentType: 'application/octet-stream'}})) throw new Error('Staging checkpoint file already exists');
+            captured.add(sha256);
+        }
+        manifest.push({path: item.key, bytes: bytes.length, sha256, backup_key: backupKey});
+    }
+    const current = await stagingFiles(env.STAGING_FILES);
+    const before = JSON.stringify(objects.map(item => [item.key, item.etag, item.size]).sort());
+    const after = JSON.stringify(current.map(item => [item.key, item.etag, item.size]).sort());
+    if (before !== after) throw new Error('Staging file inventory changed during checkpoint');
+    return manifest;
+}
+
 async function createBackup(env, at, checkpoint = null) {
     if (checkpoint !== null && (typeof checkpoint !== 'string' || !/^cutover-[0-9]{8}t[0-9]{6}z$/.test(checkpoint))) throw new Error('Invalid staging checkpoint');
     const objectKey = BACKUP_PREFIX + (checkpoint === null ? at.toISOString().slice(0, 10) : 'checkpoints/' + checkpoint) + ".json.aes-gcm";
@@ -87,13 +141,14 @@ async function createBackup(env, at, checkpoint = null) {
     if (result[tables.length + 1].results.length !== 0 || result[tables.length + 2].results[0]?.quick_check !== "ok") throw new Error("Staging backup integrity check failed");
     const snapshot = {version: 1, database: DATABASE, captured_at: new Date().toISOString(), schema: before,
         tables: Object.fromEntries(tables.map((name, i) => [name, result[i].results])), sequences: result[tables.length].results};
+    if (checkpoint !== null) snapshot.files = await checkpointFiles(env, snapshot, checkpoint);
     const sealed = await sealBackup(snapshot, env.BACKUP_APP_KEY);
     const stored = await env.STAGING_FILES.put(objectKey, JSON.stringify(sealed.envelope), {
         onlyIf: {etagDoesNotMatch: "*"}, httpMetadata: {contentType: "application/octet-stream"},
         customMetadata: {database: DATABASE, plaintext_sha256: sealed.sha256, captured_at: snapshot.captured_at},
     });
     if (!stored && checkpoint !== null) throw new Error('Staging checkpoint already exists');
-    return {status: stored ? "created" : "already_present", key: objectKey, plaintext_bytes: sealed.bytes, sha256: sealed.sha256, tables: tables.length};
+    return {status: stored ? "created" : "already_present", key: objectKey, plaintext_bytes: sealed.bytes, sha256: sealed.sha256, tables: tables.length, ...(checkpoint === null ? {} : {files: snapshot.files.length})};
 }
 
 export class StagingBackupOnly extends WorkerEntrypoint {
@@ -115,13 +170,19 @@ export class StagingRecoveryOnly extends WorkerEntrypoint {
         if (existing.n !== 0) throw new Error('Staging recovery target must be empty');
         const object = await this.env.STAGING_FILES.get(BACKUP_PREFIX + 'checkpoints/' + checkpoint + '.json.aes-gcm');
         if (!object || object.size > 28_000_000) throw new Error('Missing or excessive staging checkpoint');
-        const envelope = JSON.parse(new TextDecoder().decode(await object.arrayBuffer()));
-        if (envelope.version !== 1 || envelope.database !== DATABASE || typeof envelope.iv !== 'string' || typeof envelope.ciphertext !== 'string') throw new Error('Invalid staging checkpoint envelope');
-        const decode = value => Uint8Array.from(atob(value), c => c.charCodeAt(0));
-        const bytes = await crypto.subtle.decrypt({name: 'AES-GCM', iv: decode(envelope.iv), additionalData: encoder.encode(`FamilyFunds staging backup v1:${DATABASE}`)}, await backupKey(this.env.BACKUP_APP_KEY), decode(envelope.ciphertext));
-        if (bytes.byteLength > 20_000_000) throw new Error('Excessive staging checkpoint');
-        const snapshot = JSON.parse(new TextDecoder().decode(bytes));
-        if (snapshot.version !== 1 || snapshot.database !== DATABASE || !Array.isArray(snapshot.schema) || !Array.isArray(snapshot.sequences) || !snapshot.tables || typeof snapshot.tables !== 'object' || Array.isArray(snapshot.tables)) throw new Error('Invalid staging checkpoint contents');
+        const snapshot = await openBackup(JSON.parse(new TextDecoder().decode(await object.arrayBuffer())), this.env.BACKUP_APP_KEY);
+        if (snapshot.version !== 1 || snapshot.database !== DATABASE || !Array.isArray(snapshot.schema) || !Array.isArray(snapshot.sequences) || !Array.isArray(snapshot.files) || !snapshot.tables || typeof snapshot.tables !== 'object' || Array.isArray(snapshot.tables)) throw new Error('Invalid staging checkpoint contents');
+        if (snapshot.files.length > 2000) throw new Error('Excessive staging checkpoint files');
+        for (const file of snapshot.files) {
+            if (typeof file.path !== 'string' || !/^(private|public)\//.test(file.path) || typeof file.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(file.sha256) || !Number.isSafeInteger(file.bytes) || file.bytes < 0 || file.bytes > 10_000_000 || file.backup_key !== BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/files/' + file.sha256 + '.json.aes-gcm') throw new Error('Invalid staging checkpoint file');
+            const stored = await this.env.STAGING_FILES.get(file.backup_key);
+            if (!stored || stored.size > 28_000_000) throw new Error('Missing or excessive staging checkpoint file');
+            const contents = await openBackup(JSON.parse(new TextDecoder().decode(await stored.arrayBuffer())), this.env.BACKUP_APP_KEY);
+            if (contents.kind !== 'file' || contents.sha256 !== file.sha256 || typeof contents.contents !== 'string') throw new Error('Invalid staging checkpoint file contents');
+            const bytes = Uint8Array.from(atob(contents.contents), c => c.charCodeAt(0));
+            const sha256 = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), n => n.toString(16).padStart(2, '0')).join('');
+            if (bytes.length !== file.bytes || sha256 !== file.sha256) throw new Error('Staging checkpoint file differs');
+        }
         const names = Object.keys(snapshot.tables);
         const validName = name => typeof name === 'string' && /^[a-z_][a-z0-9_]*$/i.test(name);
         if (names.length < 40 || names.some(name => !validName(name) || !Array.isArray(snapshot.tables[name]))) throw new Error('Invalid staging checkpoint tables');
@@ -155,7 +216,7 @@ export class StagingRecoveryOnly extends WorkerEntrypoint {
         if (canonical(sequences) !== canonical(snapshot.sequences)) throw new Error('Staging restored sequences differ');
         const schema = (await this.env.RECOVERY_DB.prepare("select type,name,tbl_name,sql from sqlite_master where sql is not null and name not glob 'sqlite_*' and (name not glob 'd1_*' or name glob 'd1_staging_*' or name glob 'd1_read_revision_*') and name not glob '_cf_*' order by type,name").all()).results;
         if (canonical(schema) !== canonical(snapshot.schema)) throw new Error('Staging restored schema differs');
-        return {status: 'passed', tables: names.length, sequences: sequences.length, integrity: 'ok'};
+        return {status: 'passed', tables: names.length, sequences: sequences.length, files: snapshot.files.length, integrity: 'ok'};
     }
 }
 
