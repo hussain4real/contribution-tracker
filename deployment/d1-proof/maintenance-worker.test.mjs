@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {webcrypto} from "node:crypto";
 import {readFileSync} from "node:fs";
+import {DatabaseSync} from "node:sqlite";
 import {test} from "node:test";
 import {runInNewContext} from "node:vm";
 
@@ -116,6 +117,34 @@ test('a competing checkpoint is preserved when it appears after the initial chec
 
     await assert.rejects(new StagingBackupOnly(env).create('cutover-20261030t194500z'), /already exists/i);
     assert.equal([...objects.values()][0], 'competing checkpoint');
+});
+
+test('checkpoint snapshots include application-owned D1 runtime tables and revision triggers', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+        for (let i = 0; i < 40; i++) db.exec(`create table fixture_${i} (id integer primary key autoincrement)`);
+        db.exec('create table d1_staging_sequences (name text primary key, next_id integer); insert into d1_staging_sequences values (\'payment\', 7)');
+        db.exec('create trigger d1_read_revision_fixture_0_insert after insert on fixture_0 begin select 1; end');
+        const {env, objects} = backupFixture();
+        env.DB = {prepare: sql => ({sql, all: async () => ({results: db.prepare(sql).all()})}),
+            batch: async statements => statements.map(statement => ({results: db.prepare(statement.sql).all()}))};
+        env.STAGING_BACKUP_ONLY_ENABLED = 'true';
+        const result = await new StagingBackupOnly(env).create('cutover-20261030t194501z');
+        const envelope = JSON.parse(objects.get(result.key));
+        const options = {name: 'AES-GCM', iv: Buffer.from(envelope.iv, 'base64'), additionalData: new TextEncoder().encode('FamilyFunds staging backup v1:familyfunds-d1-web-staging')};
+        const snapshot = JSON.parse(new TextDecoder().decode(await webcrypto.subtle.decrypt(options, await backupKey(secret), Buffer.from(envelope.ciphertext, 'base64'))));
+
+        assert.equal(snapshot.tables.d1_staging_sequences[0].next_id, 7);
+        assert.ok(snapshot.schema.some(item => item.name === 'd1_read_revision_fixture_0_insert'));
+        const daily = await createBackup(env, new Date('2026-10-30T19:45:01Z'));
+        const dailyEnvelope = JSON.parse(objects.get(daily.key));
+        const dailyOptions = {...options, iv: Buffer.from(dailyEnvelope.iv, 'base64')};
+        const dailySnapshot = JSON.parse(new TextDecoder().decode(await webcrypto.subtle.decrypt(dailyOptions, await backupKey(secret), Buffer.from(dailyEnvelope.ciphertext, 'base64'))));
+        assert.equal(dailySnapshot.tables.d1_staging_sequences, undefined);
+        assert.equal(dailySnapshot.schema.some(item => item.name === 'd1_read_revision_fixture_0_insert'), false);
+    } finally {
+        db.close();
+    }
 });
 
 test("an integrity failure prevents publishing a backup", async () => {

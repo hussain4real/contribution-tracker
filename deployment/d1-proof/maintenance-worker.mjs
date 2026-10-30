@@ -73,7 +73,8 @@ async function createBackup(env, at, checkpoint = null) {
         if (checkpoint !== null) throw new Error('Staging checkpoint already exists');
         return {status: "already_present", key: objectKey};
     }
-    const schemaSql = "select type,name,tbl_name,sql from sqlite_master where sql is not null and name not glob 'sqlite_*' and name not glob 'd1_*' and name not glob '_cf_*' order by type,name";
+    const includedRuntime = checkpoint === null ? "name not glob 'd1_*'" : "(name not glob 'd1_*' or name glob 'd1_staging_*' or name glob 'd1_read_revision_*')";
+    const schemaSql = "select type,name,tbl_name,sql from sqlite_master where sql is not null and name not glob 'sqlite_*' and " + includedRuntime + " and name not glob '_cf_*' order by type,name";
     const before = (await env.DB.prepare(schemaSql).all()).results;
     const tables = before.filter(item => item.type === "table").map(item => item.name);
     if (tables.length < 40 || tables.some(name => !/^[a-z_][a-z0-9_]*$/i.test(name))) throw new Error("Unexpected staging backup schema");
