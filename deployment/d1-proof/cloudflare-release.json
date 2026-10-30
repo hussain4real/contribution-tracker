@@ -38,7 +38,12 @@
     "image_repository": "familyfunds-d1-staging",
     "dockerfile": "Dockerfile.slim",
     "url": "https://d1-staging.familyfunds.app",
-    "companions": []
+    "companions": [
+      {
+        "worker": "familyfunds-d1-maintenance-staging",
+        "entry": "maintenance-worker.mjs"
+      }
+    ]
   },
   "accepted_migrations_sha256": "41030db19fc50e7d60c54dca72743f7b7277e62cc28872367d79d7f93c66c5b9"
 }
