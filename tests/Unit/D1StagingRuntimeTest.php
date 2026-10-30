@@ -45,6 +45,40 @@ function stagingReadCacheFixture(?Closure $afterBatch = null): PDO
     return $pdo;
 }
 
+it('handles another request creating the private read cache directory first', function (): void {
+    if (! function_exists('pcntl_fork')) {
+        $this->markTestSkipped('The deterministic race test requires pcntl.');
+    }
+
+    stagingReadCacheFixture();
+    $pid = pcntl_fork();
+    if ($pid === 0) {
+        eval('namespace FamilyFunds\\D1Staging; function mkdir($path, $mode, $recursive) { \\mkdir($path, $mode, $recursive); return \\mkdir($path, $mode, $recursive); }');
+        try {
+            $result = (new D1StagingRuntime)->runReadOnly(fn () => DB::table('contributions')->sum('amount'), 1, 10);
+            exit($result === 10 ? 0 : 1);
+        } catch (Throwable) {
+            exit(1);
+        }
+    }
+    expect($pid)->toBeGreaterThan(0);
+    pcntl_waitpid($pid, $status);
+    expect(pcntl_wifexited($status))->toBeTrue()
+        ->and(pcntl_wexitstatus($status))->toBe(0);
+});
+
+it('fails closed when the private read cache directory cannot be created', function (): void {
+    stagingReadCacheFixture();
+    $directory = Config::string('d1-staging.read_snapshot_path');
+    file_put_contents($directory, 'not a directory');
+    try {
+        expect(fn () => (new D1StagingRuntime)->runReadOnly(fn () => null, 1, 10))
+            ->toThrow(RuntimeException::class, 'Could not prepare the private staging read cache.');
+    } finally {
+        unlink($directory);
+    }
+});
+
 it('shares a read snapshot between members while reading fresh committed amounts and roles', function (): void {
     $pdo = stagingReadCacheFixture();
     $runtime = new D1StagingRuntime;
