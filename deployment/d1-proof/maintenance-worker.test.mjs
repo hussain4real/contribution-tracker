@@ -5,8 +5,8 @@ import {DatabaseSync} from "node:sqlite";
 import {test} from "node:test";
 import {runInNewContext} from "node:vm";
 
-const source = readFileSync(new URL("./maintenance-worker.mjs", import.meta.url), "utf8").replace(/^import .*;\n/gm, "").replace("export default ", "const handler = ").replace("export class ", "class ");
-const {handler, StagingBackupOnly, calendarTasks, sealBackup, backupKey, createBackup, backupSlot} = runInNewContext(source + "\n({handler, StagingBackupOnly, calendarTasks, sealBackup, backupKey, createBackup, backupSlot})", {
+const source = readFileSync(new URL("./maintenance-worker.mjs", import.meta.url), "utf8").replace(/^import .*;\n/gm, "").replace("export default ", "const handler = ").replaceAll("export class ", "class ");
+const {handler, StagingBackupOnly, StagingRecoveryOnly, calendarTasks, sealBackup, backupKey, createBackup, backupSlot} = runInNewContext(source + "\n({handler, StagingBackupOnly, StagingRecoveryOnly, calendarTasks, sealBackup, backupKey, createBackup, backupSlot})", {
     WorkerEntrypoint: class {constructor(env) { this.env = env; }}, crypto: webcrypto, TextEncoder, TextDecoder, Response, btoa, atob, console,
 });
 const secret = "base64:" + Buffer.alloc(32, 7).toString("base64");
@@ -18,7 +18,7 @@ function backupFixture() {
     let reads = 0;
     const env = {
         DATABASE_NAME: "familyfunds-d1-web-staging", ENABLED: "true", MAINTENANCE_FAMILY_ID: "50", PURGE_FAMILY_ID: "51", BACKUP_APP_KEY: secret,
-        STAGING_FILES: {head: async key => objects.has(key), put: async (key, body, options) => { if (options.onlyIf?.etagDoesNotMatch === '*' && objects.has(key)) return null; objects.set(key, body); return {key}; }},
+        STAGING_FILES: {head: async key => objects.has(key), get: async key => { const value = objects.get(key); if (value === undefined) return null; const bytes = new TextEncoder().encode(value); return {size: bytes.length, arrayBuffer: async () => bytes.buffer}; }, put: async (key, body, options) => { if (options.onlyIf?.etagDoesNotMatch === '*' && objects.has(key)) return null; objects.set(key, body); return {key}; }},
         DB: {
             prepare: sql => ({sql, all: async () => { reads++; return {results: schema}; }}),
             batch: async statements => statements.map(statement => ({results: statement.sql.startsWith("select *") ? [{id: 1, body: "private fixture"}]
@@ -144,6 +144,53 @@ test('checkpoint snapshots include application-owned D1 runtime tables and revis
         assert.equal(dailySnapshot.schema.some(item => item.name === 'd1_read_revision_fixture_0_insert'), false);
     } finally {
         db.close();
+    }
+});
+
+test('an isolated empty recovery database restores and verifies a checkpoint without replay', async () => {
+    const source = new DatabaseSync(':memory:');
+    const recovered = new DatabaseSync(':memory:');
+    const adapter = db => ({prepare(sql) { return {sql, values: [], bind(...values) { this.values = values; return this; },
+        async all() { return {results: db.prepare(sql).all(...this.values)}; }, async first() { return db.prepare(sql).get(...this.values); }}; },
+        async batch(statements) { db.exec('BEGIN'); try { const result = []; for (const statement of statements) result.push(await statement.all()); db.exec('COMMIT'); return result; } catch (error) { db.exec('ROLLBACK'); throw error; } }});
+    try {
+        for (let i = 0; i < 40; i++) source.exec(`create table fixture_${i} (id integer primary key autoincrement, name text)`);
+        source.exec("insert into fixture_0 (id,name) values (8,'synthetic')");
+        source.exec('create table d1_staging_read_revision (id integer primary key, revision integer); insert into d1_staging_read_revision values (1,4)');
+        source.exec('create trigger d1_read_revision_fixture_0_insert after insert on fixture_0 begin update d1_staging_read_revision set revision=revision+1 where id=1; end');
+        const {env, objects} = backupFixture();
+        env.DB = adapter(source);
+        env.RECOVERY_DB = adapter(recovered);
+        env.STAGING_BACKUP_ONLY_ENABLED = 'true';
+        const service = new StagingBackupOnly(env);
+        const checkpoint = 'cutover-20261030t200001z';
+        await service.create(checkpoint);
+        const restore = new StagingRecoveryOnly(env);
+        await assert.rejects(restore.restore(checkpoint), /disabled/i);
+        env.STAGING_RESTORE_ONLY_ENABLED = 'true';
+        env.STAGING_RECOVERY_NAME = 'familyfunds-production';
+        await assert.rejects(restore.restore(checkpoint), /wrong staging recovery target/i);
+        env.STAGING_RECOVERY_NAME = 'familyfunds-d1-staging-recovery';
+        const key = 'private/staging-backups/d1-web/checkpoints/' + checkpoint + '.json.aes-gcm';
+        const original = objects.get(key);
+        const envelope = JSON.parse(original);
+        envelope.ciphertext = (envelope.ciphertext[0] === 'A' ? 'B' : 'A') + envelope.ciphertext.slice(1);
+        objects.set(key, JSON.stringify(envelope));
+        await assert.rejects(restore.restore(checkpoint));
+        assert.equal(recovered.prepare("select count(*) n from sqlite_master where type='table' and name not glob 'sqlite_*'").get().n, 0);
+        objects.set(key, original);
+
+        const result = await restore.restore(checkpoint);
+        assert.equal(result.status, 'passed');
+        assert.equal(result.tables, 41);
+        assert.equal(recovered.prepare('select name from fixture_0 where id=8').get().name, 'synthetic');
+        recovered.exec("insert into fixture_0(name) values ('next')");
+        assert.equal(recovered.prepare('select revision from d1_staging_read_revision where id=1').get().revision, 5);
+        assert.equal(recovered.prepare("select seq from sqlite_sequence where name='fixture_0'").get().seq, 9);
+        await assert.rejects(restore.restore(checkpoint), /empty/i);
+    } finally {
+        source.close();
+        recovered.close();
     }
 });
 

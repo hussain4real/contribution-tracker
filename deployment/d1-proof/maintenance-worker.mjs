@@ -105,6 +105,60 @@ export class StagingBackupOnly extends WorkerEntrypoint {
     }
 }
 
+export class StagingRecoveryOnly extends WorkerEntrypoint {
+    async restore(checkpoint) {
+        if (this.env.STAGING_RESTORE_ONLY_ENABLED !== 'true') throw new Error('Staging recovery is disabled');
+        target(this.env);
+        if (this.env.STAGING_RECOVERY_NAME !== 'familyfunds-d1-staging-recovery' || !this.env.RECOVERY_DB) throw new Error('Wrong staging recovery target');
+        if (typeof checkpoint !== 'string' || !/^cutover-[0-9]{8}t[0-9]{6}z$/.test(checkpoint)) throw new Error('Invalid staging checkpoint');
+        const existing = await this.env.RECOVERY_DB.prepare("select count(*) n from sqlite_master where type='table' and name not glob 'sqlite_*' and name not glob '_cf_*'").first();
+        if (existing.n !== 0) throw new Error('Staging recovery target must be empty');
+        const object = await this.env.STAGING_FILES.get(BACKUP_PREFIX + 'checkpoints/' + checkpoint + '.json.aes-gcm');
+        if (!object || object.size > 28_000_000) throw new Error('Missing or excessive staging checkpoint');
+        const envelope = JSON.parse(new TextDecoder().decode(await object.arrayBuffer()));
+        if (envelope.version !== 1 || envelope.database !== DATABASE || typeof envelope.iv !== 'string' || typeof envelope.ciphertext !== 'string') throw new Error('Invalid staging checkpoint envelope');
+        const decode = value => Uint8Array.from(atob(value), c => c.charCodeAt(0));
+        const bytes = await crypto.subtle.decrypt({name: 'AES-GCM', iv: decode(envelope.iv), additionalData: encoder.encode(`FamilyFunds staging backup v1:${DATABASE}`)}, await backupKey(this.env.BACKUP_APP_KEY), decode(envelope.ciphertext));
+        if (bytes.byteLength > 20_000_000) throw new Error('Excessive staging checkpoint');
+        const snapshot = JSON.parse(new TextDecoder().decode(bytes));
+        if (snapshot.version !== 1 || snapshot.database !== DATABASE || !Array.isArray(snapshot.schema) || !Array.isArray(snapshot.sequences) || !snapshot.tables || typeof snapshot.tables !== 'object' || Array.isArray(snapshot.tables)) throw new Error('Invalid staging checkpoint contents');
+        const names = Object.keys(snapshot.tables);
+        const validName = name => typeof name === 'string' && /^[a-z_][a-z0-9_]*$/i.test(name);
+        if (names.length < 40 || names.some(name => !validName(name) || !Array.isArray(snapshot.tables[name]))) throw new Error('Invalid staging checkpoint tables');
+        const tableSchema = snapshot.schema.filter(item => item.type === 'table');
+        if (tableSchema.length !== names.length || tableSchema.some(item => !names.includes(item.name)) || snapshot.schema.some(item => !validName(item.name) || typeof item.sql !== 'string' || !['table', 'index', 'trigger', 'view'].includes(item.type))) throw new Error('Invalid staging checkpoint schema');
+        const statements = [this.env.RECOVERY_DB.prepare('pragma defer_foreign_keys=on')];
+        for (const item of tableSchema) statements.push(this.env.RECOVERY_DB.prepare(item.sql));
+        for (const name of names) {
+            const rows = snapshot.tables[name];
+            if (!rows.length) continue;
+            const columns = Object.keys(rows[0]);
+            if (!columns.length || columns.some(column => !validName(column)) || rows.some(row => !row || typeof row !== 'object' || Array.isArray(row) || Object.keys(row).length !== columns.length || columns.some(column => !Object.hasOwn(row, column) || !(row[column] === null || typeof row[column] === 'string' || (typeof row[column] === 'number' && Number.isFinite(row[column]) && (!Number.isInteger(row[column]) || Number.isSafeInteger(row[column]))))))) throw new Error('Unsupported staging checkpoint row');
+            const sql = `insert into "${name}"(${columns.map(column => `"${column}"`).join(',')}) select ${columns.map((_column, index) => `json_extract(value,'$[${index}]')`).join(',')} from json_each(?)`;
+            for (let i = 0; i < rows.length; i += 50) statements.push(this.env.RECOVERY_DB.prepare(sql).bind(JSON.stringify(rows.slice(i, i + 50).map(row => columns.map(column => row[column])))));
+        }
+        for (const row of snapshot.sequences) {
+            if (!row || !validName(row.name) || !Number.isSafeInteger(row.seq) || row.seq < 0) throw new Error('Invalid staging checkpoint sequence');
+            statements.push(this.env.RECOVERY_DB.prepare('delete from sqlite_sequence where name=?').bind(row.name), this.env.RECOVERY_DB.prepare('insert into sqlite_sequence(name,seq) values(?,?)').bind(row.name, row.seq));
+        }
+        for (const item of snapshot.schema.filter(item => item.type !== 'table')) statements.push(this.env.RECOVERY_DB.prepare(item.sql));
+        statements.push(this.env.RECOVERY_DB.prepare('pragma foreign_key_check'), this.env.RECOVERY_DB.prepare('pragma quick_check'));
+        if (statements.length > 900) throw new Error('Staging restore exceeds one atomic batch');
+        const outcome = await this.env.RECOVERY_DB.batch(statements);
+        if (outcome.at(-2).results.length || outcome.at(-1).results[0]?.quick_check !== 'ok') throw new Error('Staging restore integrity failed');
+        const canonical = rows => JSON.stringify(rows.map(row => JSON.stringify(Object.keys(row).sort().map(key => [key, row[key]]))).sort());
+        for (const name of names) {
+            const rows = (await this.env.RECOVERY_DB.prepare(`select * from "${name}"`).all()).results;
+            if (canonical(rows) !== canonical(snapshot.tables[name])) throw new Error('Staging restored table differs: ' + name);
+        }
+        const sequences = (await this.env.RECOVERY_DB.prepare('select name,seq from sqlite_sequence order by name').all()).results;
+        if (canonical(sequences) !== canonical(snapshot.sequences)) throw new Error('Staging restored sequences differ');
+        const schema = (await this.env.RECOVERY_DB.prepare("select type,name,tbl_name,sql from sqlite_master where sql is not null and name not glob 'sqlite_*' and (name not glob 'd1_*' or name glob 'd1_staging_*' or name glob 'd1_read_revision_*') and name not glob '_cf_*' order by type,name").all()).results;
+        if (canonical(schema) !== canonical(snapshot.schema)) throw new Error('Staging restored schema differs');
+        return {status: 'passed', tables: names.length, sequences: sequences.length, integrity: 'ok'};
+    }
+}
+
 export default {
     async fetch() { return new Response("Not found", {status: 404}); },
     async scheduled(controller, env) {
