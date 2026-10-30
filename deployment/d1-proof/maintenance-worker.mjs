@@ -74,6 +74,11 @@ async function openBackup(envelope, secret) {
     return JSON.parse(new TextDecoder().decode(bytes));
 }
 
+function checkpointBucket(env) {
+    if (env.STAGING_CHECKPOINT_BUCKET_NAME !== 'familyfunds-d1-staging-checkpoints' || !env.STAGING_CHECKPOINT_FILES) throw new Error('Wrong staging checkpoint bucket');
+    return env.STAGING_CHECKPOINT_FILES;
+}
+
 async function stagingFiles(bucket) {
     const objects = [];
     for (const prefix of ['private/', 'public/']) {
@@ -108,7 +113,7 @@ async function checkpointFiles(env, snapshot, checkpoint) {
         const backupKey = BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/files/' + sha256 + '.json.aes-gcm';
         if (!captured.has(sha256)) {
             const sealed = await sealBackup({kind: 'file', sha256, contents: base64(bytes)}, env.BACKUP_APP_KEY);
-            if (!await env.STAGING_FILES.put(backupKey, JSON.stringify(sealed.envelope), {onlyIf: {etagDoesNotMatch: '*'}, httpMetadata: {contentType: 'application/octet-stream'}})) throw new Error('Staging checkpoint file already exists');
+            if (!await checkpointBucket(env).put(backupKey, JSON.stringify(sealed.envelope), {onlyIf: {etagDoesNotMatch: '*'}, httpMetadata: {contentType: 'application/octet-stream'}})) throw new Error('Staging checkpoint file already exists');
             captured.add(sha256);
         }
         manifest.push({path: item.key, bytes: bytes.length, sha256, backup_key: backupKey,
@@ -123,8 +128,9 @@ async function checkpointFiles(env, snapshot, checkpoint) {
 
 async function createBackup(env, at, checkpoint = null) {
     if (checkpoint !== null && (typeof checkpoint !== 'string' || !/^cutover-[0-9]{8}t[0-9]{6}z$/.test(checkpoint))) throw new Error('Invalid staging checkpoint');
+    const destination = checkpoint === null ? env.STAGING_FILES : checkpointBucket(env);
     const objectKey = BACKUP_PREFIX + (checkpoint === null ? at.toISOString().slice(0, 10) : 'checkpoints/' + checkpoint) + ".json.aes-gcm";
-    if (await env.STAGING_FILES.head(objectKey)) {
+    if (await destination.head(objectKey)) {
         if (checkpoint !== null) throw new Error('Staging checkpoint already exists');
         return {status: "already_present", key: objectKey};
     }
@@ -144,7 +150,7 @@ async function createBackup(env, at, checkpoint = null) {
         tables: Object.fromEntries(tables.map((name, i) => [name, result[i].results])), sequences: result[tables.length].results};
     if (checkpoint !== null) snapshot.files = await checkpointFiles(env, snapshot, checkpoint);
     const sealed = await sealBackup(snapshot, env.BACKUP_APP_KEY);
-    const stored = await env.STAGING_FILES.put(objectKey, JSON.stringify(sealed.envelope), {
+    const stored = await destination.put(objectKey, JSON.stringify(sealed.envelope), {
         onlyIf: {etagDoesNotMatch: "*"}, httpMetadata: {contentType: "application/octet-stream"},
         customMetadata: {database: DATABASE, plaintext_sha256: sealed.sha256, captured_at: snapshot.captured_at},
     });
@@ -171,7 +177,7 @@ export class StagingRecoveryOnly extends WorkerEntrypoint {
         if (existing.n !== 0) throw new Error('Staging recovery target must be empty');
         const existingFiles = await this.env.RECOVERY_FILES.list({limit: 1});
         if (existingFiles.objects.length || existingFiles.truncated) throw new Error('Staging recovery bucket must be empty');
-        const object = await this.env.STAGING_FILES.get(BACKUP_PREFIX + 'checkpoints/' + checkpoint + '.json.aes-gcm');
+        const object = await checkpointBucket(this.env).get(BACKUP_PREFIX + 'checkpoints/' + checkpoint + '.json.aes-gcm');
         if (!object || object.size > 28_000_000) throw new Error('Missing or excessive staging checkpoint');
         const snapshot = await openBackup(JSON.parse(new TextDecoder().decode(await object.arrayBuffer())), this.env.BACKUP_APP_KEY);
         if (snapshot.version !== 1 || snapshot.database !== DATABASE || !Array.isArray(snapshot.schema) || !Array.isArray(snapshot.sequences) || !Array.isArray(snapshot.files) || !snapshot.tables || typeof snapshot.tables !== 'object' || Array.isArray(snapshot.tables)) throw new Error('Invalid staging checkpoint contents');
@@ -180,7 +186,7 @@ export class StagingRecoveryOnly extends WorkerEntrypoint {
         const readFile = async file => {
             if (typeof file.path !== 'string' || !/^(private|public)\//.test(file.path) || /\.\.|\\/.test(file.path) || file.path.startsWith(BACKUP_PREFIX) || typeof file.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(file.sha256) || !Number.isSafeInteger(file.bytes) || file.bytes < 0 || file.bytes > 10_000_000 || file.backup_key !== BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/files/' + file.sha256 + '.json.aes-gcm') throw new Error('Invalid staging checkpoint file');
             if (!file.http_metadata || typeof file.http_metadata !== 'object' || Array.isArray(file.http_metadata) || !file.custom_metadata || typeof file.custom_metadata !== 'object' || Array.isArray(file.custom_metadata) || Object.values(file.custom_metadata).some(value => typeof value !== 'string') || Object.entries(file.http_metadata).some(([key, value]) => !['contentType', 'contentLanguage', 'contentDisposition', 'contentEncoding', 'cacheControl', 'cacheExpiry'].includes(key) || typeof value !== 'string' || (key === 'cacheExpiry' && !Number.isFinite(Date.parse(value))))) throw new Error('Invalid staging checkpoint file metadata');
-            const stored = await this.env.STAGING_FILES.get(file.backup_key);
+            const stored = await checkpointBucket(this.env).get(file.backup_key);
             if (!stored || stored.size > 28_000_000) throw new Error('Missing or excessive staging checkpoint file');
             const contents = await openBackup(JSON.parse(new TextDecoder().decode(await stored.arrayBuffer())), this.env.BACKUP_APP_KEY);
             if (contents.kind !== 'file' || contents.sha256 !== file.sha256 || typeof contents.contents !== 'string') throw new Error('Invalid staging checkpoint file contents');

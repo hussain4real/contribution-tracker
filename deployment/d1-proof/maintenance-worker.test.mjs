@@ -13,6 +13,7 @@ const secret = "base64:" + Buffer.alloc(32, 7).toString("base64");
 
 function backupFixture() {
     const objects = new Map();
+    const checkpointObjects = new Map();
     const recoveryObjects = new Map();
     const recoveryMetadata = new Map();
     const schema = Array.from({length: 40}, (_, i) => ({type: "table", name: "table_" + i, tbl_name: "table_" + i, sql: "create table table_" + i + "(id integer)"}));
@@ -21,6 +22,8 @@ function backupFixture() {
     const env = {
         DATABASE_NAME: "familyfunds-d1-web-staging", ENABLED: "true", MAINTENANCE_FAMILY_ID: "50", PURGE_FAMILY_ID: "51", BACKUP_APP_KEY: secret,
         RECOVERY_FILES: {list: async () => ({objects: [...recoveryObjects.keys()].map(key => ({key})), truncated: false}), put: async (key, bytes, options) => { if (options.onlyIf?.etagDoesNotMatch === '*' && recoveryObjects.has(key)) return null; recoveryObjects.set(key, bytes); recoveryMetadata.set(key, options); return {key}; }, get: async key => { const bytes = recoveryObjects.get(key); const metadata = recoveryMetadata.get(key); return bytes === undefined ? null : {size: bytes.length, httpMetadata: {contentLanguage: undefined, ...metadata?.httpMetadata}, customMetadata: metadata?.customMetadata, arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)}; }},
+        STAGING_CHECKPOINT_BUCKET_NAME: 'familyfunds-d1-staging-checkpoints',
+        STAGING_CHECKPOINT_FILES: {head: async key => checkpointObjects.has(key), get: async key => { const value = checkpointObjects.get(key); if (value === undefined) return null; const bytes = new TextEncoder().encode(value); return {size: bytes.length, arrayBuffer: async () => bytes.buffer}; }, put: async (key, body, options) => { if (options.onlyIf?.etagDoesNotMatch === '*' && checkpointObjects.has(key)) return null; checkpointObjects.set(key, body); return {key}; }},
         STAGING_FILES: {head: async key => objects.has(key), list: async ({prefix}) => ({objects: [...objects].filter(([key]) => key.startsWith(prefix)).map(([key, value]) => ({key, size: new TextEncoder().encode(value).length, etag: 'fixture-etag'})), truncated: false}), get: async key => { const value = objects.get(key); if (value === undefined) return null; const bytes = new TextEncoder().encode(value); return {size: bytes.length, etag: 'fixture-etag', body: true, httpMetadata: key.startsWith('private/reports/') ? {contentType: 'text/csv'} : {}, customMetadata: key.startsWith('private/reports/') ? {kind: 'synthetic'} : {}, arrayBuffer: async () => bytes.buffer}; }, put: async (key, body, options) => { if (options.onlyIf?.etagDoesNotMatch === '*' && objects.has(key)) return null; objects.set(key, body); return {key}; }},
         DB: {
             prepare: sql => ({sql, all: async () => { reads++; return {results: schema}; }}),
@@ -29,7 +32,7 @@ function backupFixture() {
                     : statement.sql === "pragma quick_check" ? [{quick_check: "ok"}] : schema})),
         },
     };
-    return {env, objects, recoveryObjects, recoveryMetadata, reads: () => reads, corrupt: () => { badIntegrity = true; }};
+    return {env, objects, checkpointObjects, recoveryObjects, recoveryMetadata, reads: () => reads, corrupt: () => { badIntegrity = true; }};
 }
 
 test("calendar tasks catch up missed monthly work and respect reminder boundaries", () => {
@@ -85,12 +88,15 @@ test("a durable daily snapshot is reused without recapturing or waking PHP", asy
 });
 
 test("backup-only checkpoints create fresh snapshots without scheduling tasks or overwriting a checkpoint", async () => {
-    const {env, objects} = backupFixture();
+    const {env, objects, checkpointObjects} = backupFixture();
     const service = new StagingBackupOnly(env);
     const checkpoint = 'cutover-20261030t194500z';
     await assert.rejects(service.create(checkpoint), /disabled/i);
     env.STAGING_BACKUP_ONLY_ENABLED = 'true';
     for (const value of [null, '../other', '2026-10-30']) await assert.rejects(service.create(value), /checkpoint/i);
+    env.STAGING_CHECKPOINT_BUCKET_NAME = 'familyfunds-d1-staging-private';
+    await assert.rejects(service.create(checkpoint), /wrong staging checkpoint bucket/i);
+    env.STAGING_CHECKPOINT_BUCKET_NAME = 'familyfunds-d1-staging-checkpoints';
     env.DATABASE_NAME = 'familyfunds-production';
     await assert.rejects(service.create(checkpoint), /disabled/i);
     env.DATABASE_NAME = 'familyfunds-d1-web-staging';
@@ -99,27 +105,28 @@ test("backup-only checkpoints create fresh snapshots without scheduling tasks or
     const result = await service.create(checkpoint);
     assert.equal(result.status, 'created');
     assert.equal(result.key, 'private/staging-backups/d1-web/checkpoints/' + checkpoint + '.json.aes-gcm');
-    assert.equal(objects.size, 1);
-    const envelope = JSON.parse(objects.get(result.key));
+    assert.equal(objects.size, 0);
+    assert.equal(checkpointObjects.size, 1);
+    const envelope = JSON.parse(checkpointObjects.get(result.key));
     const options = {name: 'AES-GCM', iv: Buffer.from(envelope.iv, 'base64'), additionalData: new TextEncoder().encode('FamilyFunds staging backup v1:familyfunds-d1-web-staging')};
     const snapshot = JSON.parse(new TextDecoder().decode(await webcrypto.subtle.decrypt(options, await backupKey(secret), Buffer.from(envelope.ciphertext, 'base64'))));
     assert.equal(snapshot.database, 'familyfunds-d1-web-staging');
     assert.equal(Object.keys(snapshot.tables).length, 40);
     await assert.rejects(service.create(checkpoint), /already exists/i);
-    assert.equal(objects.size, 1);
+    assert.equal(checkpointObjects.size, 1);
 });
 
 test('a competing checkpoint is preserved when it appears after the initial check', async () => {
-    const {env, objects} = backupFixture();
+    const {env, checkpointObjects} = backupFixture();
     env.STAGING_BACKUP_ONLY_ENABLED = 'true';
-    const put = env.STAGING_FILES.put;
-    env.STAGING_FILES.put = async (key, body, options) => {
-        objects.set(key, 'competing checkpoint');
+    const put = env.STAGING_CHECKPOINT_FILES.put;
+    env.STAGING_CHECKPOINT_FILES.put = async (key, body, options) => {
+        checkpointObjects.set(key, 'competing checkpoint');
         return put(key, body, options);
     };
 
     await assert.rejects(new StagingBackupOnly(env).create('cutover-20261030t194500z'), /already exists/i);
-    assert.equal([...objects.values()][0], 'competing checkpoint');
+    assert.equal([...checkpointObjects.values()][0], 'competing checkpoint');
 });
 
 test('checkpoint snapshots include application-owned D1 runtime tables and revision triggers', async () => {
@@ -128,12 +135,12 @@ test('checkpoint snapshots include application-owned D1 runtime tables and revis
         for (let i = 0; i < 40; i++) db.exec(`create table fixture_${i} (id integer primary key autoincrement)`);
         db.exec('create table d1_staging_sequences (name text primary key, next_id integer); insert into d1_staging_sequences values (\'payment\', 7)');
         db.exec('create trigger d1_read_revision_fixture_0_insert after insert on fixture_0 begin select 1; end');
-        const {env, objects} = backupFixture();
+        const {env, objects, checkpointObjects} = backupFixture();
         env.DB = {prepare: sql => ({sql, all: async () => ({results: db.prepare(sql).all()})}),
             batch: async statements => statements.map(statement => ({results: db.prepare(statement.sql).all()}))};
         env.STAGING_BACKUP_ONLY_ENABLED = 'true';
         const result = await new StagingBackupOnly(env).create('cutover-20261030t194501z');
-        const envelope = JSON.parse(objects.get(result.key));
+        const envelope = JSON.parse(checkpointObjects.get(result.key));
         const options = {name: 'AES-GCM', iv: Buffer.from(envelope.iv, 'base64'), additionalData: new TextEncoder().encode('FamilyFunds staging backup v1:familyfunds-d1-web-staging')};
         const snapshot = JSON.parse(new TextDecoder().decode(await webcrypto.subtle.decrypt(options, await backupKey(secret), Buffer.from(envelope.ciphertext, 'base64'))));
 
@@ -161,7 +168,7 @@ test('an isolated empty recovery database restores and verifies a checkpoint wit
         source.exec("insert into fixture_0 (id,name) values (8,'synthetic')");
         source.exec('create table d1_staging_read_revision (id integer primary key, revision integer); insert into d1_staging_read_revision values (1,4)');
         source.exec('create trigger d1_read_revision_fixture_0_insert after insert on fixture_0 begin update d1_staging_read_revision set revision=revision+1 where id=1; end');
-        const {env, objects, recoveryObjects, recoveryMetadata} = backupFixture();
+        const {env, objects, checkpointObjects, recoveryObjects, recoveryMetadata} = backupFixture();
         env.DB = adapter(source);
         env.RECOVERY_DB = adapter(recovered);
         env.STAGING_BACKUP_ONLY_ENABLED = 'true';
@@ -181,21 +188,21 @@ test('an isolated empty recovery database restores and verifies a checkpoint wit
         assert.equal(new TextDecoder().decode(recoveryObjects.get('private/existing')), 'keep');
         recoveryObjects.clear();
         const key = 'private/staging-backups/d1-web/checkpoints/' + checkpoint + '.json.aes-gcm';
-        const original = objects.get(key);
+        const original = checkpointObjects.get(key);
         const envelope = JSON.parse(original);
         envelope.ciphertext = (envelope.ciphertext[0] === 'A' ? 'B' : 'A') + envelope.ciphertext.slice(1);
-        objects.set(key, JSON.stringify(envelope));
+        checkpointObjects.set(key, JSON.stringify(envelope));
         await assert.rejects(restore.restore(checkpoint));
         assert.equal(recovered.prepare("select count(*) n from sqlite_master where type='table' and name not glob 'sqlite_*'").get().n, 0);
-        objects.set(key, original);
-        const fileKey = [...objects.keys()].find(item => item.includes('/files/'));
-        const originalFile = objects.get(fileKey);
+        checkpointObjects.set(key, original);
+        const fileKey = [...checkpointObjects.keys()].find(item => item.includes('/files/'));
+        const originalFile = checkpointObjects.get(fileKey);
         const fileEnvelope = JSON.parse(originalFile);
         fileEnvelope.ciphertext = (fileEnvelope.ciphertext[0] === 'A' ? 'B' : 'A') + fileEnvelope.ciphertext.slice(1);
-        objects.set(fileKey, JSON.stringify(fileEnvelope));
+        checkpointObjects.set(fileKey, JSON.stringify(fileEnvelope));
         await assert.rejects(restore.restore(checkpoint));
         assert.equal(recovered.prepare("select count(*) n from sqlite_master where type='table' and name not glob 'sqlite_*'").get().n, 0);
-        objects.set(fileKey, originalFile);
+        checkpointObjects.set(fileKey, originalFile);
 
         const result = await restore.restore(checkpoint);
         assert.equal(result.status, 'passed');
@@ -236,32 +243,33 @@ test('checkpoint refuses a missing referenced application file before publishing
     try {
         for (let i = 0; i < 39; i++) db.exec(`create table fixture_${i} (id integer primary key autoincrement)`);
         db.exec("create table report_artifacts (id integer primary key autoincrement, disk text, path text); insert into report_artifacts (disk,path) values ('local','reports/missing.csv')");
-        const {env, objects} = backupFixture();
+        const {env, objects, checkpointObjects} = backupFixture();
         env.DB = {prepare: sql => ({sql, all: async () => ({results: db.prepare(sql).all()})}),
             batch: async statements => statements.map(statement => ({results: db.prepare(statement.sql).all()}))};
         env.STAGING_BACKUP_ONLY_ENABLED = 'true';
 
         await assert.rejects(new StagingBackupOnly(env).create('cutover-20261030t200003z'), /referenced file.*missing/i);
         assert.equal(objects.size, 0);
+        assert.equal(checkpointObjects.size, 0);
     } finally {
         db.close();
     }
 });
 
 test('checkpoint encrypts application files', async () => {
-    const {env, objects} = backupFixture();
+    const {env, objects, checkpointObjects} = backupFixture();
     env.STAGING_BACKUP_ONLY_ENABLED = 'true';
     objects.set('private/reports/synthetic.csv', 'synthetic report contents');
 
     const result = await new StagingBackupOnly(env).create('cutover-20261030t200004z');
     assert.equal(result.files, 1);
-    const encrypted = [...objects.entries()].filter(([key]) => key.includes('/files/'));
+    const encrypted = [...checkpointObjects.entries()].filter(([key]) => key.includes('/files/'));
     assert.equal(encrypted.length, 1);
     assert.doesNotMatch(encrypted[0][1], /synthetic report contents/);
 });
 
 test('checkpoint rejects a changed application file inventory before publishing the database snapshot', async () => {
-    const {env, objects} = backupFixture();
+    const {env, objects, checkpointObjects} = backupFixture();
     env.STAGING_BACKUP_ONLY_ENABLED = 'true';
     objects.set('private/reports/first.csv', 'first');
     const get = env.STAGING_FILES.get;
@@ -273,7 +281,7 @@ test('checkpoint rejects a changed application file inventory before publishing 
 
     const checkpoint = 'cutover-20261030t200005z';
     await assert.rejects(new StagingBackupOnly(env).create(checkpoint), /inventory changed/i);
-    assert.equal(objects.has('private/staging-backups/d1-web/checkpoints/' + checkpoint + '.json.aes-gcm'), false);
+    assert.equal(checkpointObjects.has('private/staging-backups/d1-web/checkpoints/' + checkpoint + '.json.aes-gcm'), false);
     assert.equal(objects.get('private/reports/first.csv'), 'first');
     assert.equal(objects.get('private/reports/second.csv'), 'second');
 });
