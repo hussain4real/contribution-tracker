@@ -4,6 +4,7 @@ import AccountDetails from '@/components/AccountDetails.vue';
 import AggregateStats from '@/components/contributions/AggregateStats.vue';
 import ContributionCard from '@/components/contributions/ContributionCard.vue';
 import { Button } from '@/components/ui/button';
+import { useNetworkStatus } from '@/composables/useNetworkStatus';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useCurrencyFormatter } from '@/lib/currency';
 import { dashboard } from '@/routes';
@@ -18,6 +19,7 @@ import {
     TrendingUp,
     Wallet,
 } from '@lucide/vue';
+import { ref } from 'vue';
 
 interface Payment {
     id: number;
@@ -129,6 +131,22 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const { formatCurrency } = useCurrencyFormatter();
+const { isOnline } = useNetworkStatus();
+const unavailableDownload = ref<number | 'statement' | null>(null);
+
+function checkDownloadConnection(
+    event: MouseEvent,
+    download: number | 'statement',
+): void {
+    if (!isOnline.value) {
+        event.preventDefault();
+        unavailableDownload.value = download;
+
+        return;
+    }
+
+    unavailableDownload.value = null;
+}
 </script>
 
 <template>
@@ -163,11 +181,20 @@ const { formatCurrency } = useCurrencyFormatter();
                                 },
                             }).url
                         "
+                        @click="checkDownloadConnection($event, 'statement')"
                     >
                         <Download class="h-4 w-4" /> Download statement
                     </a>
                 </Button>
             </div>
+
+            <p
+                v-if="unavailableDownload === 'statement'"
+                role="alert"
+                class="text-sm text-red-600"
+            >
+                Connect to the internet and try downloading the statement again.
+            </p>
 
             <section
                 class="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border dark:bg-neutral-900"
@@ -272,9 +299,20 @@ const { formatCurrency } = useCurrencyFormatter();
                                         payment_batch: receipt.id,
                                     }).url
                                 "
+                                @click="
+                                    checkDownloadConnection($event, receipt.id)
+                                "
                                 >Download receipt</a
                             ></Button
                         >
+                        <p
+                            v-if="unavailableDownload === receipt.id"
+                            role="alert"
+                            class="w-full text-sm text-red-600"
+                        >
+                            Connect to the internet and try downloading this
+                            receipt again.
+                        </p>
                     </li>
                 </ul>
                 <nav
