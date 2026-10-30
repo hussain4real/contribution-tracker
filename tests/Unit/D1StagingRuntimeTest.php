@@ -63,6 +63,9 @@ it('handles another request creating the private read cache directory first', fu
     }
     expect($pid)->toBeGreaterThan(0);
     pcntl_waitpid($pid, $status);
+    if (! is_int($status)) {
+        throw new RuntimeException('Could not read the race test process status.');
+    }
     expect(pcntl_wifexited($status))->toBeTrue()
         ->and(pcntl_wexitstatus($status))->toBe(0);
 });
