@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import {createHash, createHmac, randomUUID, timingSafeEqual, webcrypto} from "node:crypto";
-import {readFileSync} from "node:fs";
+import {mkdtempSync, readFileSync, rmSync, writeFileSync} from "node:fs";
+import {tmpdir} from "node:os";
+import {join} from "node:path";
+import {spawnSync} from "node:child_process";
 import {test} from "node:test";
 import {runInNewContext} from "node:vm";
 import {STAGING_BOOTSTRAP_ASSETS as packagedAssets} from "./container-bootstrap-assets.mjs";
@@ -12,7 +15,7 @@ const source = readFileSync(new URL("./container-worker.mjs", import.meta.url), 
     .replace('import { containerEnvironment } from "./container-env.mjs";', "")
     .replace("export class ", "class ").replace("export default ", "const handler = ");
 
-function fixture(assets = [{path: "/var/www/html/deployment/d1-proof/container-nginx-staging.conf", content: "events {}", sha256: "a".repeat(64)}, {path: "/var/www/html/deployment/d1-proof/run-staging.php", content: "<?php echo 1;", sha256: "b".repeat(64)}]) {
+function fixture(assets = [{path: "/var/www/html/deployment/d1-proof/container-nginx-staging.conf", content: "events {}", sha256: "a".repeat(64)}, {path: "/var/www/html/deployment/d1-proof/run-staging.php", content: "<?php echo 1;", sha256: "b".repeat(64)}, ...packagedAssets.filter(asset => asset.path.endsWith('/staging-fpm-status.php'))]) {
     const {handler, Container} = runInNewContext(source + "\n({handler, Container: FamilyFundsWebStagingContainer})", {
         Request, Response, Headers, URL, ReadableStream, AbortSignal, AbortController, TextEncoder, TextDecoder,
         performance, setTimeout, clearTimeout, console,
@@ -77,7 +80,7 @@ function webhookRequest(record) {
 }
 
 test("the deployable bootstrap contains the exact reviewed source bytes", () => {
-    assert.equal(packagedAssets.length, 13);
+    assert.equal(packagedAssets.length, 14);
     for (const asset of packagedAssets) {
         const relative = asset.path.replace("/var/www/html/", "");
         assert.equal(asset.content, readFileSync(new URL("../../" + relative, import.meta.url), "utf8"));
@@ -96,6 +99,7 @@ test('only staging images configure the private FPM status listener and block it
     assert.doesNotMatch(sourceFile('Dockerfile.production'), /pm\.status_listen|container-nginx-staging\.conf/);
     assert.match(sourceFile('container-nginx-staging.conf'), /location \^~ \/__staging_fpm_status \{ return 404; \}/);
     assert.ok(packagedAssets.some(asset => asset.path.endsWith('/container-nginx-staging.conf')));
+    assert.ok(packagedAssets.some(asset => asset.path.endsWith('/staging-fpm-status.php')));
 });
 
 test("runtime diagnostics require both existing staging credentials", async () => {
@@ -310,7 +314,12 @@ test('staging FPM status requires both credentials, an enabled control and pause
     const response = await f.handler.fetch(request(headers), f.env);
     assert.deepEqual(await response.json(), {active_processes: 1, listen_queue: 0, listen_queue_capacity: 64, total_processes: 4, start_time: 123});
     assert.equal(response.headers.get('Cache-Control'), 'no-store');
-    assert.deepEqual(Array.from(command), ['php', '/var/www/html/deployment/d1-proof/staging-fpm-status.php']);
+    const asset = packagedAssets.find(asset => asset.path.endsWith('/staging-fpm-status.php'));
+    assert.equal(command[0], 'php');
+    assert.equal(command[1], '-r');
+    assert.match(command[2], /hash_file\("sha256"/);
+    assert.ok(command[2].includes(asset.sha256));
+    assert.ok(command[2].includes(asset.path));
     f.env.RUNTIME_PROFILE = 'production';
     assert.equal((await f.handler.fetch(request(headers), f.env)).status, 404);
 });
@@ -322,6 +331,8 @@ test('staging FPM status rejects malformed data or admission changed during insp
     await container.setAdmissionPaused(true);
     container.ctx.container.exec = async () => ({output: async () => ({exitCode: 0, stdout: new TextEncoder().encode('{"active_processes":0}')})});
     await assert.rejects(container.stagingFpmStatus(), /Invalid staging FPM status/);
+    container.ctx.container.exec = async () => ({output: async () => ({exitCode: 1, stdout: new Uint8Array()})});
+    await assert.rejects(container.stagingFpmStatus(), /unavailable/);
     container.ctx.container.exec = async () => ({output: async () => ({exitCode: 0, stdout: new TextEncoder().encode(JSON.stringify({active_processes: 0, listen_queue: 8842250, listen_queue_capacity: 64, total_processes: 2, start_time: 123}))})});
     await assert.rejects(container.stagingFpmStatus(), /Invalid staging FPM status/);
     let finish;
@@ -332,6 +343,37 @@ test('staging FPM status rejects malformed data or admission changed during insp
     await container.setAdmissionPaused(true);
     finish({exitCode: 0, stdout: new TextEncoder().encode(JSON.stringify({active_processes: 0, listen_queue: 0, listen_queue_capacity: 64, total_processes: 4, start_time: 123}))});
     await assert.rejects(pending, /unavailable/);
+});
+
+test('the FPM launcher refuses to execute stale probe bytes', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'ff-probe-'));
+    try {
+        const path = join(directory, 'probe.php');
+        const good = '<?php echo "verified";';
+        const expected = createHash('sha256').update(good).digest('hex');
+        const asset = packagedAssets.find(item => item.path.endsWith('/staging-fpm-status.php'));
+        const f = fixture();
+        const Container = f.container.constructor;
+        const container = new Container(f.container.ctx, {...f.env, STAGING_ADMISSION_CONTROL: '1', STAGING_FPM_STATUS_ENABLED: '1'});
+        await container.setAdmissionPaused(true);
+        let command;
+        container.ctx.container.exec = async args => {
+            command = Array.from(args);
+            return {output: async () => ({exitCode: 1, stdout: new Uint8Array()})};
+        };
+        await assert.rejects(container.stagingFpmStatus(), /unavailable/);
+        const launcher = command[2].replace(JSON.stringify(asset.path), JSON.stringify(path)).replace(asset.sha256, expected);
+        writeFileSync(path, good);
+        const verified = spawnSync('php', ['-r', launcher], {encoding: 'utf8'});
+        assert.equal(verified.status, 0);
+        assert.equal(verified.stdout, 'verified');
+        writeFileSync(path, '<?php echo "stale";');
+        const stale = spawnSync('php', ['-r', launcher], {encoding: 'utf8'});
+        assert.equal(stale.status, 1);
+        assert.equal(stale.stdout, '');
+    } finally {
+        rmSync(directory, {recursive: true, force: true});
+    }
 });
 
 test("runtime diagnostics use fixed read-only programs", async () => {
@@ -395,7 +437,8 @@ test("the optimized startup installs only packaged files before the fixed entryp
     container.ctx.container.getTcpPort = () => ({fetch: async () => new Response("up")});
     await container.waitForReady();
     assert.equal(started.env.FF_STAGING_ASSET_0, "events {}");
-    assert.ok(!JSON.stringify(started.env).includes("<?php"));
+    assert.ok(!JSON.stringify(started.env).includes("<?php echo 1;"));
+    assert.match(started.entrypoint[2], /staging-fpm-status\.php/);
     assert.equal(started.entrypoint[0], "/bin/sh");
     assert.equal(started.env.FF_STARTUP_PROFILE, undefined);
     assert.equal(started.env.FF_STAGING_START_REQUEST_MS, undefined);

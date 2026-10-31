@@ -424,7 +424,10 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
             throw new Error("Staging FPM status is unavailable");
         }
         const generation = this.admissionGeneration;
-        const output = await this.containerOutput(["php", "/var/www/html/deployment/d1-proof/staging-fpm-status.php"], {stdout: "pipe", stderr: "pipe"}, 5000);
+        const asset = STAGING_BOOTSTRAP_ASSETS.find(asset => asset.path === "/var/www/html/deployment/d1-proof/staging-fpm-status.php");
+        if (!asset || !/^[a-f0-9]{64}$/.test(asset.sha256)) throw new Error("Staging FPM status is unavailable");
+        const php = `$path=${JSON.stringify(asset.path)};$hash=@hash_file("sha256",$path);if(!is_string($hash)||!hash_equals(${JSON.stringify(asset.sha256)},$hash)){exit(1);}require $path;`;
+        const output = await this.containerOutput(["php", "-r", php], {stdout: "pipe", stderr: "pipe"}, 5000);
         if (output.exitCode !== 0 || output.stdout.byteLength > 4096 || !this.admissionPaused || this.admissionGeneration !== generation || !this.ctx.container?.running) throw new Error("Staging FPM status is unavailable");
         const status = JSON.parse(new TextDecoder().decode(output.stdout));
         const keys = ["active_processes", "listen_queue", "listen_queue_capacity", "total_processes", "start_time"];
