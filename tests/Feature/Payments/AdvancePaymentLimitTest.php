@@ -12,11 +12,12 @@ use App\Models\User;
 describe('Advance Payment Limit (FR-018)', function () {
     beforeEach(function () {
         $this->financialSecretary = User::factory()->financialSecretary()->create();
-        $this->member = User::factory()->member()->employed()->create();
+        $this->member = User::factory()->member()->employed()->create(['family_id' => $this->financialSecretary->family_id]);
     });
 
     it('rejects payment targeting more than 6 months ahead', function () {
-        $sevenMonthsAhead = now()->addMonths(7);
+        $this->travelTo(now()->setDate(2026, 10, 31));
+        $sevenMonthsAhead = now()->startOfMonth()->addMonths(7);
 
         $this->actingAs($this->financialSecretary)
             ->postReviewedPayment(route('payments.store'), [
@@ -44,7 +45,8 @@ describe('Advance Payment Limit (FR-018)', function () {
     });
 
     it('allows exactly 6 months ahead', function () {
-        $exactlySixMonths = now()->addMonths(6);
+        $this->travelTo(now()->setDate(2026, 10, 31));
+        $exactlySixMonths = now()->startOfMonth()->addMonths(6);
 
         $this->actingAs($this->financialSecretary)
             ->postReviewedPayment(route('payments.store'), [

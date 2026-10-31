@@ -61,7 +61,7 @@ it('uses a contribution created after its initial list without creating a duplic
 });
 
 it('allocates through the sixth advance month regardless of the current time of day', function (int $hour): void {
-    $this->travelTo(now()->setTime($hour, 0));
+    $this->travelTo(now()->setDate(2026, 10, 31)->setTime($hour, 0));
     $family = Family::factory()->create();
     $recorder = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
     $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
@@ -76,6 +76,6 @@ it('allocates through the sixth advance month regardless of the current time of 
     assert($last !== null);
     $contribution = $last->contribution;
     assert($contribution !== null);
-    expect($contribution->year)->toBe(now()->addMonths(6)->year)
-        ->and($contribution->month)->toBe(now()->addMonths(6)->month);
+    expect($contribution->year)->toBe(now()->startOfMonth()->addMonths(6)->year)
+        ->and($contribution->month)->toBe(now()->startOfMonth()->addMonths(6)->month);
 })->with([0, 12, 23]);

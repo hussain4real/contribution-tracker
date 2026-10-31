@@ -74,8 +74,8 @@ class StorePaymentRequest extends FormRequest
             $targetMonth = $this->integerInput('target_month');
 
             if ($targetYear !== null && $targetMonth !== null) {
-                $targetDate = now()->setYear($targetYear)->setMonth($targetMonth)->startOfMonth();
-                $maxAdvanceDate = now()->addMonths(6)->startOfMonth();
+                $targetDate = now()->startOfMonth()->setYear($targetYear)->setMonth($targetMonth);
+                $maxAdvanceDate = now()->startOfMonth()->addMonths(6);
 
                 if ($targetDate->gt($maxAdvanceDate)) {
                     $validator->errors()->add('target_month', 'Advance payments are limited to 6 months ahead.');

@@ -16,6 +16,22 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Testing\AssertableInertia;
 
+it('applies the six-month advance limit in a month-end payment review', function () {
+    $this->travelTo(now()->setDate(2026, 10, 31)->startOfDay());
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $membership = $member->membershipForFamily($family);
+    assert($membership instanceof FamilyMembership);
+    $preview = app(PaymentAllocationPreview::class);
+
+    $valid = $preview->preview($member, $family, $membership, 28000);
+    expect($valid['allocations'])->toHaveCount(7)
+        ->and($valid['allocations'][6]['month'])->toBe(4)
+        ->and($valid['allocations'][6]['year'])->toBe(2027);
+    expect(fn () => $preview->preview($member, $family, $membership, 32000))
+        ->toThrow(InvalidArgumentException::class, 'six-month advance-payment limit');
+});
+
 it('previews the actual allocation without writing financial records', function (string $scenario) {
     $this->travelTo(now()->setDate(2026, 10, 15)->startOfDay());
     Queue::fake();

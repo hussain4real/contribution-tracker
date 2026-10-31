@@ -75,7 +75,7 @@ class PaymentAllocationPreview
         if ($remaining > 0) {
             $last = $pending->last() ?? throw new LogicException('A pending contribution is required for allocation.');
             $cursor = Carbon::createFromDate($last->year, $last->month, 1)->startOfMonth()->addMonth();
-            $maximum = now()->addMonths(6)->startOfMonth();
+            $maximum = now()->startOfMonth()->addMonths(6);
             while ($cursor->lte($maximum)) {
                 $remaining = $apply($resolve($cursor->year, $cursor->month), $remaining);
                 if ($remaining === 0) {

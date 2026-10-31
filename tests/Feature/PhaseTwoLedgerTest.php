@@ -234,6 +234,7 @@ it('returns existing reversals and rejects invalid reasons and cross-family repl
 });
 
 it('validates receipt correction and allocation invariants', function () {
+    $this->travelTo(now()->setDate(2026, 10, 31));
     [$family, $admin, $member] = ledgerFixture();
     $service = app(PaymentAllocationService::class);
     $receiptWithoutMembership = PaymentBatch::factory()->create([

@@ -147,14 +147,28 @@ test('payment recording validates member has contribution category', function ()
 });
 
 test('payment recording validates advance payment limit', function () {
+    $this->travelTo(now()->setDate(2026, 10, 31));
     $tool = new RecordPayment($this->admin);
 
     $result = decodeToolResult($tool->handle(new Request([
         'member_name' => 'Aminu Hussain',
         'amount' => 4000,
-        'target_year' => now()->addMonths(7)->year,
-        'target_month' => now()->addMonths(7)->month,
+        'target_year' => now()->startOfMonth()->addMonths(7)->year,
+        'target_month' => now()->startOfMonth()->addMonths(7)->month,
     ])));
 
     expect($result['error'])->toContain('limited to 6 months');
+});
+
+test('payment recording previews the selected month on the last day of a longer month', function () {
+    $this->travelTo(now()->setDate(2026, 10, 31));
+    $result = decodeToolResult((new RecordPayment($this->admin))->handle(new Request([
+        'member_name' => 'Aminu Hussain',
+        'amount' => 4000,
+        'target_year' => 2026,
+        'target_month' => 11,
+    ])));
+
+    expect($result['status'])->toBe('confirmation_required')
+        ->and($result['message'])->toContain('November 2026');
 });
