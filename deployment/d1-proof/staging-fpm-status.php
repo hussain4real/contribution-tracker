@@ -41,8 +41,8 @@ try {
         'SERVER_PROTOCOL' => 'HTTP/1.1',
         'SCRIPT_FILENAME' => '/__staging_fpm_status',
         'SCRIPT_NAME' => '/__staging_fpm_status',
-        'REQUEST_URI' => '/__staging_fpm_status?json',
-        'QUERY_STRING' => 'json',
+        'REQUEST_URI' => '/__staging_fpm_status?json&full',
+        'QUERY_STRING' => 'json&full',
     ];
     $encoded = '';
     foreach ($params as $name => $value) {
@@ -94,6 +94,23 @@ try {
     if ($status['total processes'] < 1 || $status['active processes'] > $status['total processes'] || $status['start time'] < 1
         || $status['listen queue len'] < 1 || $status['listen queue'] > $status['listen queue len'] + 1) {
         throw new RuntimeException('Inconsistent FPM status');
+    }
+    $processes = $status['processes'] ?? null;
+    if (! is_array($processes) || ! array_is_list($processes) || count($processes) !== $status['total processes']) {
+        throw new RuntimeException('Incomplete FPM process status');
+    }
+    $activeProcesses = 0;
+    foreach ($processes as $process) {
+        $state = is_array($process) ? ($process['state'] ?? null) : null;
+        if (! is_string($state) || ! in_array($state, ['Creating', 'Idle', 'Reading headers', 'Getting request information', 'Running', 'Ending', 'Finishing'], true)) {
+            throw new RuntimeException('Invalid FPM process state');
+        }
+        if ($state !== 'Idle') {
+            $activeProcesses++;
+        }
+    }
+    if ($activeProcesses !== $status['active processes']) {
+        throw new RuntimeException('Inconsistent FPM process status');
     }
     $tcp = @file_get_contents('/proc/net/tcp', false, null, 0, 1048577);
     if ($tcp === false || strlen($tcp) > 1048576) {

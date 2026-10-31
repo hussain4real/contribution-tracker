@@ -84,7 +84,7 @@ function runStagingFpmProbe(?string $response, ?string $tcp = '0: 0100007F:2328 
 it('returns only validated FPM activity counts from the private listener', function (): void {
     $response = "Status: 200\r\nContent-Type: application/json\r\n\r\n".json_encode([
         'pool' => 'www', 'active processes' => 1, 'listen queue' => 0, 'listen queue len' => 64, 'total processes' => 4, 'start time' => 123,
-        'request uri' => '/private-not-returned',
+        'processes' => [['state' => 'Finishing', 'request uri' => '/private-not-returned'], ['state' => 'Idle'], ['state' => 'Idle'], ['state' => 'Idle']],
     ], JSON_THROW_ON_ERROR);
     $result = runStagingFpmProbe($response);
 
@@ -97,6 +97,7 @@ it('returns only validated FPM activity counts from the private listener', funct
 it('accepts a queued request when FPM and the kernel agree', function (): void {
     $response = "Status: 200\r\n\r\n".json_encode([
         'pool' => 'www', 'active processes' => 2, 'listen queue' => 1, 'listen queue len' => 64, 'total processes' => 2, 'start time' => 123,
+        'processes' => [['state' => 'Running'], ['state' => 'Finishing']],
     ], JSON_THROW_ON_ERROR);
     $result = runStagingFpmProbe($response, '0: 0100007F:2328 00000000:0000 0A 00000000:00000001');
     $status = json_decode($result['stdout'], true, flags: JSON_THROW_ON_ERROR);
@@ -110,6 +111,7 @@ it('accepts a queued request when FPM and the kernel agree', function (): void {
 it('rejects missing, malformed, duplicate or inconsistent kernel queue snapshots', function (?string $tcp): void {
     $response = "Status: 200\r\n\r\n".json_encode([
         'pool' => 'www', 'active processes' => 0, 'listen queue' => 0, 'listen queue len' => 64, 'total processes' => 1, 'start time' => 123,
+        'processes' => [['state' => 'Idle']],
     ], JSON_THROW_ON_ERROR);
     $result = runStagingFpmProbe($response, $tcp);
     expect($result['exit'])->toBe(1)->and($result['stdout'])->toBe('');
@@ -119,6 +121,20 @@ it('rejects missing, malformed, duplicate or inconsistent kernel queue snapshots
     'malformed queue' => ['0: 0100007F:2328 00000000:0000 0A invalid'],
     'duplicate listener' => ["0: 0100007F:2328 00000000:0000 0A 00000000:00000000\n1: 0100007F:2328 00000000:0000 0A 00000000:00000000"],
     'queue mismatch' => ['0: 0100007F:2328 00000000:0000 0A 00000000:00000001'],
+]);
+
+it('rejects missing or inconsistent individual FPM process states', function (mixed $processes): void {
+    $response = "Status: 200\r\n\r\n".json_encode([
+        'pool' => 'www', 'active processes' => 0, 'listen queue' => 0, 'listen queue len' => 64, 'total processes' => 1, 'start time' => 123,
+        'processes' => $processes,
+    ], JSON_THROW_ON_ERROR);
+    $result = runStagingFpmProbe($response);
+    expect($result['exit'])->toBe(1)->and($result['stdout'])->toBe('');
+})->with([
+    'missing process list' => [null],
+    'missing worker' => [[]],
+    'unknown worker state' => [[['state' => 'Unknown']]],
+    'active finishing worker with zero aggregate' => [[['state' => 'Finishing']]],
 ]);
 
 it('fails closed when FPM status is unavailable or invalid', function (?string $response): void {
