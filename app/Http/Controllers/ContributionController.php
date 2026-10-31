@@ -15,6 +15,7 @@ use App\Models\PaymentBatch;
 use App\Models\PlatformPlan;
 use App\Models\User;
 use App\Services\FamilyContributionReviewService;
+use App\Services\PaystackService;
 use App\Support\PlatformPlanCatalog;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -61,7 +62,7 @@ class ContributionController extends Controller
      * Shows personal contribution history with family aggregate stats.
      * Does NOT show other members' individual details (FR-016).
      */
-    public function my(): Response
+    public function my(PaystackService $paystack): Response
     {
         $user = $this->authUser();
         $family = $user->currentFamily ?? $user->family;
@@ -137,7 +138,7 @@ class ContributionController extends Controller
             ->where('slug', PlatformPlanCatalog::Free)->where('is_active', true)->first();
         $onlinePaymentsAvailable = (! $plan || in_array(PlatformPlanCatalog::OnlinePayments, $plan->features, true))
             && (! $plan?->isPaid() || ! in_array($family->subscription_status, ['cancelled', 'past_due'], true))
-            && $family->hasBankDetails() && filled(config('services.paystack.public_key'));
+            && $family->hasBankDetails() && $paystack->isConfigured();
 
         $nextContributionDetails = null;
         if ($nextContribution !== null) {

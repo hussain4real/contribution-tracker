@@ -137,6 +137,30 @@ it('explains when paystack is not configured for the app', function () {
         );
 });
 
+it('does not offer or initialize online payment when a required key is missing', function (string $missingKey) {
+    config([$missingKey => null]);
+    Http::preventStrayRequests();
+    Http::fake(['api.paystack.co/transaction/initialize' => Http::response()]);
+    $family = Family::factory()->create(['bank_code' => '058', 'account_number' => '0045502216']);
+    $member = User::factory()->member()->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
+
+    $this->actingAs($member)->get(route('pay.index'))
+        ->assertOk()->assertDontSee('sk_test_secret')->assertInertia(fn (Assert $page) => $page
+        ->where('has_paystack', false)
+        ->where('bank_setup_status', 'missing_paystack_key')
+        ->missing('paystack_secret_key'));
+
+    $this->postJson(route('pay.initiate'), [
+        'contribution_ids' => [$contribution->id],
+        'expected_contribution_amount_kobo' => 400_000,
+        'expected_gross_amount_kobo' => 416_244,
+    ])->assertUnprocessable()->assertJsonPath('message', 'Online payments are currently unavailable.');
+
+    expect(PaystackTransaction::count())->toBe(0);
+    Http::assertNothingSent();
+})->with(['secret key' => 'services.paystack.secret_key', 'public key' => 'services.paystack.public_key']);
+
 it('marks online payments as ready when bank details and paystack key are configured', function () {
     $family = Family::factory()->create([
         'bank_name' => 'Guaranty Trust Bank',

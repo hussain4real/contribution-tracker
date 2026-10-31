@@ -58,7 +58,7 @@ class MemberPaymentController extends Controller
             ]);
 
         $paystackPublicKey = $this->stringConfig('services.paystack.public_key');
-        $bankSetupStatus = $this->bankSetupStatus($family, $paystackPublicKey);
+        $bankSetupStatus = $this->bankSetupStatus($family);
 
         return Inertia::render('Pay/Index', [
             'pending_contributions' => $pendingContributions,
@@ -85,6 +85,10 @@ class MemberPaymentController extends Controller
             return response()->json([
                 'message' => 'Online payments are not set up for your family. Ask your admin to configure bank details.',
             ], 422);
+        }
+
+        if (! $this->paystack->isConfigured()) {
+            return response()->json(['message' => 'Online payments are currently unavailable.'], 422);
         }
 
         $contributionIds = array_values(array_unique($this->integerList($validated['contribution_ids'] ?? [])));
@@ -284,7 +288,7 @@ class MemberPaymentController extends Controller
         return is_string($value) ? $value : '';
     }
 
-    private function bankSetupStatus(Family $family, string $paystackPublicKey): string
+    private function bankSetupStatus(Family $family): string
     {
         if (! $family->hasBankDetails()) {
             return filled($family->bank_name) || filled($family->account_name) || filled($family->account_number)
@@ -292,7 +296,7 @@ class MemberPaymentController extends Controller
                 : 'missing_bank_details';
         }
 
-        if ($paystackPublicKey === '') {
+        if (! $this->paystack->isConfigured()) {
             return 'missing_paystack_key';
         }
 

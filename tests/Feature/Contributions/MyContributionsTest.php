@@ -275,7 +275,7 @@ describe('My Contributions', function () {
     });
 
     it('only offers online payment when the plan and payment setup allow it', function () {
-        config(['services.paystack.public_key' => 'public-test-key']);
+        config(['services.paystack.public_key' => 'public-test-key', 'services.paystack.secret_key' => 'secret-test-key']);
         $family = $this->member->family;
         assert($family instanceof Family);
         $plan = PlatformPlan::create([
@@ -287,6 +287,11 @@ describe('My Contributions', function () {
         $this->actingAs($this->member)->get(route('contributions.my'))
             ->assertOk()->assertInertia(fn (Assert $page) => $page->where('online_payments_available', true));
 
+        config(['services.paystack.secret_key' => null]);
+        $this->actingAs($this->member)->get(route('contributions.my'))
+            ->assertOk()->assertInertia(fn (Assert $page) => $page->where('online_payments_available', false));
+
+        config(['services.paystack.secret_key' => 'secret-test-key']);
         $plan->update(['features' => []]);
         $member = $this->member->fresh();
         assert($member instanceof User);
