@@ -64,6 +64,17 @@ export async function restoreProductionCheckpoint(env, checkpoint) {
     }
     const webhooks = pendingProductionWebhookReferences(snapshot.tables.d1_runtime_webhook_inbox);
     if (webhooks.some(reference => !paths.has(reference.key))) throw new Error('Missing pending webhook file');
+    for (const reference of webhooks) {
+        const file = snapshot.files.find(item => item.path === reference.key);
+        let record;
+        try {
+            record = JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(await readFile(file)));
+        } catch {
+            throw new Error('Invalid pending webhook payload');
+        }
+        if (!record || record.provider !== reference.provider || typeof record.raw !== 'string' || typeof record.signature !== 'string'
+            || await digest(new TextEncoder().encode(record.raw)) !== reference.sha256) throw new Error('Invalid pending webhook payload');
+    }
     const statements = [env.RECOVERY_DB.prepare('pragma defer_foreign_keys=on')];
     for (const item of schemaTables) statements.push(env.RECOVERY_DB.prepare(item.sql));
     for (const name of names) {

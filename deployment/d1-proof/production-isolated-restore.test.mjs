@@ -33,9 +33,11 @@ async function fixture() {
     schema.push({type: 'index', name: 'users_id_index', tbl_name: 'users', sql: 'CREATE INDEX users_id_index on users(id)'});
     const tables = Object.fromEntries(names.map(name => [name, []]));
     tables.families = [{id: 7}]; tables.users = [{id: 8}];
-    const bytes = new TextEncoder().encode('synthetic webhook'), sha = createHash('sha256').update(bytes).digest('hex');
-    const path = `private/webhook-inbox/paystack/${sha}.json`, fileKey = prefix + `files/${sha}.json.aes-gcm`;
-    tables.d1_runtime_webhook_inbox = [{id: `paystack:${sha}`, object_key: path, accepted_at: null}];
+    const raw = 'synthetic webhook', webhookSha = createHash('sha256').update(raw).digest('hex');
+    const bytes = new TextEncoder().encode(JSON.stringify({provider: 'paystack', raw, signature: 'synthetic'}));
+    const sha = createHash('sha256').update(bytes).digest('hex');
+    const path = `private/webhook-inbox/paystack/${webhookSha}.json`, fileKey = prefix + `files/${sha}.json.aes-gcm`;
+    tables.d1_runtime_webhook_inbox = [{id: `paystack:${webhookSha}`, object_key: path, accepted_at: null}];
     const snapshot = {version: 1, database: 'familyfunds-production', schema, tables, sequences: [{name: 'families', seq: 7}, {name: 'users', seq: 8}],
         files: [{path, bytes: bytes.length, sha256: sha, backup_key: fileKey, http_metadata: {contentType: 'application/json'}, custom_metadata: {kind: 'test'}}]};
     const databaseKey = prefix + 'd1/2026-10-31.json.aes-gcm';
@@ -71,6 +73,9 @@ test('rejects disabled, missing, corrupt and incomplete checkpoints before writi
         await assert.rejects(restoreProductionCheckpoint(f.env, f.checkpoint), /missing pending webhook/i);
         await f.save({...f.snapshot, files: [{...f.snapshot.files[0], http_metadata: null}]});
         await assert.rejects(restoreProductionCheckpoint(f.env, f.checkpoint), /metadata/i);
+        const badWebhook = {...f.snapshot.tables.d1_runtime_webhook_inbox[0], id: `paystack:${'e'.repeat(64)}`, object_key: `private/webhook-inbox/paystack/${'e'.repeat(64)}.json`};
+        await f.save({...f.snapshot, tables: {...f.snapshot.tables, d1_runtime_webhook_inbox: [badWebhook]}, files: [{...f.snapshot.files[0], path: badWebhook.object_key}]});
+        await assert.rejects(restoreProductionCheckpoint(f.env, f.checkpoint), /invalid pending webhook payload/i);
         await f.save({...f.snapshot, tables: {...f.snapshot.tables, report_artifacts: [{id: 1, disk: 'local', path: 'reports/missing.csv'}]}});
         await assert.rejects(restoreProductionCheckpoint(f.env, f.checkpoint), /missing checkpoint referenced file/i);
         await f.save({...f.snapshot, tables: {...f.snapshot.tables, families: [{id: 1}, {id: 2, unexpected: 3}]}});
