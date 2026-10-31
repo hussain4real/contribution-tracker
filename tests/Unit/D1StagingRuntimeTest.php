@@ -401,17 +401,17 @@ it('allocates payments and queues receipts through the D1 runtime using current 
     }, $family->id, $officer->id);
     $first = $runtime->run(fn () => app(PaymentAllocationService::class)->createBatch(
         member: $member, amount: 3000, paidAt: now(), recordedBy: $officer, family: $family, idempotencyKey: 'd1-first',
-        expectedAllocations: $firstReview['allocations'], reviewExpiresAt: now()->addMinute()->timestamp,
+        expectedAllocations: $firstReview['allocations'], reviewExpiresAt: now()->addMinute()->getTimestamp(),
     ), $family->id, $officer->id);
     $replayed = $runtime->run(fn () => app(PaymentAllocationService::class)->createBatch(
         member: $member, amount: 3000, paidAt: now(), recordedBy: $officer, family: $family, idempotencyKey: 'd1-first',
-        expectedAllocations: $firstReview['allocations'], reviewExpiresAt: now()->subMinute()->timestamp,
+        expectedAllocations: $firstReview['allocations'], reviewExpiresAt: now()->subMinute()->getTimestamp(),
     ), $family->id, $officer->id);
     expect($replayed->id)->toBe($first->id)
         ->and(stagingSqlValue($pdo, 'select count(*) from jobs'))->toBe(1);
     expect(fn () => $runtime->run(fn () => app(PaymentAllocationService::class)->createBatch(
         member: $member, amount: 3000, paidAt: now(), recordedBy: $officer, family: $family, idempotencyKey: 'd1-expired-new',
-        expectedAllocations: $firstReview['allocations'], reviewExpiresAt: now()->subMinute()->timestamp,
+        expectedAllocations: $firstReview['allocations'], reviewExpiresAt: now()->subMinute()->getTimestamp(),
     ), $family->id, $officer->id))->toThrow(ValidationException::class);
     expect(stagingSqlValue($pdo, 'select count(*) from payment_batches'))->toBe(1)
         ->and(stagingSqlValue($pdo, 'select count(*) from jobs'))->toBe(1);
