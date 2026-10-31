@@ -316,6 +316,21 @@ it('renders the member receipt amount date method family and authorized download
     $mail->assertSeeInHtml($url);
 });
 
+it('lets the paying member download a receipt after delivery fails while denying another member', function () {
+    $batch = recordReceiptPayment($this);
+    $batch->receiptDeliveries()->update(['status' => 'failed', 'failed_at' => now()]);
+    $url = route('payment-batches.receipt', ['current_family' => $this->family->slug, 'payment_batch' => $batch->id]);
+
+    $this->actingAs($this->member)->get(route('contributions.my', ['current_family' => $this->family->slug]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->where('receipts.data.0.id', $batch->id));
+    $response = $this->actingAs($this->member)->get($url)->assertOk()->assertHeader('content-type', 'application/pdf');
+    expect($response->streamedContent())->toStartWith('%PDF-');
+
+    $otherMember = User::factory()->member()->create(['family_id' => $this->family->id]);
+    $this->actingAs($otherMember)->get($url)->assertForbidden();
+});
+
 it('sends the approved WhatsApp template with receipt details and the member download link', function () {
     Http::fake(['graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.receipt']]])]);
     $batch = recordReceiptPayment($this);
