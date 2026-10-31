@@ -179,7 +179,7 @@ class PaymentAllocationService
             }
 
             if ($expectedAllocations !== null) {
-                $actualAllocations = $batch->allocations()->with('contribution')->get()->map(function (Payment $payment): array {
+                $actualAllocations = array_values($batch->allocations()->with('contribution')->get()->map(function (Payment $payment): array {
                     $contribution = $payment->contribution;
                     if (! $contribution instanceof Contribution) {
                         throw new InvalidArgumentException('The payment allocation has no contribution.');
@@ -187,8 +187,8 @@ class PaymentAllocationService
 
                     return ['year' => $contribution->year, 'month' => $contribution->month,
                         'period' => $contribution->period_label, 'amount' => $payment->amount];
-                })->all();
-                if ($actualAllocations !== $expectedAllocations) {
+                })->all());
+                if (! $this->allocationsMatch($actualAllocations, $expectedAllocations)) {
                     throw ValidationException::withMessages(['review' => 'Contribution balances changed. Review the payment again before recording it.']);
                 }
             }
@@ -220,7 +220,7 @@ class PaymentAllocationService
         $allocations = $batch->allocations()->lockForUpdate()->get();
         $contributions = Contribution::query()->whereIntegerInRaw('id', $allocations->pluck('contribution_id')->all())
             ->lockForUpdate()->get()->keyBy('id');
-        $actual = $allocations->map(function (Payment $payment) use ($contributions): array {
+        $actual = array_values($allocations->map(function (Payment $payment) use ($contributions): array {
             $contribution = $contributions->get($payment->contribution_id);
             if (! $contribution instanceof Contribution) {
                 throw new InvalidArgumentException('The payment allocation has no contribution.');
@@ -228,10 +228,24 @@ class PaymentAllocationService
 
             return ['year' => $contribution->year, 'month' => $contribution->month,
                 'period' => $contribution->period_label, 'amount' => $payment->amount];
-        })->all();
-        if (! $matches || $actual !== $expectedAllocations) {
+        })->all());
+        if (! $matches || ! $this->allocationsMatch($actual, $expectedAllocations)) {
             throw ValidationException::withMessages(['review' => 'This payment request key was already used for different details.']);
         }
+    }
+
+    /**
+     * @param  list<array{year: int, month: int, period: string, amount: int}>  $actual
+     * @param  list<array{year: int, month: int, period: string, amount: int}>  $expected
+     */
+    private function allocationsMatch(array $actual, array $expected): bool
+    {
+        $compare = fn (array $left, array $right): int => [$left['year'], $left['month'], $left['period'], $left['amount']]
+            <=> [$right['year'], $right['month'], $right['period'], $right['amount']];
+        usort($actual, $compare);
+        usort($expected, $compare);
+
+        return $actual === $expected;
     }
 
     private function allocateToContributions(

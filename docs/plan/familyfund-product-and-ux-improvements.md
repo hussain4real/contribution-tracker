@@ -165,6 +165,8 @@ The existing [product completion roadmap](../familyfund-product-completion-roadm
 
 **Retry after review expiry:** A valid review that has expired can now retrieve its already-recorded payment when the original officer and payment details match, but cannot create a new payment. The existing replay checks compare the receipt and its allocations inside the allocation transaction. Local feature tests cover an expired replay, changed details, a different officer and an expired review with no recorded payment; remote behavior remains to be verified.
 
+**Allocation order on retry:** A synthetic feature test reproduced an unchanged reviewed payment being rejected when its stored allocations were returned in a different order. The draft now compares the complete allocation details without depending on row order, while still rejecting changed periods or amounts. The regression and focused payment and D1 adapter tests pass locally; deployed behavior remains to be verified.
+
 ## Phase 2 — Dashboard clarity and trust
 
 ### 5. Actionable family dashboard

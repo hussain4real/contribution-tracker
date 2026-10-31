@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\PaymentAllocationPreview;
 use App\Services\PaymentAllocationService;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -122,6 +123,30 @@ it('reviews and posts the same allocations and safely replays the reviewed reque
     $data['idempotency_key'] = (string) Str::uuid();
     $this->actingAs($officer)->postJson(route('payments.review', ['current_family' => $family->slug]), $data)
         ->assertOk()->assertJsonPath('possible_duplicate', true);
+});
+
+it('replays the same reviewed payment when allocation rows are returned in a different order', function () {
+    $this->travelTo(now()->setDate(2026, 10, 15)->startOfDay());
+    Queue::fake();
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    $first = Contribution::factory()->forUser($member)->forMonth(2026, 9)->create(['expected_amount' => 4000]);
+    $second = Contribution::factory()->forUser($member)->forMonth(2026, 10)->create(['expected_amount' => 4000]);
+    $data = ['member_id' => $member->id, 'amount' => 8000, 'paid_at' => now()->toDateString(),
+        'method' => 'cash', 'idempotency_key' => (string) Str::uuid()];
+    $data['review_token'] = $this->actingAs($officer)->postJson(route('payments.review', ['current_family' => $family->slug]), $data)->assertOk()->json('token');
+    $url = route('payments.store', ['current_family' => $family->slug]);
+    $this->actingAs($officer)->post($url, $data)->assertSessionHasNoErrors();
+    $receipt = PaymentBatch::sole();
+    $firstPayment = $receipt->allocations()->where('contribution_id', $first->id)->sole();
+    DB::table('payments')->where('id', $firstPayment->id)->update(['id' => $firstPayment->id + 1000]);
+    expect($receipt->allocations()->pluck('contribution_id')->all())->toBe([$second->id, $first->id]);
+
+    $this->actingAs($officer)->post($url, $data)
+        ->assertRedirect(route('payments.index', ['current_family' => $family->slug, 'receipt' => $receipt->id]))
+        ->assertSessionHasNoErrors();
+    expect(PaymentBatch::count())->toBe(1)->and(Payment::count())->toBe(2);
 });
 
 it('does not record a payment submitted without review', function () {
