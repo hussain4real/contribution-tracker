@@ -498,6 +498,14 @@ it('allocates payments and queues receipts through the D1 runtime using current 
     expect(stagingSqlValue($pdo, 'select sum(payments.amount) from payments where contribution_id='.$contribution->id." and not exists (select 1 from financial_reversals where reversible_type='payment_batch' and reversible_id=payments.payment_batch_id)"))->toBe(2000)
         ->and(stagingSqlValue($pdo, 'select count(*) from financial_reversals'))->toBe(1)
         ->and(stagingSqlValue($pdo, 'select count(*) from payment_batches'))->toBe(3);
+
+    $collected = $runtime->runReadOnly(fn (): int => (int) Contribution::query()
+        ->where('family_id', $family->id)
+        ->where('year', $contribution->year)
+        ->where('month', $contribution->month)
+        ->withSum('payments as paid_amount', 'amount')
+        ->get()->sum('paid_amount'), $family->id, $officer->id);
+    expect($collected)->toBe(2000);
 });
 
 it('preserves a read WhatsApp receipt when an older callback runs through D1', function (): void {
