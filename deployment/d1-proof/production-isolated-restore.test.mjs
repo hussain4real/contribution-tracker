@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import {createHash, createHmac} from 'node:crypto';
+import {readFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import test from 'node:test';
+import {runInNewContext} from 'node:vm';
 import {pendingProductionWebhookReferences, productionBackupPrefix, sealProductionBackup} from './production-backup.mjs';
 import {restoreProductionCheckpoint} from './production-isolated-restore.mjs';
 import {relayProductionWebhooks} from './production-webhooks.mjs';
@@ -63,6 +65,22 @@ test('restores a synthetic production checkpoint into empty isolated targets', a
         assert.equal(f.db.prepare("select count(*) n from sqlite_master where name='users_id_index'").get().n, 1);
         assert.ok(f.env.RECOVERY_FILES.data.has(f.path));
         await assert.rejects(restoreProductionCheckpoint(f.env, f.checkpoint), /targets must be empty/i);
+    } finally { f.db.close(); }
+});
+
+test('the isolated recovery entrypoint has no public action and requires explicit configuration over RPC', async () => {
+    const source = readFileSync(new URL('./production-isolated-recovery-entry.mjs', import.meta.url), 'utf8')
+        .replace(/^import .*;\n/gm, '').replace('export class ', 'class ').replace('export default ', 'const handler = ');
+    const {handler, Recovery} = runInNewContext(source + '\n({handler, Recovery: ProductionIsolatedRecovery})', {
+        WorkerEntrypoint: class {constructor(env) { this.env = env; }}, restoreProductionCheckpoint, Response,
+    });
+    const f = await fixture();
+    try {
+        assert.equal((await handler.fetch(new Request('https://recovery.example/restore', {method: 'POST'}), f.env)).status, 404);
+        await assert.rejects(new Recovery({...f.env, PRODUCTION_ISOLATED_RESTORE_ENABLED: 'false'}).restore(f.checkpoint), /disabled/i);
+        const result = await new Recovery(f.env).restore(f.checkpoint);
+        assert.equal(result.status, 'passed');
+        assert.equal(result.pending_webhooks, 1);
     } finally { f.db.close(); }
 });
 
