@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import {createHash, createHmac, timingSafeEqual, webcrypto} from "node:crypto";
+import {createHash, createHmac, randomUUID, timingSafeEqual, webcrypto} from "node:crypto";
 import {readFileSync} from "node:fs";
 import {test} from "node:test";
 import {runInNewContext} from "node:vm";
@@ -18,13 +18,14 @@ function fixture(assets = [{path: "/var/www/html/deployment/d1-proof/container-n
         performance, setTimeout, clearTimeout, console,
         STAGING_BOOTSTRAP_ASSETS: assets,
         containerEnvironment,
-        crypto: {subtle: {timingSafeEqual, importKey: webcrypto.subtle.importKey.bind(webcrypto.subtle), verify: webcrypto.subtle.verify.bind(webcrypto.subtle)}},
+        crypto: {randomUUID, subtle: {timingSafeEqual, importKey: webcrypto.subtle.importKey.bind(webcrypto.subtle), verify: webcrypto.subtle.verify.bind(webcrypto.subtle)}},
     });
     const commands = [];
     const stored = new Map();
     const ctx = {
         blockConcurrencyWhile: callback => callback(),
-        storage: {get: async key => stored.get(key), put: async (key, value) => { stored.set(key, value); }},
+        storage: {get: async key => stored.get(key), put: async (key, value) => { stored.set(key, value); },
+            delete: async key => stored.delete(key), list: async ({prefix, limit}) => new Map([...stored].filter(([key]) => key.startsWith(prefix)).slice(0, limit))},
         container: {
             running: true, setInactivityTimeout: async () => {},
             inspect: async () => ({image: "registry.example/staging@sha256:fixture", labels: {}}),
@@ -475,6 +476,7 @@ test('staging admission pause rejects new webhooks while an earlier queue send r
     await sendStarted;
     await container.setAdmissionPaused(true);
     assert.equal((await container.inspect()).webhook_sends, 1);
+    assert.equal((await container.inspect()).unresolved_webhook_sends, 1);
     const rejected = await f.handler.fetch(webhookRequest(record), f.env);
     assert.equal(rejected.status, 503);
     assert.equal(f.queued.length, 0);
@@ -482,10 +484,64 @@ test('staging admission pause rejects new webhooks while an earlier queue send r
     assert.equal((await first).status, 202);
     assert.equal(f.queued.length, 1);
     assert.equal((await container.inspect()).webhook_sends, 0);
+    assert.equal((await container.inspect()).unresolved_webhook_sends, 0);
     await container.setAdmissionPaused(false);
     f.env.STAGING_WEBHOOK_QUEUE.send = async value => { f.queued.push(value); };
     assert.equal((await f.handler.fetch(webhookRequest(record), f.env)).status, 202);
     assert.equal(f.queued.length, 2);
+});
+
+test('webhook drain inspection cannot combine an old count with a newer pause', async () => {
+    const f = fixture();
+    let tail = Promise.resolve();
+    f.container.ctx.blockConcurrencyWhile = callback => {
+        const next = tail.then(callback);
+        tail = next.catch(() => {});
+        return next;
+    };
+    const Container = f.container.constructor;
+    const container = new Container(f.container.ctx, {...f.env, STAGING_ADMISSION_CONTROL: '1'});
+    await container.admissionReady;
+    const originalList = container.ctx.storage.list;
+    let releaseList;
+    let notifyList;
+    const started = new Promise(resolve => { notifyList = resolve; });
+    container.ctx.storage.list = async options => {
+        container.ctx.storage.list = originalList;
+        const snapshot = await originalList(options);
+        notifyList();
+        await new Promise(resolve => { releaseList = resolve; });
+        return snapshot;
+    };
+    const inspection = container.inspect();
+    await started;
+    const pause = container.setAdmissionPaused(true);
+    await new Promise(resolve => setImmediate(resolve));
+    releaseList();
+    const status = await inspection;
+    assert.equal(status.admission_paused, false);
+    assert.equal(status.unresolved_webhook_sends, 0);
+    await pause;
+    assert.equal((await container.inspect()).admission_paused, true);
+});
+
+test('an uncertain staging webhook send remains unresolved after object reconstruction', async () => {
+    const f = fixture();
+    f.env.STAGING_ADMISSION_CONTROL = '1';
+    const Container = f.container.constructor;
+    const container = new Container(f.container.ctx, f.env);
+    f.env.STAGING_CONTAINER = {getByName: () => container};
+    f.env.STAGING_WEBHOOK_QUEUE.send = async () => { throw new Error('Synthetic uncertain queue outcome'); };
+    const record = signedRecord('paystack', {event: 'charge.success', data: {domain: 'test', reference: 'D1-WEBHOOK-UAT-fixture', metadata: {family_id: 43}}}, f.webhook);
+    await assert.rejects(f.handler.fetch(webhookRequest(record), f.env), /uncertain queue outcome/);
+    await container.setAdmissionPaused(true);
+    const restored = new Container(container.ctx, f.env);
+    const status = await restored.inspect();
+    assert.equal(status.admission_paused, true);
+    assert.equal(status.webhook_sends, 0);
+    assert.equal(status.unresolved_webhook_sends, 1);
+    f.env.STAGING_CONTAINER = {getByName: () => restored};
+    assert.equal((await f.handler.fetch(webhookRequest(record), f.env)).status, 503);
 });
 
 test("live payments, other families and invalid signatures never enter the queue", async () => {

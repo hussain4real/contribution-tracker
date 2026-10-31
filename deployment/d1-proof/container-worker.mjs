@@ -374,21 +374,31 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
         const info = await this.ctx.container.inspect();
         const result = {running: this.ctx.container.running, image: info?.image ?? null};
         if (this.env.RUNTIME_PROFILE === "production") return result;
+        const admission = this.admissionEnabled ? await this.ctx.blockConcurrencyWhile(async () => {
+            const unresolved = await this.ctx.storage.list({prefix: "staging-webhook-send:", limit: 1001});
+            return {admission_paused: this.admissionPaused, unresolved_webhook_sends: unresolved.size};
+        }) : {};
         return {...result, activity: {request_slots: this.inFlight, waiting_requests: this.waiters.length,
             starting: this.starting !== null, maintenance_rpcs: this.activeMaintenance},
-            ...(this.admissionEnabled ? {admission_paused: this.admissionPaused, restart_operations: this.activeRestarts, webhook_sends: this.activeWebhookSends} : {})};
+            ...(this.admissionEnabled ? {...admission, restart_operations: this.activeRestarts, webhook_sends: this.activeWebhookSends} : {})};
     }
 
     async enqueueWebhook(record) {
         await this.admissionReady;
         if (!this.admissionEnabled) throw new Error("Staging admission control is disabled");
-        if (this.admissionPaused) return false;
+        const config = webhookConfig(this.env);
+        if (!config || !await verifyWebhook(record, config)) throw new Error("Invalid staging webhook");
+        const id = await this.ctx.blockConcurrencyWhile(async () => {
+            if (this.admissionPaused) return null;
+            const operation = crypto.randomUUID();
+            await this.ctx.storage.put(`staging-webhook-send:${operation}`, true);
+            return operation;
+        });
+        if (id === null) return false;
         this.activeWebhookSends++;
         try {
-            const config = webhookConfig(this.env);
-            if (!config || !await verifyWebhook(record, config)) throw new Error("Invalid staging webhook");
-            if (this.admissionPaused) return false;
             await this.env.STAGING_WEBHOOK_QUEUE.send(record, {contentType: "json"});
+            if (!await this.ctx.storage.delete(`staging-webhook-send:${id}`)) throw new Error("Unknown staging webhook operation");
             return true;
         } finally {
             this.activeWebhookSends--;
