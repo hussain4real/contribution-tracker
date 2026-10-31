@@ -32,11 +32,22 @@ export class StagingGatewayAdmission extends DurableObject {
         return this.ctx.blockConcurrencyWhile(async () => this.#readStatus());
     }
 
-    async #readStatus() {
+    async inspectOperations() {
+        return this.ctx.blockConcurrencyWhile(async () => this.#readStatus(true));
+    }
+
+    async #readStatus(details = false) {
         const pending = await this.ctx.storage.list({prefix: "operation:", limit: 1001});
         const paused = await this.ctx.storage.get("paused");
         if (paused !== undefined && typeof paused !== "boolean") throw new Error("Invalid stored admission state");
-        return {paused: paused === true, unresolved: pending.size};
+        const status = {paused: paused === true, unresolved: pending.size};
+        if (!details) return status;
+        const operations = [...pending].slice(0, 1000).map(([key, createdAt]) => {
+            const id = key.slice("operation:".length);
+            if (!/^[a-f0-9-]{36}$/.test(id) || !Number.isSafeInteger(createdAt) || createdAt < 0) throw new Error("Invalid stored gateway operation");
+            return {id, created_at_ms: createdAt};
+        });
+        return {...status, operations, truncated: pending.size > 1000};
     }
 }
 
@@ -55,7 +66,11 @@ export default {
             const admin = new TextEncoder().encode(env.STAGING_GATEWAY_ADMIN_TOKEN ?? "");
             if (admin.length < 32 || actual.length !== admin.length || !crypto.subtle.timingSafeEqual(actual, admin)) return Response.json({error: "Forbidden"}, {status: 403});
             const gate = env.STAGING_GATEWAY_ADMISSION_OBJECT.getByName("staging-gateway");
-            if (request.method === "GET") return Response.json(await gate.status(), {headers: {"Cache-Control": "no-store"}});
+            if (request.method === "GET") {
+                const details = new URL(request.url).searchParams.get("details");
+                if (details !== null && details !== "1") return Response.json({error: "Invalid inspection request"}, {status: 400});
+                return Response.json(details ? await gate.inspectOperations() : await gate.status(), {headers: {"Cache-Control": "no-store"}});
+            }
             if (request.method !== "POST") return Response.json({error: "Not found"}, {status: 404});
             const state = new URL(request.url).searchParams.get("paused");
             if (state !== "true" && state !== "false") return Response.json({error: "Invalid admission state"}, {status: 400});
@@ -84,6 +99,7 @@ export default {
             bytes.set(chunk, offset);
             offset += chunk.byteLength;
         }
+        let operationId = null;
         try {
             const body = JSON.parse(new TextDecoder().decode(bytes));
             const gateEnabled = env.STAGING_GATEWAY_ADMISSION === "1";
@@ -92,6 +108,7 @@ export default {
             if (path === "/manifest") {
                 const id = gate ? await gate.begin() : null;
                 if (gate && id === null) return Response.json({error: "Staging maintenance in progress"}, {status: 503, headers: {"Cache-Control": "no-store"}});
+                operationId = id;
                 const result = await manifest(env);
                 if (gate) await gate.complete(id);
                 return Response.json(result);
@@ -112,6 +129,7 @@ export default {
             });
             const id = gate ? await gate.begin() : null;
             if (gate && id === null) return Response.json({error: "Staging maintenance in progress"}, {status: 503, headers: {"Cache-Control": "no-store"}});
+            operationId = id;
             const result = isBatch
                 ? await env.DB.batch(statements)
                 : await statements[0].all();
@@ -120,7 +138,7 @@ export default {
         } catch (error) {
             return Response.json({
                 error: error instanceof Error ? error.message : "D1 query failed",
-            }, { status: 422 });
+            }, { status: 422, headers: operationId ? {"X-Staging-Gateway-Operation": operationId, "Cache-Control": "no-store"} : {} });
         }
     },
 };
