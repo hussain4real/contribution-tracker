@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Actions\ReversePaymentBatch;
 use App\Enums\TransactionStatus;
 use App\Enums\TransactionType;
 use App\Models\Contribution;
@@ -616,6 +617,15 @@ it('allocates a successful callback payment', function () {
         ->assertRedirect(route('pay.index'))
         ->assertSessionHas('success', 'Payment already confirmed.');
     expect(Payment::where('contribution_id', $contribution->id)->count())->toBe(1);
+
+    app(ReversePaymentBatch::class)->handle($transaction->paymentBatch()->firstOrFail(), $member, 'Correction');
+    $this->actingAs($member)
+        ->get(route('pay.callback', ['reference' => 'TXN_SUCCESS']))
+        ->assertRedirect(route('pay.index'))
+        ->assertSessionHas('error', 'This payment was reversed and no longer counts toward your contributions. Contact your family admin if you need help.');
+    expect($transaction->refresh()->status)->toBe(TransactionStatus::Reversed)
+        ->and(Payment::where('contribution_id', $contribution->id)->count())->toBe(1);
+    Http::assertSentCount(1);
 });
 
 it('reports when a verified callback cannot yet be posted to the ledger', function () {

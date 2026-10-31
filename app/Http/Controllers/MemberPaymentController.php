@@ -219,6 +219,10 @@ class MemberPaymentController extends Controller
             return redirect()->route('pay.index')->with('error', 'Transaction not found.');
         }
 
+        if ($transaction->status === TransactionStatus::Reversed) {
+            return redirect()->route('pay.index')->with('error', 'This payment was reversed and no longer counts toward your contributions. Contact your family admin if you need help.');
+        }
+
         if ($transaction->isSuccessful()) {
             if ($transaction->payment_batch_id !== null && $transaction->allocated_at !== null) {
                 return redirect()->route('pay.index')->with('success', 'Payment already confirmed.');
