@@ -97,6 +97,8 @@ The existing [product completion roadmap](../familyfund-product-completion-roadm
 
 **Uncertain online-payment outcome:** The member payment flow now advises checking payment history or contacting the family admin before trying again when an outcome cannot be confirmed. It no longer promises automatic confirmation or claims support has been notified. The callback treats non-final and unknown provider statuses as unconfirmed; [Paystack documents](https://paystack.com/docs/payments/verify-payments/) that pending and ongoing transactions can still be in progress. It also avoids claiming that contributions were updated for a successful legacy transaction without a recorded payment batch and allocation timestamp, and explains when a recorded payment has been reversed. Local tests cover those outcomes and replay of a recorded allocation; an actual online payment remains to be verified in a suitable test environment. Legacy unallocated transactions are not automatically posted or modified by this change.
 
+**Callback access:** The contribution-payment callback now looks up only the signed-in member's contribution transaction in the current family. Local tests verify that another member's reference, the member's reference in another family, and a subscription reference are not verified or changed through this endpoint. Paystack's webhook remains a separate settlement path; remote verification is still required.
+
 ### 2. Receipt and reminder delivery visibility
 
 - Show channel-specific states such as queued, sent, delivered or failed, only where the provider actually supplies the state. Distinguish provider acceptance from confirmed delivery.

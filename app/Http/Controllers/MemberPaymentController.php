@@ -213,7 +213,12 @@ class MemberPaymentController extends Controller
             return redirect()->route('pay.index')->with('error', 'Invalid payment reference.');
         }
 
-        $transaction = PaystackTransaction::where('reference', $reference)->first();
+        $transaction = PaystackTransaction::query()
+            ->where('reference', $reference)
+            ->where('user_id', $this->authUser()->id)
+            ->where('family_id', app(Family::class)->id)
+            ->where('type', TransactionType::Contribution)
+            ->first();
 
         if (! $transaction) {
             return redirect()->route('pay.index')->with('error', 'Transaction not found.');

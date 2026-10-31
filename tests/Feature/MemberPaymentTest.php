@@ -557,6 +557,31 @@ it('redirects callbacks for unknown transactions', function () {
         ->assertSessionHas('error', 'Transaction not found.');
 });
 
+it('does not verify another member, family, or payment type through the contribution callback', function (string $scope) {
+    Http::fake();
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $transactionFamily = $scope === 'family' ? Family::factory()->create() : $family;
+    if ($scope === 'family') {
+        $member->ensureFamilyMembership($transactionFamily);
+    }
+    $owner = $scope === 'member'
+        ? User::factory()->member()->employed()->create(['family_id' => $family->id])
+        : $member;
+    $transaction = PaystackTransaction::create([
+        'reference' => 'TXN_OTHER_SCOPE', 'user_id' => $owner->id, 'family_id' => $transactionFamily->id,
+        'type' => $scope === 'type' ? TransactionType::Subscription : TransactionType::Contribution,
+        'amount' => 4000, 'status' => TransactionStatus::Pending,
+    ]);
+
+    $this->actingAs($member)->get(route('pay.callback', ['current_family' => $family->slug, 'reference' => $transaction->reference]))
+        ->assertRedirect(route('pay.index', ['current_family' => $family->slug]))
+        ->assertSessionHas('error', 'Transaction not found.');
+    Http::assertNothingSent();
+    expect($transaction->refresh()->status)->toBe(TransactionStatus::Pending)
+        ->and($transaction->payment_batch_id)->toBeNull();
+})->with(['member', 'family', 'type']);
+
 it('allocates a successful callback payment', function () {
     Http::fake([
         'api.paystack.co/transaction/verify/TXN_SUCCESS' => Http::response([
