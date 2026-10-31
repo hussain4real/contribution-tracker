@@ -205,7 +205,8 @@ const payWithPaystack = async () => {
             },
             body: JSON.stringify({
                 contribution_ids: selectedIds.value,
-                expected_contribution_amount_kobo: selectedContributionKobo.value,
+                expected_contribution_amount_kobo:
+                    selectedContributionKobo.value,
                 expected_gross_amount_kobo: grossAmountKobo.value,
             }),
         });
@@ -288,8 +289,8 @@ const payWithPaystack = async () => {
             <div v-else class="space-y-4">
                 <p class="text-sm text-muted-foreground">
                     The periods you select set the payment amount. Payments are
-                    applied to your oldest unpaid contributions first, which
-                    may be different periods. Check your receipt to see which
+                    applied to your oldest unpaid contributions first, which may
+                    be different periods. Check your receipt to see which
                     periods were paid.
                 </p>
                 <div class="flex items-center justify-between">
