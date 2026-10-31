@@ -5,6 +5,8 @@ function enabled(env) {
     if (env.ENABLED !== "true" || env.DATABASE_NAME !== "familyfunds-production") throw new Error("Production maintenance is disabled");
 }
 
+class InvalidReminderSchedule extends Error {}
+
 export function productionCalendarTasks(at, families, startMonth) {
     if (!/^\d{4}-\d{2}$/.test(startMonth) || startMonth > at.toISOString().slice(0, 7)) throw new Error("Invalid production schedule start month");
     const start = new Date(startMonth + "-01T00:00:00Z");
@@ -17,14 +19,16 @@ export function productionCalendarTasks(at, families, startMonth) {
             const period = month.toISOString().slice(0, 7);
             tasks.push({id: `generate:${period}:${family}`, kind: "generate", family_id: family, at: `${period}-01T00:00:00.000Z`});
             const raw = typeof row === 'number' ? null : row.reminder_settings;
-            const settings = raw ? JSON.parse(raw) : null;
+            let settings;
+            try { settings = raw ? JSON.parse(raw) : null; }
+            catch { throw new InvalidReminderSchedule('Invalid family reminder schedule'); }
             const revisions = settings ? [...(Array.isArray(settings.history) ? settings.history : []), settings] : [];
             const configured = revisions.filter(revision => revision && typeof revision.effective_from === 'string' && period >= revision.effective_from)
                 .sort((a, b) => b.effective_from.localeCompare(a.effective_from))[0];
             const first = configured ? configured.reminder_day : 25;
             const second = configured ? configured.follow_up_day : 28;
             const time = configured ? configured.time : '08:00';
-            if (!Number.isInteger(first) || first < 1 || first > 28 || !Number.isInteger(second) || second <= first || second > 28 || typeof time !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new Error('Invalid family reminder schedule');
+            if (!Number.isInteger(first) || first < 1 || first > 28 || !Number.isInteger(second) || second <= first || second > 28 || typeof time !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new InvalidReminderSchedule('Invalid family reminder schedule');
             for (const [kind, day] of [['remind25', first], ['remind28', second]]) {
                 const due = `${period}-${String(day).padStart(2, '0')}T${time}:00.000Z`;
                 if (new Date(due) <= at) tasks.push({id: `${kind}:${period}:${family}`, kind, family_id: family, at: due});
@@ -36,6 +40,36 @@ export function productionCalendarTasks(at, families, startMonth) {
 
 async function health(env, name, status, details) {
     await env.DB.prepare("insert into d1_runtime_health(name,status,details,checked_at) values(?,?,?,unixepoch()) on conflict(name) do update set status=excluded.status,details=excluded.details,checked_at=excluded.checked_at").bind(name, status, JSON.stringify(details)).run();
+}
+
+async function retryInvalidFamilySchedules(env, at) {
+    const debts = (await env.DB.prepare("select name from d1_runtime_health where name glob 'family-schedule-debt:*' and status='error' order by checked_at,name limit 50").all()).results;
+    for (const debt of debts) {
+        const match = /^family-schedule-debt:(\d{4}-\d{2}):(\d+)$/.exec(debt.name);
+        const familyId = match ? Number(match[2]) : NaN;
+        if (!match || !Number.isSafeInteger(familyId) || familyId < 1) throw new Error('Invalid family schedule debt');
+        const month = match[1];
+        const nextMonth = new Date(month + '-01T00:00:00Z');
+        if (!Number.isFinite(nextMonth.getTime()) || nextMonth.toISOString().slice(0, 7) !== month || month > at.toISOString().slice(0, 7)) throw new Error('Invalid family schedule debt month');
+        nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
+        const family = await env.DB.prepare('select id,reminder_settings from families where id=?').bind(familyId).first();
+        if (!family) {
+            await env.DB.prepare("delete from d1_runtime_health where name=? and status='error'").bind(debt.name).run();
+            continue;
+        }
+        let tasks;
+        try { tasks = productionCalendarTasks(nextMonth > at ? at : new Date(nextMonth.getTime() - 1), [family], month); }
+        catch (error) {
+            if (!(error instanceof InvalidReminderSchedule)) throw error;
+            await env.DB.prepare("update d1_runtime_health set checked_at=unixepoch() where name=? and status='error'").bind(debt.name).run();
+            continue;
+        }
+        const unchanged = family.reminder_settings ?? null;
+        const statements = tasks.map(task => env.DB.prepare("insert into d1_runtime_schedule_outbox(id,kind,family_id,due_at) select ?,?,?,? where exists(select 1 from families where id=? and reminder_settings is ?) on conflict(id) do nothing")
+            .bind(task.id, task.kind, task.family_id, task.at, familyId, unchanged));
+        statements.push(env.DB.prepare("delete from d1_runtime_health where name=? and status='error' and exists(select 1 from families where id=? and reminder_settings is ?)").bind(debt.name, familyId, unchanged));
+        await env.DB.batch(statements);
+    }
 }
 
 async function backupTick(env, at) {
@@ -82,7 +116,17 @@ export default {
         const nextMonth = new Date(saved.month + "-01T00:00:00Z");
         nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
         const calendarAt = saved.month === currentMonth ? at : new Date(nextMonth.getTime() - 1);
-        const tasks = productionCalendarTasks(calendarAt, families, saved.month);
+        await retryInvalidFamilySchedules(env, at);
+        const tasks = [];
+        for (const family of families) {
+            try { tasks.push(...productionCalendarTasks(calendarAt, [family], saved.month)); }
+            catch (error) {
+                if (!(error instanceof InvalidReminderSchedule)) throw error;
+                console.warn(JSON.stringify({event: 'invalid_family_reminder_schedule', family_id: family.id, month: saved.month}));
+                await health(env, `family-schedule-debt:${saved.month}:${family.id}`, 'error', {family_id: family.id, month: saved.month});
+                tasks.push({id: `generate:${saved.month}:${family.id}`, kind: 'generate', family_id: family.id, at: `${saved.month}-01T00:00:00.000Z`});
+            }
+        }
         const purgeAt = new Date(at); purgeAt.setUTCHours(1, 30, 0, 0);
         if (purgeAt > at) purgeAt.setUTCDate(purgeAt.getUTCDate() - 1);
         const purges = (await env.DB.prepare("select id from families where archived_at is not null and legal_hold_at is null and purge_after<=datetime('now') order by id limit 50").all()).results;
@@ -111,8 +155,11 @@ export default {
         for (let offset = 0; offset < tasks.length; offset += 100) {
             await env.DB.batch(tasks.slice(offset, offset + 100).map(task => env.DB.prepare("insert into d1_runtime_schedule_outbox(id,kind,family_id,due_at) values(?,?,?,?) on conflict(id) do nothing").bind(task.id, task.kind, task.family_id, task.at)));
         }
-        await health(env, "family-schedule-cursor", "healthy", {cursor: families.length === 50 ? families.at(-1).id : 0,
-            month: families.length === 50 || saved.month === currentMonth ? saved.month : nextMonth.toISOString().slice(0, 7)});
+        const hasMore = families.length === 50;
+        const debtCount = Number((await env.DB.prepare("select count(*) n from d1_runtime_health where name glob 'family-schedule-debt:*' and status='error'").first())?.n);
+        if (!Number.isSafeInteger(debtCount) || debtCount < 0) throw new Error('Invalid family schedule debt count');
+        await health(env, "family-schedule-cursor", debtCount ? "error" : "healthy", {cursor: hasMore ? families.at(-1).id : 0,
+            month: hasMore || saved.month === currentMonth ? saved.month : nextMonth.toISOString().slice(0, 7), debt_count: debtCount});
         const pending = (await env.DB.prepare("select id from d1_runtime_schedule_outbox where completed_at is null and (dispatched_at is null or dispatched_at<unixepoch()-300) and (lease_until is null or lease_until<=unixepoch()) order by due_at,id limit 50").all()).results;
         for (const task of pending) {
             await env.MAINTENANCE_QUEUE.send({id: task.id}, {contentType: "json"});

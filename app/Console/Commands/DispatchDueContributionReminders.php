@@ -10,6 +10,8 @@ use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Log;
+use UnexpectedValueException;
 
 #[Signature('contributions:dispatch-due-reminders')]
 #[Description('Dispatch due family contribution reminders in UTC')]
@@ -25,7 +27,14 @@ class DispatchDueContributionReminders extends Command
         $failed = false;
         Family::query()->whereNull('archived_at')->chunkById(100, function ($families) use ($now, $month, &$failed): void {
             foreach ($families as $family) {
-                $settings = $family->reminderSettingsForMonth($month);
+                try {
+                    $settings = $family->reminderSettingsForMonth($month);
+                } catch (UnexpectedValueException) {
+                    Log::warning('Invalid family contribution reminder settings.', ['family_id' => $family->id, 'month' => $month]);
+                    $failed = true;
+
+                    continue;
+                }
                 foreach ([25 => $settings['reminder_day'], 28 => $settings['follow_up_day']] as $type => $day) {
                     $due = Carbon::parse(sprintf('%s-%02d %s', $month, $day, $settings['time']), 'UTC');
                     if ($due->greaterThan($now)) {

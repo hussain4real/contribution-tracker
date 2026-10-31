@@ -190,6 +190,59 @@ test('the scheduled SQL queues each family reminder at its configured time witho
     } finally { f.sqlite.close(); }
 });
 
+test('an invalid family schedule does not block other families and remains retryable for a past month', async () => {
+    const f = await nativeSqlFixture();
+    try {
+        const insert = f.sqlite.prepare('insert into families(id,reminder_settings) values(?,?)');
+        insert.run(1, JSON.stringify({effective_from: '2026-09', reminder_day: 29, follow_up_day: 28, time: '08:00'}));
+        for (let id = 2; id <= 51; id++) insert.run(id, null);
+        f.env.SCHEDULE_START_MONTH = '2026-09';
+        f.controller.scheduledTime = new Date('2026-10-30T12:00:00Z').getTime();
+
+        await handler.scheduled(f.controller, f.env);
+        await handler.scheduled(f.controller, f.env);
+        assert.equal(f.sqlite.prepare("select count(*) n from d1_runtime_schedule_outbox where id='remind25:2026-09:51'").get().n, 1);
+        assert.equal(f.sqlite.prepare("select count(*) n from d1_runtime_schedule_outbox where id='remind25:2026-09:1'").get().n, 0);
+        const blocked = JSON.parse(f.sqlite.prepare("select details from d1_runtime_health where name='family-schedule-cursor'").get().details);
+        assert.equal(blocked.month, '2026-10');
+        assert.equal(f.sqlite.prepare("select count(*) n from d1_runtime_health where name='family-schedule-debt:2026-09:1' and status='error'").get().n, 1);
+        await handler.scheduled(f.controller, f.env);
+        await handler.scheduled(f.controller, f.env);
+        assert.equal(f.sqlite.prepare("select count(*) n from d1_runtime_schedule_outbox where id='remind25:2026-10:51'").get().n, 1);
+
+        f.sqlite.prepare('update families set reminder_settings=? where id=1').run(JSON.stringify({effective_from: '2026-09', reminder_day: 10, follow_up_day: 20, time: '08:00'}));
+        const originalBatch = f.env.DB.batch;
+        f.env.DB.batch = statements => originalBatch([...statements, f.env.DB.prepare('insert into missing_fixture_table values(1)')]);
+        await assert.rejects(() => handler.scheduled(f.controller, f.env));
+        assert.equal(f.sqlite.prepare("select count(*) n from d1_runtime_health where name='family-schedule-debt:2026-09:1'").get().n, 1);
+        assert.equal(f.sqlite.prepare("select count(*) n from d1_runtime_schedule_outbox where id='remind25:2026-09:1'").get().n, 0);
+        f.env.DB.batch = originalBatch;
+        await handler.scheduled(f.controller, f.env);
+        assert.equal(f.sqlite.prepare("select count(*) n from d1_runtime_schedule_outbox where id='remind25:2026-09:1'").get().n, 1);
+        assert.equal(f.sqlite.prepare("select count(*) n from d1_runtime_schedule_outbox where id='remind25:2026-09:51'").get().n, 1);
+        const recovered = JSON.parse(f.sqlite.prepare("select details from d1_runtime_health where name='family-schedule-cursor'").get().details);
+        assert.equal(recovered.month, '2026-10');
+        assert.equal(f.sqlite.prepare("select count(*) n from d1_runtime_health where name='family-schedule-debt:2026-09:1'").get().n, 0);
+        assert.equal(f.sqlite.prepare("select status from d1_runtime_health where name='family-schedule-cursor'").get().status, 'healthy');
+    } finally { f.sqlite.close(); }
+});
+
+test('malformed schedule JSON does not stop other scheduled maintenance', async () => {
+    const f = await nativeSqlFixture();
+    try {
+        f.sqlite.prepare('insert into families(id,reminder_settings) values(?,?)').run(1, '{');
+        f.sqlite.prepare('insert into families(id,reminder_settings) values(?,?)').run(2, null);
+        await handler.scheduled(f.controller, f.env);
+        assert.equal(f.sqlite.prepare("select count(*) n from d1_runtime_schedule_outbox where id='generate:2026-10:1'").get().n, 1);
+        assert.equal(f.sqlite.prepare("select count(*) n from d1_runtime_schedule_outbox where id='remind25:2026-10:2'").get().n, 1);
+        assert.equal(f.sqlite.prepare("select status from d1_runtime_health where name='family-schedule-cursor'").get().status, 'error');
+        f.sqlite.prepare('update families set reminder_settings=null where id=1').run();
+        await handler.scheduled(f.controller, f.env);
+        assert.equal(f.sqlite.prepare("select count(*) n from d1_runtime_schedule_outbox where id='remind25:2026-10:1'").get().n, 1);
+        assert.equal(f.sqlite.prepare("select status from d1_runtime_health where name='family-schedule-cursor'").get().status, 'healthy');
+    } finally { f.sqlite.close(); }
+});
+
 test('a failed scheduled queue send retains its stored outbox row and later recovers it', async () => {
     const f = await nativeSqlFixture();
     try {

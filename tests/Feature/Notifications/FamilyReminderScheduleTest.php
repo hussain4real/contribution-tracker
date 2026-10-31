@@ -54,6 +54,28 @@ it('sends configured reminders after their UTC boundaries without duplicate sche
     Notification::assertSentToTimes($member, ContributionReminderNotification::class, 2);
 });
 
+it('continues other families when one reminder schedule is invalid and retries after correction', function () {
+    Notification::fake();
+    $invalid = Family::factory()->create(['reminder_settings' => [
+        'reminder_day' => 29, 'follow_up_day' => 28, 'time' => '08:00',
+        'channels' => ['mail'], 'effective_from' => '2026-10',
+    ]]);
+    $valid = Family::factory()->create();
+    $first = User::factory()->member()->employed()->create(['family_id' => $invalid->id]);
+    $second = User::factory()->member()->employed()->create(['family_id' => $valid->id]);
+    Contribution::factory()->forUser($first)->forMonth(2026, 10)->create();
+    Contribution::factory()->forUser($second)->forMonth(2026, 10)->create();
+    $this->travelTo(Carbon::parse('2026-10-25 08:00:00', 'UTC'));
+
+    $this->artisan('contributions:dispatch-due-reminders')->assertFailed();
+    Notification::assertNotSentTo($first, ContributionReminderNotification::class);
+    Notification::assertSentToTimes($second, ContributionReminderNotification::class, 1);
+    $invalid->update(['reminder_settings' => null]);
+    $this->artisan('contributions:dispatch-due-reminders')->assertSuccessful();
+    Notification::assertSentToTimes($first, ContributionReminderNotification::class, 1);
+    Notification::assertSentToTimes($second, ContributionReminderNotification::class, 1);
+});
+
 it('rejects invalid persisted reminder schedules instead of sending at an unexpected time', function (array $settings) {
     $family = Family::factory()->create(['reminder_settings' => $settings]);
 
