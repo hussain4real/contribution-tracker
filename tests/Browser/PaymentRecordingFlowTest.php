@@ -146,10 +146,12 @@ describe('Payment Recording Flow (Browser)', function () {
         $key = $page->script('() => document.querySelector("[name=idempotency_key]")?.value');
         expect($token)->toBeString()->and($key)->toBeString();
 
+        $this->withoutMiddleware(ResetBrowserSessionAttributes::class);
         $this->actingAs($this->financialSecretary)->post(route('payments.store', ['current_family' => $this->family->slug]), [
             'member_id' => $this->member->id, 'amount' => 4000, 'paid_at' => $paidAt,
             'method' => 'cash', 'idempotency_key' => $key, 'review_token' => $token,
         ])->assertSessionHasNoErrors();
+        $this->withMiddleware(ResetBrowserSessionAttributes::class);
         $receipt = PaymentBatch::sole();
 
         $this->travel(16)->minutes();
@@ -173,10 +175,12 @@ describe('Payment Recording Flow (Browser)', function () {
         $token = $page->script('() => document.querySelector("[name=review_token]")?.value');
         $key = $page->script('() => document.querySelector("[name=idempotency_key]")?.value');
         expect($token)->toBeString()->and($key)->toBeString();
+        $this->withoutMiddleware(ResetBrowserSessionAttributes::class);
         $this->actingAs($this->financialSecretary)->post(route('payments.store', ['current_family' => $this->family->slug]), [
             'member_id' => $this->member->id, 'amount' => 4000, 'paid_at' => now()->format('Y-m-d'),
             'method' => 'cash', 'idempotency_key' => $key, 'review_token' => $token,
         ])->assertSessionHasNoErrors();
+        $this->withMiddleware(ResetBrowserSessionAttributes::class);
         $receipt = PaymentBatch::sole();
         $queuedCount = $queue->pushed(SendPaymentReceipt::class)->count();
         expect($queuedCount)->toBeGreaterThan(0);

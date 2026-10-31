@@ -72,6 +72,37 @@ describe('Member History Flow', function () {
         $this->recorder = createBrowserFinancialSecretary($this->family);
     });
 
+    it('keeps an intended destination isolated from a different browser session', function (): void {
+        $otherFamily = createBrowserFamily();
+        visit('/'.$otherFamily->slug.'/contributions/my')->assertPathIs('/login');
+
+        visit(route('login'))
+            ->fill('email', $this->member->email)
+            ->fill('password', 'password')
+            ->click('@login-button')
+            ->assertPathIs('/'.$this->family->slug.'/dashboard')
+            ->assertNoJavaScriptErrors();
+    });
+
+    it('returns a member to their intended page in the same browser session', function (): void {
+        $page = visit('/'.$this->family->slug.'/contributions/my')->assertPathIs('/login');
+
+        $page->fill('email', $this->member->email)
+            ->fill('password', 'password')
+            ->click('@login-button')
+            ->assertPathIs('/'.$this->family->slug.'/contributions/my')
+            ->assertSee('My money')
+            ->assertNoJavaScriptErrors();
+    });
+
+    it('does not share authentication with a different browser session', function (): void {
+        loginBrowserAs($this->member);
+
+        visit('/'.$this->family->slug.'/contributions/my')
+            ->assertPathIs('/login')
+            ->assertNoJavaScriptErrors();
+    });
+
     it('member can navigate to my contributions page from dashboard', function () {
         Contribution::factory()
             ->forUser($this->member)
