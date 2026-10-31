@@ -84,7 +84,12 @@ async function receiveWebhook(request, env) {
     const record = {provider, raw: new TextDecoder("utf-8", {fatal: true}).decode(bytes),
         signature: request.headers.get(provider === "paystack" ? "X-Paystack-Signature" : "X-Hub-Signature-256") ?? ""};
     if (!await verifyWebhook(record, config)) return new Response("Forbidden", {status: 403});
-    await env.STAGING_WEBHOOK_QUEUE.send(record, {contentType: "json"});
+    if (env.RUNTIME_PROFILE !== "production" && env.STAGING_ADMISSION_CONTROL === "1") {
+        const admitted = await env.STAGING_CONTAINER.getByName("isolated-staging").enqueueWebhook(record);
+        if (!admitted) return new Response("Staging maintenance in progress. No operation was submitted.", {status: 503, headers: {"Retry-After": "30", "Cache-Control": "no-store"}});
+    } else {
+        await env.STAGING_WEBHOOK_QUEUE.send(record, {contentType: "json"});
+    }
     return Response.json({message: "Accepted"}, {status: provider === "paystack" ? 202 : 200, headers: {"Cache-Control": "no-store"}});
 }
 
@@ -108,6 +113,7 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
         this.waiters = [];
         this.activeMaintenance = 0;
         this.activeRestarts = 0;
+        this.activeWebhookSends = 0;
         this.startupState = {attempts: 0, allocations: 0};
         this.label = env.RUNTIME_PROFILE === "production" ? "FamilyFunds" : "Staging";
         this.admissionEnabled = env.RUNTIME_PROFILE !== "production" && env.STAGING_ADMISSION_CONTROL === "1";
@@ -370,7 +376,23 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
         if (this.env.RUNTIME_PROFILE === "production") return result;
         return {...result, activity: {request_slots: this.inFlight, waiting_requests: this.waiters.length,
             starting: this.starting !== null, maintenance_rpcs: this.activeMaintenance},
-            ...(this.admissionEnabled ? {admission_paused: this.admissionPaused, restart_operations: this.activeRestarts} : {})};
+            ...(this.admissionEnabled ? {admission_paused: this.admissionPaused, restart_operations: this.activeRestarts, webhook_sends: this.activeWebhookSends} : {})};
+    }
+
+    async enqueueWebhook(record) {
+        await this.admissionReady;
+        if (!this.admissionEnabled) throw new Error("Staging admission control is disabled");
+        if (this.admissionPaused) return false;
+        this.activeWebhookSends++;
+        try {
+            const config = webhookConfig(this.env);
+            if (!config || !await verifyWebhook(record, config)) throw new Error("Invalid staging webhook");
+            if (this.admissionPaused) return false;
+            await this.env.STAGING_WEBHOOK_QUEUE.send(record, {contentType: "json"});
+            return true;
+        } finally {
+            this.activeWebhookSends--;
+        }
     }
 
     async setAdmissionPaused(paused) {

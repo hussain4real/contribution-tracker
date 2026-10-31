@@ -456,6 +456,38 @@ test("a signed test payment is durably queued without waking a cold container", 
     assert.deepEqual(JSON.parse(JSON.stringify(queued[0])), record);
 });
 
+test('staging admission pause rejects new webhooks while an earlier queue send remains visible', async () => {
+    const f = fixture();
+    f.env.STAGING_ADMISSION_CONTROL = '1';
+    const Container = f.container.constructor;
+    const container = new Container(f.container.ctx, f.env);
+    f.env.STAGING_CONTAINER = {getByName: () => container};
+    let finishSend;
+    let notifySend;
+    const sendStarted = new Promise(resolve => { notifySend = resolve; });
+    f.env.STAGING_WEBHOOK_QUEUE.send = async record => {
+        notifySend();
+        await new Promise(resolve => { finishSend = resolve; });
+        f.queued.push(record);
+    };
+    const record = signedRecord('paystack', {event: 'charge.success', data: {domain: 'test', reference: 'D1-WEBHOOK-UAT-fixture', metadata: {family_id: 43}}}, f.webhook);
+    const first = f.handler.fetch(webhookRequest(record), f.env);
+    await sendStarted;
+    await container.setAdmissionPaused(true);
+    assert.equal((await container.inspect()).webhook_sends, 1);
+    const rejected = await f.handler.fetch(webhookRequest(record), f.env);
+    assert.equal(rejected.status, 503);
+    assert.equal(f.queued.length, 0);
+    finishSend();
+    assert.equal((await first).status, 202);
+    assert.equal(f.queued.length, 1);
+    assert.equal((await container.inspect()).webhook_sends, 0);
+    await container.setAdmissionPaused(false);
+    f.env.STAGING_WEBHOOK_QUEUE.send = async value => { f.queued.push(value); };
+    assert.equal((await f.handler.fetch(webhookRequest(record), f.env)).status, 202);
+    assert.equal(f.queued.length, 2);
+});
+
 test("live payments, other families and invalid signatures never enter the queue", async () => {
     const {handler, env, webhook, queued} = fixture();
     for (const data of [{domain: "live", reference: "D1-WEBHOOK-UAT-fixture", metadata: {family_id: 43}},
