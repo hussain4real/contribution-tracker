@@ -151,6 +151,10 @@ async function createBackup(env, at, checkpoint = null, exceptions = []) {
         if (checkpoint !== null) throw new Error('Staging checkpoint already exists');
         return {status: "already_present", key: objectKey};
     }
+    if (checkpoint !== null) {
+        const claimKey = BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/claim';
+        if (!await destination.put(claimKey, 'staging checkpoint claimed', {onlyIf: {etagDoesNotMatch: '*'}})) throw new Error('Staging checkpoint already exists or was attempted');
+    }
     const includedRuntime = checkpoint === null ? "name not glob 'd1_*'" : "(name not glob 'd1_*' or name glob 'd1_staging_*' or name glob 'd1_read_revision_*')";
     const schemaSql = "select type,name,tbl_name,sql from sqlite_master where sql is not null and name not glob 'sqlite_*' and " + includedRuntime + " and name not glob '_cf_*' order by type,name";
     const before = (await env.DB.prepare(schemaSql).all()).results;

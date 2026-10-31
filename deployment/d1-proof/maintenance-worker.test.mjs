@@ -106,14 +106,14 @@ test("backup-only checkpoints create fresh snapshots without scheduling tasks or
     assert.equal(result.status, 'created');
     assert.equal(result.key, 'private/staging-backups/d1-web/checkpoints/' + checkpoint + '.json.aes-gcm');
     assert.equal(objects.size, 0);
-    assert.equal(checkpointObjects.size, 1);
+    assert.equal(checkpointObjects.size, 2);
     const envelope = JSON.parse(checkpointObjects.get(result.key));
     const options = {name: 'AES-GCM', iv: Buffer.from(envelope.iv, 'base64'), additionalData: new TextEncoder().encode('FamilyFunds staging backup v1:familyfunds-d1-web-staging')};
     const snapshot = JSON.parse(new TextDecoder().decode(await webcrypto.subtle.decrypt(options, await backupKey(secret), Buffer.from(envelope.ciphertext, 'base64'))));
     assert.equal(snapshot.database, 'familyfunds-d1-web-staging');
     assert.equal(Object.keys(snapshot.tables).length, 40);
     await assert.rejects(service.create(checkpoint), /already exists/i);
-    assert.equal(checkpointObjects.size, 1);
+    assert.equal(checkpointObjects.size, 2);
 });
 
 test('a competing checkpoint is preserved when it appears after the initial check', async () => {
@@ -127,6 +127,17 @@ test('a competing checkpoint is preserved when it appears after the initial chec
 
     await assert.rejects(new StagingBackupOnly(env).create('cutover-20261030t194500z'), /already exists/i);
     assert.equal([...checkpointObjects.values()][0], 'competing checkpoint');
+});
+
+test('concurrent attempts cannot share a staging checkpoint ID', async () => {
+    const {env, checkpointObjects} = backupFixture();
+    env.STAGING_BACKUP_ONLY_ENABLED = 'true';
+    const service = new StagingBackupOnly(env);
+    const checkpoint = 'cutover-20261031t040000z';
+    const attempts = await Promise.allSettled([service.create(checkpoint), service.create(checkpoint)]);
+    assert.equal(attempts.filter(item => item.status === 'fulfilled').length, 1);
+    assert.match(attempts.find(item => item.status === 'rejected').reason.message, /already exists or was attempted/i);
+    assert.equal(checkpointObjects.size, 2);
 });
 
 test('checkpoint snapshots include application-owned D1 runtime tables and revision triggers', async () => {
@@ -238,7 +249,7 @@ test('an isolated empty recovery database restores and verifies a checkpoint wit
     }
 });
 
-test('checkpoint refuses a missing referenced application file before publishing anything', async () => {
+test('checkpoint refuses a missing referenced application file before publishing a snapshot', async () => {
     const db = new DatabaseSync(':memory:');
     try {
         for (let i = 0; i < 39; i++) db.exec(`create table fixture_${i} (id integer primary key autoincrement)`);
@@ -250,7 +261,8 @@ test('checkpoint refuses a missing referenced application file before publishing
 
         await assert.rejects(new StagingBackupOnly(env).create('cutover-20261030t200003z'), /referenced file.*missing/i);
         assert.equal(objects.size, 0);
-        assert.equal(checkpointObjects.size, 0);
+        assert.equal(checkpointObjects.size, 1);
+        await assert.rejects(new StagingBackupOnly(env).create('cutover-20261030t200003z'), /already exists or was attempted/i);
     } finally {
         db.close();
     }
@@ -275,10 +287,10 @@ test('checkpoint records only the approved missing statements and restores their
         const backup = new StagingBackupOnly(env);
         const checkpoint = 'cutover-20261030t200006z';
         const exceptions = [{id: 11, path: 'reports/11.csv'}, {id: 13, path: 'reports/13.csv'}];
-        await assert.rejects(backup.create(checkpoint, exceptions.slice(0, 1)), /referenced file.*missing/i);
-        await assert.rejects(backup.create(checkpoint, [{id: 11, path: 'reports/wrong.csv'}, exceptions[1]]), /referenced file.*missing/i);
+        await assert.rejects(backup.create('cutover-20261030t200007z', exceptions.slice(0, 1)), /referenced file.*missing/i);
+        await assert.rejects(backup.create('cutover-20261030t200008z', [{id: 11, path: 'reports/wrong.csv'}, exceptions[1]]), /referenced file.*missing/i);
         await assert.rejects(backup.create(checkpoint, [{id: 99, path: 'reports/99.csv'}]), /invalid.*exceptions/i);
-        assert.equal(checkpointObjects.size, 0);
+        assert.equal(checkpointObjects.size, 2);
         const result = await backup.create(checkpoint, exceptions);
         assert.deepEqual(Array.from(result.missing_file_ids), [11, 13]);
         const snapshot = await openBackup(JSON.parse(checkpointObjects.get(result.key)), secret);
@@ -330,7 +342,8 @@ test('checkpoint refuses success when encrypted file readback is missing or corr
         const checkpoint = 'cutover-20261031t030001z';
         await assert.rejects(new StagingBackupOnly(env).create(checkpoint));
         assert.equal(checkpointObjects.has('private/staging-backups/d1-web/checkpoints/' + checkpoint + '.json.aes-gcm'), false);
-        assert.equal(checkpointObjects.size, 1);
+        assert.equal(checkpointObjects.size, 2);
+        await assert.rejects(new StagingBackupOnly(env).create(checkpoint), /already exists or was attempted/i);
     }
 });
 
@@ -347,7 +360,7 @@ test('checkpoint refuses success when database snapshot readback differs and pre
     const checkpoint = 'cutover-20261031t030002z';
     const service = new StagingBackupOnly(env);
     await assert.rejects(service.create(checkpoint), /stored staging checkpoint differs/i);
-    assert.equal(checkpointObjects.size, 1);
+    assert.equal(checkpointObjects.size, 2);
     await assert.rejects(service.create(checkpoint), /already exists/i);
 });
 
@@ -372,11 +385,12 @@ test('checkpoint rejects a changed application file inventory before publishing 
 test('checkpoint rejects an incomplete or repeating file inventory cursor', async () => {
     const {env, checkpointObjects} = backupFixture();
     env.STAGING_BACKUP_ONLY_ENABLED = 'true';
+    let attempt = 0;
     for (const page of [{objects: [], truncated: true}, {objects: [], truncated: true, cursor: 'same'}]) {
         env.STAGING_FILES.list = async () => page;
-        await assert.rejects(new StagingBackupOnly(env).create('cutover-20261030t202200z'), /incomplete.*file inventory/i);
+        await assert.rejects(new StagingBackupOnly(env).create(`cutover-20261030t20220${attempt++}z`), /incomplete.*file inventory/i);
     }
-    assert.equal(checkpointObjects.size, 0);
+    assert.equal(checkpointObjects.size, 2);
 });
 
 test('checkpoint rejects a database change made while its application files are copied', async () => {
