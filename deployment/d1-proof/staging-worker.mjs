@@ -24,11 +24,15 @@ export class StagingGatewayAdmission extends DurableObject {
         if (typeof paused !== "boolean") throw new Error("Invalid admission state");
         return this.ctx.blockConcurrencyWhile(async () => {
             await this.ctx.storage.put("paused", paused);
-            return this.status();
+            return this.#readStatus();
         });
     }
 
     async status() {
+        return this.ctx.blockConcurrencyWhile(async () => this.#readStatus());
+    }
+
+    async #readStatus() {
         const pending = await this.ctx.storage.list({prefix: "operation:", limit: 1001});
         const paused = await this.ctx.storage.get("paused");
         if (paused !== undefined && typeof paused !== "boolean") throw new Error("Invalid stored admission state");

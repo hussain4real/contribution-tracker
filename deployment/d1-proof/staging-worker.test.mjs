@@ -65,3 +65,34 @@ test('gateway admission is opt-in and refuses a different database target', asyn
     assert.equal((await handler.fetch(f.admin('POST', true), f.env)).status, 404);
     assert.equal((await handler.fetch(f.query(), f.env)).status, 422);
 });
+
+test('gateway status cannot combine a stale count with a newer paused state', async () => {
+    const f = fixture();
+    const list = f.storage.list;
+    let releaseList;
+    let notifyList;
+    const listStarted = new Promise(resolve => { notifyList = resolve; });
+    f.storage.list = async options => {
+        f.storage.list = list;
+        const snapshot = await list(options);
+        notifyList();
+        await new Promise(resolve => { releaseList = resolve; });
+        return snapshot;
+    };
+    let tail = Promise.resolve();
+    const gate = new Gate({storage: f.storage, blockConcurrencyWhile: callback => {
+        const next = tail.then(callback);
+        tail = next.catch(() => {});
+        return next;
+    }}, {});
+    const status = gate.status();
+    await listStarted;
+    const operation = gate.begin();
+    const pause = gate.setPaused(true);
+    await new Promise(resolve => setImmediate(resolve));
+    releaseList();
+    assert.deepEqual(JSON.parse(JSON.stringify(await status)), {paused: false, unresolved: 0});
+    const id = await operation;
+    assert.deepEqual(JSON.parse(JSON.stringify(await pause)), {paused: true, unresolved: 1});
+    await gate.complete(id);
+});
