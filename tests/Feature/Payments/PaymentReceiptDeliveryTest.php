@@ -266,6 +266,29 @@ it('allows an officer to retry an unconfirmed receipt once without changing the 
     Queue::assertPushed(SendPaymentReceipt::class, 3);
 });
 
+it('does not offer receipt retry when the endpoint cannot retry the delivery', function (string $reason) {
+    Queue::fake([SendPaymentReceipt::class]);
+    $batch = recordReceiptPayment($this);
+    $delivery = $batch->receiptDeliveries()->where('channel', 'mail')->firstOrFail();
+    $delivery->update(['status' => 'failed', 'failed_at' => now()]);
+    if ($reason === 'archived') {
+        $batch->membership()->firstOrFail()->update(['archived_at' => now()]);
+    } elseif ($reason === 'missing membership') {
+        DB::table('payment_batches')->where('id', $batch->id)->update(['family_membership_id' => null]);
+    } else {
+        $delivery->update(['channel' => 'unsupported']);
+    }
+
+    $this->actingAs($this->recorder)->get(route('payments.index', ['current_family' => $this->family->slug]))
+        ->assertOk()->assertInertia(fn (Assert $page) => $page
+        ->where('receipts.0.deliveries.0.status', 'unconfirmed')
+        ->where('receipts.0.deliveries.0.can_retry', false));
+
+    $this->post(route('payment-receipt-deliveries.retry', ['current_family' => $this->family->slug, 'delivery' => $delivery->id]))
+        ->assertRedirect()->assertSessionHas('error', 'This delivery cannot currently be retried.');
+    Queue::assertPushed(SendPaymentReceipt::class, 2);
+})->with(['archived', 'missing membership', 'unsupported channel']);
+
 it('retries a provider-reported WhatsApp failure without requeueing the email', function () {
     Queue::fake([SendPaymentReceipt::class]);
     Http::fake(['graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.retry']]])]);
