@@ -7,6 +7,55 @@ use App\Models\FamilyMembership;
 use App\Models\Payment;
 use App\Models\PaymentBatch;
 use App\Models\PaystackTransaction;
+use Pest\Browser\Api\PendingAwaitablePage;
+
+function simulateContributionCheckout(PendingAwaitablePage $page, string $checkoutEvent, bool $dropVerification = false): void
+{
+    $manifestJson = file_get_contents(public_path('build/manifest.json'));
+    if ($manifestJson === false) {
+        throw new RuntimeException('The frontend build manifest is unavailable.');
+    }
+    $manifest = json_decode($manifestJson, true, flags: JSON_THROW_ON_ERROR);
+    $entry = is_array($manifest) ? ($manifest['node_modules/@paystack/inline-js/es/inline.js'] ?? null) : null;
+    $moduleFile = is_array($entry) ? ($entry['file'] ?? null) : null;
+    if (! is_string($moduleFile)) {
+        throw new RuntimeException('The Paystack module is missing from the frontend build.');
+    }
+    $moduleUrl = json_encode('/build/'.$moduleFile, JSON_THROW_ON_ERROR);
+    $event = json_encode($checkoutEvent, JSON_THROW_ON_ERROR);
+    $drop = json_encode($dropVerification, JSON_THROW_ON_ERROR);
+    $page->script(<<<JS
+        async () => {
+            sessionStorage.setItem('checkout-verifications', '0');
+            const blocked = new WeakSet();
+            const originalOpen = XMLHttpRequest.prototype.open;
+            XMLHttpRequest.prototype.open = function (...args) {
+                if (String(args[1]).includes('/pay/callback')) {
+                    sessionStorage.setItem('checkout-verifications', String(Number(sessionStorage.getItem('checkout-verifications')) + 1));
+                    if ({$drop}) blocked.add(this);
+                }
+                return originalOpen.apply(this, args);
+            };
+            const originalSend = XMLHttpRequest.prototype.send;
+            XMLHttpRequest.prototype.send = function (...args) {
+                if (blocked.has(this)) {
+                    queueMicrotask(() => this.dispatchEvent(new ProgressEvent('error')));
+                    return;
+                }
+                return originalSend.apply(this, args);
+            };
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = (input, options) => String(input).includes('/pay/initiate')
+                ? Promise.resolve(new Response(JSON.stringify({ access_code: 'synthetic', reference: 'TXN_MISSING' }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+                : originalFetch(input, options);
+            const { default: PaystackPop } = await import({$moduleUrl});
+            PaystackPop.prototype.resumeTransaction = function (accessCode, callbacks) {
+                callbacks[{$event}]({ message: 'Synthetic checkout event' });
+                callbacks.onSuccess({});
+            };
+        }
+        JS);
+}
 
 /**
  * T078 [US5] Browser test for member contribution history navigation
@@ -83,39 +132,7 @@ describe('Member History Flow', function () {
         $page->navigate(route('pay.index', ['current_family' => $this->family->slug]))
             ->assertSee('Pay Contributions');
 
-        $manifestJson = file_get_contents(public_path('build/manifest.json'));
-        if ($manifestJson === false) {
-            throw new RuntimeException('The frontend build manifest is unavailable.');
-        }
-        $manifest = json_decode($manifestJson, true, flags: JSON_THROW_ON_ERROR);
-        $entry = is_array($manifest) ? ($manifest['node_modules/@paystack/inline-js/es/inline.js'] ?? null) : null;
-        $moduleFile = is_array($entry) ? ($entry['file'] ?? null) : null;
-        if (! is_string($moduleFile)) {
-            throw new RuntimeException('The Paystack module is missing from the frontend build.');
-        }
-        $moduleUrl = json_encode('/build/'.$moduleFile, JSON_THROW_ON_ERROR);
-        $event = json_encode($checkoutEvent, JSON_THROW_ON_ERROR);
-        $page->script(<<<JS
-            async () => {
-                sessionStorage.setItem('checkout-verifications', '0');
-                const originalOpen = XMLHttpRequest.prototype.open;
-                XMLHttpRequest.prototype.open = function (...args) {
-                    if (String(args[1]).includes('/pay/callback')) {
-                        sessionStorage.setItem('checkout-verifications', String(Number(sessionStorage.getItem('checkout-verifications')) + 1));
-                    }
-                    return originalOpen.apply(this, args);
-                };
-                const originalFetch = window.fetch.bind(window);
-                window.fetch = (input, options) => String(input).includes('/pay/initiate')
-                    ? Promise.resolve(new Response(JSON.stringify({ access_code: 'synthetic', reference: 'TXN_MISSING' }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
-                    : originalFetch(input, options);
-                const { default: PaystackPop } = await import({$moduleUrl});
-                PaystackPop.prototype.resumeTransaction = function (accessCode, callbacks) {
-                    callbacks[{$event}]({ message: 'Synthetic checkout event' });
-                    callbacks.onSuccess({});
-                };
-            }
-            JS);
+        simulateContributionCheckout($page, $checkoutEvent);
 
         $page->click('Select All')
             ->click('button:has-text("with Paystack")')
@@ -125,6 +142,23 @@ describe('Member History Flow', function () {
         expect($page->script("() => sessionStorage.getItem('checkout-verifications')"))->toBe('1');
         expect($page->script("() => document.body.innerText.split('Transaction not found.').length - 1"))->toBe(1);
     })->with(['cancelled' => 'onCancel', 'load failure' => 'onError']);
+
+    it('keeps an unconfirmed warning visible if payment verification loses its connection', function () {
+        config(['services.paystack.public_key' => 'pk_test_synthetic', 'services.paystack.secret_key' => 'sk_test_synthetic']);
+        $this->family->update(['bank_code' => '058', 'account_number' => '1234567890']);
+        Contribution::factory()->forUser($this->member)->currentMonth()->create(['expected_amount' => 4000]);
+        $page = loginBrowserAs($this->member);
+        $page->navigate(route('pay.index', ['current_family' => $this->family->slug]))->assertSee('Pay Contributions');
+        simulateContributionCheckout($page, 'onCancel', dropVerification: true);
+
+        $page->click('Select All')
+            ->click('button:has-text("with Paystack")')
+            ->assertPathIs("/{$this->family->slug}/pay")
+            ->assertSeeIn('[role="alert"]', 'Could not confirm your payment. Check your payment history or contact your family admin before trying again.')
+            ->assertEnabled('button:has-text("with Paystack")')
+            ->assertNoJavaScriptErrors();
+        expect($page->script("() => sessionStorage.getItem('checkout-verifications')"))->toBe('1');
+    });
 
     it('member can view contribution details with payments', function () {
         // Use a future month so it's before the due date (shows "Partial" not "Overdue")

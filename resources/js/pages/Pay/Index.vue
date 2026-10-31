@@ -72,6 +72,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const selectedIds = ref<number[]>([]);
 const processing = ref(false);
+const paymentUnconfirmed = ref(false);
 const { formatCurrency: formatAmount } = useCurrencyFormatter();
 const payableContributions = computed(() =>
     props.pending_contributions.filter(
@@ -194,6 +195,7 @@ const payWithPaystack = async () => {
         return;
     }
 
+    paymentUnconfirmed.value = false;
     processing.value = true;
 
     try {
@@ -234,9 +236,7 @@ const payWithPaystack = async () => {
             verificationStarted = true;
 
             const showUnconfirmed = () => {
-                toast.error(
-                    'Could not confirm your payment. Check your payment history or contact your family admin before trying again.',
-                );
+                paymentUnconfirmed.value = true;
                 return false;
             };
 
@@ -259,9 +259,7 @@ const payWithPaystack = async () => {
             onError: verifyPayment,
         });
     } catch {
-        toast.error(
-            'Could not confirm your payment. Check your payment history or contact your family admin before trying again.',
-        );
+        paymentUnconfirmed.value = true;
         processing.value = false;
     }
 };
@@ -276,6 +274,15 @@ const payWithPaystack = async () => {
                 title="Pay Contributions"
                 :description="`Monthly contribution: ${formatted_amount}`"
             />
+
+            <div
+                v-if="paymentUnconfirmed"
+                role="alert"
+                class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
+            >
+                Could not confirm your payment. Check your payment history or
+                contact your family admin before trying again.
+            </div>
 
             <!-- No Paystack Setup -->
             <div
