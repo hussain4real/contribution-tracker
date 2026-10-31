@@ -101,6 +101,8 @@ The existing [product completion roadmap](../familyfund-product-completion-roadm
 
 **Checkout selection:** Initialization now refuses a mixed selection if any requested contribution is outside the member's current family or is no longer payable, including when one becomes fully paid during balance calculation. The page also submits the contribution and total amounts it displayed; initialization recalculates both and asks the member to refresh if the balance or fee has changed. Local tests verify that these rejected cases create neither a Paystack request nor a transaction. The page explains that selected periods set the amount while payments apply to the oldest unpaid contributions first; a local Paystack callback test verifies that behavior. This does not eliminate changes to balances after the check or prove the amount shown in a real provider checkout.
 
+**Synthetic mobile checkout walkthrough:** At 390 × 844 pixels, a local browser showed the oldest-first explanation and a ₦2,000 contribution with a ₦2,030.46 total. With online availability mocked on and the initialization request intercepted, the browser submitted those same amounts in kobo. A mocked stale-amount response displayed the refresh message and re-enabled the Pay button. No Paystack request or payment was made; this does not verify an actual checkout or provider delivery.
+
 ### 2. Receipt and reminder delivery visibility
 
 - Show channel-specific states such as queued, sent, delivered or failed, only where the provider actually supplies the state. Distinguish provider acceptance from confirmed delivery.
