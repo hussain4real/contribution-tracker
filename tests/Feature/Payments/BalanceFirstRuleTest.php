@@ -190,7 +190,7 @@ describe('Balance-First Rule (FR-020)', function () {
     });
 
     it('creates contribution for target month if not exists', function () {
-        $nextMonth = now()->addMonth();
+        $nextMonth = now()->startOfMonth()->addMonth();
 
         // No contributions exist for next month
         expect(Contribution::forUser($this->member->id)

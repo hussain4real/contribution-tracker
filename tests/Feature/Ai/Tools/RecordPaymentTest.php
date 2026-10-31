@@ -56,7 +56,7 @@ test('payment recording requires a positive amount', function () {
 });
 
 test('payment recording preview includes a valid target period', function () {
-    $target = now()->addMonths(2);
+    $target = now()->startOfMonth()->addMonths(2);
     $tool = new RecordPayment($this->admin);
 
     $result = decodeToolResult($tool->handle(new Request([

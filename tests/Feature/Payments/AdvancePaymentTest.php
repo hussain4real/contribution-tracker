@@ -21,7 +21,7 @@ describe('Advance Payments (FR-018)', function () {
     });
 
     it('allows payment for next month', function () {
-        $nextMonth = now()->addMonth();
+        $nextMonth = now()->startOfMonth()->addMonth();
 
         $this->actingAs($this->financialSecretary)
             ->postReviewedPayment(route('payments.store'), [
@@ -41,7 +41,7 @@ describe('Advance Payments (FR-018)', function () {
     });
 
     it('handles string target_year and target_month from form input', function () {
-        $nextMonth = now()->addMonth();
+        $nextMonth = now()->startOfMonth()->addMonth();
 
         $this->actingAs($this->financialSecretary)
             ->postReviewedPayment(route('payments.store'), [
@@ -94,7 +94,8 @@ describe('Advance Payments (FR-018)', function () {
     });
 
     it('allows payment for up to 6 months ahead', function () {
-        $sixMonthsAhead = now()->addMonths(6);
+        $this->travelTo(now()->setDate(2026, 10, 31));
+        $sixMonthsAhead = now()->startOfMonth()->addMonths(6);
 
         $this->actingAs($this->financialSecretary)
             ->postReviewedPayment(route('payments.store'), [

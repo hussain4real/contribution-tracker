@@ -18,7 +18,7 @@ describe('Record Partial Payment', function () {
 
     it('contribution shows Partial status after partial payment', function () {
         // Create a future month contribution to avoid overdue status
-        $futureMonth = now()->addMonth();
+        $futureMonth = now()->startOfMonth()->addMonth();
 
         $contribution = Contribution::factory()
             ->forUser($this->member)
@@ -44,7 +44,7 @@ describe('Record Partial Payment', function () {
     });
 
     it('multiple partial payments accumulate correctly', function () {
-        $futureMonth = now()->addMonth();
+        $futureMonth = now()->startOfMonth()->addMonth();
 
         $contribution = Contribution::factory()
             ->forUser($this->member)

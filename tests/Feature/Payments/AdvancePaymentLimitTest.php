@@ -61,7 +61,7 @@ describe('Advance Payment Limit (FR-018)', function () {
     });
 
     it('allows payment for past months with unpaid contributions', function () {
-        $pastMonth = now()->subMonth();
+        $pastMonth = now()->startOfMonth()->subMonth();
 
         $this->actingAs($this->financialSecretary)
             ->postReviewedPayment(route('payments.store'), [
