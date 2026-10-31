@@ -283,10 +283,17 @@ class PaymentAllocationService
         $replacedContributions = $replaces instanceof PaymentBatch
             ? $replaces->allocations()->lockForUpdate()->pluck('contribution_id')->all()
             : [];
-        $contributions = $allContributions->filter(function (Contribution $contribution) use ($payments, $replacedContributions): bool {
+        $maximumAdvanceDate = now()->startOfMonth()->addMonths(6);
+        $maximumPeriod = $maximumAdvanceDate->year * 100 + $maximumAdvanceDate->month;
+        if ($allContributions->contains(fn (Contribution $contribution): bool => in_array($contribution->id, $replacedContributions, true)
+            && $contribution->year * 100 + $contribution->month > $maximumPeriod)) {
+            throw new InvalidArgumentException('The original receipt includes a contribution beyond the six-month advance-payment limit.');
+        }
+        $contributions = $allContributions->filter(function (Contribution $contribution) use ($payments, $replacedContributions, $maximumPeriod): bool {
             $contribution->setRelation('payments', $payments->get($contribution->id, new \Illuminate\Database\Eloquent\Collection));
 
-            return $contribution->balance > 0 || in_array($contribution->id, $replacedContributions, true);
+            return $contribution->year * 100 + $contribution->month <= $maximumPeriod
+                && ($contribution->balance > 0 || in_array($contribution->id, $replacedContributions, true));
         });
 
         if ($targetYear !== null && $targetMonth !== null) {
@@ -327,8 +334,6 @@ class PaymentAllocationService
 
         $lastContribution = $contributions->reverse()->firstOrFail();
         $cursor = Carbon::createFromDate($lastContribution->year, $lastContribution->month, 1)->startOfMonth()->addMonth();
-        $maximumAdvanceDate = now()->startOfMonth()->addMonths(6);
-
         while ($remainingAmount > 0 && $cursor->lte($maximumAdvanceDate)) {
             $contribution = $allContributions->first(fn (Contribution $item): bool => $item->year === $cursor->year && $item->month === $cursor->month)
                 ?? $this->findOrCreateContribution($member, $family, $membership, $cursor->year, $cursor->month);

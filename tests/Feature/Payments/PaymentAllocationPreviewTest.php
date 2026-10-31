@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
+use App\Actions\CorrectPaymentBatch;
 use App\Actions\ReversePaymentBatch;
+use App\Enums\PaymentMethod;
 use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\FamilyMembership;
@@ -32,6 +34,76 @@ it('applies the six-month advance limit in a month-end payment review', function
         ->and($valid['allocations'][6]['year'])->toBe(2027);
     expect(fn () => $preview->preview($member, $family, $membership, 32000))
         ->toThrow(InvalidArgumentException::class, 'six-month advance-payment limit');
+});
+
+it('does not allocate to an existing contribution beyond the advance limit', function () {
+    $this->travelTo(now()->setDate(2026, 10, 31)->startOfDay());
+    Queue::fake();
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    Contribution::factory()->forUser($member)->forMonth(2026, 10)->create(['expected_amount' => 4000]);
+    $future = Contribution::factory()->forUser($member)->forMonth(2027, 5)->create(['expected_amount' => 4000]);
+    $data = ['member_id' => $member->id, 'amount' => 8000, 'paid_at' => now()->toDateString(),
+        'method' => 'cash', 'idempotency_key' => (string) Str::uuid()];
+
+    $review = $this->actingAs($officer)->postJson(route('payments.review', ['current_family' => $family->slug]), $data)->assertOk();
+    $review->assertJsonPath('allocations.0.month', 10)->assertJsonPath('allocations.1.month', 11);
+    $data['review_token'] = $review->json('token');
+    $this->actingAs($officer)->post(route('payments.store', ['current_family' => $family->slug]), $data)->assertSessionHasNoErrors();
+    expect(Payment::query()->where('contribution_id', $future->id)->count())->toBe(0);
+});
+
+it('enforces the advance limit when allocating without a payment review', function () {
+    $this->travelTo(now()->setDate(2026, 10, 31)->startOfDay());
+    Queue::fake();
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    Contribution::factory()->forUser($member)->forMonth(2026, 10)->create(['expected_amount' => 4000]);
+    $future = Contribution::factory()->forUser($member)->forMonth(2027, 5)->create(['expected_amount' => 4000]);
+
+    $batch = app(PaymentAllocationService::class)->createBatch(member: $member, amount: 8000, paidAt: now(), recordedBy: $officer, family: $family);
+    $periods = $batch->allocations()->with('contribution')->get()->map(fn (Payment $payment): int => ($payment->contribution ?? throw new LogicException('Missing contribution'))->month)->all();
+    expect($periods)->toBe([10, 11])->and(Payment::query()->where('contribution_id', $future->id)->count())->toBe(0);
+});
+
+it('starts at the current month when the only recorded contribution is beyond the advance limit', function () {
+    $this->travelTo(now()->setDate(2026, 10, 31)->startOfDay());
+    Queue::fake();
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    $membership = $member->membershipForFamily($family);
+    assert($membership instanceof FamilyMembership);
+    $future = Contribution::factory()->forUser($member)->forMonth(2027, 5)->create(['expected_amount' => 4000]);
+
+    $preview = app(PaymentAllocationPreview::class)->preview($member, $family, $membership, 4000);
+    expect($preview['allocations'][0]['month'])->toBe(10);
+    expect(fn () => app(PaymentAllocationPreview::class)->preview($member, $family, $membership, 4000, 2027, 5))
+        ->toThrow(InvalidArgumentException::class, 'six-month advance-payment limit');
+    $batch = app(PaymentAllocationService::class)->createBatch(member: $member, amount: 4000, paidAt: now(), recordedBy: $officer, family: $family, expectedAllocations: $preview['allocations']);
+    $contribution = $batch->allocations->sole()->contribution ?? throw new LogicException('Missing contribution');
+    expect($contribution->month)->toBe(10)
+        ->and(Payment::query()->where('contribution_id', $future->id)->count())->toBe(0);
+});
+
+it('does not silently reallocate a correction of a receipt beyond the advance limit', function () {
+    $this->travelTo(now()->setDate(2026, 11, 1)->startOfDay());
+    Queue::fake();
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    $original = app(PaymentAllocationService::class)->createBatch(
+        member: $member, amount: 4000, paidAt: now(), recordedBy: $officer, family: $family, targetYear: 2027, targetMonth: 5,
+    );
+    $this->travelTo(now()->setDate(2026, 10, 31)->startOfDay());
+
+    expect(fn () => app(CorrectPaymentBatch::class)->handle(
+        original: $original, actor: $officer, reason: 'Correct receipt', amount: 4000, paidAt: '2026-11-01', method: PaymentMethod::Cash,
+    ))->toThrow(InvalidArgumentException::class, 'original receipt includes a contribution beyond');
+    $original = $original->fresh() ?? throw new LogicException('Missing original receipt');
+    expect(PaymentBatch::count())->toBe(1)->and($original->isReversed())->toBeFalse();
 });
 
 it('previews the actual allocation without writing financial records', function (string $scenario) {

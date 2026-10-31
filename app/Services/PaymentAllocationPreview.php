@@ -26,7 +26,13 @@ class PaymentAllocationPreview
         $existing = Contribution::query()->forUser($member)->where('family_id', $family->id)
             ->with('payments')->get()->keyBy(fn (Contribution $contribution): string => $this->periodKey($contribution->year, $contribution->month));
         $outstanding = (int) $existing->sum(fn (Contribution $contribution): int => $contribution->balance);
-        $pending = $existing->filter(fn (Contribution $contribution): bool => $contribution->balance > 0)->values();
+        $maximum = now()->startOfMonth()->addMonths(6);
+        $maximumPeriod = $maximum->year * 100 + $maximum->month;
+        if ($targetYear !== null && $targetMonth !== null && $targetYear * 100 + $targetMonth > $maximumPeriod) {
+            throw new InvalidArgumentException('The payment exceeds the six-month advance-payment limit.');
+        }
+        $pending = $existing->filter(fn (Contribution $contribution): bool => $contribution->balance > 0
+            && $contribution->year * 100 + $contribution->month <= $maximumPeriod)->values();
 
         $resolve = function (int $year, int $month) use ($existing, $membership): Contribution {
             $key = $this->periodKey($year, $month);
@@ -75,7 +81,6 @@ class PaymentAllocationPreview
         if ($remaining > 0) {
             $last = $pending->last() ?? throw new LogicException('A pending contribution is required for allocation.');
             $cursor = Carbon::createFromDate($last->year, $last->month, 1)->startOfMonth()->addMonth();
-            $maximum = now()->startOfMonth()->addMonths(6);
             while ($cursor->lte($maximum)) {
                 $remaining = $apply($resolve($cursor->year, $cursor->month), $remaining);
                 if ($remaining === 0) {
