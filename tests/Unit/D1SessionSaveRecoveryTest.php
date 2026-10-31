@@ -175,7 +175,7 @@ it('reports a recovered production session to Nightwatch without relying on the 
     expect($this->handler->read($this->id))->toBe('updated');
 })->with(['monitor available' => false, 'monitor unavailable' => true]);
 
-it('passes a recovered production session notice through the real Nightwatch channel', function (): void {
+it('sends a recovered production session notice through the real Nightwatch channel and ingest', function (): void {
     $this->app['env'] = 'production';
     config(['app.debug' => false, 'd1-production.enabled' => true, 'd1-staging.enabled' => false, 'nightwatch.enabled' => true]);
     $this->url = D1RuntimeProfile::PRODUCTION_URL;
@@ -190,13 +190,29 @@ it('passes a recovered production session notice through the real Nightwatch cha
     if (! $ingest instanceof Ingest) {
         throw new RuntimeException('Expected the installed Nightwatch ingest.');
     }
-    $ingest->shouldDigestWhenBufferIsFull(false);
     $ingest->flush();
     $core->config['enabled'] = true;
+    $core->sample(1.0);
+    $sockets = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+    if ($sockets === false) {
+        throw new RuntimeException('Could not create the isolated Nightwatch connection.');
+    }
+    fwrite($sockets[1], '2:OK');
+    $ingest->streamFactory = static fn (): mixed => $sockets[0];
 
     expect($this->handler->write($this->id, 'updated'))->toBeTrue();
-    $records = json_decode($ingest->buffer->pull('synthetic')->rawPayload(), true, flags: JSON_THROW_ON_ERROR);
+    $core->digest();
     $core->config['enabled'] = false;
+    $wire = stream_get_contents($sockets[1]);
+    fclose($sockets[1]);
+    if (! is_string($wire)) {
+        throw new RuntimeException('Could not read the isolated Nightwatch connection.');
+    }
+    $frame = explode(':', $wire, 4);
+    if (count($frame) !== 4) {
+        throw new RuntimeException('Expected a Nightwatch payload frame.');
+    }
+    $records = json_decode($frame[3], true, flags: JSON_THROW_ON_ERROR);
     if (! is_array($records)) {
         throw new RuntimeException('Expected Nightwatch records.');
     }
