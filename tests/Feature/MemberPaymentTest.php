@@ -450,6 +450,32 @@ it('rejects initiation when no unpaid contributions are selected', function () {
         ->assertJson(['message' => 'No unpaid contributions selected.']);
 });
 
+it('does not initiate checkout for a mixed selection containing an unavailable contribution', function (string $case) {
+    Http::fake();
+    $family = Family::factory()->create([
+        'bank_name' => 'Kuda Bank', 'bank_code' => '090267', 'account_number' => '1234567890',
+    ]);
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $valid = Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
+    $otherFamily = $case === 'family' ? Family::factory()->create() : $family;
+    $owner = $case === 'member'
+        ? User::factory()->member()->employed()->create(['family_id' => $family->id])
+        : $member;
+    $unavailable = Contribution::factory()->create([
+        'family_id' => $otherFamily->id, 'user_id' => $owner->id,
+        'year' => now()->copy()->startOfMonth()->addMonth()->year,
+        'month' => now()->copy()->startOfMonth()->addMonth()->month,
+        'expected_amount' => $case === 'paid' ? 0 : 4000,
+    ]);
+
+    $this->actingAs($member)->postJson(route('pay.initiate'), ['contribution_ids' => [$valid->id, $unavailable->id]])
+        ->assertUnprocessable()
+        ->assertJson(['message' => 'Some selected contributions are no longer available. Refresh and try again.']);
+
+    expect(PaystackTransaction::count())->toBe(0);
+    Http::assertNothingSent();
+})->with(['member', 'family', 'paid']);
+
 it('rejects initiation with contribution ids from another family', function () {
     Http::fake([
         'api.paystack.co/transaction/initialize' => Http::response([
@@ -537,6 +563,31 @@ it('rejects initiation when selected contributions become paid during calculatio
         ])
         ->assertUnprocessable()
         ->assertJson(['message' => 'Selected contributions are already paid.']);
+});
+
+it('does not initiate a reduced checkout when one of several selections becomes paid during calculation', function () {
+    Http::fake();
+    $family = Family::factory()->create([
+        'bank_name' => 'Kuda Bank', 'bank_code' => '090267', 'account_number' => '1234567890',
+    ]);
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $first = Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
+    $nextMonth = now()->startOfMonth()->addMonth();
+    $second = Contribution::factory()->forUser($member)->forMonth($nextMonth->year, $nextMonth->month)->create(['expected_amount' => 4000]);
+    $simulateRace = true;
+    Contribution::retrieved(function (Contribution $retrieved) use (&$simulateRace, $second, $member): void {
+        if ($simulateRace && $retrieved->id === $second->id) {
+            $simulateRace = false;
+            Payment::factory()->forContribution($retrieved)->recordedBy($member)->create(['amount' => 4000]);
+        }
+    });
+
+    $this->actingAs($member)->postJson(route('pay.initiate'), ['contribution_ids' => [$first->id, $second->id]])
+        ->assertUnprocessable()
+        ->assertJson(['message' => 'Some selected contributions are no longer available. Refresh and try again.']);
+
+    expect(PaystackTransaction::count())->toBe(0);
+    Http::assertNothingSent();
 });
 
 it('redirects callbacks without a reference', function () {

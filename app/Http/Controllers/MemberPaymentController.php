@@ -85,7 +85,7 @@ class MemberPaymentController extends Controller
             ], 422);
         }
 
-        $contributionIds = $this->integerList($validated['contribution_ids'] ?? []);
+        $contributionIds = array_values(array_unique($this->integerList($validated['contribution_ids'] ?? [])));
 
         // Calculate total from selected contributions
         $contributions = $user->contributions()
@@ -100,7 +100,16 @@ class MemberPaymentController extends Controller
             ], 422);
         }
 
-        $totalAmount = (int) $contributions->sum(fn (Contribution $contribution): int => $contribution->balance);
+        if ($contributions->count() !== count($contributionIds)) {
+            return response()->json(['message' => 'Some selected contributions are no longer available. Refresh and try again.'], 422);
+        }
+
+        $balances = $contributions->map(fn (Contribution $contribution): int => $contribution->balance);
+        if ($balances->contains(fn (int $balance): bool => $balance <= 0) && $balances->contains(fn (int $balance): bool => $balance > 0)) {
+            return response()->json(['message' => 'Some selected contributions are no longer available. Refresh and try again.'], 422);
+        }
+
+        $totalAmount = $balances->reduce(fn (int $total, int $balance): int => $total + $balance, 0);
 
         if ($totalAmount <= 0) {
             return response()->json([
