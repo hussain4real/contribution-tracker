@@ -1,22 +1,25 @@
 import assert from 'node:assert/strict';
-import {createHash} from 'node:crypto';
+import {createHash, createHmac} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
 import test from 'node:test';
-import {productionBackupPrefix, sealProductionBackup} from './production-backup.mjs';
+import {pendingProductionWebhookReferences, productionBackupPrefix, sealProductionBackup} from './production-backup.mjs';
 import {restoreProductionCheckpoint} from './production-isolated-restore.mjs';
+import {relayProductionWebhooks} from './production-webhooks.mjs';
 
 function bucket() {
     const data = new Map(), metadata = new Map();
     return {data, async list({prefix = ''}) { return {objects: [...data.keys()].filter(key => key.startsWith(prefix)).map(key => ({key})), truncated: false}; },
         async get(key) { const value = data.get(key); if (value === undefined) return null; const bytes = typeof value === 'string' ? new TextEncoder().encode(value) : value;
-            return {size: bytes.length, ...metadata.get(key), arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)}; },
+            return {size: bytes.length, ...metadata.get(key), text: async () => new TextDecoder().decode(bytes), arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)}; },
         async put(key, value, options = {}) { if (options.onlyIf?.etagDoesNotMatch === '*' && data.has(key)) return null;
-            data.set(key, value); metadata.set(key, {httpMetadata: options.httpMetadata, customMetadata: options.customMetadata}); return {key}; }};
+            data.set(key, value); metadata.set(key, {httpMetadata: options.httpMetadata, customMetadata: options.customMetadata}); return {key}; },
+        async delete(key) { data.delete(key); metadata.delete(key); }};
 }
 
 function target(db) {
     return {prepare(sql) { return {sql, values: [], bind(...values) { this.values = values; return this; },
-        async first() { return db.prepare(sql).get(...this.values); }, async all() { return {results: db.prepare(sql).all(...this.values)}; }}; },
+        async first() { return db.prepare(sql).get(...this.values); }, async all() { return {results: db.prepare(sql).all(...this.values)}; },
+        async run() { return db.prepare(sql).run(...this.values); }}; },
     async batch(statements) { db.exec('begin'); try { const result = []; for (const statement of statements) result.push(await statement.all()); db.exec('commit'); return result;
     } catch (error) { db.exec('rollback'); throw error; } }};
 }
@@ -33,8 +36,10 @@ async function fixture() {
     schema.push({type: 'index', name: 'users_id_index', tbl_name: 'users', sql: 'CREATE INDEX users_id_index on users(id)'});
     const tables = Object.fromEntries(names.map(name => [name, []]));
     tables.families = [{id: 7}]; tables.users = [{id: 8}];
-    const raw = 'synthetic webhook', webhookSha = createHash('sha256').update(raw).digest('hex');
-    const bytes = new TextEncoder().encode(JSON.stringify({provider: 'paystack', raw, signature: 'synthetic'}));
+    const raw = JSON.stringify({event: 'charge.success', data: {domain: 'live', reference: 'synthetic-recovery'}});
+    const webhookSha = createHash('sha256').update(raw).digest('hex');
+    const signature = createHmac('sha512', 'sk_live_synthetic_fixture').update(raw).digest('hex');
+    const bytes = new TextEncoder().encode(JSON.stringify({provider: 'paystack', raw, signature}));
     const sha = createHash('sha256').update(bytes).digest('hex');
     const path = `private/webhook-inbox/paystack/${webhookSha}.json`, fileKey = prefix + `files/${sha}.json.aes-gcm`;
     tables.d1_runtime_webhook_inbox = [{id: `paystack:${webhookSha}`, object_key: path, accepted_at: null}];
@@ -99,5 +104,26 @@ test('preserves competing recovery files when a conditional write loses a race',
         await assert.rejects(restoreProductionCheckpoint(f.env, f.checkpoint), /recovery file already exists/i);
         assert.equal(f.env.RECOVERY_FILES.data.get(f.path), 'competing evidence');
         assert.equal(f.db.prepare('select count(*) n from families').get().n, 1);
+    } finally { f.db.close(); }
+});
+
+test('relays a restored signed webhook once when its reference is reconstructed twice', async () => {
+    const f = await fixture();
+    try {
+        await restoreProductionCheckpoint(f.env, f.checkpoint);
+        const rows = (await f.env.RECOVERY_DB.prepare('select id,object_key,accepted_at from d1_runtime_webhook_inbox').all()).results;
+        const [reference] = pendingProductionWebhookReferences(rows);
+        let forwarded = 0, acknowledged = 0, retried = 0;
+        const env = {DB: f.env.RECOVERY_DB, FILES: f.env.RECOVERY_FILES, WEBHOOKS_ENABLED: 'true', DATABASE_NAME: 'familyfunds-production',
+            WEBHOOK_SECRETS: JSON.stringify({paystack_secret: 'sk_live_synthetic_fixture', meta_app_id: '26405719292393073', meta_app_secret: 'synthetic', meta_waba: 'synthetic', meta_phone: 'synthetic', meta_verify_token: 'synthetic'}),
+            RELAY_TOKEN: 'r'.repeat(40), PRODUCTION_CONTAINER: {getByName: () => ({fetch: async () => { forwarded++; return new Response('accepted', {status: 202}); }})}};
+        const message = {id: 'synthetic-recovery', body: reference, ack: () => acknowledged++, retry: () => retried++};
+        await relayProductionWebhooks({messages: [message]}, env);
+        await relayProductionWebhooks({messages: [message]}, env);
+        assert.equal(forwarded, 1);
+        assert.equal(acknowledged, 2);
+        assert.equal(retried, 0);
+        assert.equal(f.env.RECOVERY_FILES.data.size, 0);
+        assert.deepEqual(pendingProductionWebhookReferences((await env.DB.prepare('select id,object_key,accepted_at from d1_runtime_webhook_inbox').all()).results), []);
     } finally { f.db.close(); }
 });
