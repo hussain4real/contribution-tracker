@@ -102,6 +102,19 @@ test('only staging images configure the private FPM status listener and block it
     assert.ok(packagedAssets.some(asset => asset.path.endsWith('/staging-fpm-status.php')));
 });
 
+test('staging queue startup can be disabled without affecting the production default', () => {
+    const entrypoint = readFileSync(new URL('./container-slim-entrypoint.sh', import.meta.url), 'utf8')
+        .replace('set -eu', 'set -eu\nphp() { :; }')
+        .replace('mkdir -p /run/nginx /run/php', ':')
+        .replace('exec /usr/bin/supervisord -c /etc/supervisord.conf', 'printf "%s" "$STAGING_QUEUE_WORKER_ENABLED"');
+    const run = env => spawnSync('/bin/sh', ['-c', entrypoint], {encoding: 'utf8', env: {PATH: process.env.PATH, ...env}});
+    const staging = {APP_ENV: 'd1-staging', D1_STAGING_ENABLED: 'true'};
+    assert.equal(run(staging).stdout, 'true');
+    assert.equal(run({...staging, STAGING_QUEUE_WORKER_ENABLED: 'false'}).stdout, 'false');
+    assert.equal(run({...staging, STAGING_QUEUE_WORKER_ENABLED: 'invalid'}).status, 64);
+    assert.equal(run({APP_ENV: 'production', STAGING_QUEUE_WORKER_ENABLED: 'false'}).stdout, 'true');
+});
+
 test("runtime diagnostics require both existing staging credentials", async () => {
     const {handler, env, commands} = fixture();
     for (const headers of [{}, {Authorization: "Basic fixture"}, {Authorization: "Basic fixture", "X-Staging-Admin": "wrong"}]) {
