@@ -21,8 +21,10 @@ function fixture(assets = [{path: "/var/www/html/deployment/d1-proof/container-n
         crypto: {subtle: {timingSafeEqual, importKey: webcrypto.subtle.importKey.bind(webcrypto.subtle), verify: webcrypto.subtle.verify.bind(webcrypto.subtle)}},
     });
     const commands = [];
+    const stored = new Map();
     const ctx = {
         blockConcurrencyWhile: callback => callback(),
+        storage: {get: async key => stored.get(key), put: async (key, value) => { stored.set(key, value); }},
         container: {
             running: true, setInactivityTimeout: async () => {},
             inspect: async () => ({image: "registry.example/staging@sha256:fixture", labels: {}}),
@@ -43,7 +45,7 @@ function fixture(assets = [{path: "/var/www/html/deployment/d1-proof/container-n
         meta_waba: "fixture-waba", meta_phone: "fixture-phone", recipient: "97400000000"};
     env.STAGING_WEBHOOK_SECRETS = JSON.stringify(webhook);
     env.STAGING_WEBHOOK_QUEUE = {send: async record => queued.push(record)};
-    return {handler, container, env, commands, queued, webhook};
+    return {handler, container, env, commands, queued, webhook, stored};
 }
 
 function signedRecord(provider, payload, config) {
@@ -169,6 +171,86 @@ test('staging inspection reports a running maintenance command and clears it aft
     f.container.ctx.container.exec = async () => { throw new Error('Synthetic command failure'); };
     await assert.rejects(f.container.scheduledProof('generate', 50, '2026-01-01T00:00:00.000Z'));
     assert.equal((await f.container.inspect()).activity.maintenance_rpcs, 0);
+});
+
+test('staging admission pause requires both credentials and persists across object reconstruction', async () => {
+    const f = fixture();
+    f.env.STAGING_ADMISSION_CONTROL = '1';
+    const Container = f.container.constructor;
+    const container = new Container(f.container.ctx, f.env);
+    container.ready = true;
+    f.env.STAGING_CONTAINER = {getByName: () => container};
+    const request = headers => new Request('https://staging.example/__staging_admin/pause-admission', {method: 'POST', headers});
+    assert.equal((await f.handler.fetch(request({}), f.env)).status, 401);
+    assert.equal((await f.handler.fetch(request({Authorization: 'Basic fixture'}), f.env)).status, 403);
+    const headers = {Authorization: 'Basic fixture', 'X-Staging-Admin': 'fixture-admin'};
+    const paused = await f.handler.fetch(request(headers), f.env);
+    assert.deepEqual(await paused.json(), {admission_paused: true});
+    assert.equal((await container.fetch(new Request('https://staging.example/payments'))).status, 503);
+    await assert.rejects(container.scheduledProof('generate', 50, '2026-01-01T00:00:00.000Z'), /admission is paused/);
+    await assert.rejects(container.restart(), /admission is paused/);
+
+    const restored = new Container(f.container.ctx, f.env);
+    restored.ready = true;
+    assert.equal((await restored.inspect()).admission_paused, true);
+    f.env.STAGING_CONTAINER = {getByName: () => restored};
+    const resumed = await f.handler.fetch(new Request('https://staging.example/__staging_admin/resume-admission', {method: 'POST', headers}), f.env);
+    assert.deepEqual(await resumed.json(), {admission_paused: false});
+    assert.equal(await (await restored.fetch(new Request('https://staging.example/payments'))).text(), 'application body');
+});
+
+test('staging admission pause prevents queued and starting requests from reaching the container', async () => {
+    const f = fixture();
+    const Container = f.container.constructor;
+    const container = new Container(f.container.ctx, {...f.env, STAGING_ADMISSION_CONTROL: '1'});
+    container.ready = true;
+    container.requestLimit = 1;
+    const first = await container.fetch(new Request('https://staging.example/payments'));
+    const waiting = container.fetch(new Request('https://staging.example/payments'));
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal((await container.inspect()).activity.waiting_requests, 1);
+    await container.setAdmissionPaused(true);
+    await first.text();
+    assert.equal((await waiting).status, 503);
+    assert.equal((await container.inspect()).activity.request_slots, 0);
+
+    await container.setAdmissionPaused(false);
+    container.ready = false;
+    let finish;
+    container.waitForReady = async () => { await new Promise(resolve => { finish = resolve; }); container.ready = true; };
+    const starting = container.fetch(new Request('https://staging.example/payments'));
+    await new Promise(resolve => setImmediate(resolve));
+    await container.setAdmissionPaused(true);
+    finish();
+    assert.equal((await starting).status, 503);
+});
+
+test('staging admission control stays closed on a failed pause write and is unavailable in production', async () => {
+    const f = fixture();
+    const Container = f.container.constructor;
+    const container = new Container(f.container.ctx, {...f.env, STAGING_ADMISSION_CONTROL: '1'});
+    container.ready = true;
+    await container.admissionReady;
+    f.container.ctx.storage.put = async () => { throw new Error('Synthetic storage failure'); };
+    await assert.rejects(container.setAdmissionPaused(true), /storage failure/);
+    assert.equal((await container.fetch(new Request('https://staging.example/payments'))).status, 503);
+    const production = new Container(f.container.ctx, {...f.env, RUNTIME_PROFILE: 'production', STAGING_ADMISSION_CONTROL: '1'});
+    await assert.rejects(production.setAdmissionPaused(true), /control is disabled/);
+});
+
+test('staging inspection reports a restart already in progress after admission is paused', async () => {
+    const f = fixture();
+    const Container = f.container.constructor;
+    const container = new Container(f.container.ctx, {...f.env, STAGING_ADMISSION_CONTROL: '1'});
+    let finish;
+    container.ctx.container.destroy = () => new Promise(resolve => { finish = resolve; });
+    const restart = container.restart();
+    await new Promise(resolve => setImmediate(resolve));
+    await container.setAdmissionPaused(true);
+    assert.equal((await container.inspect()).restart_operations, 1);
+    finish();
+    await restart;
+    assert.equal((await container.inspect()).restart_operations, 0);
 });
 
 test("runtime diagnostics use fixed read-only programs", async () => {
