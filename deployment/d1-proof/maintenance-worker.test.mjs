@@ -180,6 +180,8 @@ test('an isolated empty recovery database restores and verifies a checkpoint wit
         source.exec('create table d1_staging_read_revision (id integer primary key, revision integer); insert into d1_staging_read_revision values (1,4)');
         source.exec('create trigger d1_read_revision_fixture_0_insert after insert on fixture_0 begin update d1_staging_read_revision set revision=revision+1 where id=1; end');
         const {env, objects, checkpointObjects, recoveryObjects, recoveryMetadata} = backupFixture();
+        let keyReads = 0;
+        env.BACKUP_APP_KEY = {get: async () => { keyReads++; return secret; }};
         env.DB = adapter(source);
         env.RECOVERY_DB = adapter(recovered);
         env.STAGING_BACKUP_ONLY_ENABLED = 'true';
@@ -215,7 +217,9 @@ test('an isolated empty recovery database restores and verifies a checkpoint wit
         assert.equal(recovered.prepare("select count(*) n from sqlite_master where type='table' and name not glob 'sqlite_*'").get().n, 0);
         checkpointObjects.set(fileKey, originalFile);
 
+        const keyReadsBeforeRestore = keyReads;
         const result = await restore.restore(checkpoint);
+        assert.equal(keyReads, keyReadsBeforeRestore + 1);
         assert.equal(result.status, 'passed');
         assert.equal(result.tables, 41);
         assert.equal(result.files, 1);
@@ -323,6 +327,22 @@ test('checkpoint encrypts application files', async () => {
     const encrypted = [...checkpointObjects.entries()].filter(([key]) => key.includes('/files/'));
     assert.equal(encrypted.length, 1);
     assert.doesNotMatch(encrypted[0][1], /synthetic report contents/);
+});
+
+test('checkpoint resolves a Secrets Store key once and rejects a missing key', async () => {
+    const {env, objects, checkpointObjects} = backupFixture();
+    env.STAGING_BACKUP_ONLY_ENABLED = 'true';
+    objects.set('private/reports/one.csv', 'one');
+    objects.set('private/reports/two.csv', 'two');
+    let keyReads = 0;
+    env.BACKUP_APP_KEY = {get: async () => { keyReads++; return secret; }};
+    const service = new StagingBackupOnly(env);
+    const result = await service.create('cutover-20261031t050000z');
+    assert.equal(result.files, 2);
+    assert.equal(keyReads, 1);
+    env.BACKUP_APP_KEY = {get: async () => null};
+    await assert.rejects(service.create('cutover-20261031t050001z'), /missing staging backup encryption key/i);
+    assert.equal(checkpointObjects.has('private/staging-backups/d1-web/checkpoints/cutover-20261031t050001z/claim'), false);
 });
 
 test('checkpoint refuses success when encrypted file readback is missing or corrupt', async () => {
