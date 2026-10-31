@@ -15,6 +15,30 @@ use Illuminate\Support\Facades\URL;
 use NotificationChannels\WebPush\WebPushChannel;
 
 describe('ContributionReminderNotification', function () {
+    it('does not deliver a queued reminder after the contribution is paid', function () {
+        $family = Family::factory()->create();
+        $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($user)->currentMonth()->create(['expected_amount' => 4000]);
+        $notification = (new ContributionReminderNotification($contribution))->onlyChannels(['database']);
+
+        Payment::factory()->forContribution($contribution)->create(['amount' => 4000]);
+        $user->notifyNow($notification);
+
+        expect($user->notifications()->count())->toBe(0);
+    });
+
+    it('uses the current balance when a partial payment arrives after a reminder is queued', function () {
+        $family = Family::factory()->create();
+        $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($user)->currentMonth()->create(['expected_amount' => 4000]);
+        $notification = (new ContributionReminderNotification($contribution))->onlyChannels(['database']);
+
+        Payment::factory()->forContribution($contribution)->create(['amount' => 1500]);
+        $user->notifyNow($notification);
+
+        expect($user->notifications()->sole()->data['amount_owed'])->toBe(2500);
+    });
+
     it('sends via mail, database, whatsapp, and web push channels', function () {
         $family = Family::factory()->create();
         $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
@@ -306,7 +330,7 @@ describe('ContributionReminderNotification', function () {
         $payload = $message->toArray();
         $data = resultArray($payload, 'data');
 
-        expect($payload['title'])->toBe('Contribution due soon')
+        expect($payload['title'])->toBe('Contribution reminder')
             ->and($payload['body'])->toContain($contribution->period_label)
             ->and($payload['body'])->toContain('Smith Family')
             ->and($payload['icon'])->toBe('/pwa-192x192.png')
@@ -330,7 +354,7 @@ describe('ContributionReminderNotification', function () {
         $payload = $notification->toWebPush($user, $notification)->toArray();
         $data = resultArray($payload, 'data');
 
-        expect($payload['title'])->toBe('Contribution due today')
+        expect($payload['title'])->toBe('Contribution follow-up')
             ->and($payload['tag'])->toBe("contribution-{$contribution->id}-follow_up")
             ->and($data['type'] ?? null)->toBe('follow_up');
     });

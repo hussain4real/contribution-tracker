@@ -6,6 +6,7 @@ use App\Http\Controllers\WhatsAppWebhookController;
 use App\Jobs\ProcessWhatsAppWebhook;
 use App\Models\User;
 use App\Models\WhatsAppMessage;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
@@ -182,6 +183,76 @@ describe('WhatsApp webhook handler (POST)', function () {
 });
 
 describe('ProcessWhatsAppWebhook job', function () {
+    it('can process a previously queued webhook without a retry counter', function () {
+        config(['queue.default' => 'database', 'queue.connections.database.connection' => null]);
+        $job = new ProcessWhatsAppWebhook(['entry' => [['changes' => [[
+            'field' => 'messages', 'value' => ['statuses' => [['id' => 'wamid.legacy', 'status' => 'delivered']]],
+        ]]]]]);
+        unset($job->statusRetryAttempt);
+        $restored = unserialize(serialize($job));
+        if (! $restored instanceof ProcessWhatsAppWebhook) {
+            throw new RuntimeException('Previously queued webhook could not be restored.');
+        }
+
+        $restored->handle();
+        expect(DB::table('jobs')->count())->toBe(1);
+    });
+
+    it('applies an early status after the outbound message is recorded without replaying inbound messages', function () {
+        config(['queue.default' => 'database', 'queue.connections.database.connection' => null]);
+        $this->freezeTime();
+        $payload = ['entry' => [['changes' => [['field' => 'messages', 'value' => [
+            'statuses' => [['id' => 'wamid.early', 'status' => 'delivered']],
+            'messages' => [['id' => 'wamid.inbound-once', 'from' => '2348012345678', 'type' => 'text', 'text' => ['body' => 'Hello']]],
+        ]]]]]];
+
+        (new ProcessWhatsAppWebhook($payload))->handle();
+        expect(DB::table('jobs')->count())->toBe(1)
+            ->and(DB::table('jobs')->value('payload'))->not->toContain('wamid.inbound-once')
+            ->and(WhatsAppMessage::query()->where('wa_message_id', 'wamid.inbound-once')->count())->toBe(1);
+        $outbound = WhatsAppMessage::factory()->create(['wa_message_id' => 'wamid.early', 'direction' => 'outbound', 'status' => 'sent']);
+        $this->travel(11)->seconds();
+        $this->artisan('queue:work', ['connection' => 'database', '--once' => true, '--sleep' => 0])->assertSuccessful();
+
+        expect($outbound->fresh()?->status)->toBe('delivered')
+            ->and(DB::table('jobs')->count())->toBe(0)
+            ->and(WhatsAppMessage::query()->where('wa_message_id', 'wamid.inbound-once')->count())->toBe(1);
+    });
+
+    it('stops retrying a status whose outbound message never appears', function () {
+        config(['queue.default' => 'database', 'queue.connections.database.connection' => null]);
+        $this->freezeTime();
+        $payload = ['entry' => [['changes' => [['field' => 'messages', 'value' => [
+            'statuses' => [['id' => 'wamid.unmatched', 'status' => 'failed']],
+        ]]]]]];
+        (new ProcessWhatsAppWebhook($payload))->handle();
+
+        foreach ([11, 31, 121] as $seconds) {
+            $this->travel($seconds)->seconds();
+            $this->artisan('queue:work', ['connection' => 'database', '--once' => true, '--sleep' => 0])->assertSuccessful();
+        }
+
+        expect(DB::table('jobs')->count())->toBe(0)
+            ->and(WhatsAppMessage::query()->where('wa_message_id', 'wamid.unmatched')->exists())->toBeFalse();
+    });
+
+    it('retries after a status queue failure without duplicating an earlier inbound message', function () {
+        config(['queue.default' => 'database', 'queue.connections.database.connection' => null]);
+        $job = new ProcessWhatsAppWebhook(['entry' => [['changes' => [
+            ['field' => 'messages', 'value' => ['messages' => [['id' => 'wamid.before-failure', 'from' => '2348012345678', 'type' => 'text', 'text' => ['body' => 'Hello']]]]],
+            ['field' => 'messages', 'value' => ['statuses' => [['id' => 'wamid.queue-failure', 'status' => 'delivered']]]],
+        ]]]]);
+        DB::statement("create trigger fail_whatsapp_status_retry before insert on jobs begin select raise(abort, 'queue unavailable'); end");
+
+        expect(fn () => $job->handle())->toThrow(QueryException::class);
+        expect(DB::table('jobs')->count())->toBe(0);
+
+        DB::statement('drop trigger fail_whatsapp_status_retry');
+        $job->handle();
+        expect(DB::table('jobs')->count())->toBe(1)
+            ->and(WhatsAppMessage::query()->where('wa_message_id', 'wamid.before-failure')->count())->toBe(1);
+    });
+
     it('ignores malformed entries and changes', function () {
         WhatsAppMessage::factory()->create([
             'wa_message_id' => 'wamid.unchanged',
@@ -246,6 +317,37 @@ describe('ProcessWhatsAppWebhook job', function () {
         expect($message->status)->toBe('delivered');
     });
 
+    it('preserves confirmed delivery when older status callbacks arrive later', function () {
+        $message = WhatsAppMessage::factory()->create([
+            'wa_message_id' => 'wamid.out-of-order', 'direction' => 'outbound', 'status' => 'sent',
+        ]);
+        $sendStatus = function (string $status): void {
+            (new ProcessWhatsAppWebhook(['entry' => [['changes' => [[
+                'field' => 'messages', 'value' => ['statuses' => [['id' => 'wamid.out-of-order', 'status' => $status]]],
+            ]]]]]))->handle();
+        };
+
+        $sendStatus('delivered');
+        $sendStatus('sent');
+        $sendStatus('failed');
+        expect($message->fresh()?->status)->toBe('delivered');
+        $sendStatus('read');
+        $sendStatus('delivered');
+        $sendStatus('sent');
+        expect($message->fresh()?->status)->toBe('read');
+    });
+
+    it('allows confirmed delivery to supersede a previous failure', function () {
+        $message = WhatsAppMessage::factory()->create([
+            'wa_message_id' => 'wamid.late-delivered', 'direction' => 'outbound', 'status' => 'failed',
+        ]);
+        (new ProcessWhatsAppWebhook(['entry' => [['changes' => [[
+            'field' => 'messages', 'value' => ['statuses' => [['id' => 'wamid.late-delivered', 'status' => 'delivered']]],
+        ]]]]]))->handle();
+
+        expect($message->fresh()?->status)->toBe('delivered');
+    });
+
     it('records the provider timestamp when an outbound message is read', function () {
         $readAt = now()->subMinute()->startOfSecond();
         $message = WhatsAppMessage::factory()->create([
@@ -308,7 +410,7 @@ describe('ProcessWhatsAppWebhook job', function () {
             ->and($message->error_message)->toBe('Message failed');
     });
 
-    it('logs outbound status update failures', function () {
+    it('reports outbound status update failures so the webhook can be retried', function () {
         $message = WhatsAppMessage::factory()->create([
             'wa_message_id' => 'wamid.update-fails',
             'direction' => 'outbound',
@@ -330,7 +432,7 @@ describe('ProcessWhatsAppWebhook job', function () {
             }
         });
 
-        (new ProcessWhatsAppWebhook([
+        $job = new ProcessWhatsAppWebhook([
             'entry' => [[
                 'changes' => [[
                     'field' => 'messages',
@@ -342,7 +444,9 @@ describe('ProcessWhatsAppWebhook job', function () {
                     ],
                 ]],
             ]],
-        ]))->handle();
+        ]);
+
+        expect(fn () => $job->handle())->toThrow(RuntimeException::class, 'update failed');
 
         $shouldThrowOnUpdate->enabled = false;
 

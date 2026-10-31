@@ -10,6 +10,7 @@ use App\Jobs\SendPaymentReceipt;
 use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\FamilyMembership;
+use App\Models\FinancialReversal;
 use App\Models\Payment;
 use App\Models\PaymentBatch;
 use App\Models\User;
@@ -18,6 +19,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
 class PaymentAllocationService
@@ -49,6 +51,7 @@ class PaymentAllocationService
         )->allocations;
     }
 
+    /** @param list<array{year: int, month: int, period: string, amount: int}>|null $expectedAllocations */
     public function createBatch(
         User $member,
         int $amount,
@@ -63,6 +66,8 @@ class PaymentAllocationService
         ?string $reference = null,
         ?string $idempotencyKey = null,
         ?PaymentBatch $replaces = null,
+        ?array $expectedAllocations = null,
+        ?int $reviewExpiresAt = null,
     ): PaymentBatch {
         $family ??= $recordedBy->currentFamily ?? $recordedBy->family;
 
@@ -90,18 +95,30 @@ class PaymentAllocationService
             $reference,
             $idempotencyKey,
             $replaces,
+            $expectedAllocations,
+            $reviewExpiresAt,
         ): PaymentBatch {
-            $existing = PaymentBatch::query()
-                ->where('family_id', $family->id)
+            $lockedFamily = Family::query()->lockForUpdate()->findOrFail($family->id);
+            $existing = PaymentBatch::query()->where('family_id', $family->id)
                 ->where('idempotency_key', $idempotencyKey)
-                ->with('allocations')
-                ->first();
-
+                ->lockForUpdate()->first();
             if ($existing instanceof PaymentBatch) {
+                $existing->setRelation('allocations', $existing->allocations()->lockForUpdate()->get());
+                if ($expectedAllocations !== null) {
+                    $this->verifyReviewedReplay($existing, $member, $amount, $paidAt, $recordedBy, $method, $reference, $notes, $expectedAllocations);
+                }
+
                 return $existing;
             }
-
-            $lockedFamily = Family::query()->lockForUpdate()->findOrFail($family->id);
+            if ($reviewExpiresAt !== null && $reviewExpiresAt < now()->timestamp) {
+                throw ValidationException::withMessages(['review' => 'The payment details changed or the review expired. Review it again.']);
+            }
+            if ($targetYear !== null && $targetMonth !== null) {
+                $maximumAdvanceDate = now()->startOfMonth()->addMonths(6);
+                if (($targetYear * 12) + $targetMonth > ($maximumAdvanceDate->year * 12) + $maximumAdvanceDate->month) {
+                    throw new InvalidArgumentException('The payment exceeds the six-month advance-payment limit.');
+                }
+            }
             $membership = FamilyMembership::query()
                 ->where('family_id', $lockedFamily->id)
                 ->where('user_id', $member->id)
@@ -121,7 +138,9 @@ class PaymentAllocationService
 
             $maximumReceiptNumber = PaymentBatch::query()
                 ->where('family_id', $lockedFamily->id)
-                ->max('receipt_number');
+                ->orderByDesc('receipt_number')
+                ->lockForUpdate()
+                ->value('receipt_number');
             $nextReceiptNumber = is_numeric($maximumReceiptNumber)
                 ? ((int) $maximumReceiptNumber) + 1
                 : 1;
@@ -159,7 +178,27 @@ class PaymentAllocationService
                 throw new InvalidArgumentException('The payment exceeds the six-month advance-payment limit.');
             }
 
+            if ($expectedAllocations !== null) {
+                $actualAllocations = array_values($batch->allocations()->with('contribution')->get()->map(function (Payment $payment): array {
+                    $contribution = $payment->contribution;
+                    if (! $contribution instanceof Contribution) {
+                        throw new InvalidArgumentException('The payment allocation has no contribution.');
+                    }
+
+                    return ['year' => $contribution->year, 'month' => $contribution->month,
+                        'period' => $contribution->period_label, 'amount' => $payment->amount];
+                })->all());
+                if (! $this->allocationsMatch($actualAllocations, $expectedAllocations)) {
+                    throw ValidationException::withMessages(['review' => 'Contribution balances changed. Review the payment again before recording it.']);
+                }
+            }
+
             if ($source !== PaymentSource::Backfill) {
+                $batch->receiptDeliveries()->create(['channel' => 'mail', 'status' => 'queued']);
+                $batch->receiptDeliveries()->create([
+                    'channel' => 'whatsapp',
+                    'status' => $member->hasVerifiedWhatsApp() ? 'queued' : 'unavailable',
+                ]);
                 SendPaymentReceipt::dispatch($batch->id, $member->id, 'mail');
 
                 if ($member->hasVerifiedWhatsApp()) {
@@ -169,6 +208,44 @@ class PaymentAllocationService
 
             return $batch->load('allocations');
         }, 3);
+    }
+
+    /** @param list<array{year: int, month: int, period: string, amount: int}> $expectedAllocations */
+    private function verifyReviewedReplay(PaymentBatch $batch, User $member, int $amount, DateTimeInterface|string $paidAt, User $recordedBy, PaymentMethod $method, ?string $reference, ?string $notes, array $expectedAllocations): void
+    {
+        $matches = $batch->membership?->user_id === $member->id && $batch->total_amount === $amount
+            && $batch->paid_at->toDateString() === Carbon::parse($paidAt)->toDateString()
+            && $batch->recorded_by === $recordedBy->id && $batch->method === $method
+            && $batch->reference === $reference && $batch->notes === $notes;
+        $allocations = $batch->allocations()->lockForUpdate()->get();
+        $contributions = Contribution::query()->whereIntegerInRaw('id', $allocations->pluck('contribution_id')->all())
+            ->lockForUpdate()->get()->keyBy('id');
+        $actual = array_values($allocations->map(function (Payment $payment) use ($contributions): array {
+            $contribution = $contributions->get($payment->contribution_id);
+            if (! $contribution instanceof Contribution) {
+                throw new InvalidArgumentException('The payment allocation has no contribution.');
+            }
+
+            return ['year' => $contribution->year, 'month' => $contribution->month,
+                'period' => $contribution->period_label, 'amount' => $payment->amount];
+        })->all());
+        if (! $matches || ! $this->allocationsMatch($actual, $expectedAllocations)) {
+            throw ValidationException::withMessages(['review' => 'This payment request key was already used for different details.']);
+        }
+    }
+
+    /**
+     * @param  list<array{year: int, month: int, period: string, amount: int}>  $actual
+     * @param  list<array{year: int, month: int, period: string, amount: int}>  $expected
+     */
+    private function allocationsMatch(array $actual, array $expected): bool
+    {
+        $compare = fn (array $left, array $right): int => [$left['year'], $left['month'], $left['period'], $left['amount']]
+            <=> [$right['year'], $right['month'], $right['period'], $right['amount']];
+        usort($actual, $compare);
+        usort($expected, $compare);
+
+        return $actual === $expected;
     }
 
     private function allocateToContributions(
@@ -185,27 +262,36 @@ class PaymentAllocationService
         ?PaymentBatch $replaces,
     ): int {
         $remainingAmount = $amount;
-        $contributions = Contribution::query()
+        $allContributions = Contribution::query()
             ->forUser($member)
             ->where('family_id', $family->id)
-            ->where(function ($query) use ($replaces): void {
-                $query->incomplete();
-
-                if ($replaces instanceof PaymentBatch) {
-                    $query->orWhereIn(
-                        'id',
-                        Payment::query()
-                            ->where('payment_batch_id', $replaces->id)
-                            ->select('contribution_id'),
-                    );
-                }
-            })
             ->oldestFirst()
             ->lockForUpdate()
             ->get();
+        $allPayments = Payment::query()
+            ->whereIntegerInRaw('contribution_id', $allContributions->modelKeys())
+            ->lockForUpdate()
+            ->get();
+        $batchIds = $allPayments->map(fn (Payment $payment): ?int => $payment->payment_batch_id)
+            ->filter(fn (?int $id): bool => $id !== null)->unique()->all();
+        $existingBatchIds = PaymentBatch::query()->whereIntegerInRaw('id', $batchIds)->lockForUpdate()->pluck('id');
+        $reversedBatchIds = FinancialReversal::query()->where('reversible_type', PaymentBatch::MORPH_TYPE)
+            ->whereIntegerInRaw('reversible_id', $batchIds)->lockForUpdate()->pluck('reversible_id');
+        $payments = $allPayments->filter(fn (Payment $payment): bool => $payment->payment_batch_id === null
+            || ($existingBatchIds->contains($payment->payment_batch_id) && ! $reversedBatchIds->contains($payment->payment_batch_id)))
+            ->groupBy('contribution_id');
+        $replacedContributions = $replaces instanceof PaymentBatch
+            ? $replaces->allocations()->lockForUpdate()->pluck('contribution_id')->all()
+            : [];
+        $contributions = $allContributions->filter(function (Contribution $contribution) use ($payments, $replacedContributions): bool {
+            $contribution->setRelation('payments', $payments->get($contribution->id, new \Illuminate\Database\Eloquent\Collection));
+
+            return $contribution->balance > 0 || in_array($contribution->id, $replacedContributions, true);
+        });
 
         if ($targetYear !== null && $targetMonth !== null) {
-            $target = $this->findOrCreateContribution($member, $family, $membership, $targetYear, $targetMonth);
+            $target = $allContributions->first(fn (Contribution $contribution): bool => $contribution->year === $targetYear && $contribution->month === $targetMonth)
+                ?? $this->findOrCreateContribution($member, $family, $membership, $targetYear, $targetMonth);
 
             if (! $target->isPaid() && ! $contributions->contains('id', $target->id)) {
                 $contributions->push($target);
@@ -213,13 +299,10 @@ class PaymentAllocationService
         }
 
         if ($contributions->isEmpty()) {
-            $contributions->push($this->findOrCreateContribution(
-                $member,
-                $family,
-                $membership,
-                $targetYear ?? now()->year,
-                $targetMonth ?? now()->month,
-            ));
+            $year = $targetYear ?? now()->year;
+            $month = $targetMonth ?? now()->month;
+            $contributions->push($allContributions->first(fn (Contribution $contribution): bool => $contribution->year === $year && $contribution->month === $month)
+                ?? $this->findOrCreateContribution($member, $family, $membership, $year, $month));
         }
 
         $contributions = $contributions
@@ -244,16 +327,11 @@ class PaymentAllocationService
 
         $lastContribution = $contributions->reverse()->firstOrFail();
         $cursor = Carbon::createFromDate($lastContribution->year, $lastContribution->month, 1)->startOfMonth()->addMonth();
-        $maximumAdvanceDate = now()->addMonths(6)->startOfMonth();
+        $maximumAdvanceDate = now()->startOfMonth()->addMonths(6);
 
         while ($remainingAmount > 0 && $cursor->lte($maximumAdvanceDate)) {
-            $contribution = $this->findOrCreateContribution(
-                $member,
-                $family,
-                $membership,
-                $cursor->year,
-                $cursor->month,
-            );
+            $contribution = $allContributions->first(fn (Contribution $item): bool => $item->year === $cursor->year && $item->month === $cursor->month)
+                ?? $this->findOrCreateContribution($member, $family, $membership, $cursor->year, $cursor->month);
             $remainingAmount = $this->allocateLine(
                 $batch,
                 $contribution,
@@ -278,9 +356,8 @@ class PaymentAllocationService
         ?string $notes,
         ?PaymentBatch $replaces,
     ): int {
-        $contribution->unsetRelation('payments');
         $replacedAmount = $replaces instanceof PaymentBatch
-            ? (int) $replaces->allocations()->where('contribution_id', $contribution->id)->sum('amount')
+            ? $replaces->allocations()->where('contribution_id', $contribution->id)->lockForUpdate()->get()->sum(fn (Payment $payment): int => $payment->amount)
             : 0;
         $amountToApply = min($remainingAmount, $contribution->balance + $replacedAmount);
 

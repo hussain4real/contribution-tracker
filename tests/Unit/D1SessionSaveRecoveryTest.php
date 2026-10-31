@@ -14,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Session\EncryptedStore;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
@@ -114,6 +115,7 @@ it('recovers a committed encrypted session after its response is lost without an
     $store->setId($this->id);
     $store->start();
     $store->put('login_user', 'synthetic-user');
+    Log::shouldReceive('notice')->once()->with('D1 session save recovered', ['strategy' => 'verified_committed']);
     $this->failure->phase = 'after';
     $store->save();
     expect($this->upserts)->toBe(1)->and($this->recoveries)->toBe(0);
@@ -128,10 +130,23 @@ it('recovers a save that did not commit only while the original session is uncha
     $this->handler->write($this->id, 'original');
     expect($this->handler->read($this->id))->toBe('original');
     $this->failure->phase = 'before';
+    Log::shouldReceive('notice')->once()->with('D1 session save recovered', ['strategy' => 'updated_unchanged']);
     expect($this->handler->write($this->id, 'updated'))->toBeTrue();
     $this->failure = new D1SessionSaveFailure;
     expect($this->handler->read($this->id))->toBe('updated');
     expect($this->upserts)->toBe(2)->and($this->recoveries)->toBe(1);
+});
+
+it('keeps a recovered session when the diagnostic logger fails', function (): void {
+    $this->handler->write($this->id, 'original');
+    expect($this->handler->read($this->id))->toBe('original');
+    $this->failure->phase = 'before';
+    Log::shouldReceive('notice')->once()->with('D1 session save recovered', ['strategy' => 'updated_unchanged'])
+        ->andThrow(new RuntimeException('Synthetic logging failure'));
+
+    expect($this->handler->write($this->id, 'updated'))->toBeTrue();
+    $this->failure = new D1SessionSaveFailure;
+    expect($this->handler->read($this->id))->toBe('updated');
 });
 
 it('does not recreate a new uncommitted session after a timeout', function (): void {

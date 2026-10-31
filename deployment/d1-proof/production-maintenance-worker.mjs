@@ -10,14 +10,24 @@ export function productionCalendarTasks(at, families, startMonth) {
     const start = new Date(startMonth + "-01T00:00:00Z");
     if (!Number.isFinite(start.getTime()) || at.getTime() - start.getTime() > 3660 * 86400000) throw new Error("Production calendar catch-up exceeds its audit window");
     const tasks = [];
-    for (const family of families) {
+    for (const row of families) {
+        const family = typeof row === 'number' ? row : row.id;
         if (!Number.isSafeInteger(family) || family < 1) throw new Error("Invalid production family");
         for (const month = new Date(start); month <= at; month.setUTCMonth(month.getUTCMonth() + 1)) {
             const period = month.toISOString().slice(0, 7);
             tasks.push({id: `generate:${period}:${family}`, kind: "generate", family_id: family, at: `${period}-01T00:00:00.000Z`});
-            for (const day of [25, 28]) {
-                const due = `${period}-${day}T08:00:00.000Z`;
-                if (new Date(due) <= at) tasks.push({id: `remind${day}:${period}:${family}`, kind: `remind${day}`, family_id: family, at: due});
+            const raw = typeof row === 'number' ? null : row.reminder_settings;
+            const settings = raw ? JSON.parse(raw) : null;
+            const revisions = settings ? [...(Array.isArray(settings.history) ? settings.history : []), settings] : [];
+            const configured = revisions.filter(revision => revision && typeof revision.effective_from === 'string' && period >= revision.effective_from)
+                .sort((a, b) => b.effective_from.localeCompare(a.effective_from))[0];
+            const first = configured ? configured.reminder_day : 25;
+            const second = configured ? configured.follow_up_day : 28;
+            const time = configured ? configured.time : '08:00';
+            if (!Number.isInteger(first) || first < 1 || first > 28 || !Number.isInteger(second) || second <= first || second > 28 || typeof time !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new Error('Invalid family reminder schedule');
+            for (const [kind, day] of [['remind25', first], ['remind28', second]]) {
+                const due = `${period}-${String(day).padStart(2, '0')}T${time}:00.000Z`;
+                if (new Date(due) <= at) tasks.push({id: `${kind}:${period}:${family}`, kind, family_id: family, at: due});
             }
         }
     }
@@ -66,7 +76,7 @@ export default {
         const saved = state ? JSON.parse(state.details) : {cursor: 0, month: env.SCHEDULE_START_MONTH};
         const cursor = saved.cursor;
         if (!Number.isSafeInteger(cursor) || cursor < 0) throw new Error("Invalid production family cursor");
-        const families = (await env.DB.prepare("select id from families where id>? order by id limit 50").bind(cursor).all()).results.map(row => row.id);
+        const families = (await env.DB.prepare("select id,reminder_settings from families where id>? order by id limit 50").bind(cursor).all()).results;
         const currentMonth = at.toISOString().slice(0, 7);
         if (typeof saved.month !== "string" || !/^\d{4}-\d{2}$/.test(saved.month) || saved.month > currentMonth) throw new Error("Invalid production calendar checkpoint");
         const nextMonth = new Date(saved.month + "-01T00:00:00Z");
@@ -101,7 +111,7 @@ export default {
         for (let offset = 0; offset < tasks.length; offset += 100) {
             await env.DB.batch(tasks.slice(offset, offset + 100).map(task => env.DB.prepare("insert into d1_runtime_schedule_outbox(id,kind,family_id,due_at) values(?,?,?,?) on conflict(id) do nothing").bind(task.id, task.kind, task.family_id, task.at)));
         }
-        await health(env, "family-schedule-cursor", "healthy", {cursor: families.length === 50 ? families.at(-1) : 0,
+        await health(env, "family-schedule-cursor", "healthy", {cursor: families.length === 50 ? families.at(-1).id : 0,
             month: families.length === 50 || saved.month === currentMonth ? saved.month : nextMonth.toISOString().slice(0, 7)});
         const pending = (await env.DB.prepare("select id from d1_runtime_schedule_outbox where completed_at is null and (dispatched_at is null or dispatched_at<unixepoch()-300) and (lease_until is null or lease_until<=unixepoch()) order by due_at,id limit 50").all()).results;
         for (const task of pending) {

@@ -6,13 +6,16 @@ namespace App\Jobs;
 
 use App\Mail\PaymentReceiptMail;
 use App\Models\PaymentBatch;
+use App\Models\PaymentReceiptDelivery;
 use App\Models\User;
 use App\Services\ReportArtifactService;
+use App\Services\TransactionalNotificationQueue;
 use App\Services\WhatsAppService;
 use App\Support\CurrencyFormatter;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\Middleware\RateLimited;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -33,7 +36,8 @@ class SendPaymentReceipt implements ShouldQueue
         public readonly int $recipientId,
         public readonly string $channel,
     ) {
-        $this->afterCommit();
+        $this->onConnection(app(TransactionalNotificationQueue::class)->connection());
+        $this->beforeCommit();
     }
 
     /** @return list<int> */
@@ -45,13 +49,22 @@ class SendPaymentReceipt implements ShouldQueue
     /** @return list<object> */
     public function middleware(): array
     {
-        return $this->channel === 'whatsapp'
-            ? [(new RateLimited('whatsapp-notifications'))->releaseAfter(60)]
-            : [];
+        $middleware = [(new WithoutOverlapping("{$this->paymentBatchId}:{$this->channel}"))->releaseAfter(90)->expireAfter(180)];
+        if ($this->channel === 'whatsapp') {
+            $middleware[] = (new RateLimited('whatsapp-notifications'))->releaseAfter(60);
+        }
+
+        return $middleware;
     }
 
     public function failed(?Throwable $exception): void
     {
+        PaymentReceiptDelivery::query()
+            ->where('payment_batch_id', $this->paymentBatchId)
+            ->where('channel', $this->channel)
+            ->where('status', 'queued')
+            ->update(['status' => 'failed', 'failed_at' => now()]);
+
         Log::error('Payment receipt delivery failed', [
             'payment_batch_id' => $this->paymentBatchId,
             'channel' => $this->channel,
@@ -68,8 +81,23 @@ class SendPaymentReceipt implements ShouldQueue
         if (! $batch instanceof PaymentBatch || ! $member instanceof User
             || $member->id !== $this->recipientId || $membership->isArchived()
             || $batch->family->isArchived() || $batch->isReversed()) {
+            PaymentReceiptDelivery::query()
+                ->where('payment_batch_id', $this->paymentBatchId)
+                ->where('channel', $this->channel)
+                ->where('status', 'queued')
+                ->update(['status' => 'unavailable']);
+
             return;
         }
+
+        $delivery = PaymentReceiptDelivery::query()->firstOrCreate([
+            'payment_batch_id' => $batch->id,
+            'channel' => $this->channel,
+        ], ['status' => 'queued']);
+        if ($delivery->status !== 'queued') {
+            return;
+        }
+        $delivery->update(['attempted_at' => now()]);
 
         $receiptUrl = route('payment-batches.receipt', [
             'current_family' => $batch->family->slug,
@@ -80,12 +108,16 @@ class SendPaymentReceipt implements ShouldQueue
             $artifact = $artifacts->receipt($batch->family, $batch, $member);
             Mail::to($member->email)->send(new PaymentReceiptMail($batch, $artifact, $receiptUrl));
 
+            $delivery->update(['status' => 'accepted', 'accepted_at' => now(), 'failed_at' => null]);
+
             return;
         }
 
         $phone = $member->routeNotificationForWhatsApp();
 
         if ($phone === null) {
+            $delivery->update(['status' => 'unavailable']);
+
             return;
         }
 
@@ -101,8 +133,16 @@ class SendPaymentReceipt implements ShouldQueue
                 $receiptUrl,
             ],
             languageCode: Config::string('services.whatsapp.templates.payment_receipt.language'),
+            familyId: $batch->family_id,
+            userId: $member->id,
         );
 
-        throw_unless($result['success'], RuntimeException::class, 'WhatsApp payment receipt delivery failed: '.($result['error'] ?? 'Unknown error'));
+        throw_unless($result['success'] && filled($result['wa_message_id']), RuntimeException::class, 'WhatsApp payment receipt delivery failed: '.($result['error'] ?? 'No provider message ID was returned'));
+        $delivery->update([
+            'status' => 'accepted',
+            'provider_message_id' => $result['wa_message_id'],
+            'accepted_at' => now(),
+            'failed_at' => null,
+        ]);
     }
 }

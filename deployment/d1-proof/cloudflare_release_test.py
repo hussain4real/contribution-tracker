@@ -101,6 +101,7 @@ class ReleaseSafetyTest(unittest.TestCase):
                                                         'runtime_credentials_packaged': False, 'rootfs_sha256': hashlib.sha256(b'inspected image').hexdigest(),
                                                         'image_archive_sha256': hashlib.sha256(b'inspected original image').hexdigest(), 'source_image_id': DIGEST}))
             old_raw, old_mime = release.multipart('container-worker.mjs', {'container-worker.mjs': b'old reviewed code'}, [], None)
+            old_maintenance_raw, old_maintenance_mime = release.multipart('maintenance-worker.mjs', {'maintenance-worker.mjs': b'old maintenance code'}, [], None)
             writes = []
             commands = []
 
@@ -112,12 +113,14 @@ class ReleaseSafetyTest(unittest.TestCase):
                 if method == 'GET' and '/containers/applications/' in url:
                     return {'configuration': {'image': 'old@' + DIGEST}}
                 if method == 'GET':
+                    if url.endswith('/familyfunds-d1-maintenance-staging'):
+                        return old_maintenance_raw, old_maintenance_mime
                     return old_raw, old_mime
                 if method == 'PUT':
                     message = release.email.parser.BytesParser(policy=release.email.policy.default).parsebytes(
                         ('Content-Type: ' + kwargs['content_type'] + '\r\n\r\n').encode() + data)
-                    writes.append(json.loads(next(message.iter_parts()).get_payload(decode=True)))
-                    if len(writes) == 1:
+                    writes.append((url, json.loads(next(message.iter_parts()).get_payload(decode=True))))
+                    if url.endswith('/familyfunds-d1-web-v2') and len([entry for entry in writes if entry[0] == url]) == 1:
                         raise RuntimeError('simulated unknown update outcome')
                     return {}
                 raise AssertionError('Unexpected or database API call: ' + url)
@@ -133,12 +136,15 @@ class ReleaseSafetyTest(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, 'previous code/image restored'):
                     release.publish('staging', path)
                 prepared.assert_not_called()
-            self.assertEqual(len(writes), 2)
+            self.assertEqual([url.rsplit('/', 1)[-1] for url, _ in writes], [
+                'familyfunds-d1-maintenance-staging', 'familyfunds-d1-web-v2',
+                'familyfunds-d1-web-v2', 'familyfunds-d1-maintenance-staging',
+            ])
             self.assertTrue(any(args[:3] == ['docker', 'image', 'load'] for args in commands))
             self.assertTrue(any(args[:2] == ['docker', 'push'] for args in commands))
             self.assertFalse(any('buildx' in args for args in commands))
-            for metadata in writes:
-                self.assertEqual(metadata['containers'], [{'class_name': 'FamilyFundsWebStagingContainer'}])
+            for url, metadata in writes:
+                self.assertEqual(metadata.get('containers'), [{'class_name': 'FamilyFundsWebStagingContainer'}] if url.endswith('/familyfunds-d1-web-v2') else None)
 
     def test_modified_original_staging_archive_is_refused_before_credentials_or_docker(self):
         with tempfile.TemporaryDirectory() as directory:

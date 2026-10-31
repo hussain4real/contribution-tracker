@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Channels;
 
+use App\Models\User;
+use App\Notifications\ContributionReminderNotification;
 use App\Services\WhatsAppService;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Log;
@@ -30,20 +32,21 @@ class WhatsAppChannel
     /**
      * Send the given notification.
      */
-    public function send(object $notifiable, Notification $notification): void
+    /** @return array{success: bool, wa_message_id: ?string, error: ?string}|null */
+    public function send(object $notifiable, Notification $notification): ?array
     {
         if (! method_exists($notifiable, 'routeNotificationFor')) {
-            return;
+            return null;
         }
 
         $to = $notifiable->routeNotificationFor('whatsapp', $notification);
 
         if (! is_string($to) || $to === '') {
-            return;
+            return null;
         }
 
         if (! method_exists($notification, 'toWhatsApp')) {
-            return;
+            return null;
         }
 
         try {
@@ -54,7 +57,7 @@ class WhatsAppChannel
                 'error' => $e->getMessage(),
             ]);
 
-            return;
+            return null;
         }
 
         if (! $message instanceof WhatsAppMessage) {
@@ -62,9 +65,14 @@ class WhatsAppChannel
                 'notification' => $notification::class,
             ]);
 
-            return;
+            return null;
         }
 
-        $this->whatsapp->send($this->whatsapp->normalisePhone($to), $message);
+        if ($notification instanceof ContributionReminderNotification && $notifiable instanceof User) {
+            return $this->whatsapp->send($this->whatsapp->normalisePhone($to), $message,
+                $notification->contribution->family_id, $notifiable->id);
+        }
+
+        return $this->whatsapp->send($this->whatsapp->normalisePhone($to), $message);
     }
 }

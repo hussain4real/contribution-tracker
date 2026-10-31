@@ -13,6 +13,26 @@ test("calendar catch-up covers every family and respects both reminder boundarie
     assert.throws(() => productionCalendarTasks(new Date("2026-10-25"), families, "2026-11"));
 });
 
+test('configured schedules use UTC and preserve per-period reminder identities', () => {
+    const family = {id: 7, reminder_settings: JSON.stringify({reminder_day: 10, follow_up_day: 20, time: '14:35', effective_from: '2026-10'})};
+    const before = productionCalendarTasks(new Date('2026-10-10T14:34:59Z'), [family], '2026-10');
+    assert.deepEqual(before.map(task => task.kind), ['generate']);
+    const at = productionCalendarTasks(new Date('2026-10-20T14:35:00Z'), [family], '2026-10');
+    assert.deepEqual(at.map(task => task.id), ['generate:2026-10:7', 'remind25:2026-10:7', 'remind28:2026-10:7']);
+    assert.equal(at[1].at, '2026-10-10T14:35:00.000Z');
+    const history = productionCalendarTasks(new Date('2026-10-20T14:35:00Z'), [family], '2026-09');
+    assert.equal(history.find(task => task.id === 'remind25:2026-09:7').at, '2026-09-25T08:00:00.000Z');
+});
+
+test('pending schedule changes keep previously queued months on their original timing', () => {
+    const family = {id: 7, reminder_settings: JSON.stringify({reminder_day: 12, follow_up_day: 22, time: '17:00', effective_from: '2026-12',
+        history: [{reminder_day: 10, follow_up_day: 20, time: '14:35', effective_from: '2026-11'}]})};
+    const tasks = productionCalendarTasks(new Date('2026-12-22T17:00:00Z'), [family], '2026-10');
+    assert.equal(tasks.find(task => task.id === 'remind25:2026-10:7').at, '2026-10-25T08:00:00.000Z');
+    assert.equal(tasks.find(task => task.id === 'remind25:2026-11:7').at, '2026-11-10T14:35:00.000Z');
+    assert.equal(tasks.find(task => task.id === 'remind25:2026-12:7').at, '2026-12-12T17:00:00.000Z');
+});
+
 function fixture() {
     const row = {id: "remind25:2026-10:987", kind: "remind25", family_id: 987, at: "2026-10-25T08:00:00.000Z", cursor: 0, completed_at: null, lease_token: null};
     let calls = 0, expired = false;
@@ -105,7 +125,7 @@ async function nativeSqlFixture() {
     const {DatabaseSync} = await import('node:sqlite');
     const sqlite = new DatabaseSync(':memory:');
     sqlite.exec(`
-        create table families(id integer primary key, archived_at text,legal_hold_at text,purge_after text);
+        create table families(id integer primary key, archived_at text,legal_hold_at text,purge_after text,reminder_settings text);
         create table report_schedules(id integer primary key,family_id integer,is_active integer,next_run_at text);
         create table jobs(id integer primary key,available_at integer,reserved_at integer);
         create table failed_jobs(id integer primary key);
@@ -147,6 +167,29 @@ test('the real scheduled SQL catches up more than fifty families without waking 
     } finally { f.sqlite.close(); }
 });
 
+test('the scheduled SQL queues each family reminder at its configured time without duplicating it', async () => {
+    const f = await nativeSqlFixture();
+    try {
+        const insert = f.sqlite.prepare('insert into families(id,reminder_settings) values(?,?)');
+        insert.run(1, JSON.stringify({reminder_day: 10, follow_up_day: 20, time: '14:35', effective_from: '2026-10'}));
+        insert.run(2, JSON.stringify({reminder_day: 10, follow_up_day: 20, time: '15:30', effective_from: '2026-10'}));
+        insert.run(3, null);
+        f.controller.scheduledTime = new Date('2026-10-10T14:34:00Z').getTime();
+        await handler.scheduled(f.controller, f.env);
+        assert.equal(f.sqlite.prepare("select count(*) n from d1_runtime_schedule_outbox where kind='remind25'").get().n, 0);
+        f.controller.scheduledTime = new Date('2026-10-10T14:35:00Z').getTime();
+        await handler.scheduled(f.controller, f.env);
+        await handler.scheduled(f.controller, f.env);
+        const reminders = f.sqlite.prepare("select id,due_at from d1_runtime_schedule_outbox where kind='remind25' order by id").all();
+        assert.deepEqual(reminders.map(row => ({...row})), [{id: 'remind25:2026-10:1', due_at: '2026-10-10T14:35:00.000Z'}]);
+        assert.equal(f.queued.filter(item => item.id === 'remind25:2026-10:1').length, 1);
+        f.controller.scheduledTime = new Date('2026-10-10T15:30:00Z').getTime();
+        await handler.scheduled(f.controller, f.env);
+        assert.equal(f.sqlite.prepare("select count(*) n from d1_runtime_schedule_outbox where kind='remind25'").get().n, 2);
+        assert.equal(f.sqlite.prepare("select count(*) n from d1_runtime_schedule_outbox where kind='remind28'").get().n, 0);
+    } finally { f.sqlite.close(); }
+});
+
 test('a failed scheduled queue send retains its stored outbox row and later recovers it', async () => {
     const f = await nativeSqlFixture();
     try {
@@ -168,7 +211,7 @@ test('scheduled SQL wakes only due reports, eligible purges and available or exp
     const f = await nativeSqlFixture();
     try {
         f.sqlite.exec(`
-            insert into families values(1,datetime('now','-1 year'),null,datetime('now','-1 day')),
+            insert into families(id,archived_at,legal_hold_at,purge_after) values(1,datetime('now','-1 year'),null,datetime('now','-1 day')),
                 (2,datetime('now','-1 year'),datetime('now'),datetime('now','-1 day')),
                 (3,datetime('now'),null,datetime('now','+1 day'));
             insert into report_schedules values(1,1,1,datetime('now','-1 hour')),(2,2,0,datetime('now','-1 hour')),(3,3,1,datetime('now','+1 hour'));

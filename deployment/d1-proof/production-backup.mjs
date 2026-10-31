@@ -46,10 +46,13 @@ export function productionBackupSlot(at) {
 
 export async function listProductionObjects(bucket, prefix) {
     const objects = [];
+    const cursors = new Set();
     let cursor;
     do {
         const page = await bucket.list({prefix, limit: 1000, cursor});
         objects.push(...page.objects);
+        if (page.truncated && (!page.cursor || cursors.has(page.cursor))) throw new Error('Incomplete production object listing');
+        if (page.truncated) cursors.add(page.cursor);
         cursor = page.truncated ? page.cursor : undefined;
     } while (cursor);
     return objects;
@@ -105,18 +108,45 @@ export function productionBackupPrefix(checkpoint = null) {
     return BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/';
 }
 
+export function pendingProductionWebhookReferences(rows) {
+    if (!Array.isArray(rows)) throw new Error('Production webhook inbox is missing from checkpoint');
+    const references = [], ids = new Set();
+    for (const row of rows) {
+        if (!row || !Object.hasOwn(row, 'accepted_at')) throw new Error('Invalid production webhook inbox row');
+        if (row.accepted_at !== null) {
+            if (!Number.isSafeInteger(row.accepted_at) || row.accepted_at < 0) throw new Error('Invalid production webhook inbox row');
+            continue;
+        }
+        const match = typeof row.id === 'string' ? /^(paystack|whatsapp):([a-f0-9]{64})$/.exec(row.id) : null;
+        if (!match || row.object_key !== `private/webhook-inbox/${match[1]}/${match[2]}.json` || ids.has(row.id)) throw new Error('Invalid pending production webhook reference');
+        ids.add(row.id);
+        references.push({id: row.id, provider: match[1], key: row.object_key, sha256: match[2]});
+    }
+    return references;
+}
+
 export async function createProductionBackup(env, at, checkpoint = null) {
     if (env.DATABASE_NAME !== DATABASE || env.BACKUPS_ENABLED !== "true") throw new Error("Production backups are disabled");
     const prefix = productionBackupPrefix(checkpoint);
     const objectKey = prefix + "d1/" + productionBackupSlot(at) + ".json.aes-gcm";
-    if (await env.BACKUP_FILES.head(objectKey)) return {status: "already_present", key: objectKey};
+    if (checkpoint !== null && (await listProductionObjects(env.BACKUP_FILES, prefix)).length) throw new Error('Production checkpoint already exists');
+    if (await env.BACKUP_FILES.head(objectKey)) {
+        if (checkpoint !== null) throw new Error('Production checkpoint already exists');
+        return {status: "already_present", key: objectKey};
+    }
     const captured = await snapshot(env);
+    if (checkpoint !== null && encoder.encode(JSON.stringify(captured)).length > 8_000_000) throw new Error("Production database backup exceeds memory budget");
+    const pendingWebhookFiles = new Set(checkpoint === null ? [] : pendingProductionWebhookReferences(captured.tables.d1_runtime_webhook_inbox).map(row => row.key));
+    const checkpointFile = object => !object.key.startsWith(BACKUP_PREFIX)
+        && (!object.key.startsWith('private/webhook-inbox/') || pendingWebhookFiles.has(object.key));
     const files = [...await listProductionObjects(env.APPLICATION_FILES, "private/"), ...await listProductionObjects(env.APPLICATION_FILES, "public/")]
-        .filter(object => !object.key.startsWith(BACKUP_PREFIX) && !object.key.startsWith("private/webhook-inbox/"));
+        .filter(checkpointFile);
+    if ([...pendingWebhookFiles].some(path => !files.some(file => file.key === path))) throw new Error('A pending production webhook file is missing from the checkpoint');
+    if (checkpoint !== null && files.some(file => typeof file.version !== 'string' || file.version === '')) throw new Error('Production checkpoint file version missing');
     for (const file of files) {
         if (file.size > 16 * 1024 * 1024) throw new Error("Application file exceeds production backup size budget");
         const current = await env.APPLICATION_FILES.get(file.key, {onlyIf: {etagMatches: file.etag}});
-        if (!current || !("body" in current) || current.etag !== file.etag) throw new Error("Application file changed during backup");
+        if (!current || !("body" in current) || current.etag !== file.etag || (checkpoint !== null && current.version !== file.version)) throw new Error("Application file changed during backup");
         const bytes = new Uint8Array(await current.arrayBuffer());
         const sha256 = await digest(bytes);
         const blobKey = prefix + "files/" + sha256 + ".json.aes-gcm";
@@ -124,7 +154,16 @@ export async function createProductionBackup(env, at, checkpoint = null) {
             const envelope = await sealProductionBackup(bytes, env.BACKUP_KEY, "file:" + sha256);
             await env.BACKUP_FILES.put(blobKey, JSON.stringify(envelope), {onlyIf: {etagDoesNotMatch: "*"}, httpMetadata: {contentType: "application/octet-stream"}});
         }
-        captured.files.push({path: file.key, bytes: bytes.length, sha256, backup_key: blobKey});
+        if (checkpoint !== null) {
+            const stored = await env.BACKUP_FILES.get(blobKey);
+            if (!stored || stored.size > 24_000_000) throw new Error('Production checkpoint file is missing or excessive');
+            const envelope = JSON.parse(await stored.text());
+            if (envelope.kind !== 'file:' + sha256) throw new Error('Production checkpoint file identity differs');
+            const restored = await openProductionBackup(envelope, env.BACKUP_KEY);
+            if (restored.length !== bytes.length || await digest(restored) !== sha256) throw new Error('Production checkpoint file differs');
+        }
+        captured.files.push({path: file.key, bytes: bytes.length, sha256, backup_key: blobKey,
+            ...(checkpoint !== null ? {http_metadata: current.httpMetadata ?? {}, custom_metadata: current.customMetadata ?? {}} : {})});
     }
     for (const table of ["report_artifacts", "reconciliation_imports"]) {
         for (const row of captured.tables[table] ?? []) {
@@ -133,12 +172,32 @@ export async function createProductionBackup(env, at, checkpoint = null) {
             if (!captured.files.some(file => file.path === path)) throw new Error("A database-referenced file is missing from the backup");
         }
     }
+    if (checkpoint !== null) {
+        const currentFiles = [...await listProductionObjects(env.APPLICATION_FILES, "private/"), ...await listProductionObjects(env.APPLICATION_FILES, "public/")]
+            .filter(checkpointFile);
+        const inventory = values => JSON.stringify(values.map(item => [item.key, item.etag, item.size, item.version]).sort());
+        if (inventory(files) !== inventory(currentFiles)) throw new Error('Production file inventory changed during checkpoint');
+        const current = await snapshot(env);
+        const canonical = rows => JSON.stringify(rows.map(row => JSON.stringify(Object.keys(row).sort().map(key => [key, row[key]]))).sort());
+        if (JSON.stringify(captured.schema) !== JSON.stringify(current.schema)
+            || canonical(captured.sequences) !== canonical(current.sequences)
+            || Object.keys(captured.tables).some(name => !current.tables[name] || canonical(captured.tables[name]) !== canonical(current.tables[name]))) throw new Error('Production database changed during checkpoint');
+    }
     const bytes = encoder.encode(JSON.stringify(captured));
     if (bytes.length > 8_000_000) throw new Error("Production database backup exceeds memory budget");
     const envelope = await sealProductionBackup(bytes, env.BACKUP_KEY, "database");
     const verified = await openProductionBackup(envelope, env.BACKUP_KEY);
     if (await digest(verified) !== await digest(bytes)) throw new Error("Production backup verification failed");
     const stored = await env.BACKUP_FILES.put(objectKey, JSON.stringify(envelope), {onlyIf: {etagDoesNotMatch: "*"}, httpMetadata: {contentType: "application/octet-stream"}, customMetadata: {captured_at: captured.captured_at, plaintext_sha256: envelope.sha256}});
+    if (checkpoint !== null && !stored) throw new Error('Production checkpoint already exists');
+    if (checkpoint !== null && stored) {
+        const published = await env.BACKUP_FILES.get(objectKey);
+        if (!published || published.size > 12_000_000) throw new Error('Production checkpoint database is missing or excessive');
+        const publishedEnvelope = JSON.parse(await published.text());
+        if (publishedEnvelope.kind !== 'database') throw new Error('Production checkpoint database identity differs');
+        const restored = await openProductionBackup(publishedEnvelope, env.BACKUP_KEY);
+        if (await digest(restored) !== await digest(bytes)) throw new Error('Production checkpoint database differs');
+    }
     return {status: stored ? "created" : "already_present", key: objectKey, tables: Object.keys(captured.tables).length, files: captured.files.length};
 }
 

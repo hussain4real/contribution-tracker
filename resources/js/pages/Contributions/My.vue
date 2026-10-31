@@ -1,14 +1,17 @@
 <script setup lang="ts">
+import PaymentReceiptController from '@/actions/App/Http/Controllers/PaymentReceiptController';
 import AccountDetails from '@/components/AccountDetails.vue';
 import AggregateStats from '@/components/contributions/AggregateStats.vue';
 import ContributionCard from '@/components/contributions/ContributionCard.vue';
 import { Button } from '@/components/ui/button';
+import { useNetworkStatus } from '@/composables/useNetworkStatus';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useCurrencyFormatter } from '@/lib/currency';
 import { dashboard } from '@/routes';
 import { myStatement } from '@/routes/contributions';
+import { index as payIndex } from '@/routes/pay';
 import { type BreadcrumbItem } from '@/types';
-import { Head } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import {
     AlertCircle,
     CheckCircle2,
@@ -16,6 +19,7 @@ import {
     TrendingUp,
     Wallet,
 } from '@lucide/vue';
+import { ref } from 'vue';
 
 interface Payment {
     id: number;
@@ -60,6 +64,26 @@ interface FamilyAggregate {
 
 interface Props {
     member_id: number;
+    next_contribution: {
+        period_label: string;
+        due_date: string;
+        balance: number;
+    } | null;
+    receipts: {
+        data: {
+            id: number;
+            receipt_number: number;
+            amount: number;
+            paid_at: string;
+            is_reversed: boolean;
+            periods: string[];
+        }[];
+        current_page: number;
+        last_page: number;
+        prev_page_url: string | null;
+        next_page_url: string | null;
+    };
+    online_payments_available: boolean;
     statement_period: { date_from: string; date_to: string };
     contributions?: Contribution[];
     personal_stats?: PersonalStats;
@@ -68,6 +92,15 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
     member_id: 0,
+    next_contribution: null,
+    receipts: () => ({
+        data: [],
+        current_page: 1,
+        last_page: 1,
+        prev_page_url: null,
+        next_page_url: null,
+    }),
+    online_payments_available: false,
     statement_period: () => ({ date_from: '', date_to: '' }),
     contributions: () => [],
     personal_stats: () => ({
@@ -98,6 +131,23 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const { formatCurrency } = useCurrencyFormatter();
+const page = usePage();
+const { isOnline } = useNetworkStatus();
+const unavailableDownload = ref<number | 'statement' | null>(null);
+
+function checkDownloadConnection(
+    event: MouseEvent,
+    download: number | 'statement',
+): void {
+    if (!isOnline.value) {
+        event.preventDefault();
+        unavailableDownload.value = download;
+
+        return;
+    }
+
+    unavailableDownload.value = null;
+}
 </script>
 
 <template>
@@ -111,7 +161,7 @@ const { formatCurrency } = useCurrencyFormatter();
                     <h1
                         class="text-2xl font-semibold text-neutral-900 dark:text-neutral-100"
                     >
-                        My Contribution History
+                        My money
                     </h1>
                     <p
                         class="mt-1 text-sm text-neutral-600 dark:text-neutral-400"
@@ -132,11 +182,182 @@ const { formatCurrency } = useCurrencyFormatter();
                                 },
                             }).url
                         "
+                        @click="checkDownloadConnection($event, 'statement')"
                     >
                         <Download class="h-4 w-4" /> Download statement
                     </a>
                 </Button>
             </div>
+
+            <div
+                v-if="page.flash.payment_result?.kind === 'error'"
+                role="alert"
+                class="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
+            >
+                {{ page.flash.payment_result.message }}
+            </div>
+            <div
+                v-else-if="page.flash.payment_result?.kind === 'success'"
+                role="status"
+                class="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200"
+            >
+                {{ page.flash.payment_result.message }}
+            </div>
+
+            <p
+                v-if="unavailableDownload === 'statement'"
+                role="alert"
+                class="text-sm text-red-600"
+            >
+                Connect to the internet and try downloading the statement again.
+            </p>
+
+            <section
+                class="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border dark:bg-neutral-900"
+                aria-labelledby="next-payment-heading"
+            >
+                <h2 id="next-payment-heading" class="text-lg font-semibold">
+                    Next contribution
+                </h2>
+                <div
+                    v-if="next_contribution"
+                    class="mt-3 flex flex-wrap items-center justify-between gap-4"
+                >
+                    <div>
+                        <p class="font-medium">
+                            {{ next_contribution.period_label }} ·
+                            {{ formatCurrency(next_contribution.balance) }}
+                            remaining
+                        </p>
+                        <p
+                            class="text-sm text-neutral-600 dark:text-neutral-400"
+                        >
+                            Due {{ next_contribution.due_date }} · Total
+                            outstanding
+                            {{
+                                formatCurrency(personal_stats.total_outstanding)
+                            }}
+                        </p>
+                    </div>
+                    <Button v-if="online_payments_available" as-child
+                        ><Link :href="payIndex().url">Pay now</Link></Button
+                    >
+                </div>
+                <p
+                    v-else
+                    class="mt-3 text-sm text-neutral-600 dark:text-neutral-400"
+                >
+                    No unpaid contributions are currently recorded.
+                </p>
+                <p
+                    v-if="next_contribution && !online_payments_available"
+                    class="mt-3 text-sm text-neutral-600 dark:text-neutral-400"
+                >
+                    Online payment is currently unavailable. Contact your family
+                    admin for payment options.
+                </p>
+            </section>
+
+            <section
+                class="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border dark:bg-neutral-900"
+                aria-labelledby="my-receipts-heading"
+            >
+                <h2 id="my-receipts-heading" class="text-lg font-semibold">
+                    Your receipts
+                </h2>
+                <p
+                    v-if="receipts.data.length === 0"
+                    class="mt-3 text-sm text-neutral-600 dark:text-neutral-400"
+                >
+                    No receipts are available yet.
+                </p>
+                <ul
+                    v-else
+                    class="mt-3 divide-y divide-neutral-200 dark:divide-neutral-700"
+                >
+                    <li
+                        v-for="receipt in receipts.data"
+                        :key="receipt.id"
+                        class="flex flex-wrap items-center justify-between gap-3 py-3"
+                    >
+                        <div>
+                            <p class="font-medium">
+                                Receipt #{{ receipt.receipt_number }} ·
+                                {{ formatCurrency(receipt.amount) }}
+                                <span
+                                    v-if="receipt.is_reversed"
+                                    class="text-amber-700 dark:text-amber-300"
+                                >
+                                    · Reversed</span
+                                >
+                            </p>
+                            <p
+                                class="text-sm text-neutral-600 dark:text-neutral-400"
+                            >
+                                {{ receipt.paid_at
+                                }}<span v-if="receipt.periods.length">
+                                    · {{ receipt.periods.join(', ') }}</span
+                                >
+                            </p>
+                            <p
+                                v-if="receipt.is_reversed"
+                                class="text-sm text-neutral-600 dark:text-neutral-400"
+                            >
+                                This payment no longer counts towards your
+                                balance.
+                            </p>
+                        </div>
+                        <Button variant="outline" as-child
+                            ><a
+                                :aria-label="`Download receipt #${receipt.receipt_number}`"
+                                :href="
+                                    PaymentReceiptController({
+                                        payment_batch: receipt.id,
+                                    }).url
+                                "
+                                @click="
+                                    checkDownloadConnection($event, receipt.id)
+                                "
+                                >Download receipt</a
+                            ></Button
+                        >
+                        <p
+                            v-if="unavailableDownload === receipt.id"
+                            role="alert"
+                            class="w-full text-sm text-red-600"
+                        >
+                            Connect to the internet and try downloading this
+                            receipt again.
+                        </p>
+                    </li>
+                </ul>
+                <nav
+                    v-if="receipts.last_page > 1"
+                    aria-label="Receipt pages"
+                    class="mt-4 flex flex-wrap items-center gap-3"
+                >
+                    <Button
+                        v-if="receipts.prev_page_url"
+                        variant="outline"
+                        as-child
+                        ><Link :href="receipts.prev_page_url" preserve-scroll
+                            >Previous</Link
+                        ></Button
+                    >
+                    <span class="text-sm text-neutral-600 dark:text-neutral-400"
+                        >Page {{ receipts.current_page }} of
+                        {{ receipts.last_page }}</span
+                    >
+                    <Button
+                        v-if="receipts.next_page_url"
+                        variant="outline"
+                        as-child
+                        ><Link :href="receipts.next_page_url" preserve-scroll
+                            >Next</Link
+                        ></Button
+                    >
+                </nav>
+            </section>
 
             <AccountDetails />
 

@@ -40,6 +40,7 @@ class StorePaymentRequest extends FormRequest
             'method' => ['sometimes', new Enum(PaymentMethod::class)],
             'reference' => ['nullable', 'string', 'max:255'],
             'idempotency_key' => ['nullable', 'uuid'],
+            'review_token' => ['nullable', 'string', 'max:16000'],
             'target_year' => ['nullable', 'integer', 'min:2020', 'max:2100'],
             'target_month' => ['nullable', 'integer', 'min:1', 'max:12'],
         ];
@@ -73,8 +74,8 @@ class StorePaymentRequest extends FormRequest
             $targetMonth = $this->integerInput('target_month');
 
             if ($targetYear !== null && $targetMonth !== null) {
-                $targetDate = now()->setYear($targetYear)->setMonth($targetMonth)->startOfMonth();
-                $maxAdvanceDate = now()->addMonths(6)->startOfMonth();
+                $targetDate = now()->startOfMonth()->setYear($targetYear)->setMonth($targetMonth);
+                $maxAdvanceDate = now()->startOfMonth()->addMonths(6);
 
                 if ($targetDate->gt($maxAdvanceDate)) {
                     $validator->errors()->add('target_month', 'Advance payments are limited to 6 months ahead.');

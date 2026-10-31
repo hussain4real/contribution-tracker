@@ -256,7 +256,7 @@ it('smokes authenticated family pages', function () {
     navigateAndAssertBrowserSmoke($page, route('members.show', $member), 'Browser Member');
     navigateAndAssertBrowserSmoke($page, route('members.edit', $member), 'Edit Member');
     navigateAndAssertBrowserSmoke($page, route('contributions.index'), 'Contributions');
-    navigateAndAssertBrowserSmoke($page, route('contributions.my'), 'My Contribution History');
+    navigateAndAssertBrowserSmoke($page, route('contributions.my'), 'My money');
     navigateAndAssertBrowserSmoke($page, route('contributions.show', $contribution), $contribution->period_label);
     navigateAndAssertBrowserSmoke($page, route('payments.index'), 'Record Payment');
     navigateAndAssertBrowserSmoke($page, route('payments.create', $member), 'Record Payment for Browser Member');

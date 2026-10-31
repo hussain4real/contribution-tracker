@@ -64,7 +64,7 @@ describe('Balance-First Rule (FR-020)', function () {
         // Member pays ₦4,000 targeting third month
         // Balance-first rule: should complete first month first, then apply rest to second
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 4000, // ₦4,000
                 'paid_at' => now()->toDateString(),
@@ -116,7 +116,7 @@ describe('Balance-First Rule (FR-020)', function () {
 
         // All months unpaid, pay ₦10,000 (enough for first + second + ₦2,000 towards third)
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 10000, // ₦10,000
                 'paid_at' => now()->toDateString(),
@@ -170,7 +170,7 @@ describe('Balance-First Rule (FR-020)', function () {
 
         // Pay ₦4,000 - should go directly to second month
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 4000,
                 'paid_at' => now()->toDateString(),
@@ -190,7 +190,7 @@ describe('Balance-First Rule (FR-020)', function () {
     });
 
     it('creates contribution for target month if not exists', function () {
-        $nextMonth = now()->addMonth();
+        $nextMonth = now()->startOfMonth()->addMonth();
 
         // No contributions exist for next month
         expect(Contribution::forUser($this->member->id)
@@ -199,7 +199,7 @@ describe('Balance-First Rule (FR-020)', function () {
         )->toBeFalse();
 
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 4000,
                 'paid_at' => now()->toDateString(),
@@ -222,7 +222,7 @@ describe('Balance-First Rule (FR-020)', function () {
         $this->family->update(['due_day' => 30]);
 
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 4000,
                 'paid_at' => now()->toDateString(),

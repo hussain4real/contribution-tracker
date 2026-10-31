@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Models\Contribution;
 use App\Models\User;
 use App\Notifications\ContributionReminderNotification;
+use App\Services\QueueContributionReminder;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
@@ -47,10 +48,12 @@ class ContributionWhatsAppReminderController extends Controller
 
         $type = CarbonImmutable::now()->day >= 28 ? 'follow_up' : 'reminder';
 
-        $member->notify(
-            (new ContributionReminderNotification($contribution, $type))->onlyChannels(['whatsapp'])
-        );
+        $notification = (new ContributionReminderNotification($contribution, $type))->onlyChannels(['whatsapp']);
+        if ($notification->via($member) === []) {
+            return back()->with('error', 'This member has disabled WhatsApp contribution reminders.');
+        }
+        app(QueueContributionReminder::class)->queue($member, $notification);
 
-        return back()->with('success', "WhatsApp reminder sent to {$member->name}.");
+        return back()->with('success', "WhatsApp reminder queued for {$member->name}.");
     }
 }

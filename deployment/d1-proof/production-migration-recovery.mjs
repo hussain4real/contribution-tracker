@@ -1,5 +1,5 @@
 import {WorkerEntrypoint} from 'cloudflare:workers';
-import {createProductionBackup, openProductionBackup, productionBackupSlot, productionBackupPrefix, BACKUP_PREFIX, listProductionObjects} from './production-backup.mjs';
+import {createProductionBackup, openProductionBackup, pendingProductionWebhookReferences, productionBackupPrefix, BACKUP_PREFIX, listProductionObjects} from './production-backup.mjs';
 
 const ARCHIVE = 'migration-archive/synthetic-20261027/';
 const RECOVERY = 'migration-recovery/actual-20261027/';
@@ -17,6 +17,16 @@ async function boundedObject(bucket, path) {
     const object = await bucket.get(path);
     if (!object || object.size > 16_000_000) throw new Error('Missing or excessive bounded recovery object');
     return {object, bytes: new Uint8Array(await object.arrayBuffer())};
+}
+
+function fileMetadata(file) {
+    if (file.http_metadata === undefined && file.custom_metadata === undefined) return null;
+    const http = file.http_metadata, custom = file.custom_metadata;
+    if (!http || typeof http !== 'object' || Array.isArray(http) || !custom || typeof custom !== 'object' || Array.isArray(custom)
+        || Object.values(custom).some(value => typeof value !== 'string')
+        || Object.entries(http).some(([key, value]) => !['contentType', 'contentLanguage', 'contentDisposition', 'contentEncoding', 'cacheControl', 'cacheExpiry'].includes(key)
+            || typeof value !== 'string' || (key === 'cacheExpiry' && !Number.isFinite(Date.parse(value))))) throw new Error('Invalid production checkpoint file metadata');
+    return {http, custom};
 }
 
 export class ProductionMigrationRecovery extends WorkerEntrypoint {
@@ -86,12 +96,23 @@ export class ProductionMigrationRecovery extends WorkerEntrypoint {
         if (this.env.RECOVERY_NAME !== 'familyfunds-production-migration-recovery') throw new Error('Wrong actual recovery target');
         const existing = await this.env.RECOVERY_DB.prepare("select count(*) n from sqlite_master where type='table' and name not glob 'sqlite_*' and name not glob '_cf_*'").first();
         if (existing.n !== 0) throw new Error('Actual recovery target must be empty; never replay restore');
-        const stored = await boundedObject(this.env.BACKUP_FILES, productionBackupPrefix(checkpoint) + 'd1/' + productionBackupSlot(new Date()) + '.json.aes-gcm');
+        const prefix = productionBackupPrefix(checkpoint) + 'd1/';
+        const snapshots = await listProductionObjects(this.env.BACKUP_FILES, prefix);
+        if (snapshots.length !== 1 || !snapshots[0].key.startsWith(prefix) || !/^\d{4}-\d{2}-\d{2}\.json\.aes-gcm$/.test(snapshots[0].key.slice(prefix.length))) throw new Error('Checkpoint must contain exactly one production database snapshot');
+        const stored = await boundedObject(this.env.BACKUP_FILES, snapshots[0].key);
         const envelope = JSON.parse(new TextDecoder().decode(stored.bytes));
         const snapshot = JSON.parse(new TextDecoder().decode(await openProductionBackup(envelope, this.env.BACKUP_KEY)));
         if (snapshot.tables.users?.length !== 66 || snapshot.tables.families?.length !== 44 || snapshot.files.length !== 7) throw new Error('Unexpected actual recovery snapshot');
         const names = Object.keys(snapshot.tables);
         if (names.length !== 55 || names.some(name => !/^[a-z_][a-z0-9_]*$/.test(name))) throw new Error('Unexpected recovery tables');
+        const webhooks = snapshot.tables.d1_runtime_webhook_inbox === undefined ? null : pendingProductionWebhookReferences(snapshot.tables.d1_runtime_webhook_inbox);
+        if (webhooks?.some(reference => !snapshot.files.some(file => file.path === reference.key))) throw new Error('Pending production webhook file missing from recovery');
+        const recoveryPrefix = RECOVERY + crypto.randomUUID() + '/';
+        const metadata = snapshot.files.map(fileMetadata);
+        for (const file of snapshot.files) {
+            if (typeof file.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(file.sha256)) throw new Error('Invalid recovery file digest');
+            if (await this.env.APPLICATION_FILES.head(recoveryPrefix + file.sha256)) throw new Error('Recovery file already exists');
+        }
         const statements = [this.env.RECOVERY_DB.prepare('pragma defer_foreign_keys=on')];
         for (const item of snapshot.schema.filter(item => item.type === 'table')) statements.push(this.env.RECOVERY_DB.prepare(item.sql));
         for (const name of names) {
@@ -123,22 +144,35 @@ export class ProductionMigrationRecovery extends WorkerEntrypoint {
         const sequences = (await this.env.RECOVERY_DB.prepare('select name,seq from sqlite_sequence order by name').all()).results;
         if (canonical(sequences) !== canonical(snapshot.sequences)) throw new Error('Restored sequence high-water marks differ');
         const files = [];
-        for (const file of snapshot.files) {
+        for (const [index, file] of snapshot.files.entries()) {
             const sealed = await boundedObject(this.env.BACKUP_FILES, file.backup_key);
             const bytes = await openProductionBackup(JSON.parse(new TextDecoder().decode(sealed.bytes)), this.env.BACKUP_KEY);
             if (bytes.length !== file.bytes || await digest(bytes) !== file.sha256) throw new Error('Decrypted actual file differs');
-            const path = RECOVERY + file.sha256;
-            await this.env.APPLICATION_FILES.put(path, bytes);
-            const restored = await boundedObject(this.env.APPLICATION_FILES, path);
-            if (await digest(restored.bytes) !== file.sha256) throw new Error('Restored actual file differs');
-            await this.env.APPLICATION_FILES.delete(path);
+            const path = recoveryPrefix + file.sha256;
+            const fileMeta = metadata[index];
+            const httpMetadata = fileMeta ? {...fileMeta.http} : undefined;
+            if (httpMetadata?.cacheExpiry) httpMetadata.cacheExpiry = new Date(httpMetadata.cacheExpiry);
+            const created = await this.env.APPLICATION_FILES.put(path, bytes, {onlyIf: {etagDoesNotMatch: '*'},
+                ...(fileMeta ? {httpMetadata, customMetadata: fileMeta.custom} : {})});
+            if (!created) throw new Error('Recovery file already exists');
+            try {
+                const restored = await boundedObject(this.env.APPLICATION_FILES, path);
+                if (await digest(restored.bytes) !== file.sha256) throw new Error('Restored actual file differs');
+                const ordered = value => JSON.stringify(Object.entries(value).filter(([, item]) => item !== undefined).sort(([a], [b]) => a.localeCompare(b)));
+                if (fileMeta && (ordered(restored.object.httpMetadata ?? {}) !== ordered(fileMeta.http)
+                    || ordered(restored.object.customMetadata ?? {}) !== ordered(fileMeta.custom))) throw new Error('Restored actual file metadata differs');
+            } finally {
+                await this.env.APPLICATION_FILES.delete(path);
+            }
             files.push({bytes: bytes.length, sha256: file.sha256});
         }
         let tamperRejected = false;
         const altered = {...envelope, ciphertext: (envelope.ciphertext[0] === 'A' ? 'B' : 'A') + envelope.ciphertext.slice(1)};
         try { await openProductionBackup(altered, this.env.BACKUP_KEY); } catch { tamperRejected = true; }
         if (!tamperRejected) throw new Error('Backup tamper rejection failed');
-        return {status: 'passed', tables, sequences: sequences.length, files, foreign_key_violations: 0, integrity: 'ok', tamper_rejected: true,
+        const metadataVerified = metadata.every(Boolean);
+        return {status: metadataVerified && webhooks !== null ? 'passed' : 'partial', tables, sequences: sequences.length, files, metadata_verified: metadataVerified,
+            pending_webhooks: webhooks?.length ?? null, foreign_key_violations: 0, integrity: 'ok', tamper_rejected: true,
             backup_key_fingerprint: await digest(encoder.encode(this.env.BACKUP_KEY)), source_written: false, application_files_unchanged: true};
     }
 }

@@ -16,6 +16,7 @@ it('returns useful validation feedback and no receipt for a closed-period paymen
     ReconciliationPeriod::factory()->create(['family_id' => $family->id, 'status' => ReconciliationPeriodStatus::Closed]);
     $this->actingAs($officer)->from(route('payments.index', ['current_family' => $family->slug]));
     $data = ['member_id' => $member->id, 'amount' => 1000, 'paid_at' => now()->toDateString(), 'method' => 'cash', 'idempotency_key' => (string) Str::uuid()];
+    $data['review_token'] = $this->postJson(route('payments.review', ['current_family' => $family->slug]), $data)->assertOk()->json('token');
     $url = route('payments.store', ['current_family' => $family->slug]);
     if ($json) {
         $this->postJson($url, $data)->assertUnprocessable()->assertJsonValidationErrors('financial_period');

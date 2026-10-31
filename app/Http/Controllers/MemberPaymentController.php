@@ -38,6 +38,7 @@ class MemberPaymentController extends Controller
     {
         $user = $this->authUser();
         $family = app(Family::class);
+        $maximumAdvanceDate = now()->startOfMonth()->addMonths(6);
 
         $pendingContributions = $user->contributions()
             ->where('family_id', $family->id)
@@ -53,10 +54,11 @@ class MemberPaymentController extends Controller
                 'balance' => $contribution->balance,
                 'status' => $contribution->status,
                 'period_label' => $contribution->period_label,
+                'can_pay_online' => ($contribution->year * 12) + $contribution->month <= ($maximumAdvanceDate->year * 12) + $maximumAdvanceDate->month,
             ]);
 
         $paystackPublicKey = $this->stringConfig('services.paystack.public_key');
-        $bankSetupStatus = $this->bankSetupStatus($family, $paystackPublicKey);
+        $bankSetupStatus = $this->bankSetupStatus($family);
 
         return Inertia::render('Pay/Index', [
             'pending_contributions' => $pendingContributions,
@@ -85,7 +87,11 @@ class MemberPaymentController extends Controller
             ], 422);
         }
 
-        $contributionIds = $this->integerList($validated['contribution_ids'] ?? []);
+        if (! $this->paystack->isConfigured()) {
+            return response()->json(['message' => 'Online payments are currently unavailable.'], 422);
+        }
+
+        $contributionIds = array_values(array_unique($this->integerList($validated['contribution_ids'] ?? [])));
 
         // Calculate total from selected contributions
         $contributions = $user->contributions()
@@ -100,7 +106,16 @@ class MemberPaymentController extends Controller
             ], 422);
         }
 
-        $totalAmount = (int) $contributions->sum(fn (Contribution $contribution): int => $contribution->balance);
+        if ($contributions->count() !== count($contributionIds)) {
+            return response()->json(['message' => 'Some selected contributions are no longer available. Refresh and try again.'], 422);
+        }
+
+        $balances = $contributions->map(fn (Contribution $contribution): int => $contribution->balance);
+        if ($balances->contains(fn (int $balance): bool => $balance <= 0) && $balances->contains(fn (int $balance): bool => $balance > 0)) {
+            return response()->json(['message' => 'Some selected contributions are no longer available. Refresh and try again.'], 422);
+        }
+
+        $totalAmount = $balances->reduce(fn (int $total, int $balance): int => $total + $balance, 0);
 
         if ($totalAmount <= 0) {
             return response()->json([
@@ -108,7 +123,18 @@ class MemberPaymentController extends Controller
             ], 422);
         }
 
+        $maximumAdvanceDate = now()->startOfMonth()->addMonths(6);
+        if ($contributions->contains(fn (Contribution $contribution): bool => ($contribution->year * 12) + $contribution->month > ($maximumAdvanceDate->year * 12) + $maximumAdvanceDate->month
+        )) {
+            return response()->json(['message' => 'Advance payments are limited to 6 months ahead.'], 422);
+        }
+
         $feeEstimate = $this->feeCalculator->estimateForContributionAmount($totalAmount);
+
+        if ($request->integer('expected_contribution_amount_kobo') !== $feeEstimate['contribution_amount_kobo']
+            || $request->integer('expected_gross_amount_kobo') !== $feeEstimate['gross_amount_kobo']) {
+            return response()->json(['message' => 'Your payment amount has changed. Refresh and review it before trying again.'], 422);
+        }
 
         $reference = 'TXN_'.Str::upper(Str::random(16));
 
@@ -204,38 +230,72 @@ class MemberPaymentController extends Controller
         $reference = $request->query('reference');
 
         if (! is_string($reference) || $reference === '') {
-            return redirect()->route('pay.index')->with('error', 'Invalid payment reference.');
+            return $this->paymentResult('error', 'Invalid payment reference.');
         }
 
-        $transaction = PaystackTransaction::where('reference', $reference)->first();
+        $transaction = PaystackTransaction::query()
+            ->where('reference', $reference)
+            ->where('user_id', $this->authUser()->id)
+            ->where('family_id', app(Family::class)->id)
+            ->where('type', TransactionType::Contribution)
+            ->first();
 
         if (! $transaction) {
-            return redirect()->route('pay.index')->with('error', 'Transaction not found.');
+            return $this->paymentResult('error', 'Transaction not found.');
+        }
+
+        if ($transaction->status === TransactionStatus::Reversed) {
+            return $this->paymentResult('error', 'This payment was reversed and no longer counts toward your contributions. Contact your family admin if you need help.');
         }
 
         if ($transaction->isSuccessful()) {
-            return redirect()->route('pay.index')->with('success', 'Payment already confirmed.');
+            if ($transaction->payment_batch_id !== null && $transaction->allocated_at !== null) {
+                return $this->paymentResult('success', 'Payment already confirmed.');
+            }
+
+            return $this->paymentResult('error', 'Payment may have been successful, but we could not confirm it was recorded. Check your payment history or contact your family admin before trying again.');
         }
 
         try {
             $response = $this->paystack->verifyTransaction($reference);
             $data = $this->responseData($response);
-            $status = $this->stringValue($data['status'] ?? 'failed');
+            $status = $this->stringValue($data['status'] ?? null);
 
             if ($status !== 'success') {
-                return redirect()->route('pay.index')->with('error', 'Payment was not successful. Please try again.');
+                if ($status === 'failed' && $this->stringValue($data['reference'] ?? null) === $reference) {
+                    $current = $this->settlementService->recordProviderFailure($reference);
+                    if ($current->status === TransactionStatus::Allocated && $current->payment_batch_id !== null && $current->allocated_at !== null) {
+                        return $this->paymentResult('success', 'Payment already confirmed.');
+                    }
+                    if ($current->status === TransactionStatus::Reversed) {
+                        return $this->paymentResult('error', 'This payment was reversed and no longer counts toward your contributions. Contact your family admin if you need help.');
+                    }
+                    if ($current->status === TransactionStatus::Failed) {
+                        return $this->paymentResult('error', 'Payment was not successful. Please try again.');
+                    }
+                }
+
+                return $this->paymentResult('error', 'Could not confirm your payment. Check your payment history or contact your family admin before trying again.');
             }
 
             $settledTransaction = $this->settlementService->settle($reference, $data);
 
-            if ($settledTransaction->isSuccessful()) {
-                return redirect()->route('pay.index')->with('success', 'Payment successful! Your contributions have been updated.');
+            if ($settledTransaction->isSuccessful() && $settledTransaction->payment_batch_id !== null && $settledTransaction->allocated_at !== null) {
+                return $this->paymentResult('success', 'Payment successful! Your contributions have been updated.');
             }
 
-            return redirect()->route('pay.index')->with('error', 'Payment was verified but could not be posted. Support has been notified.');
+            return $this->paymentResult('error', 'Payment was verified but not recorded. Contact your family admin before trying again.');
         } catch (Throwable) {
-            return redirect()->route('pay.index')->with('error', 'Could not verify payment. Your payment will be confirmed shortly.');
+            return $this->paymentResult('error', 'Could not confirm your payment. Check your payment history or contact your family admin before trying again.');
         }
+    }
+
+    /** @param 'success'|'error' $kind */
+    private function paymentResult(string $kind, string $message): RedirectResponse
+    {
+        Inertia::flash('payment_result', ['kind' => $kind, 'message' => $message]);
+
+        return redirect()->route('contributions.my');
     }
 
     private function stringConfig(string $key): string
@@ -245,7 +305,7 @@ class MemberPaymentController extends Controller
         return is_string($value) ? $value : '';
     }
 
-    private function bankSetupStatus(Family $family, string $paystackPublicKey): string
+    private function bankSetupStatus(Family $family): string
     {
         if (! $family->hasBankDetails()) {
             return filled($family->bank_name) || filled($family->account_name) || filled($family->account_number)
@@ -253,7 +313,7 @@ class MemberPaymentController extends Controller
                 : 'missing_bank_details';
         }
 
-        if ($paystackPublicKey === '') {
+        if (! $this->paystack->isConfigured()) {
             return 'missing_paystack_key';
         }
 

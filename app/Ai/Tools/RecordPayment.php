@@ -94,8 +94,8 @@ class RecordPayment implements Tool
 
         // Validate advance payment limit
         if ($targetYear !== null && $targetMonth !== null) {
-            $targetDate = now()->setYear($targetYear)->setMonth($targetMonth)->startOfMonth();
-            $maxAdvanceDate = now()->addMonths(6)->startOfMonth();
+            $targetDate = now()->startOfMonth()->setYear($targetYear)->setMonth($targetMonth);
+            $maxAdvanceDate = now()->startOfMonth()->addMonths(6);
 
             if ($targetDate->gt($maxAdvanceDate)) {
                 return json_encode(['error' => 'Advance payments are limited to 6 months ahead.'], JSON_THROW_ON_ERROR);
@@ -105,7 +105,7 @@ class RecordPayment implements Tool
         $currency = $family->currency;
         $formattedAmount = CurrencyFormatter::format($amount, $currency);
         $targetInfo = ($targetYear !== null && $targetMonth !== null)
-            ? ' for '.now()->setYear($targetYear)->setMonth($targetMonth)->format('F Y')
+            ? ' for '.now()->startOfMonth()->setYear($targetYear)->setMonth($targetMonth)->format('F Y')
             : '';
 
         if (! $confirmed) {

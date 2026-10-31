@@ -6,6 +6,7 @@ import {
     index,
 } from '@/actions/App/Http/Controllers/PaymentController';
 import PaymentReceiptController from '@/actions/App/Http/Controllers/PaymentReceiptController';
+import PaymentReceiptDeliveryRetryController from '@/actions/App/Http/Controllers/PaymentReceiptDeliveryRetryController';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -58,6 +59,48 @@ interface ReceiptItem {
     is_reversed: boolean;
     reversal_reason: string | null;
     can_reverse: boolean;
+    deliveries: {
+        id: number;
+        channel: string;
+        status: string;
+        failure_reason: string | null;
+        can_retry: boolean;
+    }[];
+}
+
+function deliveryStatus(status: string, channel: string): string {
+    switch (status) {
+        case 'queued':
+            return 'Queued';
+        case 'accepted':
+            return channel === 'mail'
+                ? 'Submitted to mailer'
+                : 'Accepted by WhatsApp';
+        case 'delivered':
+            return 'Delivered';
+        case 'failed':
+            return 'Delivery failed';
+        case 'unconfirmed':
+            return 'Delivery could not be confirmed';
+        case 'unavailable':
+            return 'Unavailable';
+        default:
+            return 'Unknown';
+    }
+}
+
+function retryDelivery(id: number, status: string): void {
+    const message =
+        status === 'unconfirmed'
+            ? 'The earlier delivery may have succeeded. Retry and possibly send another receipt?'
+            : 'Retry this receipt delivery?';
+    if (confirm(message)) {
+        router.post(
+            PaymentReceiptDeliveryRetryController({ delivery: id }).url,
+            {},
+            { preserveScroll: true },
+        );
+    }
 }
 
 const props = defineProps<Props>();
@@ -265,6 +308,7 @@ function reverseReceipt(): void {
                                 <th class="px-6 py-3">Receipt</th>
                                 <th class="px-6 py-3">Member</th>
                                 <th class="px-6 py-3">Date / Method</th>
+                                <th class="px-6 py-3">Receipt delivery</th>
                                 <th class="px-6 py-3 text-right">Amount</th>
                                 <th class="px-6 py-3"></th>
                             </tr>
@@ -297,6 +341,47 @@ function reverseReceipt(): void {
                                         class="text-xs text-muted-foreground"
                                     >
                                         {{ receipt.reference }}
+                                    </p>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <p
+                                        v-if="!receipt.deliveries.length"
+                                        class="text-muted-foreground"
+                                    >
+                                        No delivery history
+                                    </p>
+                                    <p
+                                        v-for="delivery in receipt.deliveries"
+                                        :key="delivery.channel"
+                                    >
+                                        {{
+                                            delivery.channel === 'mail'
+                                                ? 'Email'
+                                                : 'WhatsApp'
+                                        }}:
+                                        {{
+                                            deliveryStatus(
+                                                delivery.status,
+                                                delivery.channel,
+                                            )
+                                        }}
+                                        <span
+                                            v-if="delivery.failure_reason"
+                                            class="block text-xs text-muted-foreground"
+                                            >{{ delivery.failure_reason }}</span
+                                        >
+                                        <Button
+                                            v-if="delivery.can_retry"
+                                            size="sm"
+                                            variant="ghost"
+                                            @click="
+                                                retryDelivery(
+                                                    delivery.id,
+                                                    delivery.status,
+                                                )
+                                            "
+                                            >Retry</Button
+                                        >
                                     </p>
                                 </td>
                                 <td class="px-6 py-4 text-right font-semibold">

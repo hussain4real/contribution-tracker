@@ -4,20 +4,29 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Channels\WhatsAppChannel;
 use App\Enums\PaymentStatus;
 use App\Http\Requests\ContributionRegisterRequest;
 use App\Models\Contribution;
+use App\Models\ContributionReminderDelivery;
 use App\Models\Family;
 use App\Models\FamilyMembership;
 use App\Models\Payment;
+use App\Models\PaymentBatch;
+use App\Models\PlatformPlan;
 use App\Models\User;
+use App\Notifications\ContributionReminderNotification;
 use App\Services\FamilyContributionReviewService;
+use App\Services\PaystackService;
+use App\Support\PlatformPlanCatalog;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Inertia\Inertia;
 use Inertia\Response;
+use NotificationChannels\WebPush\WebPushChannel;
+use UnexpectedValueException;
 
 class ContributionController extends Controller
 {
@@ -57,7 +66,7 @@ class ContributionController extends Controller
      * Shows personal contribution history with family aggregate stats.
      * Does NOT show other members' individual details (FR-016).
      */
-    public function my(): Response
+    public function my(PaystackService $paystack): Response
     {
         $user = $this->authUser();
         $family = $user->currentFamily ?? $user->family;
@@ -104,13 +113,51 @@ class ContributionController extends Controller
 
         $personalTotalExpected = (int) $contributionModels->sum(fn (Contribution $contribution): int => $contribution->expected_amount);
         $personalTotalPaid = (int) $contributionModels->sum(fn (Contribution $contribution): int => $contribution->total_paid);
-        $personalTotalOutstanding = $personalTotalExpected - $personalTotalPaid;
+        $personalTotalOutstanding = (int) $contributionModels->sum(fn (Contribution $contribution): int => $contribution->balance);
         $personalPaymentRate = $personalTotalExpected > 0
             ? round(($personalTotalPaid / $personalTotalExpected) * 100, 1)
             : 0;
 
+        $membership = $user->membershipForFamily($family);
+        abort_unless($membership instanceof FamilyMembership, 403);
+        $nextContribution = $contributionModels->filter(fn (Contribution $contribution): bool => $contribution->balance > 0)
+            ->sortBy([['year', 'asc'], ['month', 'asc']])->first();
+        $receipts = PaymentBatch::query()
+            ->where('family_id', $family->id)
+            ->where('family_membership_id', $membership->id)
+            ->with(['allocations.contribution', 'reversal'])
+            ->orderByDesc('paid_at')->orderByDesc('id')
+            ->paginate(20, ['*'], 'receipts_page')
+            ->through(fn (PaymentBatch $batch): array => [
+                'id' => $batch->id,
+                'receipt_number' => $batch->receipt_number,
+                'amount' => $batch->total_amount,
+                'paid_at' => $batch->paid_at->toDateString(),
+                'is_reversed' => $batch->isReversed(),
+                'periods' => $batch->allocations->map(fn (Payment $payment): ?string => $payment->contribution?->period_label)
+                    ->filter()->unique()->values()->all(),
+            ]);
+        $family->loadMissing('platformPlan');
+        $plan = $family->platformPlan ?? PlatformPlan::query()
+            ->where('slug', PlatformPlanCatalog::Free)->where('is_active', true)->first();
+        $onlinePaymentsAvailable = (! $plan || in_array(PlatformPlanCatalog::OnlinePayments, $plan->features, true))
+            && (! $plan?->isPaid() || ! in_array($family->subscription_status, ['cancelled', 'past_due'], true))
+            && $family->hasBankDetails() && $paystack->isConfigured();
+
+        $nextContributionDetails = null;
+        if ($nextContribution !== null) {
+            $nextContributionDetails = [
+                'period_label' => $nextContribution->period_label,
+                'due_date' => $nextContribution->due_date->toDateString(),
+                'balance' => $nextContribution->balance,
+            ];
+        }
+
         return Inertia::render('Contributions/My', [
             'member_id' => $user->id,
+            'next_contribution' => $nextContributionDetails,
+            'receipts' => $receipts,
+            'online_payments_available' => $onlinePaymentsAvailable,
             'statement_period' => [
                 'date_from' => now()->startOfYear()->toDateString(),
                 'date_to' => now()->endOfYear()->toDateString(),
@@ -143,6 +190,34 @@ class ContributionController extends Controller
         $contribution->load(['user.familyMemberships.familyCategory:id,name,monthly_amount', 'payments.recorder']);
         $contributionUser = $contribution->user;
         $membership = $contributionUser?->membershipForFamilyId($contribution->family_id);
+        $canRecord = $this->user($request)->canRecordPayments();
+        $reminderDeliveries = collect();
+        if ($canRecord) {
+            $family = $contribution->family;
+            $deliveries = ContributionReminderDelivery::query()->where('contribution_id', $contribution->id)
+                ->with('whatsappMessage')->latest('id')->limit(30)->get();
+            $retryChannels = [];
+            if ($deliveries->isNotEmpty() && $contributionUser instanceof User && $family instanceof Family && ! $family->isArchived()) {
+                try {
+                    $retryChannels = array_map(fn (string $channel): string => match ($channel) {
+                        WhatsAppChannel::class => 'whatsapp',
+                        WebPushChannel::class => 'webpush',
+                        default => $channel,
+                    }, (new ContributionReminderNotification($contribution))->via($contributionUser));
+                } catch (UnexpectedValueException $exception) {
+                    report($exception);
+                }
+            }
+            $reminderDeliveries = $deliveries->map(fn (ContributionReminderDelivery $delivery): array => [
+                'id' => $delivery->id, 'type' => $delivery->reminder_type, 'channel' => $delivery->channel,
+                'status' => $delivery->displayStatus(), 'created_at' => $delivery->created_at?->toIso8601String(),
+                'failure_reason' => $delivery->failureReason(),
+                'can_retry' => $contribution->balance > 0 && in_array($delivery->channel, ['mail', 'whatsapp', 'webpush'], true)
+                    && in_array($delivery->reminder_type, ['reminder', 'follow_up'], true)
+                    && in_array($delivery->channel, $retryChannels, true)
+                    && in_array($delivery->displayStatus(), ['failed', 'unconfirmed'], true),
+            ]);
+        }
 
         return Inertia::render('Contributions/Show', [
             'contribution' => [
@@ -163,7 +238,8 @@ class ContributionController extends Controller
                     'category' => $membership?->categoryLabel(),
                 ],
             ],
-            'can_record_payment' => $this->user($request)->canRecordPayments(),
+            'can_record_payment' => $canRecord,
+            'reminder_deliveries' => $reminderDeliveries,
         ]);
     }
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Actions\AssignFamilyCategory;
+use App\Http\Requests\UpdateFamilyReminderSettingsRequest;
 use App\Jobs\SyncPaystackSubaccount;
 use App\Models\Family;
 use App\Models\FamilyCategory;
@@ -52,7 +53,30 @@ class FamilySettingsController extends Controller
                 'has_paystack_subaccount' => $family->hasPaystackSubaccount(),
             ],
             'categories' => $categories,
+            'reminderSettings' => $family->reminder_settings ?? Family::DEFAULT_REMINDER_SETTINGS,
         ]);
+    }
+
+    public function updateReminderSettings(UpdateFamilyReminderSettingsRequest $request): RedirectResponse
+    {
+        $family = $this->adminFamily();
+        $effective = now('UTC')->startOfMonth()->addMonth()->format('Y-m');
+        $existing = $family->reminder_settings;
+        $history = is_array($existing) && is_array($existing['history'] ?? null) ? $existing['history'] : [];
+        if (is_array($existing) && is_string($existing['effective_from'] ?? null) && $existing['effective_from'] < $effective) {
+            unset($existing['history']);
+            $history[] = $existing;
+        }
+        $family->update(['reminder_settings' => [
+            'reminder_day' => $request->integer('reminder_day'),
+            'follow_up_day' => $request->integer('follow_up_day'),
+            'time' => $request->string('time')->toString(),
+            'channels' => $request->validated('channels'),
+            'effective_from' => $effective,
+            'history' => $history,
+        ]]);
+
+        return back()->with('success', 'Contribution reminder settings updated.');
     }
 
     public function update(Request $request): RedirectResponse

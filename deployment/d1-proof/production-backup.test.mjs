@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {BACKUP_PREFIX, cleanProductionBackups, createProductionBackup, openProductionBackup, productionBackupSlot, productionRetention, sealProductionBackup} from "./production-backup.mjs";
+import {BACKUP_PREFIX, cleanProductionBackups, createProductionBackup, listProductionObjects, openProductionBackup, pendingProductionWebhookReferences, productionBackupSlot, productionRetention, sealProductionBackup} from "./production-backup.mjs";
 
 const secret = "base64:" + Buffer.alloc(32, 7).toString("base64");
 const at = new Date("2026-10-26T05:00:00Z");
@@ -24,6 +24,11 @@ test("production backup slots follow the existing 02:30 Qatar schedule", () => {
     assert.equal(productionBackupSlot(new Date("2026-10-25T23:30:00Z")), "2026-10-26");
 });
 
+test('production backup rejects a truncated object listing without a continuation cursor', async () => {
+    await assert.rejects(listProductionObjects({list: async () => ({objects: [], truncated: true})}, 'private/'), /incomplete.*listing/i);
+    await assert.rejects(listProductionObjects({list: async () => ({objects: [], truncated: true, cursor: 'same'})}, 'private/'), /incomplete.*listing/i);
+});
+
 test("retention keeps daily history then eight weeks then six additional months and always the latest", () => {
     const objects = Array.from({length: 400}, (_, day) => ({key: BACKUP_PREFIX + "d1/" + new Date(at.getTime() - day * 86400000).toISOString().slice(0, 10) + ".json.aes-gcm", size: 1000}));
     const selected = productionRetention(objects, at);
@@ -40,10 +45,14 @@ function fixture() {
     const objects = new Map();
     let reads = 0, integrity = true;
     const schema = [...Array.from({length: 40}, (_, i) => ({type: "table", name: "table_" + i, sql: "create table table_" + i + "(id integer)"})),
-        {type: "table", name: "report_artifacts", sql: "create table report_artifacts(id integer,disk text,path text)"}];
+        {type: "table", name: "report_artifacts", sql: "create table report_artifacts(id integer,disk text,path text)"},
+        {type: "table", name: "d1_runtime_webhook_inbox", sql: "create table d1_runtime_webhook_inbox(id text,object_key text,accepted_at integer)"}];
+    const webhookRows = [];
     const bytes = Buffer.from("private application PDF fixture");
-    objects.set("private/reports/fixture.pdf", {bytes, etag: "source-etag", uploaded: at});
-    const describe = (key, object) => ({key, size: object.bytes.length, etag: object.etag, uploaded: object.uploaded});
+    objects.set("private/reports/fixture.pdf", {bytes, etag: "source-etag", version: "source-version", uploaded: at,
+        httpMetadata: {contentType: 'application/pdf', cacheExpiry: new Date('2026-12-01T00:00:00.000Z')}, customMetadata: {kind: 'synthetic'}});
+    const describe = (key, object) => ({key, size: object.bytes.length, etag: object.etag, version: object.version, uploaded: object.uploaded,
+        httpMetadata: object.httpMetadata, customMetadata: object.customMetadata});
     const appObjects = new Map(objects);
     objects.clear();
     const env = {
@@ -52,6 +61,7 @@ function fixture() {
             prepare: sql => ({sql, all: async () => { reads++; return {results: schema}; }}),
             batch: async statements => statements.map(({sql}) => {
                 if (sql.startsWith('select * from "report_artifacts"')) return {results: [{id: 1, disk: "local", path: "reports/fixture.pdf"}]};
+                if (sql.startsWith('select * from "d1_runtime_webhook_inbox"')) return {results: webhookRows.map(row => ({...row}))};
                 if (sql.startsWith("select *")) return {results: [{id: 1}]};
                 if (sql.includes("sqlite_sequence")) return {results: [{name: "report_artifacts", seq: 1}]};
                 if (sql === "pragma foreign_key_check") return {results: integrity ? [] : [{table: "broken"}]};
@@ -81,16 +91,17 @@ function fixture() {
             return object ? {...describe(key, object), body: new Response(object.bytes).body, arrayBuffer: async () => object.bytes.buffer.slice(object.bytes.byteOffset, object.bytes.byteOffset + object.bytes.byteLength)} : null;
         },
     };
-    return {env, objects, appObjects, bytes, reads: () => reads, corrupt: () => { integrity = false; }};
+    return {env, objects, appObjects, webhookRows, bytes, reads: () => reads, corrupt: () => { integrity = false; }};
 }
 
 test("a production snapshot recovers its private PDF through an authenticated file manifest", async () => {
     const f = fixture();
     const result = await createProductionBackup(f.env, at);
-    assert.equal(result.status, "created"); assert.equal(result.files, 1); assert.equal(result.tables, 41);
+    assert.equal(result.status, "created"); assert.equal(result.files, 1); assert.equal(result.tables, 42);
     const database = JSON.parse(new TextDecoder().decode(await openProductionBackup(JSON.parse(f.objects.get(result.key).bytes.toString()), secret)));
     assert.equal(database.tables.report_artifacts[0].id, 1);
     assert.equal(database.files[0].path, "private/reports/fixture.pdf");
+    assert.equal(database.files[0].http_metadata, undefined);
     const file = database.files[0];
     const recovered = await openProductionBackup(JSON.parse(f.objects.get(file.backup_key).bytes.toString()), secret);
     assert.deepEqual(Buffer.from(recovered), f.bytes);
@@ -110,8 +121,155 @@ test('cutover checkpoints capture fresh data without replacing an immutable dail
     assert.equal(f.objects.get(daily.key).bytes.toString(), old);
     const snapshot = JSON.parse(new TextDecoder().decode(await openProductionBackup(JSON.parse(f.objects.get(checkpoint.key).bytes), secret)));
     assert.ok(snapshot.files[0].backup_key.includes('/checkpoints/cutover-20261027t140000z/files/'));
-    assert.equal((await createProductionBackup(f.env, at, 'cutover-20261027t140000z')).status, 'already_present');
+    assert.deepEqual(snapshot.files[0].http_metadata, {contentType: 'application/pdf', cacheExpiry: '2026-12-01T00:00:00.000Z'});
+    assert.deepEqual(snapshot.files[0].custom_metadata, {kind: 'synthetic'});
+    await assert.rejects(createProductionBackup(f.env, at, 'cutover-20261027t140000z'), /checkpoint already exists/i);
+    await assert.rejects(createProductionBackup(f.env, new Date('2026-10-27T05:00:00Z'), 'cutover-20261027t140000z'), /checkpoint already exists/i);
     await assert.rejects(() => createProductionBackup(f.env, at, '../escape'));
+});
+
+test('a cutover checkpoint refuses database changes during file capture', async () => {
+    const f = fixture();
+    const batch = f.env.DB.batch;
+    let calls = 0;
+    f.env.DB.batch = async statements => {
+        const result = await batch(statements);
+        if (++calls === 2) result[0].results = [{id: 2}];
+        return result;
+    };
+    const checkpoint = 'cutover-20261027t140001z';
+
+    await assert.rejects(createProductionBackup(f.env, at, checkpoint), /database changed during checkpoint/i);
+    assert.equal(f.objects.has(BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/d1/' + productionBackupSlot(at) + '.json.aes-gcm'), false);
+});
+
+test('a cutover checkpoint refuses file inventory changes during capture', async () => {
+    const f = fixture();
+    const get = f.env.APPLICATION_FILES.get;
+    f.env.APPLICATION_FILES.get = async (...args) => {
+        const object = await get(...args);
+        f.appObjects.set('private/reports/added.pdf', {bytes: Buffer.from('new fixture'), etag: 'new-etag', uploaded: at});
+        return object;
+    };
+    const checkpoint = 'cutover-20261027t140002z';
+
+    await assert.rejects(createProductionBackup(f.env, at, checkpoint), /file inventory changed during checkpoint/i);
+    assert.equal(f.objects.has(BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/d1/' + productionBackupSlot(at) + '.json.aes-gcm'), false);
+});
+
+test('a cutover checkpoint refuses a same-content file replacement during capture', async () => {
+    for (const stage of ['before-get', 'after-get']) {
+        const f = fixture();
+        const get = f.env.APPLICATION_FILES.get;
+        f.env.APPLICATION_FILES.get = async (...args) => {
+            if (stage === 'before-get') f.appObjects.get('private/reports/fixture.pdf').version = 'replacement-version';
+            const object = await get(...args);
+            if (stage === 'after-get') f.appObjects.get('private/reports/fixture.pdf').version = 'replacement-version';
+            return object;
+        };
+        const checkpoint = stage === 'before-get' ? 'cutover-20261031t050001z' : 'cutover-20261031t050002z';
+        await assert.rejects(createProductionBackup(f.env, at, checkpoint), /file.*changed/i);
+        assert.equal(f.objects.has(BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/d1/' + productionBackupSlot(at) + '.json.aes-gcm'), false);
+    }
+});
+
+test('a cutover checkpoint encrypts pending webhook payloads without retaining unrelated inbox files', async () => {
+    const f = fixture();
+    const id = 'a'.repeat(64), key = `private/webhook-inbox/paystack/${id}.json`;
+    const orphan = `private/webhook-inbox/whatsapp/${'b'.repeat(64)}.json`;
+    f.webhookRows.push({id: `paystack:${id}`, object_key: key, accepted_at: null},
+        {id: `whatsapp:${'c'.repeat(64)}`, object_key: `private/webhook-inbox/whatsapp/${'c'.repeat(64)}.json`, accepted_at: 1});
+    f.appObjects.set(key, {bytes: Buffer.from('synthetic pending payload'), etag: 'pending-etag', version: 'pending-version', uploaded: at});
+    f.appObjects.set(orphan, {bytes: Buffer.from('unrelated payload'), etag: 'orphan-etag', version: 'orphan-version', uploaded: at});
+    const daily = await createProductionBackup(f.env, at);
+    const old = JSON.parse(new TextDecoder().decode(await openProductionBackup(JSON.parse(f.objects.get(daily.key).bytes), secret)));
+    assert.equal(old.files.some(file => file.path === key), false);
+    const checkpoint = await createProductionBackup(f.env, at, 'cutover-20261031t050004z');
+    const snapshot = JSON.parse(new TextDecoder().decode(await openProductionBackup(JSON.parse(f.objects.get(checkpoint.key).bytes), secret)));
+    const file = snapshot.files.find(item => item.path === key);
+    assert.ok(file);
+    assert.equal(snapshot.files.some(item => item.path === orphan), false);
+    const encrypted = f.objects.get(file.backup_key).bytes.toString();
+    assert.equal(encrypted.includes('synthetic pending payload'), false);
+    assert.equal(new TextDecoder().decode(await openProductionBackup(JSON.parse(encrypted), secret)), 'synthetic pending payload');
+});
+
+test('a cutover checkpoint refuses missing or invalid pending webhook references', async () => {
+    for (const invalid of [false, true]) {
+        const f = fixture(), id = 'd'.repeat(64);
+        f.webhookRows.push({id: `paystack:${id}`, object_key: invalid ? 'private/other.json' : `private/webhook-inbox/paystack/${id}.json`, accepted_at: null});
+        const checkpoint = invalid ? 'cutover-20261031t050006z' : 'cutover-20261031t050005z';
+        await assert.rejects(createProductionBackup(f.env, at, checkpoint), /pending production webhook/i);
+        assert.equal(f.objects.has(BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/d1/' + productionBackupSlot(at) + '.json.aes-gcm'), false);
+    }
+});
+
+test('pending webhook reference reconstruction rejects absent, malformed or duplicate entries', () => {
+    const id = 'e'.repeat(64), row = {id: `paystack:${id}`, object_key: `private/webhook-inbox/paystack/${id}.json`, accepted_at: null};
+    assert.throws(() => pendingProductionWebhookReferences(null), /inbox is missing/i);
+    assert.throws(() => pendingProductionWebhookReferences([{}]), /invalid production webhook inbox row/i);
+    assert.throws(() => pendingProductionWebhookReferences([{...row, accepted_at: 'unknown'}]), /invalid production webhook inbox row/i);
+    assert.throws(() => pendingProductionWebhookReferences([row, row]), /invalid pending production webhook reference/i);
+    assert.deepEqual(pendingProductionWebhookReferences([{...row, accepted_at: 1}]), []);
+});
+
+test('a cutover checkpoint refuses an inventory without file versions', async () => {
+    const f = fixture();
+    delete f.appObjects.get('private/reports/fixture.pdf').version;
+    await assert.rejects(createProductionBackup(f.env, at, 'cutover-20261031t050003z'), /file version missing/i);
+    assert.equal((await createProductionBackup(f.env, at)).status, 'created');
+});
+
+test('a cutover checkpoint refuses an unreadable encrypted file before publishing its database', async () => {
+    const f = fixture();
+    const put = f.env.BACKUP_FILES.put;
+    f.env.BACKUP_FILES.put = async (key, value, options) => {
+        const stored = await put(key, value, options);
+        if (key.includes('/files/')) {
+            const envelope = JSON.parse(value);
+            envelope.ciphertext = (envelope.ciphertext[0] === 'A' ? 'B' : 'A') + envelope.ciphertext.slice(1);
+            f.objects.get(key).bytes = Buffer.from(JSON.stringify(envelope));
+        }
+        return stored;
+    };
+    const checkpoint = 'cutover-20261027t140003z';
+
+    await assert.rejects(createProductionBackup(f.env, at, checkpoint));
+    assert.equal(f.objects.has(BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/d1/' + productionBackupSlot(at) + '.json.aes-gcm'), false);
+    await assert.rejects(createProductionBackup(f.env, at, checkpoint), /checkpoint already exists/i);
+});
+
+test('a cutover checkpoint reports an unreadable published database instead of success', async () => {
+    const f = fixture();
+    const put = f.env.BACKUP_FILES.put;
+    f.env.BACKUP_FILES.put = async (key, value, options) => {
+        const stored = await put(key, value, options);
+        if (key.includes('/d1/')) {
+            const envelope = JSON.parse(value);
+            envelope.ciphertext = (envelope.ciphertext[0] === 'A' ? 'B' : 'A') + envelope.ciphertext.slice(1);
+            f.objects.get(key).bytes = Buffer.from(JSON.stringify(envelope));
+        }
+        return stored;
+    };
+    const checkpoint = 'cutover-20261027t140004z';
+
+    await assert.rejects(createProductionBackup(f.env, at, checkpoint));
+    assert.equal(f.objects.has(BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/d1/' + productionBackupSlot(at) + '.json.aes-gcm'), true);
+    await assert.rejects(createProductionBackup(f.env, at, checkpoint), /checkpoint already exists/i);
+});
+
+test('a racing cutover checkpoint cannot replace or report another snapshot as new', async () => {
+    const f = fixture();
+    const put = f.env.BACKUP_FILES.put;
+    f.env.BACKUP_FILES.put = async (key, value, options) => {
+        if (key.includes('/d1/')) f.objects.set(key, {bytes: Buffer.from('competing checkpoint'), etag: 'other', uploaded: at});
+        return put(key, value, options);
+    };
+    const checkpoint = 'cutover-20261027t140005z';
+    const key = BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/d1/' + productionBackupSlot(at) + '.json.aes-gcm';
+
+    await assert.rejects(createProductionBackup(f.env, at, checkpoint), /checkpoint already exists/i);
+    assert.equal(f.objects.get(key).bytes.toString(), 'competing checkpoint');
 });
 
 test("a database-referenced missing file prevents publishing a successful backup", async () => {
