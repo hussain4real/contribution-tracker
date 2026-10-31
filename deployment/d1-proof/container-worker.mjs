@@ -152,7 +152,9 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
         this.startupState = {attempts: 0, allocations: 0, requested_ms: Date.now()};
         const deadline = Date.now() + 25_000;
         while (Date.now() < deadline) {
+            if (this.admissionPaused) return;
             const allocated = await this.ctx.blockConcurrencyWhile(async () => {
+                if (this.admissionPaused) return false;
                 this.startupState.attempts++;
                 try {
                     if (!container.running) {
@@ -195,6 +197,7 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
                     return false;
                 }
             });
+            if (this.admissionPaused) return;
             if (allocated) {
                 this.startupState.phase = "idle-timeout";
                 try {
@@ -205,6 +208,7 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
                     await new Promise(resolve => setTimeout(resolve, 500));
                     continue;
                 }
+                if (this.admissionPaused) return;
                 this.startupState.allocations++;
                 if (this.env.RUNTIME_PROFILE === "production") {
                     this.startupState.phase = "outbound-intercept";

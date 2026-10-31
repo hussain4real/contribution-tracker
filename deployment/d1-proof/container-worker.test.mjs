@@ -225,6 +225,26 @@ test('staging admission pause prevents queued and starting requests from reachin
     assert.equal((await starting).status, 503);
 });
 
+test('staging admission pause prevents a startup retry from starting the container', async () => {
+    const f = fixture();
+    const Container = f.container.constructor;
+    f.container.ctx.container.running = false;
+    let starts = 0;
+    let finishTimeout;
+    const timeoutPending = new Promise(resolve => { finishTimeout = resolve; });
+    f.container.ctx.container.start = () => { starts++; };
+    f.container.ctx.container.setInactivityTimeout = () => timeoutPending;
+    f.container.ctx.container.getTcpPort = () => ({fetch: async () => new Response('not ready', {status: 503})});
+    const container = new Container(f.container.ctx, {...f.env, CONTAINER_ENV: '{}', STAGING_ADMISSION_CONTROL: '1'});
+    const pending = container.fetch(new Request('https://staging.example/payments'));
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(starts, 1);
+    await container.setAdmissionPaused(true);
+    finishTimeout();
+    assert.equal((await pending).status, 503);
+    assert.equal(starts, 1);
+});
+
 test('staging admission control stays closed on a failed pause write and is unavailable in production', async () => {
     const f = fixture();
     const Container = f.container.constructor;
