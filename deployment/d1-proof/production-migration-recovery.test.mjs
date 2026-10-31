@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import test from 'node:test';
 import {runInNewContext} from 'node:vm';
-import {listProductionObjects, openProductionBackup, productionBackupPrefix, productionBackupSlot, sealProductionBackup, BACKUP_PREFIX} from './production-backup.mjs';
+import {listProductionObjects, openProductionBackup, pendingProductionWebhookReferences, productionBackupPrefix, productionBackupSlot, sealProductionBackup, BACKUP_PREFIX} from './production-backup.mjs';
 
 function bucket(initial = {}) {
     const data = new Map(Object.entries(initial));
@@ -26,7 +26,7 @@ function fixture(overrides = {}, clock = Date, cryptography = webcrypto) {
         BACKUP_FILES: bucket({[BACKUP_PREFIX + 'd1/2026-10-27.json.aes-gcm']: 'old encrypted synthetic'}),
         RECOVERY_DB: {prepare: () => ({first: async () => ({n: 1})})}, ...overrides};
     const Recovery = runInNewContext(source + '\nProductionMigrationRecovery', {WorkerEntrypoint: class {constructor(env) {this.env = env;}},
-        crypto: cryptography, TextEncoder, TextDecoder, Date: clock, Set, BACKUP_PREFIX, listProductionObjects, openProductionBackup, productionBackupPrefix, productionBackupSlot,
+        crypto: cryptography, TextEncoder, TextDecoder, Date: clock, Set, BACKUP_PREFIX, listProductionObjects, openProductionBackup, pendingProductionWebhookReferences, productionBackupPrefix, productionBackupSlot,
         createProductionBackup: async (_env, _at, checkpoint) => ({key: productionBackupPrefix(checkpoint) + 'd1/fixture'})});
     return {env, recovery: new Recovery(env)};
 }
@@ -72,11 +72,15 @@ test('an isolated synthetic checkpoint restores tables, sequence values and veri
         constructor(...args) { super(...(args.length ? args : [capturedAt.valueOf() + 86400000])); }
     }
     const secret = 'base64:' + Buffer.alloc(32, 7).toString('base64');
-    const names = ['families', 'users', ...Array.from({length: 53}, (_, index) => `fixture_${index}`)];
+    const names = ['families', 'users', 'd1_runtime_webhook_inbox', ...Array.from({length: 52}, (_, index) => `fixture_${index}`)];
     const tables = Object.fromEntries(names.map(name => [name, []]));
     tables.families = Array.from({length: 44}, (_, index) => ({id: index + 1}));
     tables.users = Array.from({length: 66}, (_, index) => ({id: index + 1}));
-    const schema = names.map(name => ({type: 'table', name, sql: `create table "${name}" (id integer primary key autoincrement)`}));
+    const webhookId = 'e'.repeat(64), webhookPath = `private/webhook-inbox/paystack/${webhookId}.json`;
+    tables.d1_runtime_webhook_inbox = [{id: `paystack:${webhookId}`, object_key: webhookPath, accepted_at: null}];
+    const schema = names.map(name => ({type: 'table', name, sql: name === 'd1_runtime_webhook_inbox'
+        ? 'create table d1_runtime_webhook_inbox (id text primary key, object_key text, accepted_at integer)'
+        : `create table "${name}" (id integer primary key autoincrement)`}));
     schema.push({type: 'index', name: 'fixture_users_index', sql: 'create index fixture_users_index on users(id)'});
     schema.push({type: 'trigger', name: 'fixture_users_trigger', sql: 'create trigger fixture_users_trigger after insert on users begin select 1; end'});
     const sequences = [{name: 'families', seq: 100}, {name: 'users', seq: 200}];
@@ -89,6 +93,7 @@ test('an isolated synthetic checkpoint restores tables, sequence values and veri
         const backupKey = productionBackupPrefix(checkpoint) + `files/${sha256}.json.aes-gcm`;
         await backups.put(backupKey, JSON.stringify(await sealProductionBackup(bytes, secret, `file:${sha256}`)));
         files.push({bytes: bytes.length, sha256, backup_key: backupKey,
+            ...(index === 0 ? {path: webhookPath} : {}),
             http_metadata: {contentType: 'text/plain', cacheExpiry: '2026-12-01T00:00:00.000Z'}, custom_metadata: {kind: 'synthetic'}});
     }
     const snapshot = {schema, tables, sequences, files};
@@ -115,6 +120,12 @@ test('an isolated synthetic checkpoint restores tables, sequence values and veri
         assert.equal(db.prepare("select count(*) n from sqlite_master where type='table' and name not glob 'sqlite_*'").get().n, 0);
         backups.data.set(backupKey, original);
 
+        const missingWebhook = {...snapshot, files: snapshot.files.map((file, index) => index === 0 ? {...file, path: 'private/other.json'} : file)};
+        backups.data.set(backupKey, JSON.stringify(await sealProductionBackup(new TextEncoder().encode(JSON.stringify(missingWebhook)), secret, 'database')));
+        await assert.rejects(f.recovery.run('restore', checkpoint), /pending production webhook file missing/i);
+        assert.equal(db.prepare("select count(*) n from sqlite_master where type='table' and name not glob 'sqlite_*'").get().n, 0);
+        backups.data.set(backupKey, original);
+
         const conflictPath = `migration-recovery/actual-20261027/${runId}/${files[0].sha256}`;
         application.data.set(conflictPath, 'existing recovery evidence');
         await assert.rejects(f.recovery.run('restore', checkpoint), /recovery file already exists/i);
@@ -127,6 +138,7 @@ test('an isolated synthetic checkpoint restores tables, sequence values and veri
         assert.equal(result.tables.length, 55);
         assert.equal(result.files.length, 7);
         assert.equal(result.metadata_verified, true);
+        assert.equal(result.pending_webhooks, 1);
         assert.equal(result.integrity, 'ok');
         assert.equal(result.tamper_rejected, true);
         assert.deepEqual(db.prepare('select name,seq from sqlite_sequence order by name').all().map(row => ({...row})), sequences);
@@ -138,7 +150,8 @@ test('an isolated synthetic checkpoint restores tables, sequence values and veri
 
         const legacyDb = new DatabaseSync(':memory:');
         try {
-            const legacy = {...snapshot, files: snapshot.files.map(file => ({bytes: file.bytes, sha256: file.sha256, backup_key: file.backup_key}))};
+            const legacy = {...snapshot, files: snapshot.files.map(file => ({bytes: file.bytes, sha256: file.sha256, backup_key: file.backup_key,
+                ...(file.path ? {path: file.path} : {})}))};
             backups.data.set(backupKey, JSON.stringify(await sealProductionBackup(new TextEncoder().encode(JSON.stringify(legacy)), secret, 'database')));
             const legacyRecovery = fixture({RECOVERY_DB: makeTarget(legacyDb), BACKUP_FILES: backups, APPLICATION_FILES: bucket(), BACKUP_KEY: secret}, FixedDate,
                 {subtle: webcrypto.subtle, randomUUID: () => runId});
@@ -149,6 +162,25 @@ test('an isolated synthetic checkpoint restores tables, sequence values and veri
         } finally {
             backups.data.set(backupKey, original);
             legacyDb.close();
+        }
+
+        const noInboxDb = new DatabaseSync(':memory:');
+        try {
+            const tablesWithoutInbox = {...snapshot.tables};
+            delete tablesWithoutInbox.d1_runtime_webhook_inbox;
+            tablesWithoutInbox.legacy_fixture = [];
+            const noInbox = {...snapshot, tables: tablesWithoutInbox, schema: snapshot.schema.map(item => item.name === 'd1_runtime_webhook_inbox'
+                ? {type: 'table', name: 'legacy_fixture', sql: 'create table legacy_fixture(id integer primary key autoincrement)'} : item)};
+            backups.data.set(backupKey, JSON.stringify(await sealProductionBackup(new TextEncoder().encode(JSON.stringify(noInbox)), secret, 'database')));
+            const recovery = fixture({RECOVERY_DB: makeTarget(noInboxDb), BACKUP_FILES: backups, APPLICATION_FILES: bucket(), BACKUP_KEY: secret}, FixedDate,
+                {subtle: webcrypto.subtle, randomUUID: () => runId});
+            const result = await recovery.recovery.run('restore', checkpoint);
+            assert.equal(result.status, 'partial');
+            assert.equal(result.metadata_verified, true);
+            assert.equal(result.pending_webhooks, null);
+        } finally {
+            backups.data.set(backupKey, original);
+            noInboxDb.close();
         }
 
         const racingDb = new DatabaseSync(':memory:');

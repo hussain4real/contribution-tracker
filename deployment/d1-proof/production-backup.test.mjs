@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {BACKUP_PREFIX, cleanProductionBackups, createProductionBackup, listProductionObjects, openProductionBackup, productionBackupSlot, productionRetention, sealProductionBackup} from "./production-backup.mjs";
+import {BACKUP_PREFIX, cleanProductionBackups, createProductionBackup, listProductionObjects, openProductionBackup, pendingProductionWebhookReferences, productionBackupSlot, productionRetention, sealProductionBackup} from "./production-backup.mjs";
 
 const secret = "base64:" + Buffer.alloc(32, 7).toString("base64");
 const at = new Date("2026-10-26T05:00:00Z");
@@ -202,6 +202,15 @@ test('a cutover checkpoint refuses missing or invalid pending webhook references
         await assert.rejects(createProductionBackup(f.env, at, checkpoint), /pending production webhook/i);
         assert.equal(f.objects.has(BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/d1/' + productionBackupSlot(at) + '.json.aes-gcm'), false);
     }
+});
+
+test('pending webhook reference reconstruction rejects absent, malformed or duplicate entries', () => {
+    const id = 'e'.repeat(64), row = {id: `paystack:${id}`, object_key: `private/webhook-inbox/paystack/${id}.json`, accepted_at: null};
+    assert.throws(() => pendingProductionWebhookReferences(null), /inbox is missing/i);
+    assert.throws(() => pendingProductionWebhookReferences([{}]), /invalid production webhook inbox row/i);
+    assert.throws(() => pendingProductionWebhookReferences([{...row, accepted_at: 'unknown'}]), /invalid production webhook inbox row/i);
+    assert.throws(() => pendingProductionWebhookReferences([row, row]), /invalid pending production webhook reference/i);
+    assert.deepEqual(pendingProductionWebhookReferences([{...row, accepted_at: 1}]), []);
 });
 
 test('a cutover checkpoint refuses an inventory without file versions', async () => {

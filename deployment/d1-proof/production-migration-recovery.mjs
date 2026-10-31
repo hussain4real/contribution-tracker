@@ -1,5 +1,5 @@
 import {WorkerEntrypoint} from 'cloudflare:workers';
-import {createProductionBackup, openProductionBackup, productionBackupPrefix, BACKUP_PREFIX, listProductionObjects} from './production-backup.mjs';
+import {createProductionBackup, openProductionBackup, pendingProductionWebhookReferences, productionBackupPrefix, BACKUP_PREFIX, listProductionObjects} from './production-backup.mjs';
 
 const ARCHIVE = 'migration-archive/synthetic-20261027/';
 const RECOVERY = 'migration-recovery/actual-20261027/';
@@ -105,6 +105,8 @@ export class ProductionMigrationRecovery extends WorkerEntrypoint {
         if (snapshot.tables.users?.length !== 66 || snapshot.tables.families?.length !== 44 || snapshot.files.length !== 7) throw new Error('Unexpected actual recovery snapshot');
         const names = Object.keys(snapshot.tables);
         if (names.length !== 55 || names.some(name => !/^[a-z_][a-z0-9_]*$/.test(name))) throw new Error('Unexpected recovery tables');
+        const webhooks = snapshot.tables.d1_runtime_webhook_inbox === undefined ? null : pendingProductionWebhookReferences(snapshot.tables.d1_runtime_webhook_inbox);
+        if (webhooks?.some(reference => !snapshot.files.some(file => file.path === reference.key))) throw new Error('Pending production webhook file missing from recovery');
         const recoveryPrefix = RECOVERY + crypto.randomUUID() + '/';
         const metadata = snapshot.files.map(fileMetadata);
         for (const file of snapshot.files) {
@@ -169,7 +171,8 @@ export class ProductionMigrationRecovery extends WorkerEntrypoint {
         try { await openProductionBackup(altered, this.env.BACKUP_KEY); } catch { tamperRejected = true; }
         if (!tamperRejected) throw new Error('Backup tamper rejection failed');
         const metadataVerified = metadata.every(Boolean);
-        return {status: metadataVerified ? 'passed' : 'partial', tables, sequences: sequences.length, files, metadata_verified: metadataVerified, foreign_key_violations: 0, integrity: 'ok', tamper_rejected: true,
+        return {status: metadataVerified && webhooks !== null ? 'passed' : 'partial', tables, sequences: sequences.length, files, metadata_verified: metadataVerified,
+            pending_webhooks: webhooks?.length ?? null, foreign_key_violations: 0, integrity: 'ok', tamper_rejected: true,
             backup_key_fingerprint: await digest(encoder.encode(this.env.BACKUP_KEY)), source_written: false, application_files_unchanged: true};
     }
 }

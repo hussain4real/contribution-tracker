@@ -108,6 +108,23 @@ export function productionBackupPrefix(checkpoint = null) {
     return BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/';
 }
 
+export function pendingProductionWebhookReferences(rows) {
+    if (!Array.isArray(rows)) throw new Error('Production webhook inbox is missing from checkpoint');
+    const references = [], ids = new Set();
+    for (const row of rows) {
+        if (!row || !Object.hasOwn(row, 'accepted_at')) throw new Error('Invalid production webhook inbox row');
+        if (row.accepted_at !== null) {
+            if (!Number.isSafeInteger(row.accepted_at) || row.accepted_at < 0) throw new Error('Invalid production webhook inbox row');
+            continue;
+        }
+        const match = typeof row.id === 'string' ? /^(paystack|whatsapp):([a-f0-9]{64})$/.exec(row.id) : null;
+        if (!match || row.object_key !== `private/webhook-inbox/${match[1]}/${match[2]}.json` || ids.has(row.id)) throw new Error('Invalid pending production webhook reference');
+        ids.add(row.id);
+        references.push({id: row.id, provider: match[1], key: row.object_key, sha256: match[2]});
+    }
+    return references;
+}
+
 export async function createProductionBackup(env, at, checkpoint = null) {
     if (env.DATABASE_NAME !== DATABASE || env.BACKUPS_ENABLED !== "true") throw new Error("Production backups are disabled");
     const prefix = productionBackupPrefix(checkpoint);
@@ -119,18 +136,7 @@ export async function createProductionBackup(env, at, checkpoint = null) {
     }
     const captured = await snapshot(env);
     if (checkpoint !== null && encoder.encode(JSON.stringify(captured)).length > 8_000_000) throw new Error("Production database backup exceeds memory budget");
-    const pendingWebhookFiles = new Set();
-    if (checkpoint !== null) {
-        const inbox = captured.tables.d1_runtime_webhook_inbox;
-        if (!Array.isArray(inbox)) throw new Error('Production webhook inbox is missing from checkpoint');
-        for (const row of inbox) {
-            if (!Object.hasOwn(row, 'accepted_at')) throw new Error('Invalid production webhook inbox row');
-            if (row.accepted_at !== null) continue;
-            const match = typeof row.id === 'string' ? /^(paystack|whatsapp):([a-f0-9]{64})$/.exec(row.id) : null;
-            if (!match || row.object_key !== `private/webhook-inbox/${match[1]}/${match[2]}.json`) throw new Error('Invalid pending production webhook reference');
-            pendingWebhookFiles.add(row.object_key);
-        }
-    }
+    const pendingWebhookFiles = new Set(checkpoint === null ? [] : pendingProductionWebhookReferences(captured.tables.d1_runtime_webhook_inbox).map(row => row.key));
     const checkpointFile = object => !object.key.startsWith(BACKUP_PREFIX)
         && (!object.key.startsWith('private/webhook-inbox/') || pendingWebhookFiles.has(object.key));
     const files = [...await listProductionObjects(env.APPLICATION_FILES, "private/"), ...await listProductionObjects(env.APPLICATION_FILES, "public/")]
