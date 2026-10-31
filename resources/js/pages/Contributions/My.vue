@@ -11,7 +11,7 @@ import { dashboard } from '@/routes';
 import { myStatement } from '@/routes/contributions';
 import { index as payIndex } from '@/routes/pay';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import {
     AlertCircle,
     CheckCircle2,
@@ -131,6 +131,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const { formatCurrency } = useCurrencyFormatter();
+const page = usePage();
 const { isOnline } = useNetworkStatus();
 const unavailableDownload = ref<number | 'statement' | null>(null);
 
@@ -186,6 +187,21 @@ function checkDownloadConnection(
                         <Download class="h-4 w-4" /> Download statement
                     </a>
                 </Button>
+            </div>
+
+            <div
+                v-if="page.props.flash?.error"
+                role="alert"
+                class="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
+            >
+                {{ page.props.flash.error }}
+            </div>
+            <div
+                v-else-if="page.props.flash?.success"
+                role="status"
+                class="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200"
+            >
+                {{ page.props.flash.success }}
             </div>
 
             <p

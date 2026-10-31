@@ -3,7 +3,10 @@
 declare(strict_types=1);
 
 use App\Models\Contribution;
+use App\Models\FamilyMembership;
 use App\Models\Payment;
+use App\Models\PaymentBatch;
+use App\Models\PaystackTransaction;
 
 /**
  * T078 [US5] Browser test for member contribution history navigation
@@ -26,6 +29,41 @@ describe('Member History Flow', function () {
         $page->click('My Contributions')
             ->assertPathIs("/{$this->family->slug}/contributions/my")
             ->assertSee('My money');
+    });
+
+    it('shows a payment callback error after a full page return', function () {
+        $page = loginBrowserAs($this->member);
+
+        $page->navigate(route('pay.callback', ['current_family' => $this->family->slug, 'reference' => 'TXN_MISSING']))
+            ->assertPathIs("/{$this->family->slug}/contributions/my")
+            ->assertSeeIn('[role="alert"]', 'Transaction not found.')
+            ->assertVisible('[role="alert"]')
+            ->assertNoJavaScriptErrors();
+        $page->click('Dashboard')->back()
+            ->assertDontSee('Transaction not found.');
+    });
+
+    it('shows a confirmed payment and receipt after a full page return', function () {
+        $membership = $this->member->membershipForFamily($this->family);
+        assert($membership instanceof FamilyMembership);
+        $batch = PaymentBatch::factory()->create([
+            'family_id' => $this->family->id,
+            'family_membership_id' => $membership->id,
+            'recorded_by' => $this->recorder->id,
+        ]);
+        $transaction = PaystackTransaction::factory()->create([
+            'family_id' => $this->family->id,
+            'user_id' => $this->member->id,
+            'payment_batch_id' => $batch->id,
+        ]);
+
+        $page = loginBrowserAs($this->member);
+        $page->navigate(route('pay.callback', ['current_family' => $this->family->slug, 'reference' => $transaction->reference]))
+            ->assertPathIs("/{$this->family->slug}/contributions/my")
+            ->assertSeeIn('[role="status"]', 'Payment already confirmed.')
+            ->assertVisible('[role="status"]')
+            ->assertSee("Receipt #{$batch->receipt_number}")
+            ->assertNoJavaScriptErrors();
     });
 
     it('member can view contribution details with payments', function () {

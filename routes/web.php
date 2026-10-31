@@ -209,8 +209,8 @@ Route::prefix('{current_family}')
         Route::middleware('subscription:'.PlatformPlanCatalog::OnlinePayments)->group(function () {
             Route::get('pay', [MemberPaymentController::class, 'show'])->name('pay.index');
             Route::post('pay/initiate', [MemberPaymentController::class, 'initiate'])->name('pay.initiate');
-            Route::get('pay/callback', [MemberPaymentController::class, 'callback'])->name('pay.callback');
         });
+        Route::get('pay/callback', [MemberPaymentController::class, 'callback'])->name('pay.callback');
 
         // Subscription Management
         Route::get('subscription', [SubscriptionController::class, 'index'])->name('subscription.index');
