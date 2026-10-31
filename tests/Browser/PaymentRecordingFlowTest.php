@@ -9,6 +9,8 @@ declare(strict_types=1);
  */
 
 use App\Models\Contribution;
+use App\Models\Payment;
+use App\Models\PaymentBatch;
 
 describe('Payment Recording Flow (Browser)', function () {
     beforeEach(function () {
@@ -80,6 +82,33 @@ describe('Payment Recording Flow (Browser)', function () {
         ]))
             ->assertSee('Pending Contributions')
             ->assertSee('remaining');
+    });
+
+    it('retrieves a recorded receipt when the payment form is retried after review expiry', function () {
+        $page = loginBrowserAs($this->financialSecretary);
+        $page->navigate(route('payments.create', [
+            'current_family' => $this->family->slug,
+            'member' => $this->member,
+        ]));
+        $paidAt = now()->format('Y-m-d');
+        fillBrowserFieldWithoutChange($page, '[name="amount"]', '4000');
+        fillBrowserFieldWithoutChange($page, '[name="paid_at"]', $paidAt);
+        $page->click('Review payment')->assertSee($this->contribution->period_label.':');
+        $token = $page->script('() => document.querySelector("[name=review_token]")?.value');
+        $key = $page->script('() => document.querySelector("[name=idempotency_key]")?.value');
+        expect($token)->toBeString()->and($key)->toBeString();
+
+        $this->actingAs($this->financialSecretary)->post(route('payments.store', ['current_family' => $this->family->slug]), [
+            'member_id' => $this->member->id, 'amount' => 4000, 'paid_at' => $paidAt,
+            'method' => 'cash', 'idempotency_key' => $key, 'review_token' => $token,
+        ])->assertSessionHasNoErrors();
+        $receipt = PaymentBatch::sole();
+
+        $this->travel(16)->minutes();
+        $page->click('button[type="submit"]')
+            ->assertSee('Receipt #'.$receipt->receipt_number.': ₦4,000.00 recorded for John Doe.')
+            ->assertNoJavaScriptErrors();
+        expect(PaymentBatch::count())->toBe(1)->and(Payment::count())->toBe(1);
     });
 
     it('quick amount buttons work correctly', function () {
