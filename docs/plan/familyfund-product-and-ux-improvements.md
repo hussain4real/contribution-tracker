@@ -150,7 +150,7 @@ The existing [product completion roadmap](../familyfund-product-completion-roadm
 
 **Production scheduler integration check:** A local synthetic SQL test ran the production scheduler for three families with different reminder settings. It queued neither reminder early, queued each configured family at its own UTC time, and did not create or enqueue a duplicate when the scheduler ran again. This checks the scheduler and its outbox, not the deployed scheduler, real queue delivery or message receipt.
 
-**Local settings walkthrough:** The demo family admin could see reminder days, UTC time, channel controls and an example message on desktop; the form was also inspected at 390 × 844 pixels. Representative-user validation remains pending.
+**Local settings walkthrough:** The demo family admin could see reminder days, UTC time, channel controls and an example message on desktop; the form was also inspected at 390 × 844 pixels. On 2026-10-31, after being invited to review reminder days, time, channels and message preview in the synthetic demo, the product owner described the setup as "very clear". This feedback does not establish which device or individual interactions were used.
 
 ### 4. Payment review
 
