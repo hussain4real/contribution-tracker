@@ -100,6 +100,7 @@ async function stagingFiles(bucket) {
         do {
             const page = await bucket.list({prefix, ...(cursor ? {cursor} : {})});
             objects.push(...page.objects.filter(item => !item.key.startsWith(BACKUP_PREFIX)));
+            if (objects.some(item => typeof item.version !== 'string' || item.version === '')) throw new Error('Missing staging file version');
             if (objects.length > 2000 || (page.truncated && (!page.cursor || cursors.has(page.cursor)))) throw new Error('Excessive or incomplete staging file inventory');
             if (page.truncated) cursors.add(page.cursor);
             cursor = page.truncated ? page.cursor : null;
@@ -126,7 +127,7 @@ async function checkpointFiles(env, snapshot, checkpoint, exceptions, secret) {
     const manifest = [], captured = new Set();
     for (const item of objects) {
         const object = await env.STAGING_FILES.get(item.key, {onlyIf: {etagMatches: item.etag}});
-        if (!object || !('body' in object) || object.etag !== item.etag) throw new Error('Staging file changed during checkpoint');
+        if (!object || !('body' in object) || object.etag !== item.etag || object.version !== item.version) throw new Error('Staging file changed during checkpoint');
         const bytes = new Uint8Array(await object.arrayBuffer());
         if (bytes.length !== item.size) throw new Error('Staging file size changed during checkpoint');
         const sha256 = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), n => n.toString(16).padStart(2, '0')).join('');
@@ -142,8 +143,8 @@ async function checkpointFiles(env, snapshot, checkpoint, exceptions, secret) {
             http_metadata: object.httpMetadata ?? {}, custom_metadata: object.customMetadata ?? {}});
     }
     const current = await stagingFiles(env.STAGING_FILES);
-    const before = JSON.stringify(objects.map(item => [item.key, item.etag, item.size]).sort());
-    const after = JSON.stringify(current.map(item => [item.key, item.etag, item.size]).sort());
+    const before = JSON.stringify(objects.map(item => [item.key, item.etag, item.size, item.version]).sort());
+    const after = JSON.stringify(current.map(item => [item.key, item.etag, item.size, item.version]).sort());
     if (before !== after) throw new Error('Staging file inventory changed during checkpoint');
     return {manifest, missing};
 }

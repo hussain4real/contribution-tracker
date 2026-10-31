@@ -24,7 +24,7 @@ function backupFixture() {
         RECOVERY_FILES: {list: async () => ({objects: [...recoveryObjects.keys()].map(key => ({key})), truncated: false}), put: async (key, bytes, options) => { if (options.onlyIf?.etagDoesNotMatch === '*' && recoveryObjects.has(key)) return null; recoveryObjects.set(key, bytes); recoveryMetadata.set(key, options); return {key}; }, get: async key => { const bytes = recoveryObjects.get(key); const metadata = recoveryMetadata.get(key); return bytes === undefined ? null : {size: bytes.length, httpMetadata: {contentLanguage: undefined, ...metadata?.httpMetadata}, customMetadata: metadata?.customMetadata, arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)}; }},
         STAGING_CHECKPOINT_BUCKET_NAME: 'familyfunds-d1-staging-checkpoints',
         STAGING_CHECKPOINT_FILES: {head: async key => checkpointObjects.has(key), get: async key => { const value = checkpointObjects.get(key); if (value === undefined) return null; const bytes = new TextEncoder().encode(value); return {size: bytes.length, arrayBuffer: async () => bytes.buffer}; }, put: async (key, body, options) => { if (options.onlyIf?.etagDoesNotMatch === '*' && checkpointObjects.has(key)) return null; checkpointObjects.set(key, body); return {key}; }},
-        STAGING_FILES: {head: async key => objects.has(key), list: async ({prefix}) => ({objects: [...objects].filter(([key]) => key.startsWith(prefix)).map(([key, value]) => ({key, size: new TextEncoder().encode(value).length, etag: 'fixture-etag'})), truncated: false}), get: async key => { const value = objects.get(key); if (value === undefined) return null; const bytes = new TextEncoder().encode(value); return {size: bytes.length, etag: 'fixture-etag', body: true, httpMetadata: key.startsWith('private/reports/') ? {contentType: 'text/csv'} : {}, customMetadata: key.startsWith('private/reports/') ? {kind: 'synthetic'} : {}, arrayBuffer: async () => bytes.buffer}; }, put: async (key, body, options) => { if (options.onlyIf?.etagDoesNotMatch === '*' && objects.has(key)) return null; objects.set(key, body); return {key}; }},
+        STAGING_FILES: {head: async key => objects.has(key), list: async ({prefix}) => ({objects: [...objects].filter(([key]) => key.startsWith(prefix)).map(([key, value]) => ({key, size: new TextEncoder().encode(value).length, etag: 'fixture-etag', version: 'fixture-version'})), truncated: false}), get: async key => { const value = objects.get(key); if (value === undefined) return null; const bytes = new TextEncoder().encode(value); return {size: bytes.length, etag: 'fixture-etag', version: 'fixture-version', body: true, httpMetadata: key.startsWith('private/reports/') ? {contentType: 'text/csv'} : {}, customMetadata: key.startsWith('private/reports/') ? {kind: 'synthetic'} : {}, arrayBuffer: async () => bytes.buffer}; }, put: async (key, body, options) => { if (options.onlyIf?.etagDoesNotMatch === '*' && objects.has(key)) return null; objects.set(key, body); return {key}; }},
         DB: {
             prepare: sql => ({sql, all: async () => { reads++; return {results: schema}; }}),
             batch: async statements => statements.map(statement => ({results: statement.sql.startsWith("select *") ? [{id: 1, body: "private fixture"}]
@@ -400,6 +400,44 @@ test('checkpoint rejects a changed application file inventory before publishing 
     assert.equal(checkpointObjects.has('private/staging-backups/d1-web/checkpoints/' + checkpoint + '.json.aes-gcm'), false);
     assert.equal(objects.get('private/reports/first.csv'), 'first');
     assert.equal(objects.get('private/reports/second.csv'), 'second');
+});
+
+test('checkpoint rejects a same-content file replacement during capture', async () => {
+    for (const stage of ['before-get', 'after-get']) {
+        const {env, objects, checkpointObjects} = backupFixture();
+        env.STAGING_BACKUP_ONLY_ENABLED = 'true';
+        objects.set('private/reports/first.csv', 'same content');
+        let version = 'fixture-version';
+        const list = env.STAGING_FILES.list;
+        env.STAGING_FILES.list = async (...args) => {
+            const page = await list(...args);
+            return {...page, objects: page.objects.map(item => ({...item, version}))};
+        };
+        const get = env.STAGING_FILES.get;
+        env.STAGING_FILES.get = async (...args) => {
+            if (stage === 'before-get') version = 'replacement-version';
+            const result = {...await get(...args), version};
+            if (stage === 'after-get') version = 'replacement-version';
+            return result;
+        };
+        const checkpoint = stage === 'before-get' ? 'cutover-20261031t040001z' : 'cutover-20261031t040002z';
+        await assert.rejects(new StagingBackupOnly(env).create(checkpoint), /file.*changed|inventory changed/i);
+        assert.equal(checkpointObjects.has('private/staging-backups/d1-web/checkpoints/' + checkpoint + '.json.aes-gcm'), false);
+    }
+});
+
+test('checkpoint refuses a file inventory without upload versions', async () => {
+    const {env, objects, checkpointObjects} = backupFixture();
+    env.STAGING_BACKUP_ONLY_ENABLED = 'true';
+    objects.set('private/reports/first.csv', 'synthetic');
+    const list = env.STAGING_FILES.list;
+    env.STAGING_FILES.list = async (...args) => {
+        const page = await list(...args);
+        return {...page, objects: page.objects.map(({version, ...item}) => item)};
+    };
+    const checkpoint = 'cutover-20261031t040003z';
+    await assert.rejects(new StagingBackupOnly(env).create(checkpoint), /missing staging file version/i);
+    assert.equal(checkpointObjects.has('private/staging-backups/d1-web/checkpoints/' + checkpoint + '.json.aes-gcm'), false);
 });
 
 test('checkpoint rejects an incomplete or repeating file inventory cursor', async () => {
