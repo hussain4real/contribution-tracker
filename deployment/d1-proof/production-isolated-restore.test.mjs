@@ -127,3 +127,29 @@ test('relays a restored signed webhook once when its reference is reconstructed 
         assert.deepEqual(pendingProductionWebhookReferences((await env.DB.prepare('select id,object_key,accepted_at from d1_runtime_webhook_inbox').all()).results), []);
     } finally { f.db.close(); }
 });
+
+test('retains a restored webhook when its signature fails relay verification', async () => {
+    const f = await fixture();
+    try {
+        const raw = JSON.stringify({event: 'charge.success', data: {domain: 'live', reference: 'synthetic-recovery'}});
+        const bytes = new TextEncoder().encode(JSON.stringify({provider: 'paystack', raw, signature: '0'.repeat(128)}));
+        const sha256 = createHash('sha256').update(bytes).digest('hex');
+        const backupKey = productionBackupPrefix(f.checkpoint) + `files/${sha256}.json.aes-gcm`;
+        await f.backups.put(backupKey, JSON.stringify(await sealProductionBackup(bytes, f.env.BACKUP_KEY, `file:${sha256}`)));
+        await f.save({...f.snapshot, files: [{...f.snapshot.files[0], bytes: bytes.length, sha256, backup_key: backupKey}]});
+        await restoreProductionCheckpoint(f.env, f.checkpoint);
+        const rows = (await f.env.RECOVERY_DB.prepare('select id,object_key,accepted_at from d1_runtime_webhook_inbox').all()).results;
+        const [reference] = pendingProductionWebhookReferences(rows);
+        let forwarded = 0, acknowledged = 0, retried = 0;
+        const env = {DB: f.env.RECOVERY_DB, FILES: f.env.RECOVERY_FILES, WEBHOOKS_ENABLED: 'true', DATABASE_NAME: 'familyfunds-production',
+            WEBHOOK_SECRETS: JSON.stringify({paystack_secret: 'sk_live_synthetic_fixture', meta_app_id: '26405719292393073', meta_app_secret: 'synthetic', meta_waba: 'synthetic', meta_phone: 'synthetic', meta_verify_token: 'synthetic'}),
+            RELAY_TOKEN: 'r'.repeat(40), PRODUCTION_CONTAINER: {getByName: () => ({fetch: async () => { forwarded++; return new Response('accepted', {status: 202}); }})}};
+        const message = {id: 'synthetic-invalid-signature', body: reference, ack: () => acknowledged++, retry: () => retried++};
+        await relayProductionWebhooks({messages: [message]}, env);
+        assert.equal(forwarded, 0);
+        assert.equal(acknowledged, 0);
+        assert.equal(retried, 1);
+        assert.equal(f.env.RECOVERY_FILES.data.has(f.path), true);
+        assert.equal(pendingProductionWebhookReferences((await env.DB.prepare('select id,object_key,accepted_at from d1_runtime_webhook_inbox').all()).results).length, 1);
+    } finally { f.db.close(); }
+});
