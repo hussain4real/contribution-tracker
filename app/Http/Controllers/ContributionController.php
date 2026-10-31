@@ -146,10 +146,12 @@ class ContributionController extends Controller
 
         $nextContributionDetails = null;
         if ($nextContribution !== null) {
+            $maximumAdvanceDate = now()->startOfMonth()->addMonths(6);
             $nextContributionDetails = [
                 'period_label' => $nextContribution->period_label,
                 'due_date' => $nextContribution->due_date->toDateString(),
                 'balance' => $nextContribution->balance,
+                'can_pay_online' => ($nextContribution->year * 12) + $nextContribution->month <= ($maximumAdvanceDate->year * 12) + $maximumAdvanceDate->month,
             ];
         }
 

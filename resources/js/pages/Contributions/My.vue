@@ -68,6 +68,7 @@ interface Props {
         period_label: string;
         due_date: string;
         balance: number;
+        can_pay_online: boolean;
     } | null;
     receipts: {
         data: {
@@ -239,7 +240,12 @@ function checkDownloadConnection(
                             }}
                         </p>
                     </div>
-                    <Button v-if="online_payments_available" as-child
+                    <Button
+                        v-if="
+                            online_payments_available &&
+                            next_contribution.can_pay_online
+                        "
+                        as-child
                         ><Link :href="payIndex().url">Pay now</Link></Button
                     >
                 </div>
@@ -248,6 +254,17 @@ function checkDownloadConnection(
                     class="mt-3 text-sm text-neutral-600 dark:text-neutral-400"
                 >
                     No unpaid contributions are currently recorded.
+                </p>
+                <p
+                    v-if="
+                        next_contribution &&
+                        online_payments_available &&
+                        !next_contribution.can_pay_online
+                    "
+                    class="mt-3 text-sm text-neutral-600 dark:text-neutral-400"
+                >
+                    Online payment is available up to six months before the
+                    contribution month.
                 </p>
                 <p
                     v-if="next_contribution && !online_payments_available"

@@ -45,6 +45,19 @@ describe('My Contributions', function () {
             ->where('personal_stats.total_outstanding', 0));
     });
 
+    it('marks the next contribution payable only within the six-month advance limit', function (int $year, int $month, bool $payable) {
+        $this->travelTo(now()->setDate(2026, 1, 31)->startOfDay());
+        Contribution::factory()->forUser($this->member)->forMonth($year, $month)->create();
+
+        $this->actingAs($this->member)->get(route('contributions.my'))
+            ->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('next_contribution.can_pay_online', $payable));
+    })->with([
+        'overdue' => [2025, 12, true],
+        'six months ahead' => [2026, 7, true],
+        'seven months ahead' => [2026, 8, false],
+    ]);
+
     it('shows member contributions with correct structure', function () {
         $contribution = Contribution::factory()
             ->forUser($this->member)
