@@ -74,6 +74,13 @@ async function openBackup(envelope, secret) {
     return JSON.parse(new TextDecoder().decode(bytes));
 }
 
+async function verifyStoredBackup(bucket, key, expected, secret) {
+    const stored = await bucket.get(key);
+    if (!stored || stored.size > 28_000_000) throw new Error('Missing or excessive stored staging checkpoint');
+    const actual = await openBackup(JSON.parse(new TextDecoder().decode(await stored.arrayBuffer())), secret);
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error('Stored staging checkpoint differs');
+}
+
 function checkpointBucket(env) {
     if (env.STAGING_CHECKPOINT_BUCKET_NAME !== 'familyfunds-d1-staging-checkpoints' || !env.STAGING_CHECKPOINT_FILES) throw new Error('Wrong staging checkpoint bucket');
     return env.STAGING_CHECKPOINT_FILES;
@@ -119,8 +126,10 @@ async function checkpointFiles(env, snapshot, checkpoint, exceptions) {
         const sha256 = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), n => n.toString(16).padStart(2, '0')).join('');
         const backupKey = BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/files/' + sha256 + '.json.aes-gcm';
         if (!captured.has(sha256)) {
-            const sealed = await sealBackup({kind: 'file', sha256, contents: base64(bytes)}, env.BACKUP_APP_KEY);
+            const fileSnapshot = {kind: 'file', sha256, contents: base64(bytes)};
+            const sealed = await sealBackup(fileSnapshot, env.BACKUP_APP_KEY);
             if (!await checkpointBucket(env).put(backupKey, JSON.stringify(sealed.envelope), {onlyIf: {etagDoesNotMatch: '*'}, httpMetadata: {contentType: 'application/octet-stream'}})) throw new Error('Staging checkpoint file already exists');
+            await verifyStoredBackup(checkpointBucket(env), backupKey, fileSnapshot, env.BACKUP_APP_KEY);
             captured.add(sha256);
         }
         manifest.push({path: item.key, bytes: bytes.length, sha256, backup_key: backupKey,
@@ -176,6 +185,7 @@ async function createBackup(env, at, checkpoint = null, exceptions = []) {
         customMetadata: {database: DATABASE, plaintext_sha256: sealed.sha256, captured_at: snapshot.captured_at},
     });
     if (!stored && checkpoint !== null) throw new Error('Staging checkpoint already exists');
+    if (checkpoint !== null) await verifyStoredBackup(destination, objectKey, snapshot, env.BACKUP_APP_KEY);
     return {status: stored ? "created" : "already_present", key: objectKey, plaintext_bytes: sealed.bytes, sha256: sealed.sha256, tables: tables.length, ...(checkpoint === null ? {} : {files: snapshot.files.length, missing_file_ids: snapshot.missing_files.map(item => item.id)})};
 }
 

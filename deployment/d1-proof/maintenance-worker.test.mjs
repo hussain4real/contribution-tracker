@@ -313,6 +313,44 @@ test('checkpoint encrypts application files', async () => {
     assert.doesNotMatch(encrypted[0][1], /synthetic report contents/);
 });
 
+test('checkpoint refuses success when encrypted file readback is missing or corrupt', async () => {
+    for (const failure of ['missing', 'corrupt']) {
+        const {env, objects, checkpointObjects} = backupFixture();
+        env.STAGING_BACKUP_ONLY_ENABLED = 'true';
+        objects.set('private/reports/present.csv', 'synthetic report');
+        const get = env.STAGING_CHECKPOINT_FILES.get;
+        env.STAGING_CHECKPOINT_FILES.get = async key => {
+            if (!key.includes('/files/')) return get(key);
+            if (failure === 'missing') return null;
+            const value = JSON.parse(checkpointObjects.get(key));
+            value.ciphertext = (value.ciphertext[0] === 'A' ? 'B' : 'A') + value.ciphertext.slice(1);
+            const bytes = new TextEncoder().encode(JSON.stringify(value));
+            return {size: bytes.length, arrayBuffer: async () => bytes.buffer};
+        };
+        const checkpoint = 'cutover-20261031t030001z';
+        await assert.rejects(new StagingBackupOnly(env).create(checkpoint));
+        assert.equal(checkpointObjects.has('private/staging-backups/d1-web/checkpoints/' + checkpoint + '.json.aes-gcm'), false);
+        assert.equal(checkpointObjects.size, 1);
+    }
+});
+
+test('checkpoint refuses success when database snapshot readback differs and preserves it', async () => {
+    const {env, checkpointObjects} = backupFixture();
+    env.STAGING_BACKUP_ONLY_ENABLED = 'true';
+    const get = env.STAGING_CHECKPOINT_FILES.get;
+    env.STAGING_CHECKPOINT_FILES.get = async key => {
+        if (key.includes('/files/')) return get(key);
+        const different = await sealBackup({database: 'familyfunds-d1-web-staging', altered: true}, secret);
+        const bytes = new TextEncoder().encode(JSON.stringify(different.envelope));
+        return {size: bytes.length, arrayBuffer: async () => bytes.buffer};
+    };
+    const checkpoint = 'cutover-20261031t030002z';
+    const service = new StagingBackupOnly(env);
+    await assert.rejects(service.create(checkpoint), /stored staging checkpoint differs/i);
+    assert.equal(checkpointObjects.size, 1);
+    await assert.rejects(service.create(checkpoint), /already exists/i);
+});
+
 test('checkpoint rejects a changed application file inventory before publishing the database snapshot', async () => {
     const {env, objects, checkpointObjects} = backupFixture();
     env.STAGING_BACKUP_ONLY_ENABLED = 'true';
