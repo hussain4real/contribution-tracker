@@ -115,9 +115,60 @@ test("inspection returns the native running image without executing a command", 
     const response = await handler.fetch(new Request("https://staging.example/__staging_admin/inspect", {
         headers: {Authorization: "Basic fixture", "X-Staging-Admin": "fixture-admin"},
     }), env);
-    assert.deepEqual(await response.json(), {running: true, image: "registry.example/staging@sha256:fixture"});
+    assert.deepEqual(await response.json(), {running: true, image: "registry.example/staging@sha256:fixture",
+        activity: {request_slots: 0, waiting_requests: 0, starting: false, maintenance_rpcs: 0}});
     assert.equal(response.headers.get("Cache-Control"), "no-store");
     assert.equal(commands.length, 0);
+});
+
+test('staging inspection reports active and waiting request slots without claiming the container is drained', async () => {
+    const f = fixture();
+    f.container.requestLimit = 1;
+    const first = await f.container.fetch(new Request('https://staging.example/payments'));
+    const secondPromise = f.container.fetch(new Request('https://staging.example/payments'));
+    await Promise.resolve();
+    const during = await f.container.inspect();
+    assert.equal(during.activity.request_slots, 1);
+    assert.equal(during.activity.waiting_requests, 1);
+    await first.text();
+    const second = await secondPromise;
+    await second.text();
+    const after = await f.container.inspect();
+    assert.equal(after.activity.request_slots, 0);
+    assert.equal(after.activity.waiting_requests, 0);
+    f.env.RUNTIME_PROFILE = 'production';
+    assert.equal((await f.container.inspect()).activity, undefined);
+});
+
+test('staging inspection reports an in-progress container startup', async () => {
+    const f = fixture();
+    f.container.ready = false;
+    f.container.ctx.container.running = false;
+    let finish;
+    const pending = new Promise(resolve => { finish = resolve; });
+    f.container.waitForReady = async () => { await pending; f.container.ready = true; f.container.ctx.container.running = true; };
+    const request = f.container.fetch(new Request('https://staging.example/payments'));
+    assert.equal((await f.container.inspect()).activity.starting, true);
+    finish();
+    await (await request).text();
+    assert.equal((await f.container.inspect()).activity.starting, false);
+});
+
+test('staging inspection reports a running maintenance command and clears it after success or failure', async () => {
+    const f = fixture();
+    f.env.STAGING_SCHEDULE_FAMILIES = JSON.stringify({family: 50, purge: 51});
+    f.env.CONTAINER_ENV = JSON.stringify({APP_KEY: 'fixture'});
+    let finish;
+    const pending = new Promise(resolve => { finish = resolve; });
+    f.container.ctx.container.exec = async () => ({output: async () => pending});
+    const command = f.container.scheduledProof('generate', 50, '2026-01-01T00:00:00.000Z');
+    assert.equal((await f.container.inspect()).activity.maintenance_rpcs, 1);
+    finish({exitCode: 0, stdout: new TextEncoder().encode('{"exit_code":0}')});
+    await command;
+    assert.equal((await f.container.inspect()).activity.maintenance_rpcs, 0);
+    f.container.ctx.container.exec = async () => { throw new Error('Synthetic command failure'); };
+    await assert.rejects(f.container.scheduledProof('generate', 50, '2026-01-01T00:00:00.000Z'));
+    assert.equal((await f.container.inspect()).activity.maintenance_rpcs, 0);
 });
 
 test("runtime diagnostics use fixed read-only programs", async () => {

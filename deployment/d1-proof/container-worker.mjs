@@ -106,6 +106,7 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
         this.starting = null;
         this.inFlight = 0;
         this.waiters = [];
+        this.activeMaintenance = 0;
         this.startupState = {attempts: 0, allocations: 0};
         this.label = env.RUNTIME_PROFILE === "production" ? "FamilyFunds" : "Staging";
         this.requestLimit = Number(env.APP_CONCURRENCY ?? 2);
@@ -337,7 +338,10 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
 
     async inspect() {
         const info = await this.ctx.container.inspect();
-        return {running: this.ctx.container.running, image: info?.image ?? null};
+        const result = {running: this.ctx.container.running, image: info?.image ?? null};
+        if (this.env.RUNTIME_PROFILE === "production") return result;
+        return {...result, activity: {request_slots: this.inFlight, waiting_requests: this.waiters.length,
+            starting: this.starting !== null, maintenance_rpcs: this.activeMaintenance}};
     }
 
     async scheduledProof(kind, familyId, at) {
@@ -349,6 +353,7 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
             throw new Error("Invalid isolated maintenance operation");
         }
         let stage = "startup";
+        this.activeMaintenance++;
         try {
             if (!this.ctx.container.running) this.ready = false;
             if (!this.ready) {
@@ -378,6 +383,8 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
             return decoded;
         } catch {
             throw new Error(`Isolated staging maintenance failed during ${stage}`);
+        } finally {
+            this.activeMaintenance--;
         }
     }
 
