@@ -119,8 +119,23 @@ export async function createProductionBackup(env, at, checkpoint = null) {
     }
     const captured = await snapshot(env);
     if (checkpoint !== null && encoder.encode(JSON.stringify(captured)).length > 8_000_000) throw new Error("Production database backup exceeds memory budget");
+    const pendingWebhookFiles = new Set();
+    if (checkpoint !== null) {
+        const inbox = captured.tables.d1_runtime_webhook_inbox;
+        if (!Array.isArray(inbox)) throw new Error('Production webhook inbox is missing from checkpoint');
+        for (const row of inbox) {
+            if (!Object.hasOwn(row, 'accepted_at')) throw new Error('Invalid production webhook inbox row');
+            if (row.accepted_at !== null) continue;
+            const match = typeof row.id === 'string' ? /^(paystack|whatsapp):([a-f0-9]{64})$/.exec(row.id) : null;
+            if (!match || row.object_key !== `private/webhook-inbox/${match[1]}/${match[2]}.json`) throw new Error('Invalid pending production webhook reference');
+            pendingWebhookFiles.add(row.object_key);
+        }
+    }
+    const checkpointFile = object => !object.key.startsWith(BACKUP_PREFIX)
+        && (!object.key.startsWith('private/webhook-inbox/') || pendingWebhookFiles.has(object.key));
     const files = [...await listProductionObjects(env.APPLICATION_FILES, "private/"), ...await listProductionObjects(env.APPLICATION_FILES, "public/")]
-        .filter(object => !object.key.startsWith(BACKUP_PREFIX) && !object.key.startsWith("private/webhook-inbox/"));
+        .filter(checkpointFile);
+    if ([...pendingWebhookFiles].some(path => !files.some(file => file.key === path))) throw new Error('A pending production webhook file is missing from the checkpoint');
     if (checkpoint !== null && files.some(file => typeof file.version !== 'string' || file.version === '')) throw new Error('Production checkpoint file version missing');
     for (const file of files) {
         if (file.size > 16 * 1024 * 1024) throw new Error("Application file exceeds production backup size budget");
@@ -153,7 +168,7 @@ export async function createProductionBackup(env, at, checkpoint = null) {
     }
     if (checkpoint !== null) {
         const currentFiles = [...await listProductionObjects(env.APPLICATION_FILES, "private/"), ...await listProductionObjects(env.APPLICATION_FILES, "public/")]
-            .filter(object => !object.key.startsWith(BACKUP_PREFIX) && !object.key.startsWith("private/webhook-inbox/"));
+            .filter(checkpointFile);
         const inventory = values => JSON.stringify(values.map(item => [item.key, item.etag, item.size, item.version]).sort());
         if (inventory(files) !== inventory(currentFiles)) throw new Error('Production file inventory changed during checkpoint');
         const current = await snapshot(env);

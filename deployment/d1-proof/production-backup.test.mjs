@@ -45,7 +45,9 @@ function fixture() {
     const objects = new Map();
     let reads = 0, integrity = true;
     const schema = [...Array.from({length: 40}, (_, i) => ({type: "table", name: "table_" + i, sql: "create table table_" + i + "(id integer)"})),
-        {type: "table", name: "report_artifacts", sql: "create table report_artifacts(id integer,disk text,path text)"}];
+        {type: "table", name: "report_artifacts", sql: "create table report_artifacts(id integer,disk text,path text)"},
+        {type: "table", name: "d1_runtime_webhook_inbox", sql: "create table d1_runtime_webhook_inbox(id text,object_key text,accepted_at integer)"}];
+    const webhookRows = [];
     const bytes = Buffer.from("private application PDF fixture");
     objects.set("private/reports/fixture.pdf", {bytes, etag: "source-etag", version: "source-version", uploaded: at,
         httpMetadata: {contentType: 'application/pdf', cacheExpiry: new Date('2026-12-01T00:00:00.000Z')}, customMetadata: {kind: 'synthetic'}});
@@ -59,6 +61,7 @@ function fixture() {
             prepare: sql => ({sql, all: async () => { reads++; return {results: schema}; }}),
             batch: async statements => statements.map(({sql}) => {
                 if (sql.startsWith('select * from "report_artifacts"')) return {results: [{id: 1, disk: "local", path: "reports/fixture.pdf"}]};
+                if (sql.startsWith('select * from "d1_runtime_webhook_inbox"')) return {results: webhookRows.map(row => ({...row}))};
                 if (sql.startsWith("select *")) return {results: [{id: 1}]};
                 if (sql.includes("sqlite_sequence")) return {results: [{name: "report_artifacts", seq: 1}]};
                 if (sql === "pragma foreign_key_check") return {results: integrity ? [] : [{table: "broken"}]};
@@ -88,13 +91,13 @@ function fixture() {
             return object ? {...describe(key, object), body: new Response(object.bytes).body, arrayBuffer: async () => object.bytes.buffer.slice(object.bytes.byteOffset, object.bytes.byteOffset + object.bytes.byteLength)} : null;
         },
     };
-    return {env, objects, appObjects, bytes, reads: () => reads, corrupt: () => { integrity = false; }};
+    return {env, objects, appObjects, webhookRows, bytes, reads: () => reads, corrupt: () => { integrity = false; }};
 }
 
 test("a production snapshot recovers its private PDF through an authenticated file manifest", async () => {
     const f = fixture();
     const result = await createProductionBackup(f.env, at);
-    assert.equal(result.status, "created"); assert.equal(result.files, 1); assert.equal(result.tables, 41);
+    assert.equal(result.status, "created"); assert.equal(result.files, 1); assert.equal(result.tables, 42);
     const database = JSON.parse(new TextDecoder().decode(await openProductionBackup(JSON.parse(f.objects.get(result.key).bytes.toString()), secret)));
     assert.equal(database.tables.report_artifacts[0].id, 1);
     assert.equal(database.files[0].path, "private/reports/fixture.pdf");
@@ -166,6 +169,37 @@ test('a cutover checkpoint refuses a same-content file replacement during captur
         };
         const checkpoint = stage === 'before-get' ? 'cutover-20261031t050001z' : 'cutover-20261031t050002z';
         await assert.rejects(createProductionBackup(f.env, at, checkpoint), /file.*changed/i);
+        assert.equal(f.objects.has(BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/d1/' + productionBackupSlot(at) + '.json.aes-gcm'), false);
+    }
+});
+
+test('a cutover checkpoint encrypts pending webhook payloads without retaining unrelated inbox files', async () => {
+    const f = fixture();
+    const id = 'a'.repeat(64), key = `private/webhook-inbox/paystack/${id}.json`;
+    const orphan = `private/webhook-inbox/whatsapp/${'b'.repeat(64)}.json`;
+    f.webhookRows.push({id: `paystack:${id}`, object_key: key, accepted_at: null},
+        {id: `whatsapp:${'c'.repeat(64)}`, object_key: `private/webhook-inbox/whatsapp/${'c'.repeat(64)}.json`, accepted_at: 1});
+    f.appObjects.set(key, {bytes: Buffer.from('synthetic pending payload'), etag: 'pending-etag', version: 'pending-version', uploaded: at});
+    f.appObjects.set(orphan, {bytes: Buffer.from('unrelated payload'), etag: 'orphan-etag', version: 'orphan-version', uploaded: at});
+    const daily = await createProductionBackup(f.env, at);
+    const old = JSON.parse(new TextDecoder().decode(await openProductionBackup(JSON.parse(f.objects.get(daily.key).bytes), secret)));
+    assert.equal(old.files.some(file => file.path === key), false);
+    const checkpoint = await createProductionBackup(f.env, at, 'cutover-20261031t050004z');
+    const snapshot = JSON.parse(new TextDecoder().decode(await openProductionBackup(JSON.parse(f.objects.get(checkpoint.key).bytes), secret)));
+    const file = snapshot.files.find(item => item.path === key);
+    assert.ok(file);
+    assert.equal(snapshot.files.some(item => item.path === orphan), false);
+    const encrypted = f.objects.get(file.backup_key).bytes.toString();
+    assert.equal(encrypted.includes('synthetic pending payload'), false);
+    assert.equal(new TextDecoder().decode(await openProductionBackup(JSON.parse(encrypted), secret)), 'synthetic pending payload');
+});
+
+test('a cutover checkpoint refuses missing or invalid pending webhook references', async () => {
+    for (const invalid of [false, true]) {
+        const f = fixture(), id = 'd'.repeat(64);
+        f.webhookRows.push({id: `paystack:${id}`, object_key: invalid ? 'private/other.json' : `private/webhook-inbox/paystack/${id}.json`, accepted_at: null});
+        const checkpoint = invalid ? 'cutover-20261031t050006z' : 'cutover-20261031t050005z';
+        await assert.rejects(createProductionBackup(f.env, at, checkpoint), /pending production webhook/i);
         assert.equal(f.objects.has(BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/d1/' + productionBackupSlot(at) + '.json.aes-gcm'), false);
     }
 });
