@@ -21,6 +21,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { useCurrencyFormatter } from '@/lib/currency';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
+import type { FormComponentOptions, VisitOptions } from '@inertiajs/core';
 import { Form, Head, Link, useHttp } from '@inertiajs/vue3';
 import { computed, nextTick, ref, watch } from 'vue';
 
@@ -151,6 +152,11 @@ const reviewHeading = ref<HTMLHeadingElement | null>(null);
 const reviewError = ref('');
 const paymentResponsePending = ref(false);
 const paymentUnconfirmed = ref(false);
+const paymentOptions: FormComponentOptions &
+    Pick<VisitOptions, 'onHttpException' | 'onNetworkError'> = {
+    onHttpException: (response) => (response.status >= 500 ? false : undefined),
+    onNetworkError: () => false,
+};
 const reviewInputs = () => ({
     member_id: props.member.id,
     amount: amount.value,
@@ -239,6 +245,7 @@ async function reviewPayment(): Promise<void> {
             <Form
                 :action="store()"
                 class="space-y-6"
+                :options="paymentOptions"
                 :on-before="() => reviewed !== null"
                 @start="paymentResponsePending = true"
                 @success="
