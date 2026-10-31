@@ -1,5 +1,40 @@
+import { DurableObject } from "cloudflare:workers";
+
 const MAX_BODY_BYTES = 2_000_000;
 const MAX_BATCH = 1000;
+
+export class StagingGatewayAdmission extends DurableObject {
+    async begin() {
+        return this.ctx.blockConcurrencyWhile(async () => {
+            const paused = await this.ctx.storage.get("paused");
+            if (paused !== undefined && typeof paused !== "boolean") throw new Error("Invalid stored admission state");
+            if (paused) return null;
+            const id = crypto.randomUUID();
+            await this.ctx.storage.put(`operation:${id}`, Date.now());
+            return id;
+        });
+    }
+
+    async complete(id) {
+        if (typeof id !== "string" || !/^[a-f0-9-]{36}$/.test(id)) throw new Error("Invalid operation ID");
+        if (!await this.ctx.storage.delete(`operation:${id}`)) throw new Error("Unknown gateway operation");
+    }
+
+    async setPaused(paused) {
+        if (typeof paused !== "boolean") throw new Error("Invalid admission state");
+        return this.ctx.blockConcurrencyWhile(async () => {
+            await this.ctx.storage.put("paused", paused);
+            return this.status();
+        });
+    }
+
+    async status() {
+        const pending = await this.ctx.storage.list({prefix: "operation:", limit: 1001});
+        const paused = await this.ctx.storage.get("paused");
+        if (paused !== undefined && typeof paused !== "boolean") throw new Error("Invalid stored admission state");
+        return {paused: paused === true, unresolved: pending.size};
+    }
+}
 
 export default {
     async fetch(request, env) {
@@ -8,6 +43,19 @@ export default {
         if (supplied.byteLength !== expected.byteLength ||
             !crypto.subtle.timingSafeEqual(supplied, expected)) {
             return Response.json({ error: "Unauthorized" }, { status: 401 });
+        }
+        const path = new URL(request.url).pathname;
+        if (path === "/__staging_admin/admission") {
+            if (env.STAGING_GATEWAY_ADMISSION !== "1" || env.DATABASE_NAME !== "familyfunds-d1-web-staging") return Response.json({error: "Not found"}, {status: 404});
+            const actual = new TextEncoder().encode(request.headers.get("X-Staging-Gateway-Admin") ?? "");
+            const admin = new TextEncoder().encode(env.STAGING_GATEWAY_ADMIN_TOKEN ?? "");
+            if (admin.length < 32 || actual.length !== admin.length || !crypto.subtle.timingSafeEqual(actual, admin)) return Response.json({error: "Forbidden"}, {status: 403});
+            const gate = env.STAGING_GATEWAY_ADMISSION_OBJECT.getByName("staging-gateway");
+            if (request.method === "GET") return Response.json(await gate.status(), {headers: {"Cache-Control": "no-store"}});
+            if (request.method !== "POST") return Response.json({error: "Not found"}, {status: 404});
+            const state = new URL(request.url).searchParams.get("paused");
+            if (state !== "true" && state !== "false") return Response.json({error: "Invalid admission state"}, {status: 400});
+            return Response.json(await gate.setPaused(state === "true"), {headers: {"Cache-Control": "no-store"}});
         }
         if (request.method !== "POST" || !["/query", "/batch", "/manifest"].includes(new URL(request.url).pathname)) {
             return Response.json({ error: "Not found" }, { status: 404 });
@@ -34,8 +82,15 @@ export default {
         }
         try {
             const body = JSON.parse(new TextDecoder().decode(bytes));
-            if (new URL(request.url).pathname === "/manifest") {
-                return Response.json(await manifest(env));
+            const gateEnabled = env.STAGING_GATEWAY_ADMISSION === "1";
+            if (gateEnabled && env.DATABASE_NAME !== "familyfunds-d1-web-staging") throw new Error("Invalid staging admission target");
+            const gate = gateEnabled ? env.STAGING_GATEWAY_ADMISSION_OBJECT.getByName("staging-gateway") : null;
+            if (path === "/manifest") {
+                const id = gate ? await gate.begin() : null;
+                if (gate && id === null) return Response.json({error: "Staging maintenance in progress"}, {status: 503, headers: {"Cache-Control": "no-store"}});
+                const result = await manifest(env);
+                if (gate) await gate.complete(id);
+                return Response.json(result);
             }
             const isBatch = new URL(request.url).pathname === "/batch";
             const queries = isBatch ? body.batch : [body];
@@ -51,9 +106,12 @@ export default {
                 }
                 return env.DB.prepare(query.sql).bind(...query.params);
             });
+            const id = gate ? await gate.begin() : null;
+            if (gate && id === null) return Response.json({error: "Staging maintenance in progress"}, {status: 503, headers: {"Cache-Control": "no-store"}});
             const result = isBatch
                 ? await env.DB.batch(statements)
                 : await statements[0].all();
+            if (gate) await gate.complete(id);
             return Response.json({ database: env.DATABASE_NAME, result });
         } catch (error) {
             return Response.json({
