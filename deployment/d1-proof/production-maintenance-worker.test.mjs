@@ -167,6 +167,29 @@ test('the real scheduled SQL catches up more than fifty families without waking 
     } finally { f.sqlite.close(); }
 });
 
+test('the scheduled SQL queues each family reminder at its configured time without duplicating it', async () => {
+    const f = await nativeSqlFixture();
+    try {
+        const insert = f.sqlite.prepare('insert into families(id,reminder_settings) values(?,?)');
+        insert.run(1, JSON.stringify({reminder_day: 10, follow_up_day: 20, time: '14:35', effective_from: '2026-10'}));
+        insert.run(2, JSON.stringify({reminder_day: 10, follow_up_day: 20, time: '15:30', effective_from: '2026-10'}));
+        insert.run(3, null);
+        f.controller.scheduledTime = new Date('2026-10-10T14:34:00Z').getTime();
+        await handler.scheduled(f.controller, f.env);
+        assert.equal(f.sqlite.prepare("select count(*) n from d1_runtime_schedule_outbox where kind='remind25'").get().n, 0);
+        f.controller.scheduledTime = new Date('2026-10-10T14:35:00Z').getTime();
+        await handler.scheduled(f.controller, f.env);
+        await handler.scheduled(f.controller, f.env);
+        const reminders = f.sqlite.prepare("select id,due_at from d1_runtime_schedule_outbox where kind='remind25' order by id").all();
+        assert.deepEqual(reminders.map(row => ({...row})), [{id: 'remind25:2026-10:1', due_at: '2026-10-10T14:35:00.000Z'}]);
+        assert.equal(f.queued.filter(item => item.id === 'remind25:2026-10:1').length, 1);
+        f.controller.scheduledTime = new Date('2026-10-10T15:30:00Z').getTime();
+        await handler.scheduled(f.controller, f.env);
+        assert.equal(f.sqlite.prepare("select count(*) n from d1_runtime_schedule_outbox where kind='remind25'").get().n, 2);
+        assert.equal(f.sqlite.prepare("select count(*) n from d1_runtime_schedule_outbox where kind='remind28'").get().n, 0);
+    } finally { f.sqlite.close(); }
+});
+
 test('a failed scheduled queue send retains its stored outbox row and later recovers it', async () => {
     const f = await nativeSqlFixture();
     try {

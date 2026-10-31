@@ -146,6 +146,8 @@ The existing [product completion roadmap](../familyfund-product-completion-roadm
 
 **Local worker verification:** A queued reminder was suppressed after full payment or after the member disabled its channel, and a WhatsApp reminder queued before a partial payment used the remaining balance when the worker sent it. These use synthetic data and a mocked provider; actual delivery remains a separate staging check.
 
+**Production scheduler integration check:** A local synthetic SQL test ran the production scheduler for three families with different reminder settings. It queued neither reminder early, queued each configured family at its own UTC time, and did not create or enqueue a duplicate when the scheduler ran again. This checks the scheduler and its outbox, not the deployed scheduler, real queue delivery or message receipt.
+
 **Local settings walkthrough:** The demo family admin could see reminder days, UTC time, channel controls and an example message on desktop; the form was also inspected at 390 × 844 pixels. Representative-user validation remains pending.
 
 ### 4. Payment review
