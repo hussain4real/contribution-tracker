@@ -45,9 +45,13 @@ function simulateContributionCheckout(PendingAwaitablePage $page, string $checko
                 return originalSend.apply(this, args);
             };
             const originalFetch = window.fetch.bind(window);
-            window.fetch = (input, options) => String(input).includes('/pay/initiate')
-                ? Promise.resolve(new Response(JSON.stringify({ access_code: 'synthetic', reference: 'TXN_MISSING' }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
-                : originalFetch(input, options);
+            window.fetch = (input, options) => {
+                if (!String(input).includes('/pay/initiate')) return originalFetch(input, options);
+                const cookie = document.cookie.split('; ').find(row => row.startsWith('XSRF-TOKEN='))?.slice('XSRF-TOKEN='.length);
+                const header = new Headers(options.headers).get('X-XSRF-TOKEN');
+                sessionStorage.setItem('checkout-xsrf-matches', String(Boolean(cookie) && header === decodeURIComponent(cookie)));
+                return Promise.resolve(new Response(JSON.stringify({ access_code: 'synthetic', reference: 'TXN_MISSING' }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+            };
             const { default: PaystackPop } = await import({$moduleUrl});
             PaystackPop.prototype.resumeTransaction = function (accessCode, callbacks) {
                 callbacks[{$event}]({ message: 'Synthetic checkout event' });
@@ -140,6 +144,7 @@ describe('Member History Flow', function () {
             ->assertSeeIn('[role="alert"]', 'Transaction not found.')
             ->assertNoJavaScriptErrors();
         expect($page->script("() => sessionStorage.getItem('checkout-verifications')"))->toBe('1');
+        expect($page->script("() => sessionStorage.getItem('checkout-xsrf-matches')"))->toBe('true');
         expect($page->script("() => document.body.innerText.split('Transaction not found.').length - 1"))->toBe(1);
     })->with(['cancelled' => 'onCancel', 'load failure' => 'onError']);
 

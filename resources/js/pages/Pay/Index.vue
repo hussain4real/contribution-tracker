@@ -203,14 +203,17 @@ const payWithPaystack = async () => {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRF-TOKEN':
-                    (
-                        document.querySelector(
-                            'meta[name="csrf-token"]',
-                        ) as HTMLMetaElement
-                    )?.content || '',
+                'X-XSRF-TOKEN': decodeURIComponent(
+                    document.cookie
+                        .split('; ')
+                        .find((row) => row.startsWith('XSRF-TOKEN='))
+                        ?.split('=')
+                        .slice(1)
+                        .join('=') ?? '',
+                ),
                 Accept: 'application/json',
             },
+            credentials: 'same-origin',
             body: JSON.stringify({
                 contribution_ids: selectedIds.value,
                 expected_contribution_amount_kobo:
