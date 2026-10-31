@@ -6,7 +6,7 @@ import {test} from "node:test";
 import {runInNewContext} from "node:vm";
 
 const source = readFileSync(new URL("./maintenance-worker.mjs", import.meta.url), "utf8").replace(/^import .*;\n/gm, "").replace("export default ", "const handler = ").replaceAll("export class ", "class ");
-const {handler, StagingBackupOnly, StagingRecoveryOnly, calendarTasks, sealBackup, backupKey, createBackup, backupSlot} = runInNewContext(source + "\n({handler, StagingBackupOnly, StagingRecoveryOnly, calendarTasks, sealBackup, backupKey, createBackup, backupSlot})", {
+const {handler, StagingBackupOnly, StagingRecoveryOnly, calendarTasks, sealBackup, openBackup, backupKey, createBackup, backupSlot} = runInNewContext(source + "\n({handler, StagingBackupOnly, StagingRecoveryOnly, calendarTasks, sealBackup, openBackup, backupKey, createBackup, backupSlot})", {
     WorkerEntrypoint: class {constructor(env) { this.env = env; }}, crypto: webcrypto, TextEncoder, TextDecoder, Response, btoa, atob, console,
 });
 const secret = "base64:" + Buffer.alloc(32, 7).toString("base64");
@@ -253,6 +253,51 @@ test('checkpoint refuses a missing referenced application file before publishing
         assert.equal(checkpointObjects.size, 0);
     } finally {
         db.close();
+    }
+});
+
+test('checkpoint records only the approved missing statements and restores their records', async () => {
+    const source = new DatabaseSync(':memory:');
+    const recovered = new DatabaseSync(':memory:');
+    const adapter = db => ({prepare(sql) { return {sql, values: [], bind(...values) { this.values = values; return this; },
+        async all() { return {results: db.prepare(sql).all(...this.values)}; }, async first() { return db.prepare(sql).get(...this.values); }}; },
+        async batch(statements) { db.exec('BEGIN'); try { const result = []; for (const statement of statements) result.push(await statement.all()); db.exec('COMMIT'); return result; } catch (error) { db.exec('ROLLBACK'); throw error; } }});
+    try {
+        for (let i = 0; i < 39; i++) source.exec(`create table fixture_${i} (id integer primary key autoincrement)`);
+        source.exec("create table report_artifacts (id integer primary key autoincrement, disk text, path text); insert into report_artifacts values (11,'local','reports/11.csv'),(13,'local','reports/13.csv')");
+        const {env, checkpointObjects} = backupFixture();
+        env.DB = adapter(source);
+        env.RECOVERY_DB = adapter(recovered);
+        env.STAGING_BACKUP_ONLY_ENABLED = 'true';
+        env.STAGING_RESTORE_ONLY_ENABLED = 'true';
+        env.STAGING_RECOVERY_NAME = 'familyfunds-d1-staging-recovery';
+        env.STAGING_RECOVERY_BUCKET_NAME = 'familyfunds-d1-staging-recovery-files';
+        const backup = new StagingBackupOnly(env);
+        const checkpoint = 'cutover-20261030t200006z';
+        const exceptions = [{id: 11, path: 'reports/11.csv'}, {id: 13, path: 'reports/13.csv'}];
+        await assert.rejects(backup.create(checkpoint, exceptions.slice(0, 1)), /referenced file.*missing/i);
+        await assert.rejects(backup.create(checkpoint, [{id: 11, path: 'reports/wrong.csv'}, exceptions[1]]), /referenced file.*missing/i);
+        await assert.rejects(backup.create(checkpoint, [{id: 99, path: 'reports/99.csv'}]), /invalid.*exceptions/i);
+        assert.equal(checkpointObjects.size, 0);
+        const result = await backup.create(checkpoint, exceptions);
+        assert.deepEqual(Array.from(result.missing_file_ids), [11, 13]);
+        const snapshot = await openBackup(JSON.parse(checkpointObjects.get(result.key)), secret);
+        assert.deepEqual(JSON.parse(JSON.stringify(snapshot.missing_files)), [
+            {table: 'report_artifacts', id: 11, disk: 'local', path: 'reports/11.csv'},
+            {table: 'report_artifacts', id: 13, disk: 'local', path: 'reports/13.csv'},
+        ]);
+        const original = checkpointObjects.get(result.key);
+        snapshot.missing_files.pop();
+        checkpointObjects.set(result.key, JSON.stringify((await sealBackup(snapshot, secret)).envelope));
+        await assert.rejects(new StagingRecoveryOnly(env).restore(checkpoint), /undocumented missing/i);
+        assert.equal(recovered.prepare("select count(*) n from sqlite_master where type='table' and name not glob 'sqlite_*'").get().n, 0);
+        checkpointObjects.set(result.key, original);
+        const restored = await new StagingRecoveryOnly(env).restore(checkpoint);
+        assert.deepEqual(Array.from(restored.missing_file_ids), [11, 13]);
+        assert.deepEqual(recovered.prepare('select id, path from report_artifacts order by id').all().map(row => ({...row})), [{id: 11, path: 'reports/11.csv'}, {id: 13, path: 'reports/13.csv'}]);
+    } finally {
+        source.close();
+        recovered.close();
     }
 });
 

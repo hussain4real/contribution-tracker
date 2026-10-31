@@ -95,15 +95,20 @@ async function stagingFiles(bucket) {
     return objects;
 }
 
-async function checkpointFiles(env, snapshot, checkpoint) {
+async function checkpointFiles(env, snapshot, checkpoint, exceptions) {
     const objects = await stagingFiles(env.STAGING_FILES);
     const paths = new Set(objects.map(item => item.key));
+    const missing = [];
     for (const name of ['report_artifacts', 'reconciliation_imports']) {
         for (const row of snapshot.tables[name] ?? []) {
             if (!['local', 'public'].includes(row.disk) || typeof row.path !== 'string' || /(^\/|\.\.|\\)/.test(row.path)) throw new Error('Invalid staging file reference');
-            if (!paths.has((row.disk === 'public' ? 'public/' : 'private/') + row.path)) throw new Error('A referenced file is missing from staging');
+            if (!paths.has((row.disk === 'public' ? 'public/' : 'private/') + row.path)) {
+                if (name !== 'report_artifacts' || row.disk !== 'local' || !exceptions.some(item => item.id === row.id && item.path === row.path)) throw new Error('A referenced file is missing from staging');
+                missing.push({table: name, id: row.id, disk: row.disk, path: row.path});
+            }
         }
     }
+    if (missing.length !== exceptions.length) throw new Error('Staging missing-file exceptions do not match the inventory');
     if (objects.some(item => item.size > 10_000_000) || objects.reduce((sum, item) => sum + item.size, 0) > 64_000_000) throw new Error('Staging files exceed checkpoint size budget');
     const manifest = [], captured = new Set();
     for (const item of objects) {
@@ -125,11 +130,12 @@ async function checkpointFiles(env, snapshot, checkpoint) {
     const before = JSON.stringify(objects.map(item => [item.key, item.etag, item.size]).sort());
     const after = JSON.stringify(current.map(item => [item.key, item.etag, item.size]).sort());
     if (before !== after) throw new Error('Staging file inventory changed during checkpoint');
-    return manifest;
+    return {manifest, missing};
 }
 
-async function createBackup(env, at, checkpoint = null) {
+async function createBackup(env, at, checkpoint = null, exceptions = []) {
     if (checkpoint !== null && (typeof checkpoint !== 'string' || !/^cutover-[0-9]{8}t[0-9]{6}z$/.test(checkpoint))) throw new Error('Invalid staging checkpoint');
+    if (!Array.isArray(exceptions) || exceptions.length > 2 || exceptions.some(item => !item || ![11, 13].includes(item.id) || typeof item.path !== 'string' || !item.path || /(^\/|\.\.|\\)/.test(item.path)) || new Set(exceptions.map(item => item.id)).size !== exceptions.length) throw new Error('Invalid staging missing-file exceptions');
     const destination = checkpoint === null ? env.STAGING_FILES : checkpointBucket(env);
     const objectKey = BACKUP_PREFIX + (checkpoint === null ? at.toISOString().slice(0, 10) : 'checkpoints/' + checkpoint) + ".json.aes-gcm";
     if (await destination.head(objectKey)) {
@@ -152,7 +158,9 @@ async function createBackup(env, at, checkpoint = null) {
         tables: Object.fromEntries(tables.map((name, i) => [name, result[i].results])), sequences: result[tables.length].results};
     if (checkpoint !== null) {
         if (encoder.encode(JSON.stringify(snapshot)).length > 20_000_000) throw new Error('Staging backup exceeds size budget');
-        snapshot.files = await checkpointFiles(env, snapshot, checkpoint);
+        const files = await checkpointFiles(env, snapshot, checkpoint, exceptions);
+        snapshot.files = files.manifest;
+        snapshot.missing_files = files.missing;
         const after = await env.DB.batch([
             ...tables.map(name => env.DB.prepare(`select * from "${name}"`)),
             env.DB.prepare("select name,seq from sqlite_sequence order by name"), env.DB.prepare(schemaSql),
@@ -168,15 +176,15 @@ async function createBackup(env, at, checkpoint = null) {
         customMetadata: {database: DATABASE, plaintext_sha256: sealed.sha256, captured_at: snapshot.captured_at},
     });
     if (!stored && checkpoint !== null) throw new Error('Staging checkpoint already exists');
-    return {status: stored ? "created" : "already_present", key: objectKey, plaintext_bytes: sealed.bytes, sha256: sealed.sha256, tables: tables.length, ...(checkpoint === null ? {} : {files: snapshot.files.length})};
+    return {status: stored ? "created" : "already_present", key: objectKey, plaintext_bytes: sealed.bytes, sha256: sealed.sha256, tables: tables.length, ...(checkpoint === null ? {} : {files: snapshot.files.length, missing_file_ids: snapshot.missing_files.map(item => item.id)})};
 }
 
 export class StagingBackupOnly extends WorkerEntrypoint {
-    async create(checkpoint) {
+    async create(checkpoint, exceptions = []) {
         if (this.env.STAGING_BACKUP_ONLY_ENABLED !== 'true') throw new Error('Staging backup-only operation is disabled');
         target(this.env);
         if (typeof checkpoint !== 'string' || !/^cutover-[0-9]{8}t[0-9]{6}z$/.test(checkpoint)) throw new Error('Invalid staging checkpoint');
-        return createBackup(this.env, new Date(), checkpoint);
+        return createBackup(this.env, new Date(), checkpoint, exceptions);
     }
 }
 
@@ -212,6 +220,14 @@ export class StagingRecoveryOnly extends WorkerEntrypoint {
             if (seenPaths.has(file.path)) throw new Error('Duplicate staging checkpoint file');
             seenPaths.add(file.path);
             await readFile(file);
+        }
+        if (!Array.isArray(snapshot.missing_files) || snapshot.missing_files.length > 2 || new Set(snapshot.missing_files.map(item => item?.id)).size !== snapshot.missing_files.length || snapshot.missing_files.some(item => !item || item.table !== 'report_artifacts' || ![11, 13].includes(item.id) || item.disk !== 'local' || typeof item.path !== 'string' || /(^\/|\.\.|\\)/.test(item.path) || seenPaths.has('private/' + item.path) || !(snapshot.tables.report_artifacts ?? []).some(row => row.id === item.id && row.disk === item.disk && row.path === item.path))) throw new Error('Invalid staging missing-file record');
+        for (const name of ['report_artifacts', 'reconciliation_imports']) {
+            if (!Array.isArray(snapshot.tables[name] ?? [])) throw new Error('Invalid staging file references');
+            for (const row of snapshot.tables[name] ?? []) {
+                if (!row || !['local', 'public'].includes(row.disk) || typeof row.path !== 'string' || /(^\/|\.\.|\\)/.test(row.path)) throw new Error('Invalid staging file reference');
+                if (!seenPaths.has((row.disk === 'public' ? 'public/' : 'private/') + row.path) && !snapshot.missing_files.some(item => item.table === name && item.id === row.id && item.disk === row.disk && item.path === row.path)) throw new Error('Undocumented missing staging file');
+            }
         }
         const names = Object.keys(snapshot.tables);
         const validName = name => typeof name === 'string' && /^[a-z_][a-z0-9_]*$/i.test(name);
@@ -258,7 +274,7 @@ export class StagingRecoveryOnly extends WorkerEntrypoint {
             const ordered = value => JSON.stringify(Object.entries(value).filter(([, item]) => item !== undefined).sort(([a], [b]) => a.localeCompare(b)));
             if (ordered(restored.httpMetadata ?? {}) !== ordered(file.http_metadata) || ordered(restored.customMetadata ?? {}) !== ordered(file.custom_metadata)) throw new Error('Staging recovery file metadata differs');
         }
-        return {status: 'passed', tables: names.length, sequences: sequences.length, files: snapshot.files.length, integrity: 'ok'};
+        return {status: 'passed', tables: names.length, sequences: sequences.length, files: snapshot.files.length, missing_file_ids: snapshot.missing_files.map(item => item.id), integrity: 'ok'};
     }
 }
 
