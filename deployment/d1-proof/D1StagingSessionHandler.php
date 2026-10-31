@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace FamilyFunds\D1Staging;
 
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use SessionHandlerInterface;
+use Throwable;
 
 final class D1StagingSessionHandler implements SessionHandlerInterface
 {
@@ -66,6 +68,7 @@ final class D1StagingSessionHandler implements SessionHandlerInterface
             $client = new D1RuntimeClient($this->url, $this->token, $this->database, timeout: 5);
             $rows = $client->rows('select payload,last_activity from sessions where id=?', [$id]);
             $current = $rows[0] ?? null;
+            $recovery = 'verified_committed';
             if ($current !== ['payload' => $payload, 'last_activity' => $lastActivity]) {
                 $previous = $this->readSessions[$id] ?? null;
                 if ($previous === null || $current !== $previous || $previous['last_activity'] <= now()->getTimestamp() - $this->lifetime * 60) {
@@ -75,6 +78,12 @@ final class D1StagingSessionHandler implements SessionHandlerInterface
                 if ($saved !== [['id' => $id]]) {
                     throw $exception;
                 }
+                $recovery = 'updated_unchanged';
+            }
+            try {
+                Log::notice('D1 session save recovered', ['strategy' => $recovery]);
+            } catch (Throwable) {
+                // Session recovery must not fail because logging is unavailable.
             }
         }
         $this->readSessions[$id] = ['payload' => $payload, 'last_activity' => $lastActivity];
