@@ -12,7 +12,7 @@ const source = readFileSync(new URL("./container-worker.mjs", import.meta.url), 
     .replace('import { containerEnvironment } from "./container-env.mjs";', "")
     .replace("export class ", "class ").replace("export default ", "const handler = ");
 
-function fixture(assets = [{path: "/var/www/html/deployment/d1-proof/container-nginx.conf", content: "events {}", sha256: "a".repeat(64)}, {path: "/var/www/html/deployment/d1-proof/run-staging.php", content: "<?php echo 1;", sha256: "b".repeat(64)}]) {
+function fixture(assets = [{path: "/var/www/html/deployment/d1-proof/container-nginx-staging.conf", content: "events {}", sha256: "a".repeat(64)}, {path: "/var/www/html/deployment/d1-proof/run-staging.php", content: "<?php echo 1;", sha256: "b".repeat(64)}]) {
     const {handler, Container} = runInNewContext(source + "\n({handler, Container: FamilyFundsWebStagingContainer})", {
         Request, Response, Headers, URL, ReadableStream, AbortSignal, AbortController, TextEncoder, TextDecoder,
         performance, setTimeout, clearTimeout, console,
@@ -83,6 +83,19 @@ test("the deployable bootstrap contains the exact reviewed source bytes", () => 
         assert.equal(asset.content, readFileSync(new URL("../../" + relative, import.meta.url), "utf8"));
         assert.equal(asset.sha256, createHash("sha256").update(asset.content).digest("hex"));
     }
+});
+
+test('only staging images configure the private FPM status listener and block its web path', () => {
+    const sourceFile = name => readFileSync(new URL(`./${name}`, import.meta.url), 'utf8');
+    for (const image of ['Dockerfile.slim', 'Dockerfile.lean']) {
+        const source = sourceFile(image);
+        assert.match(source, /container-nginx-staging\.conf/);
+        assert.match(source, /pm\.status_listen = \/run\/php\/familyfunds-staging-status\.sock/);
+        assert.match(source, /listen\.mode = 0600/);
+    }
+    assert.doesNotMatch(sourceFile('Dockerfile.production'), /pm\.status_listen|container-nginx-staging\.conf/);
+    assert.match(sourceFile('container-nginx-staging.conf'), /location \^~ \/__staging_fpm_status \{ return 404; \}/);
+    assert.ok(packagedAssets.some(asset => asset.path.endsWith('/container-nginx-staging.conf')));
 });
 
 test("runtime diagnostics require both existing staging credentials", async () => {
@@ -272,6 +285,51 @@ test('staging inspection reports a restart already in progress after admission i
     finish();
     await restart;
     assert.equal((await container.inspect()).restart_operations, 0);
+});
+
+test('staging FPM status requires both credentials, an enabled control and paused admission', async () => {
+    const f = fixture();
+    Object.assign(f.env, {STAGING_ADMISSION_CONTROL: '1', STAGING_FPM_STATUS_ENABLED: '1'});
+    const Container = f.container.constructor;
+    const container = new Container(f.container.ctx, f.env);
+    f.env.STAGING_CONTAINER = {getByName: () => container};
+    const request = headers => new Request('https://staging.example/__staging_admin/fpm-status', {headers});
+    assert.equal((await f.handler.fetch(request({}), f.env)).status, 401);
+    assert.equal((await f.handler.fetch(request({Authorization: 'Basic fixture'}), f.env)).status, 403);
+    const headers = {Authorization: 'Basic fixture', 'X-Staging-Admin': 'fixture-admin'};
+    f.env.STAGING_FPM_STATUS_ENABLED = '0';
+    assert.equal((await f.handler.fetch(request(headers), f.env)).status, 404);
+    f.env.STAGING_FPM_STATUS_ENABLED = '1';
+    await assert.rejects(f.handler.fetch(request(headers), f.env), /unavailable/);
+    await container.setAdmissionPaused(true);
+    let command;
+    container.ctx.container.exec = async args => {
+        command = args;
+        return {output: async () => ({exitCode: 0, stdout: new TextEncoder().encode(JSON.stringify({active_processes: 1, listen_queue: 0, total_processes: 4, start_time: 123}))})};
+    };
+    const response = await f.handler.fetch(request(headers), f.env);
+    assert.deepEqual(await response.json(), {active_processes: 1, listen_queue: 0, total_processes: 4, start_time: 123});
+    assert.equal(response.headers.get('Cache-Control'), 'no-store');
+    assert.deepEqual(Array.from(command), ['php', '/var/www/html/deployment/d1-proof/staging-fpm-status.php']);
+    f.env.RUNTIME_PROFILE = 'production';
+    assert.equal((await f.handler.fetch(request(headers), f.env)).status, 404);
+});
+
+test('staging FPM status rejects malformed data or admission changed during inspection', async () => {
+    const f = fixture();
+    const Container = f.container.constructor;
+    const container = new Container(f.container.ctx, {...f.env, STAGING_ADMISSION_CONTROL: '1', STAGING_FPM_STATUS_ENABLED: '1'});
+    await container.setAdmissionPaused(true);
+    container.ctx.container.exec = async () => ({output: async () => ({exitCode: 0, stdout: new TextEncoder().encode('{"active_processes":0}')})});
+    await assert.rejects(container.stagingFpmStatus(), /Invalid staging FPM status/);
+    let finish;
+    container.ctx.container.exec = async () => ({output: () => new Promise(resolve => { finish = resolve; })});
+    const pending = container.stagingFpmStatus();
+    await new Promise(resolve => setImmediate(resolve));
+    await container.setAdmissionPaused(false);
+    await container.setAdmissionPaused(true);
+    finish({exitCode: 0, stdout: new TextEncoder().encode(JSON.stringify({active_processes: 0, listen_queue: 0, total_processes: 4, start_time: 123}))});
+    await assert.rejects(pending, /unavailable/);
 });
 
 test("runtime diagnostics use fixed read-only programs", async () => {

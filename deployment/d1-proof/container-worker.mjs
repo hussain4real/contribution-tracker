@@ -118,6 +118,7 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
         this.label = env.RUNTIME_PROFILE === "production" ? "FamilyFunds" : "Staging";
         this.admissionEnabled = env.RUNTIME_PROFILE !== "production" && env.STAGING_ADMISSION_CONTROL === "1";
         this.admissionPaused = false;
+        this.admissionGeneration = 0;
         this.admissionReady = this.admissionEnabled ? ctx.blockConcurrencyWhile(async () => {
             const state = await ctx.storage.get("staging-admission-paused");
             if (state !== undefined && typeof state !== "boolean") throw new Error("Invalid staging admission state");
@@ -176,7 +177,7 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
                                 if (!/^\/var\/www\/html\/[A-Za-z0-9_./-]+$/.test(asset.path) || asset.path.includes("..") || !/^[a-f0-9]{64}$/.test(asset.sha256)) throw new Error("Invalid packaged bootstrap asset");
                                 const name = `FF_STAGING_ASSET_${i}`;
                                 const names = bootstrapParts(env, name, asset.content);
-                                const destination = asset.path.endsWith("/container-nginx.conf") ? "/etc/nginx/nginx.conf"
+                                const destination = asset.path.endsWith("/container-nginx-staging.conf") ? "/etc/nginx/nginx.conf"
                                     : asset.path.endsWith("/container-supervisor.conf") ? "/etc/supervisord.conf" : asset.path;
                                 const mode = asset.path.endsWith("/container-slim-entrypoint.sh") ? "0755" : "0644";
                                 return `["path"=>${JSON.stringify(destination)},"hash"=>${JSON.stringify(asset.sha256)},"names"=>[${names.map(name => JSON.stringify(name)).join(",")}],"mode"=>${mode}]`;
@@ -410,10 +411,29 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
         if (!this.admissionEnabled || typeof paused !== "boolean") throw new Error("Staging admission control is disabled");
         await this.ctx.blockConcurrencyWhile(async () => {
             if (paused) this.admissionPaused = true;
+            this.admissionGeneration++;
             await this.ctx.storage.put("staging-admission-paused", paused);
             if (!paused) this.admissionPaused = false;
         });
         return {admission_paused: this.admissionPaused};
+    }
+
+    async stagingFpmStatus() {
+        await this.admissionReady;
+        if (!this.admissionEnabled || this.env.STAGING_FPM_STATUS_ENABLED !== "1" || !this.admissionPaused || !this.ctx.container?.running) {
+            throw new Error("Staging FPM status is unavailable");
+        }
+        const generation = this.admissionGeneration;
+        const output = await this.containerOutput(["php", "/var/www/html/deployment/d1-proof/staging-fpm-status.php"], {stdout: "pipe", stderr: "pipe"}, 5000);
+        if (output.exitCode !== 0 || output.stdout.byteLength > 4096 || !this.admissionPaused || this.admissionGeneration !== generation || !this.ctx.container?.running) throw new Error("Staging FPM status is unavailable");
+        const status = JSON.parse(new TextDecoder().decode(output.stdout));
+        const keys = ["active_processes", "listen_queue", "total_processes", "start_time"];
+        if (!status || typeof status !== "object" || Object.keys(status).length !== keys.length
+            || keys.some(key => !Number.isSafeInteger(status[key]) || status[key] < 0)
+            || status.total_processes < 1 || status.active_processes > status.total_processes || status.start_time < 1) {
+            throw new Error("Invalid staging FPM status");
+        }
+        return status;
     }
 
     async scheduledProof(kind, familyId, at) {
@@ -531,6 +551,10 @@ export default {
                 return Response.json({restarted: true});
             }
             if (request.method === "GET" && path === "/__staging_admin/inspect") return Response.json(await container.inspect(), {headers: {"Cache-Control": "no-store"}});
+            if (request.method === "GET" && path === "/__staging_admin/fpm-status") {
+                if (env.RUNTIME_PROFILE === "production" || env.STAGING_ADMISSION_CONTROL !== "1" || env.STAGING_FPM_STATUS_ENABLED !== "1") return new Response("Not found", {status: 404});
+                return Response.json(await container.stagingFpmStatus(), {headers: {"Cache-Control": "no-store"}});
+            }
             if (request.method === "GET" && path === "/__staging_admin/runtime") return Response.json(await container.runtime(), {headers: {"Cache-Control": "no-store"}});
             return new Response("Not found", {status: 404});
         }
