@@ -286,6 +286,12 @@ const payWithPaystack = async () => {
 
             <!-- Contributions List -->
             <div v-else class="space-y-4">
+                <p class="text-sm text-muted-foreground">
+                    The periods you select set the payment amount. Payments are
+                    applied to your oldest unpaid contributions first, which
+                    may be different periods. Check your receipt to see which
+                    periods were paid.
+                </p>
                 <div class="flex items-center justify-between">
                     <button
                         type="button"

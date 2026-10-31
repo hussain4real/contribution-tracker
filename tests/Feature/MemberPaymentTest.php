@@ -303,6 +303,39 @@ it('initiates a payment for selected contributions', function () {
         ->and($transaction->fee_policy)->toBe('payer_pays');
 });
 
+it('applies an online payment to the oldest unpaid period even when a newer period sets the amount', function () {
+    $this->travelTo(now()->setDate(2026, 10, 15));
+    Http::fake(function (Request $request) {
+        if (str_ends_with($request->url(), '/transaction/initialize')) {
+            return Http::response(['status' => true, 'data' => ['authorization_url' => 'https://checkout.paystack.com/test', 'access_code' => 'access_test']]);
+        }
+
+        return Http::response(['status' => true, 'data' => [
+            'status' => 'success', 'amount' => 416_244, 'fees' => 16_244,
+            'reference' => basename($request->url()), 'paid_at' => now()->toIso8601String(),
+        ]]);
+    });
+    $family = Family::factory()->create([
+        'bank_name' => 'Kuda Bank', 'bank_code' => '090267', 'account_number' => '1234567890',
+    ]);
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $oldest = Contribution::factory()->forUser($member)->forMonth(2026, 9)->create(['expected_amount' => 4000]);
+    $selected = Contribution::factory()->forUser($member)->forMonth(2026, 10)->create(['expected_amount' => 4000]);
+
+    $this->actingAs($member)->postJson(route('pay.initiate'), [
+        'contribution_ids' => [$selected->id],
+        'expected_contribution_amount_kobo' => 400_000,
+        'expected_gross_amount_kobo' => 416_244,
+    ])->assertSuccessful();
+    $reference = PaystackTransaction::query()->sole()->reference;
+    $this->actingAs($member)->get(route('pay.callback', ['reference' => $reference]))
+        ->assertRedirect(route('pay.index'))
+        ->assertSessionHas('success', 'Payment successful! Your contributions have been updated.');
+
+    expect(Payment::where('contribution_id', $oldest->id)->sum('amount'))->toBe(4000)
+        ->and(Payment::where('contribution_id', $selected->id)->sum('amount'))->toBe(0);
+});
+
 it('marks the transaction failed when paystack initialization fails', function () {
     Http::fake([
         'api.paystack.co/transaction/initialize' => Http::response(['message' => 'Gateway down'], 500),
