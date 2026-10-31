@@ -9,6 +9,7 @@ use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\FamilyCategory;
 use App\Models\Payment;
+use App\Models\PaymentBatch;
 use App\Models\User;
 use App\Services\PaymentAllocationService;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -261,6 +262,21 @@ describe('Record Full Payment', function () {
                 'paid_at' => now()->toDateString(),
             ])
             ->assertSessionHasErrors('member_id');
+    });
+
+    it('rejects a payment for a member of another family', function () {
+        $otherMember = User::factory()->member()->employed()->create();
+
+        $this->actingAs($this->financialSecretary)
+            ->postReviewedPayment(route('payments.store'), [
+                'member_id' => $otherMember->id,
+                'amount' => 1000,
+                'paid_at' => now()->toDateString(),
+            ])
+            ->assertSessionHasErrors(['member_id' => 'The selected member does not belong to this family.']);
+
+        expect(PaymentBatch::count())->toBe(0)
+            ->and(Payment::count())->toBe(0);
     });
 
     it('validates paid_at is a valid date', function () {
