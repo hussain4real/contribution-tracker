@@ -125,6 +125,8 @@ The existing [product completion roadmap](../familyfund-product-completion-roadm
 
 **Acceptance:** The review matches the posted receipt and allocations, warnings are clear, and submitting or retrying cannot create duplicate entries.
 
+**Lost-response retry walkthrough:** On 2026-10-31, the synthetic officer reviewed a ₦1 payment, then the browser forwarded the submission to the demo server and deliberately dropped the response. The page warned that the payment was unconfirmed. Retrying the unchanged form led to the same receipt; a read-only check of the demo database found one batch and one allocation for the test reference. An initial interception mistake produced a separate synthetic receipt without dropping its response; both synthetic receipts were reversed through the demo admin UI, retaining their audit records. This does not verify a real staging payment, a retry after the review expires, or every possible concurrent submission.
+
 ## Phase 2 — Dashboard clarity and trust
 
 ### 5. Actionable family dashboard
