@@ -93,8 +93,10 @@ describe('Member History Flow', function () {
             ->assertVisible('[role="alert"]')
             ->assertNoJavaScriptErrors();
         $page->click('Dashboard')
+            ->assertSee('Family Fund Balance')
             ->assertPathIs("/{$this->family->slug}/dashboard")
             ->back()
+            ->assertSee('My money')
             ->assertPathIs("/{$this->family->slug}/contributions/my")
             ->assertDontSee('Transaction not found.');
     });
@@ -121,8 +123,10 @@ describe('Member History Flow', function () {
             ->assertSee("Receipt #{$batch->receipt_number}")
             ->assertNoJavaScriptErrors();
         $page->click('Dashboard')
+            ->assertSee('Family Fund Balance')
             ->assertPathIs("/{$this->family->slug}/dashboard")
             ->back()
+            ->assertSee('My money')
             ->assertPathIs("/{$this->family->slug}/contributions/my")
             ->assertDontSee('Payment already confirmed.');
     });

@@ -1212,6 +1212,31 @@ it('does not overwrite an allocation that completes while a failed response is i
         ->and($transaction->failed_at)->toBeNull();
 });
 
+it('reports a reversal that completes while a failed response is in flight', function () {
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->create(['family_id' => $family->id]);
+    $batch = PaymentBatch::factory()->create(['family_id' => $family->id, 'recorded_by' => $member->id]);
+    $transaction = PaystackTransaction::factory()->create([
+        'reference' => 'TXN_STALE_REVERSAL', 'user_id' => $member->id, 'family_id' => $family->id,
+        'status' => TransactionStatus::Initiated, 'allocated_at' => null,
+    ]);
+    Http::preventStrayRequests();
+    Http::fake(['api.paystack.co/transaction/verify/TXN_STALE_REVERSAL' => function () use ($transaction, $batch) {
+        $transaction->forceFill(['status' => TransactionStatus::Reversed, 'payment_batch_id' => $batch->id, 'allocated_at' => now()])->save();
+
+        return Http::response(['status' => true, 'data' => ['status' => 'failed', 'reference' => 'TXN_STALE_REVERSAL']]);
+    }]);
+
+    $this->actingAs($member)->get(route('pay.callback', ['reference' => $transaction->reference]))
+        ->assertRedirect(route('contributions.my'))
+        ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'This payment was reversed and no longer counts toward your contributions. Contact your family admin if you need help.']);
+
+    expect($transaction->refresh()->status)->toBe(TransactionStatus::Reversed)
+        ->and($transaction->payment_batch_id)->toBe($batch->id)
+        ->and($transaction->failed_at)->toBeNull();
+    Http::assertSentCount(1);
+});
+
 it('explains an uncertain outcome when callback verification throws', function () {
     Http::fake([
         'api.paystack.co/transaction/verify/TXN_ERROR' => Http::response(['message' => 'Gateway down'], 500),
