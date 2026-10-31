@@ -131,6 +131,8 @@ The existing [product completion roadmap](../familyfund-product-completion-roadm
 
 **Synthetic mobile checkout walkthrough:** At 390 × 844 pixels, a local browser showed the oldest-first explanation and a ₦2,000 contribution with a ₦2,030.46 total. With online availability mocked on and the initialization request intercepted, the browser submitted those same amounts in kobo. A mocked stale-amount response displayed the refresh message and re-enabled the Pay button. No Paystack request or payment was made; this does not verify an actual checkout or provider delivery.
 
+**Test-provider preparation:** A read-only request to Paystack using the configured local test secret returned `401 invalid_Key`. A separate local sandbox was prepared from the draft revision and a copy of the synthetic demo database, with email delivery disabled; the synthetic member could sign in. No provider transaction was created. A valid matching test-key pair is still needed before exercising an actual test-mode checkout; Paystack's test mode does not process real-money settlements.
+
 **Advance-payment limit on checkout:** The page now marks periods beyond the existing six-month limit unavailable and excludes them from Select All. A local feature test covers the month-end boundary. In a 390 × 844 synthetic walkthrough with a mocked future period and online availability, Select All selected the payable contribution while leaving the later period disabled. The mocked page does not verify a real provider checkout.
 
 ### 2. Receipt and reminder delivery visibility
