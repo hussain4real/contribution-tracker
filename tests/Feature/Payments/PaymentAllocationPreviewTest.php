@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Actions\ReversePaymentBatch;
 use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\FamilyMembership;
@@ -206,6 +207,10 @@ it('returns the original receipt when an unchanged recorded payment is retried a
         ->assertSessionHasNoErrors();
     $this->actingAs($officer)->post($url, [...$data, 'amount' => 1000])->assertSessionHasErrors('review');
     $this->actingAs($otherOfficer)->post($url, $data)->assertSessionHasErrors('review');
+    app(ReversePaymentBatch::class)->handle($receipt, $officer, 'Duplicate payment');
+    $this->actingAs($officer)->post($url, $data)
+        ->assertRedirect(route('payments.index', ['current_family' => $family->slug, 'receipt' => $receipt->id]))
+        ->assertSessionHas('success', 'Receipt #'.$receipt->receipt_number.' for ₦1,500.00 was recorded and later reversed.');
     expect(PaymentBatch::count())->toBe(1)->and(Payment::count())->toBe(1);
 });
 

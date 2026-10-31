@@ -211,9 +211,12 @@ class PaymentController extends Controller
 
         $currency = $family->currency;
         $formattedAmount = CurrencyFormatter::format($batch->total_amount, $currency);
+        $message = $batch->isReversed()
+            ? "Receipt #{$batch->receipt_number} for {$formattedAmount} was recorded and later reversed."
+            : "Receipt #{$batch->receipt_number}: {$formattedAmount} recorded for {$batch->member_name}.";
 
         return redirect()->route('payments.index', ['receipt' => $batch->id])
-            ->with('success', "Receipt #{$batch->receipt_number}: {$formattedAmount} recorded for {$batch->member_name}.");
+            ->with('success', $message);
     }
 
     private function reviewFingerprint(StorePaymentRequest $request, Family $family, User $user): string
