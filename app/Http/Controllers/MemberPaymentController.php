@@ -286,7 +286,7 @@ class MemberPaymentController extends Controller
     {
         Inertia::flash('payment_result', ['kind' => $kind, 'message' => $message]);
 
-        return redirect()->route('contributions.my')->with($kind, $message);
+        return redirect()->route('contributions.my');
     }
 
     private function stringConfig(string $key): string

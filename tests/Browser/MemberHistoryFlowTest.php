@@ -123,6 +123,7 @@ describe('Member History Flow', function () {
             ->assertSeeIn('[role="alert"]', 'Transaction not found.')
             ->assertNoJavaScriptErrors();
         expect($page->script("() => sessionStorage.getItem('checkout-verifications')"))->toBe('1');
+        expect($page->script("() => document.body.innerText.split('Transaction not found.').length - 1"))->toBe(1);
     })->with(['cancelled' => 'onCancel', 'load failure' => 'onError']);
 
     it('member can view contribution details with payments', function () {

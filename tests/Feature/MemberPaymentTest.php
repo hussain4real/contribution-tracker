@@ -370,7 +370,7 @@ it('applies an online payment to the oldest unpaid period even when a newer peri
     $reference = PaystackTransaction::query()->sole()->reference;
     $this->actingAs($member)->get(route('pay.callback', ['reference' => $reference]))
         ->assertRedirect(route('contributions.my'))
-        ->assertSessionHas('success', 'Payment successful! Your contributions have been updated.');
+        ->assertInertiaFlash('payment_result', ['kind' => 'success', 'message' => 'Payment successful! Your contributions have been updated.']);
 
     expect(Payment::where('contribution_id', $oldest->id)->sum('amount'))->toBe(4000)
         ->and(Payment::where('contribution_id', $selected->id)->sum('amount'))->toBe(0);
@@ -711,7 +711,7 @@ it('redirects callbacks without a reference', function () {
     $this->actingAs($member)
         ->get(route('pay.callback'))
         ->assertRedirect(route('contributions.my'))
-        ->assertSessionHas('error', 'Invalid payment reference.');
+        ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'Invalid payment reference.']);
 });
 
 it('redirects callbacks for unknown transactions', function () {
@@ -720,7 +720,7 @@ it('redirects callbacks for unknown transactions', function () {
     $this->actingAs($member)
         ->get(route('pay.callback', ['reference' => 'TXN_MISSING']))
         ->assertRedirect(route('contributions.my'))
-        ->assertSessionHas('error', 'Transaction not found.');
+        ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'Transaction not found.']);
 });
 
 it('does not verify another member, family, or payment type through the contribution callback', function (string $scope) {
@@ -742,7 +742,7 @@ it('does not verify another member, family, or payment type through the contribu
 
     $this->actingAs($member)->get(route('pay.callback', ['current_family' => $family->slug, 'reference' => $transaction->reference]))
         ->assertRedirect(route('contributions.my', ['current_family' => $family->slug]))
-        ->assertSessionHas('error', 'Transaction not found.');
+        ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'Transaction not found.']);
     Http::assertNothingSent();
     expect($transaction->refresh()->status)->toBe(TransactionStatus::Pending)
         ->and($transaction->payment_batch_id)->toBeNull();
@@ -779,14 +779,14 @@ it('settles an existing payment when checkout is no longer available to the fami
     $this->actingAs($member)->postJson(route('pay.initiate'), [])->assertForbidden();
     $this->get(route('pay.callback', ['reference' => $transaction->reference]))
         ->assertRedirect(route('contributions.my'))
-        ->assertSessionHas('success', 'Payment successful! Your contributions have been updated.');
+        ->assertInertiaFlash('payment_result', ['kind' => 'success', 'message' => 'Payment successful! Your contributions have been updated.']);
 
     expect($transaction->refresh()->status)->toBe(TransactionStatus::Allocated)
         ->and(Payment::where('contribution_id', $contribution->id)->sum('amount'))->toBe(4000);
     $this->get(route('contributions.my'))->assertOk()->assertInertia(fn (Assert $page) => $page
         ->where('receipts.data.0.id', $transaction->payment_batch_id));
     $this->get(route('pay.callback', ['reference' => $transaction->reference]))
-        ->assertRedirect(route('contributions.my'))->assertSessionHas('success', 'Payment already confirmed.');
+        ->assertRedirect(route('contributions.my'))->assertInertiaFlash('payment_result', ['kind' => 'success', 'message' => 'Payment already confirmed.']);
     expect(Payment::where('contribution_id', $contribution->id)->count())->toBe(1);
 })->with([
     'feature removed' => [[], 'active'],
@@ -840,7 +840,7 @@ it('allocates a successful callback payment', function () {
     $this->actingAs($member)
         ->get(route('pay.callback', ['reference' => 'TXN_SUCCESS']))
         ->assertRedirect(route('contributions.my'))
-        ->assertSessionHas('success', 'Payment successful! Your contributions have been updated.');
+        ->assertInertiaFlash('payment_result', ['kind' => 'success', 'message' => 'Payment successful! Your contributions have been updated.']);
 
     expect($transaction->refresh()->status)->toBe(TransactionStatus::Allocated)
         ->and($transaction->payment_batch_id)->not->toBeNull()
@@ -852,14 +852,14 @@ it('allocates a successful callback payment', function () {
     $this->actingAs($member)
         ->get(route('pay.callback', ['reference' => 'TXN_SUCCESS']))
         ->assertRedirect(route('contributions.my'))
-        ->assertSessionHas('success', 'Payment already confirmed.');
+        ->assertInertiaFlash('payment_result', ['kind' => 'success', 'message' => 'Payment already confirmed.']);
     expect(Payment::where('contribution_id', $contribution->id)->count())->toBe(1);
 
     app(ReversePaymentBatch::class)->handle($transaction->paymentBatch()->firstOrFail(), $member, 'Correction');
     $this->actingAs($member)
         ->get(route('pay.callback', ['reference' => 'TXN_SUCCESS']))
         ->assertRedirect(route('contributions.my'))
-        ->assertSessionHas('error', 'This payment was reversed and no longer counts toward your contributions. Contact your family admin if you need help.');
+        ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'This payment was reversed and no longer counts toward your contributions. Contact your family admin if you need help.']);
     expect($transaction->refresh()->status)->toBe(TransactionStatus::Reversed)
         ->and(Payment::where('contribution_id', $contribution->id)->count())->toBe(1);
     Http::assertSentCount(1);
@@ -897,7 +897,7 @@ it('reports when a verified callback cannot yet be posted to the ledger', functi
     $this->actingAs($member)
         ->get(route('pay.callback', ['reference' => 'TXN_UNPOSTED']))
         ->assertRedirect(route('contributions.my'))
-        ->assertSessionHas('error', 'Payment was verified but not recorded. Contact your family admin before trying again.');
+        ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'Payment was verified but not recorded. Contact your family admin before trying again.']);
 });
 
 it('does not claim an unallocated successful settlement updated contributions', function () {
@@ -917,7 +917,7 @@ it('does not claim an unallocated successful settlement updated contributions', 
 
     $this->actingAs($member)->get(route('pay.callback', ['reference' => 'TXN_UNALLOCATED']))
         ->assertRedirect(route('contributions.my'))
-        ->assertSessionHas('error', 'Payment was verified but not recorded. Contact your family admin before trying again.');
+        ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'Payment was verified but not recorded. Contact your family admin before trying again.']);
     expect($transaction->refresh()->payment_batch_id)->toBeNull();
 });
 
@@ -967,7 +967,7 @@ it('records only the settlement shortfall as a Paystack fee expense', function (
     $this->actingAs($member)
         ->get(route('pay.callback', ['reference' => 'TXN_SHORTFALL']))
         ->assertRedirect(route('contributions.my'))
-        ->assertSessionHas('success', 'Payment successful! Your contributions have been updated.');
+        ->assertInertiaFlash('payment_result', ['kind' => 'success', 'message' => 'Payment successful! Your contributions have been updated.']);
 
     $expense = Expense::query()->where('family_id', $family->id)->firstOrFail();
 
@@ -1019,7 +1019,7 @@ it('rejects successful callbacks when the verified gross amount does not match',
     $this->actingAs($member)
         ->get(route('pay.callback', ['reference' => 'TXN_BAD_AMOUNT']))
         ->assertRedirect(route('contributions.my'))
-        ->assertSessionHas('error', 'Could not confirm your payment. Check your payment history or contact your family admin before trying again.');
+        ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'Could not confirm your payment. Check your payment history or contact your family admin before trying again.']);
 
     expect($transaction->refresh()->status)->toBe(TransactionStatus::Failed)
         ->and(Payment::where('contribution_id', $contribution->id)->exists())->toBeFalse();
@@ -1054,7 +1054,7 @@ it('does not claim a legacy successful transaction was recorded without an alloc
     $this->actingAs($member)
         ->get(route('pay.callback', ['reference' => 'TXN_ALREADY_SUCCESS']))
         ->assertRedirect(route('contributions.my'))
-        ->assertSessionHas('error', 'Payment may have been successful, but we could not confirm it was recorded. Check your payment history or contact your family admin before trying again.');
+        ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'Payment may have been successful, but we could not confirm it was recorded. Check your payment history or contact your family admin before trying again.']);
 });
 
 it('does not overwrite an unallocated legacy success when a non-success callback arrives', function () {
@@ -1086,7 +1086,7 @@ it('does not overwrite an unallocated legacy success when a non-success callback
     $this->actingAs($member)
         ->get(route('pay.callback', ['reference' => 'TXN_CONFIRMED']))
         ->assertRedirect(route('contributions.my'))
-        ->assertSessionHas('error', 'Payment may have been successful, but we could not confirm it was recorded. Check your payment history or contact your family admin before trying again.');
+        ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'Payment may have been successful, but we could not confirm it was recorded. Check your payment history or contact your family admin before trying again.']);
 
     expect($transaction->refresh()->status)->toBe(TransactionStatus::Success)
         ->and($transaction->payment_batch_id)->toBeNull();
@@ -1104,7 +1104,7 @@ it('treats a nonterminal or missing provider status as unconfirmed', function (?
 
     $this->actingAs($member)->get(route('pay.callback', ['reference' => $transaction->reference]))
         ->assertRedirect(route('contributions.my'))
-        ->assertSessionHas('error', 'Could not confirm your payment. Check your payment history or contact your family admin before trying again.');
+        ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'Could not confirm your payment. Check your payment history or contact your family admin before trying again.']);
     expect($transaction->refresh()->status)->toBe(TransactionStatus::Pending)
         ->and($transaction->payment_batch_id)->toBeNull();
 })->with(['pending', 'ongoing', 'processing', 'queued', 'abandoned', 'reversed', 'unknown', null]);
@@ -1138,7 +1138,7 @@ it('shows an error for failed callback verification statuses', function () {
     $this->actingAs($member)
         ->get(route('pay.callback', ['reference' => 'TXN_FAILED']))
         ->assertRedirect(route('contributions.my'))
-        ->assertSessionHas('error', 'Payment was not successful. Please try again.');
+        ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'Payment was not successful. Please try again.']);
 });
 
 it('explains an uncertain outcome when callback verification throws', function () {
@@ -1159,5 +1159,5 @@ it('explains an uncertain outcome when callback verification throws', function (
     $this->actingAs($member)
         ->get(route('pay.callback', ['reference' => 'TXN_ERROR']))
         ->assertRedirect(route('contributions.my'))
-        ->assertSessionHas('error', 'Could not confirm your payment. Check your payment history or contact your family admin before trying again.');
+        ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'Could not confirm your payment. Check your payment history or contact your family admin before trying again.']);
 });
