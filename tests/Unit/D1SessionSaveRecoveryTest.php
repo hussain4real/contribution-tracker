@@ -16,6 +16,7 @@ use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
+use Psr\Log\LoggerInterface;
 use Tests\TestCase;
 
 pest()->extend(TestCase::class);
@@ -148,6 +149,29 @@ it('keeps a recovered session when the diagnostic logger fails', function (): vo
     $this->failure = new D1SessionSaveFailure;
     expect($this->handler->read($this->id))->toBe('updated');
 });
+
+it('reports a recovered production session to Nightwatch without relying on the default logger', function (bool $monitorFails): void {
+    $this->app['env'] = 'production';
+    config(['app.debug' => false, 'd1-production.enabled' => true, 'd1-staging.enabled' => false, 'nightwatch.enabled' => true]);
+    $this->url = D1RuntimeProfile::PRODUCTION_URL;
+    $this->database = D1RuntimeProfile::PRODUCTION_DATABASE;
+    $this->handler = new D1StagingSessionHandler($this->url, 'synthetic-token', $this->database, 120);
+    $this->handler->write($this->id, 'original');
+    expect($this->handler->read($this->id))->toBe('original');
+    $this->failure->phase = 'before';
+    Log::shouldReceive('notice')->once()->andThrow(new RuntimeException('Synthetic default logger failure'));
+    if ($monitorFails) {
+        Log::shouldReceive('channel')->once()->with('nightwatch')->andThrow(new RuntimeException('Synthetic monitoring failure'));
+    } else {
+        $monitor = Mockery::mock(LoggerInterface::class);
+        $monitor->shouldReceive('notice')->once()->with('D1 session save recovered', ['strategy' => 'updated_unchanged']);
+        Log::shouldReceive('channel')->once()->with('nightwatch')->andReturn($monitor);
+    }
+
+    expect($this->handler->write($this->id, 'updated'))->toBeTrue();
+    $this->failure = new D1SessionSaveFailure;
+    expect($this->handler->read($this->id))->toBe('updated');
+})->with(['monitor available' => false, 'monitor unavailable' => true]);
 
 it('does not recreate a new uncommitted session after a timeout', function (): void {
     $this->handler->read($this->id);

@@ -85,6 +85,13 @@ final class D1StagingSessionHandler implements SessionHandlerInterface
             } catch (Throwable) {
                 // Session recovery must not fail because logging is unavailable.
             }
+            if (config('d1-production.enabled') === true && config('nightwatch.enabled') === true) {
+                try {
+                    Log::channel('nightwatch')->notice('D1 session save recovered', ['strategy' => $recovery]);
+                } catch (Throwable) {
+                    // Monitoring must not fail a recovered session.
+                }
+            }
         }
         $this->readSessions[$id] = ['payload' => $payload, 'last_activity' => $lastActivity];
 
