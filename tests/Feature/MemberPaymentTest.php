@@ -215,7 +215,7 @@ it('does not initiate checkout when any selected contribution exceeds the advanc
     ]);
 
     $this->actingAs($member)
-        ->postJson(route('pay.initiate'), ['contribution_ids' => [$allowed->id, $tooFar->id]])
+        ->postJson(route('pay.initiate'), ['expected_contribution_amount_kobo' => 400_000, 'expected_gross_amount_kobo' => 416_244, 'contribution_ids' => [$allowed->id, $tooFar->id]])
         ->assertUnprocessable()
         ->assertJson(['message' => 'Advance payments are limited to 6 months ahead.']);
 
@@ -256,6 +256,7 @@ it('initiates a payment for selected contributions', function () {
     $this->actingAs($member);
 
     $response = $this->postJson(route('pay.initiate'), [
+        'expected_contribution_amount_kobo' => 400_000, 'expected_gross_amount_kobo' => 416_244,
         'contribution_ids' => [$contribution->id],
     ]);
 
@@ -321,6 +322,7 @@ it('marks the transaction failed when paystack initialization fails', function (
 
     $this->actingAs($member)
         ->postJson(route('pay.initiate'), [
+            'expected_contribution_amount_kobo' => 400_000, 'expected_gross_amount_kobo' => 416_244,
             'contribution_ids' => [$contribution->id],
         ])
         ->assertServerError()
@@ -351,6 +353,7 @@ it('marks the transaction failed when paystack initialization returns malformed 
 
     $this->actingAs($member)
         ->postJson(route('pay.initiate'), [
+            'expected_contribution_amount_kobo' => 400_000, 'expected_gross_amount_kobo' => 416_244,
             'contribution_ids' => [$contribution->id],
         ])
         ->assertServerError()
@@ -383,6 +386,7 @@ it('marks the transaction failed when paystack initialization omits required che
 
     $this->actingAs($member)
         ->postJson(route('pay.initiate'), [
+            'expected_contribution_amount_kobo' => 400_000, 'expected_gross_amount_kobo' => 416_244,
             'contribution_ids' => [$contribution->id],
         ])
         ->assertServerError()
@@ -407,6 +411,7 @@ it('fails to initiate without bank details', function () {
 
     $this->actingAs($member)
         ->postJson(route('pay.initiate'), [
+            'expected_contribution_amount_kobo' => 400_000, 'expected_gross_amount_kobo' => 416_244,
             'contribution_ids' => [$contribution->id],
         ])
         ->assertUnprocessable()
@@ -423,10 +428,43 @@ it('validates contribution_ids are required', function () {
 
     $this->actingAs($member)
         ->postJson(route('pay.initiate'), [
+            'expected_contribution_amount_kobo' => 400_000, 'expected_gross_amount_kobo' => 416_244,
             'contribution_ids' => [],
         ])
         ->assertUnprocessable();
 });
+
+it('requires the amounts shown before checkout', function () {
+    $member = User::factory()->member()->employed()->create();
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
+
+    $this->actingAs($member)->postJson(route('pay.initiate'), ['contribution_ids' => [$contribution->id]])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['expected_contribution_amount_kobo', 'expected_gross_amount_kobo']);
+});
+
+it('does not open checkout when the displayed balance or fee is stale', function (string $case) {
+    Http::fake();
+    $family = Family::factory()->create([
+        'bank_name' => 'Kuda Bank', 'bank_code' => '090267', 'account_number' => '1234567890',
+    ]);
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
+    if ($case === 'balance') {
+        Payment::factory()->forContribution($contribution)->recordedBy($member)->create(['amount' => 1000]);
+    } else {
+        config(['services.paystack.local_fee_basis_points' => 200]);
+    }
+
+    $this->actingAs($member)->postJson(route('pay.initiate'), [
+        'contribution_ids' => [$contribution->id],
+        'expected_contribution_amount_kobo' => 400_000,
+        'expected_gross_amount_kobo' => 416_244,
+    ])->assertUnprocessable()->assertJson(['message' => 'Your payment amount has changed. Refresh and review it before trying again.']);
+
+    expect(PaystackTransaction::count())->toBe(0);
+    Http::assertNothingSent();
+})->with(['balance', 'fee']);
 
 it('rejects initiation when no unpaid contributions are selected', function () {
     $family = Family::factory()->create([
@@ -444,6 +482,7 @@ it('rejects initiation when no unpaid contributions are selected', function () {
 
     $this->actingAs($member)
         ->postJson(route('pay.initiate'), [
+            'expected_contribution_amount_kobo' => 400_000, 'expected_gross_amount_kobo' => 416_244,
             'contribution_ids' => [$otherContribution->id],
         ])
         ->assertUnprocessable()
@@ -468,7 +507,7 @@ it('does not initiate checkout for a mixed selection containing an unavailable c
         'expected_amount' => $case === 'paid' ? 0 : 4000,
     ]);
 
-    $this->actingAs($member)->postJson(route('pay.initiate'), ['contribution_ids' => [$valid->id, $unavailable->id]])
+    $this->actingAs($member)->postJson(route('pay.initiate'), ['expected_contribution_amount_kobo' => 400_000, 'expected_gross_amount_kobo' => 416_244, 'contribution_ids' => [$valid->id, $unavailable->id]])
         ->assertUnprocessable()
         ->assertJson(['message' => 'Some selected contributions are no longer available. Refresh and try again.']);
 
@@ -504,6 +543,7 @@ it('rejects initiation with contribution ids from another family', function () {
 
     $this->actingAs($member)
         ->postJson(route('pay.initiate', ['current_family' => $currentFamily->slug]), [
+            'expected_contribution_amount_kobo' => 400_000, 'expected_gross_amount_kobo' => 416_244,
             'contribution_ids' => [$legacyContribution->id],
         ])
         ->assertUnprocessable()
@@ -527,6 +567,7 @@ it('rejects initiation when selected contributions have no balance', function ()
 
     $this->actingAs($member)
         ->postJson(route('pay.initiate'), [
+            'expected_contribution_amount_kobo' => 400_000, 'expected_gross_amount_kobo' => 416_244,
             'contribution_ids' => [$contribution->id],
         ])
         ->assertUnprocessable()
@@ -559,6 +600,7 @@ it('rejects initiation when selected contributions become paid during calculatio
 
     $this->actingAs($member)
         ->postJson(route('pay.initiate'), [
+            'expected_contribution_amount_kobo' => 400_000, 'expected_gross_amount_kobo' => 416_244,
             'contribution_ids' => [$contribution->id],
         ])
         ->assertUnprocessable()
@@ -582,7 +624,7 @@ it('does not initiate a reduced checkout when one of several selections becomes 
         }
     });
 
-    $this->actingAs($member)->postJson(route('pay.initiate'), ['contribution_ids' => [$first->id, $second->id]])
+    $this->actingAs($member)->postJson(route('pay.initiate'), ['expected_contribution_amount_kobo' => 400_000, 'expected_gross_amount_kobo' => 416_244, 'contribution_ids' => [$first->id, $second->id]])
         ->assertUnprocessable()
         ->assertJson(['message' => 'Some selected contributions are no longer available. Refresh and try again.']);
 

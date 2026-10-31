@@ -125,6 +125,11 @@ class MemberPaymentController extends Controller
 
         $feeEstimate = $this->feeCalculator->estimateForContributionAmount($totalAmount);
 
+        if ($request->integer('expected_contribution_amount_kobo') !== $feeEstimate['contribution_amount_kobo']
+            || $request->integer('expected_gross_amount_kobo') !== $feeEstimate['gross_amount_kobo']) {
+            return response()->json(['message' => 'Your payment amount has changed. Refresh and review it before trying again.'], 422);
+        }
+
         $reference = 'TXN_'.Str::upper(Str::random(16));
 
         // Determine target month (oldest selected contribution)

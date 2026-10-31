@@ -99,7 +99,7 @@ The existing [product completion roadmap](../familyfund-product-completion-roadm
 
 **Callback access:** The contribution-payment callback now looks up only the signed-in member's contribution transaction in the current family. Local tests verify that another member's reference, the member's reference in another family, and a subscription reference are not verified or changed through this endpoint. Paystack's webhook remains a separate settlement path; remote verification is still required.
 
-**Checkout selection:** Initialization now refuses a mixed selection if any requested contribution is outside the member's current family or is no longer payable, including when one becomes fully paid during balance calculation. Local tests verify no Paystack request or transaction is created in those cases. This does not eliminate changes to balances after the check or prove the amount shown in a real provider checkout.
+**Checkout selection:** Initialization now refuses a mixed selection if any requested contribution is outside the member's current family or is no longer payable, including when one becomes fully paid during balance calculation. The page also submits the contribution and total amounts it displayed; initialization recalculates both and asks the member to refresh if the balance or fee has changed. Local tests verify that these rejected cases create neither a Paystack request nor a transaction. This does not eliminate changes to balances after the check or prove the amount shown in a real provider checkout.
 
 ### 2. Receipt and reminder delivery visibility
 

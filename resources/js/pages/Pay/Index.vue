@@ -205,6 +205,8 @@ const payWithPaystack = async () => {
             },
             body: JSON.stringify({
                 contribution_ids: selectedIds.value,
+                expected_contribution_amount_kobo: selectedContributionKobo.value,
+                expected_gross_amount_kobo: grossAmountKobo.value,
             }),
         });
 
