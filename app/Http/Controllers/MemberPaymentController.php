@@ -262,11 +262,20 @@ class MemberPaymentController extends Controller
             $status = $this->stringValue($data['status'] ?? null);
 
             if ($status !== 'success') {
-                $message = $status === 'failed'
-                    ? 'Payment was not successful. Please try again.'
-                    : 'Could not confirm your payment. Check your payment history or contact your family admin before trying again.';
+                if ($status === 'failed' && $this->stringValue($data['reference'] ?? null) === $reference) {
+                    $current = $this->settlementService->recordProviderFailure($reference);
+                    if ($current->status === TransactionStatus::Allocated && $current->payment_batch_id !== null && $current->allocated_at !== null) {
+                        return $this->paymentResult('success', 'Payment already confirmed.');
+                    }
+                    if ($current->status === TransactionStatus::Reversed) {
+                        return $this->paymentResult('error', 'This payment was reversed and no longer counts toward your contributions. Contact your family admin if you need help.');
+                    }
+                    if ($current->status === TransactionStatus::Failed) {
+                        return $this->paymentResult('error', 'Payment was not successful. Please try again.');
+                    }
+                }
 
-                return $this->paymentResult('error', $message);
+                return $this->paymentResult('error', 'Could not confirm your payment. Check your payment history or contact your family admin before trying again.');
             }
 
             $settledTransaction = $this->settlementService->settle($reference, $data);

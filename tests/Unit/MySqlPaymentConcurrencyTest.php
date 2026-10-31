@@ -124,6 +124,92 @@ it('does not overwrite a concurrently allocated Paystack payment when another se
     }
 });
 
+it('does not overwrite a concurrently allocated payment with a provider failure', function (): void {
+    if (getenv('FAMILYFUND_MYSQL_CONCURRENCY_TEST') !== '1'
+        || config('database.default') !== 'mysql'
+        || config('database.connections.mysql.database') !== 'familyfund_concurrency_test'
+        || ! function_exists('pcntl_fork')) {
+        $this->markTestSkipped('Requires the explicitly configured disposable MySQL concurrency database and pcntl.');
+    }
+
+    $family = Family::factory()->create();
+    $category = FamilyCategory::factory()->create(['family_id' => $family->id, 'monthly_amount' => 4000]);
+    $member = User::factory()->member()->create(['family_id' => $family->id, 'family_category_id' => $category->id]);
+    $transaction = PaystackTransaction::query()->create([
+        'reference' => 'provider-failure-'.Str::uuid(), 'user_id' => $member->id, 'family_id' => $family->id,
+        'type' => TransactionType::Contribution, 'amount' => 4000, 'gross_amount_kobo' => 400000,
+        'status' => TransactionStatus::Initiated, 'fee_policy' => 'payer_pays',
+        'metadata' => ['target_year' => now()->year, 'target_month' => now()->month],
+    ]);
+    $reference = $transaction->reference;
+    $transactionId = $transaction->id;
+    DB::disconnect();
+    $sockets = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+    if ($sockets === false) {
+        throw new RuntimeException('Could not create the concurrency test socket.');
+    }
+    $pid = pcntl_fork();
+    if ($pid === -1) {
+        throw new RuntimeException('Could not start the concurrent settlement process.');
+    }
+    if ($pid === 0) {
+        fclose($sockets[0]);
+        DB::purge();
+        try {
+            $parentId = (int) trim((string) fgets($sockets[1]));
+            DB::beginTransaction();
+            app(PaystackContributionSettlementService::class)->settle($reference, ['status' => 'success', 'amount' => 400000, 'fees' => 0]);
+            fwrite($sockets[1], "allocated\n");
+            $waiting = false;
+            for ($attempt = 0; $attempt < 400; $attempt++) {
+                $query = DB::table('information_schema.processlist')->where('id', $parentId)->value('info');
+                if (is_string($query) && str_contains(strtolower($query), 'paystack_transactions') && str_contains(strtolower($query), 'for update')) {
+                    $waiting = true;
+                    break;
+                }
+                usleep(25000);
+            }
+            if (! $waiting) {
+                throw new RuntimeException('The provider-failure handler did not wait for the concurrent transaction.');
+            }
+            DB::commit();
+            fwrite($sockets[1], "committed\n");
+        } catch (Throwable $exception) {
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
+            fwrite($sockets[1], 'error: '.$exception->getMessage()."\n");
+        }
+        fclose($sockets[1]);
+        exit(0);
+    }
+
+    fclose($sockets[1]);
+    stream_set_timeout($sockets[0], 15);
+    DB::purge();
+    $parentId = DB::scalar('select connection_id()');
+    if (! is_int($parentId) && ! is_string($parentId)) {
+        throw new RuntimeException('Could not identify the provider-failure connection.');
+    }
+    try {
+        fwrite($sockets[0], $parentId."\n");
+        expect(trim((string) fgets($sockets[0])))->toBe('allocated');
+        $current = app(PaystackContributionSettlementService::class)->recordProviderFailure($reference);
+        expect(trim((string) fgets($sockets[0])))->toBe('committed');
+        $transaction = PaystackTransaction::query()->findOrFail($transactionId);
+        expect($current->status)->toBe(TransactionStatus::Allocated)
+            ->and($transaction->status)->toBe(TransactionStatus::Allocated)
+            ->and($transaction->payment_batch_id)->not->toBeNull()
+            ->and($transaction->failed_at)->toBeNull();
+        $events = AuditEvent::query()->where('auditable_type', $transaction->getMorphClass())
+            ->where('auditable_id', $transactionId)->where('action', 'paystack.state_changed')->get();
+        expect($events->pluck('after.status')->all())->toBe(['verified', 'allocated']);
+    } finally {
+        fclose($sockets[0]);
+        pcntl_waitpid($pid, $status);
+    }
+});
+
 it('keeps allocations correct when a nested transaction waits for the family lock', function (string $scenario): void {
     if (getenv('FAMILYFUND_MYSQL_CONCURRENCY_TEST') !== '1'
         || config('database.default') !== 'mysql'

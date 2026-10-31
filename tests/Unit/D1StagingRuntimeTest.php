@@ -405,6 +405,29 @@ it('records and audits a failed Paystack settlement through the D1 runtime', fun
         ->and(stagingSqlValue($pdo, 'select count(*) from payment_batches'))->toBe(0);
 });
 
+it('records a provider-reported failure once through the D1 runtime', function (): void {
+    config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
+    DB::purge('sqlite');
+    $this->artisan('migrate', ['--database' => 'sqlite', '--force' => true])->assertSuccessful();
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->create(['family_id' => $family->id]);
+    $transaction = PaystackTransaction::query()->create([
+        'reference' => 'd1-provider-failure-'.Str::uuid(), 'user_id' => $member->id, 'family_id' => $family->id,
+        'type' => TransactionType::Contribution, 'amount' => 4000, 'gross_amount_kobo' => 400000,
+        'status' => TransactionStatus::Initiated, 'fee_policy' => 'payer_pays',
+    ]);
+    $pdo = DB::connection('sqlite')->getPdo();
+    connectStagingSqlFixture($pdo);
+    $runtime = new D1StagingRuntime;
+
+    $runtime->run(fn () => app(PaystackContributionSettlementService::class)->recordProviderFailure($transaction->reference), $family->id);
+    $runtime->run(fn () => app(PaystackContributionSettlementService::class)->recordProviderFailure($transaction->reference), $family->id);
+
+    expect($transaction->fresh()?->status)->toBe(TransactionStatus::Failed)
+        ->and(stagingSqlValue($pdo, "select count(*) from audit_events where action='paystack.state_changed'"))->toBe(1)
+        ->and(stagingSqlValue($pdo, 'select count(*) from payment_batches'))->toBe(0);
+});
+
 it('allocates payments and queues receipts through the D1 runtime using current balances', function (): void {
     config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
     DB::purge('sqlite');

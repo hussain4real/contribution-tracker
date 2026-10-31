@@ -10,6 +10,7 @@ use App\Models\Expense;
 use App\Models\Family;
 use App\Models\FamilyCategory;
 use App\Models\Payment;
+use App\Models\PaymentBatch;
 use App\Models\PaystackTransaction;
 use App\Models\PlatformPlan;
 use App\Models\User;
@@ -1126,7 +1127,7 @@ it('shows an error for failed callback verification statuses', function () {
     ]);
 
     $member = User::factory()->member()->employed()->create();
-    PaystackTransaction::create([
+    $transaction = PaystackTransaction::create([
         'reference' => 'TXN_FAILED',
         'user_id' => $member->id,
         'family_id' => $member->family_id,
@@ -1139,6 +1140,76 @@ it('shows an error for failed callback verification statuses', function () {
         ->get(route('pay.callback', ['reference' => 'TXN_FAILED']))
         ->assertRedirect(route('contributions.my'))
         ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'Payment was not successful. Please try again.']);
+
+    expect($transaction->refresh()->status)->toBe(TransactionStatus::Failed)
+        ->and($transaction->failed_at)->not->toBeNull()
+        ->and($transaction->payment_batch_id)->toBeNull();
+});
+
+it('does not record a failed provider response for a different reference', function () {
+    Http::fake(['api.paystack.co/transaction/verify/TXN_FAILED_MISMATCH' => Http::response([
+        'status' => true, 'data' => ['status' => 'failed', 'reference' => 'TXN_OTHER'],
+    ])]);
+    $member = User::factory()->member()->create();
+    $transaction = PaystackTransaction::factory()->create([
+        'reference' => 'TXN_FAILED_MISMATCH', 'user_id' => $member->id, 'family_id' => $member->family_id,
+        'status' => TransactionStatus::Initiated, 'allocated_at' => null,
+    ]);
+
+    $this->actingAs($member)->get(route('pay.callback', ['reference' => $transaction->reference]))
+        ->assertRedirect(route('contributions.my'))
+        ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'Could not confirm your payment. Check your payment history or contact your family admin before trying again.']);
+
+    expect($transaction->refresh()->status)->toBe(TransactionStatus::Initiated)
+        ->and($transaction->failed_at)->toBeNull();
+});
+
+it('can allocate a later successful verification after a recorded provider failure', function () {
+    Http::fake(['api.paystack.co/transaction/verify/TXN_RETRIED' => Http::sequence()
+        ->push(['status' => true, 'data' => ['status' => 'failed', 'reference' => 'TXN_RETRIED']])
+        ->push(['status' => true, 'data' => ['status' => 'success', 'reference' => 'TXN_RETRIED', 'amount' => 400000, 'fees' => 0, 'currency' => 'NGN']])]);
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
+    $transaction = PaystackTransaction::factory()->create([
+        'reference' => 'TXN_RETRIED', 'user_id' => $member->id, 'family_id' => $family->id,
+        'amount' => 4000, 'gross_amount_kobo' => 400000, 'estimated_fee_kobo' => 0,
+        'status' => TransactionStatus::Initiated, 'allocated_at' => null,
+        'metadata' => ['target_year' => $contribution->year, 'target_month' => $contribution->month],
+    ]);
+
+    $this->actingAs($member)->get(route('pay.callback', ['reference' => $transaction->reference]))
+        ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'Payment was not successful. Please try again.']);
+    expect($transaction->refresh()->status)->toBe(TransactionStatus::Failed);
+
+    $this->get(route('pay.callback', ['reference' => $transaction->reference]))
+        ->assertInertiaFlash('payment_result', ['kind' => 'success', 'message' => 'Payment successful! Your contributions have been updated.']);
+    expect($transaction->refresh()->status)->toBe(TransactionStatus::Allocated)
+        ->and($transaction->failed_at)->toBeNull()
+        ->and(Payment::where('contribution_id', $contribution->id)->count())->toBe(1);
+});
+
+it('does not overwrite an allocation that completes while a failed response is in flight', function () {
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->create(['family_id' => $family->id]);
+    $batch = PaymentBatch::factory()->create(['family_id' => $family->id, 'recorded_by' => $member->id]);
+    $transaction = PaystackTransaction::factory()->create([
+        'reference' => 'TXN_STALE_FAILURE', 'user_id' => $member->id, 'family_id' => $family->id,
+        'status' => TransactionStatus::Initiated, 'allocated_at' => null,
+    ]);
+    Http::fake(function () use ($transaction, $batch) {
+        $transaction->forceFill(['status' => TransactionStatus::Allocated, 'payment_batch_id' => $batch->id, 'allocated_at' => now()])->save();
+
+        return Http::response(['status' => true, 'data' => ['status' => 'failed', 'reference' => 'TXN_STALE_FAILURE']]);
+    });
+
+    $this->actingAs($member)->get(route('pay.callback', ['reference' => $transaction->reference]))
+        ->assertRedirect(route('contributions.my'))
+        ->assertInertiaFlash('payment_result', ['kind' => 'success', 'message' => 'Payment already confirmed.']);
+
+    expect($transaction->refresh()->status)->toBe(TransactionStatus::Allocated)
+        ->and($transaction->payment_batch_id)->toBe($batch->id)
+        ->and($transaction->failed_at)->toBeNull();
 });
 
 it('explains an uncertain outcome when callback verification throws', function () {
