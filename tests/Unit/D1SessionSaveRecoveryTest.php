@@ -16,6 +16,8 @@ use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
+use Laravel\Nightwatch\Core;
+use Laravel\Nightwatch\Ingest;
 use Psr\Log\LoggerInterface;
 use Tests\TestCase;
 
@@ -172,6 +174,40 @@ it('reports a recovered production session to Nightwatch without relying on the 
     $this->failure = new D1SessionSaveFailure;
     expect($this->handler->read($this->id))->toBe('updated');
 })->with(['monitor available' => false, 'monitor unavailable' => true]);
+
+it('passes a recovered production session notice through the real Nightwatch channel', function (): void {
+    $this->app['env'] = 'production';
+    config(['app.debug' => false, 'd1-production.enabled' => true, 'd1-staging.enabled' => false, 'nightwatch.enabled' => true]);
+    $this->url = D1RuntimeProfile::PRODUCTION_URL;
+    $this->database = D1RuntimeProfile::PRODUCTION_DATABASE;
+    $this->handler = new D1StagingSessionHandler($this->url, 'synthetic-token', $this->database, 120);
+    $this->handler->write($this->id, 'original');
+    expect($this->handler->read($this->id))->toBe('original');
+    $this->failure->phase = 'before';
+
+    $core = app(Core::class);
+    $ingest = $core->ingest;
+    if (! $ingest instanceof Ingest) {
+        throw new RuntimeException('Expected the installed Nightwatch ingest.');
+    }
+    $ingest->shouldDigestWhenBufferIsFull(false);
+    $ingest->flush();
+    $core->config['enabled'] = true;
+
+    expect($this->handler->write($this->id, 'updated'))->toBeTrue();
+    $records = json_decode($ingest->buffer->pull('synthetic')->rawPayload(), true, flags: JSON_THROW_ON_ERROR);
+    $core->config['enabled'] = false;
+    if (! is_array($records)) {
+        throw new RuntimeException('Expected Nightwatch records.');
+    }
+    expect($records)->toHaveCount(1)
+        ->and($records[0])->toMatchArray([
+            't' => 'log', 'message' => 'D1 session save recovered', 'level' => 'notice',
+            'context' => '{"strategy":"updated_unchanged"}',
+        ]);
+    $this->failure = new D1SessionSaveFailure;
+    expect($this->handler->read($this->id))->toBe('updated');
+});
 
 it('does not recreate a new uncommitted session after a timeout', function (): void {
     $this->handler->read($this->id);
