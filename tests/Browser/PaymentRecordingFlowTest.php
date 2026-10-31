@@ -11,6 +11,8 @@ declare(strict_types=1);
 use App\Models\Contribution;
 use App\Models\Payment;
 use App\Models\PaymentBatch;
+use App\Models\PaymentReceiptDelivery;
+use Illuminate\Support\Facades\DB;
 
 describe('Payment Recording Flow (Browser)', function () {
     beforeEach(function () {
@@ -82,6 +84,49 @@ describe('Payment Recording Flow (Browser)', function () {
         ]))
             ->assertSee('Pending Contributions')
             ->assertSee('remaining');
+    });
+
+    it('warns before retrying an unconfirmed receipt without changing the payment', function () {
+        $batch = PaymentBatch::factory()->create([
+            'family_id' => $this->family->id,
+            'family_membership_id' => $this->member->membershipForFamily($this->family)?->id,
+            'member_name' => $this->member->name,
+            'recorded_by' => $this->financialSecretary->id,
+            'total_amount' => 1000,
+        ]);
+        $payment = Payment::factory()->create([
+            'contribution_id' => $this->contribution->id,
+            'payment_batch_id' => $batch->id,
+            'recorded_by' => $this->financialSecretary->id,
+            'amount' => 1000,
+        ]);
+        $delivery = PaymentReceiptDelivery::factory()->create([
+            'payment_batch_id' => $batch->id, 'channel' => 'mail', 'status' => 'failed', 'failed_at' => now(),
+        ]);
+        $jobsBefore = DB::table('jobs')->count();
+        $page = loginBrowserAs($this->financialSecretary);
+        $page->navigate(route('payments.index', ['current_family' => $this->family->slug]))
+            ->assertSee('Delivery could not be confirmed')
+            ->assertSee('The delivery attempt did not complete. Check the recipient details and provider before retrying.');
+        $page->script('() => { window.confirm = message => { sessionStorage.setItem("retry-warning", message); return false; }; }');
+
+        $page->click('Retry')->assertSee('Delivery could not be confirmed');
+        expect($page->script('() => sessionStorage.getItem("retry-warning")'))
+            ->toBe('The earlier delivery may have succeeded. Retry and possibly send another receipt?');
+        expect($delivery->refresh()->status)->toBe('failed')
+            ->and(DB::table('jobs')->count())->toBe($jobsBefore);
+        $page->script('() => { window.confirm = () => true; }');
+
+        $page->click('Retry')
+            ->assertSee('Receipt delivery queued again. The payment was not changed.')
+            ->assertSee('Email: Queued')
+            ->assertNoJavaScriptErrors();
+
+        expect($delivery->refresh()->status)->toBe('queued')
+            ->and(DB::table('jobs')->count())->toBe($jobsBefore + 1)
+            ->and(PaymentBatch::count())->toBe(1)
+            ->and(Payment::count())->toBe(1)
+            ->and($payment->refresh()->amount)->toBe(1000);
     });
 
     it('retrieves a recorded receipt when the payment form is retried after review expiry', function () {
