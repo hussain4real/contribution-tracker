@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Channels\WhatsAppChannel;
 use App\Enums\PaymentStatus;
 use App\Http\Requests\ContributionRegisterRequest;
 use App\Models\Contribution;
@@ -14,6 +15,7 @@ use App\Models\Payment;
 use App\Models\PaymentBatch;
 use App\Models\PlatformPlan;
 use App\Models\User;
+use App\Notifications\ContributionReminderNotification;
 use App\Services\FamilyContributionReviewService;
 use App\Services\PaystackService;
 use App\Support\PlatformPlanCatalog;
@@ -23,6 +25,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Inertia\Inertia;
 use Inertia\Response;
+use NotificationChannels\WebPush\WebPushChannel;
+use UnexpectedValueException;
 
 class ContributionController extends Controller
 {
@@ -187,17 +191,33 @@ class ContributionController extends Controller
         $contributionUser = $contribution->user;
         $membership = $contributionUser?->membershipForFamilyId($contribution->family_id);
         $canRecord = $this->user($request)->canRecordPayments();
-        $reminderDeliveries = $canRecord
-            ? ContributionReminderDelivery::query()->where('contribution_id', $contribution->id)
-                ->with('whatsappMessage')->latest('id')->limit(30)->get()
-                ->map(fn (ContributionReminderDelivery $delivery): array => [
-                    'id' => $delivery->id, 'type' => $delivery->reminder_type, 'channel' => $delivery->channel,
-                    'status' => $delivery->displayStatus(), 'created_at' => $delivery->created_at?->toIso8601String(),
-                    'failure_reason' => $delivery->failureReason(),
-                    'can_retry' => $contribution->balance > 0 && in_array($delivery->channel, ['mail', 'whatsapp', 'webpush'], true)
-                        && in_array($delivery->displayStatus(), ['failed', 'unconfirmed'], true),
-                ])
-            : collect();
+        $reminderDeliveries = collect();
+        if ($canRecord) {
+            $family = $contribution->family;
+            $deliveries = ContributionReminderDelivery::query()->where('contribution_id', $contribution->id)
+                ->with('whatsappMessage')->latest('id')->limit(30)->get();
+            $retryChannels = [];
+            if ($deliveries->isNotEmpty() && $contributionUser instanceof User && $family instanceof Family && ! $family->isArchived()) {
+                try {
+                    $retryChannels = array_map(fn (string $channel): string => match ($channel) {
+                        WhatsAppChannel::class => 'whatsapp',
+                        WebPushChannel::class => 'webpush',
+                        default => $channel,
+                    }, (new ContributionReminderNotification($contribution))->via($contributionUser));
+                } catch (UnexpectedValueException $exception) {
+                    report($exception);
+                }
+            }
+            $reminderDeliveries = $deliveries->map(fn (ContributionReminderDelivery $delivery): array => [
+                'id' => $delivery->id, 'type' => $delivery->reminder_type, 'channel' => $delivery->channel,
+                'status' => $delivery->displayStatus(), 'created_at' => $delivery->created_at?->toIso8601String(),
+                'failure_reason' => $delivery->failureReason(),
+                'can_retry' => $contribution->balance > 0 && in_array($delivery->channel, ['mail', 'whatsapp', 'webpush'], true)
+                    && in_array($delivery->reminder_type, ['reminder', 'follow_up'], true)
+                    && in_array($delivery->channel, $retryChannels, true)
+                    && in_array($delivery->displayStatus(), ['failed', 'unconfirmed'], true),
+            ]);
+        }
 
         return Inertia::render('Contributions/Show', [
             'contribution' => [

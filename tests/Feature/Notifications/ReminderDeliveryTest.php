@@ -213,10 +213,46 @@ it('rejects retries when the member has disabled the reminder channel', function
     $member->membershipForFamily($family)?->update(['reminder_channels' => []]);
     $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
     $delivery = ContributionReminderDelivery::factory()->create(['contribution_id' => $contribution->id, 'channel' => 'mail', 'status' => 'failed']);
+    $this->actingAs($officer)->get(route('contributions.show', ['current_family' => $family->slug, 'contribution' => $contribution]))
+        ->assertOk()->assertInertia(fn (Assert $page) => $page->where('reminder_deliveries.0.can_retry', false));
     $this->actingAs($officer)->post(route('reminder-deliveries.retry', ['current_family' => $family->slug, 'delivery' => $delivery->id]))
         ->assertRedirect()->assertSessionHas('error');
     expect($delivery->fresh()?->status)->toBe('failed');
     Notification::assertNothingSent();
+});
+
+it('does not offer a reminder retry when the family disables the channel or the reminder type is unsupported', function (string $reason) {
+    Notification::fake();
+    $family = Family::factory()->create();
+    if ($reason === 'family channel') {
+        $family->update(['reminder_settings' => ['reminder_day' => 10, 'follow_up_day' => 20,
+            'time' => '08:00', 'channels' => [], 'effective_from' => '2020-01']]);
+    }
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
+    $delivery = ContributionReminderDelivery::factory()->create([
+        'contribution_id' => $contribution->id, 'channel' => 'mail', 'status' => 'failed',
+        'reminder_type' => $reason === 'unsupported type' ? 'unsupported' : 'reminder',
+    ]);
+
+    $this->actingAs($officer)->get(route('contributions.show', ['current_family' => $family->slug, 'contribution' => $contribution]))
+        ->assertOk()->assertInertia(fn (Assert $page) => $page->where('reminder_deliveries.0.can_retry', false));
+    $this->post(route('reminder-deliveries.retry', ['current_family' => $family->slug, 'delivery' => $delivery->id]))
+        ->assertRedirect()->assertSessionHas('error');
+    Notification::assertNothingSent();
+})->with(['family channel', 'unsupported type']);
+
+it('keeps contribution details available when stored reminder settings are invalid', function () {
+    $family = Family::factory()->create(['reminder_settings' => ['reminder_day' => 29, 'follow_up_day' => 28,
+        'time' => '08:00', 'channels' => ['mail'], 'effective_from' => '2020-01']]);
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
+    ContributionReminderDelivery::factory()->create(['contribution_id' => $contribution->id, 'channel' => 'mail', 'status' => 'failed']);
+
+    $this->actingAs($officer)->get(route('contributions.show', ['current_family' => $family->slug, 'contribution' => $contribution]))
+        ->assertOk()->assertInertia(fn (Assert $page) => $page->where('reminder_deliveries.0.can_retry', false));
 });
 
 it('shows a provider-reported WhatsApp failure and retries only that reminder', function () {
