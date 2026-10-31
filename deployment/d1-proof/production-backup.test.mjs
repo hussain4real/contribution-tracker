@@ -47,8 +47,8 @@ function fixture() {
     const schema = [...Array.from({length: 40}, (_, i) => ({type: "table", name: "table_" + i, sql: "create table table_" + i + "(id integer)"})),
         {type: "table", name: "report_artifacts", sql: "create table report_artifacts(id integer,disk text,path text)"}];
     const bytes = Buffer.from("private application PDF fixture");
-    objects.set("private/reports/fixture.pdf", {bytes, etag: "source-etag", uploaded: at});
-    const describe = (key, object) => ({key, size: object.bytes.length, etag: object.etag, uploaded: object.uploaded});
+    objects.set("private/reports/fixture.pdf", {bytes, etag: "source-etag", version: "source-version", uploaded: at});
+    const describe = (key, object) => ({key, size: object.bytes.length, etag: object.etag, version: object.version, uploaded: object.uploaded});
     const appObjects = new Map(objects);
     objects.clear();
     const env = {
@@ -147,6 +147,29 @@ test('a cutover checkpoint refuses file inventory changes during capture', async
 
     await assert.rejects(createProductionBackup(f.env, at, checkpoint), /file inventory changed during checkpoint/i);
     assert.equal(f.objects.has(BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/d1/' + productionBackupSlot(at) + '.json.aes-gcm'), false);
+});
+
+test('a cutover checkpoint refuses a same-content file replacement during capture', async () => {
+    for (const stage of ['before-get', 'after-get']) {
+        const f = fixture();
+        const get = f.env.APPLICATION_FILES.get;
+        f.env.APPLICATION_FILES.get = async (...args) => {
+            if (stage === 'before-get') f.appObjects.get('private/reports/fixture.pdf').version = 'replacement-version';
+            const object = await get(...args);
+            if (stage === 'after-get') f.appObjects.get('private/reports/fixture.pdf').version = 'replacement-version';
+            return object;
+        };
+        const checkpoint = stage === 'before-get' ? 'cutover-20261031t050001z' : 'cutover-20261031t050002z';
+        await assert.rejects(createProductionBackup(f.env, at, checkpoint), /file.*changed/i);
+        assert.equal(f.objects.has(BACKUP_PREFIX + 'checkpoints/' + checkpoint + '/d1/' + productionBackupSlot(at) + '.json.aes-gcm'), false);
+    }
+});
+
+test('a cutover checkpoint refuses an inventory without file versions', async () => {
+    const f = fixture();
+    delete f.appObjects.get('private/reports/fixture.pdf').version;
+    await assert.rejects(createProductionBackup(f.env, at, 'cutover-20261031t050003z'), /file version missing/i);
+    assert.equal((await createProductionBackup(f.env, at)).status, 'created');
 });
 
 test('a cutover checkpoint refuses an unreadable encrypted file before publishing its database', async () => {

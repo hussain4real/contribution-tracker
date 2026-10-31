@@ -121,10 +121,11 @@ export async function createProductionBackup(env, at, checkpoint = null) {
     if (checkpoint !== null && encoder.encode(JSON.stringify(captured)).length > 8_000_000) throw new Error("Production database backup exceeds memory budget");
     const files = [...await listProductionObjects(env.APPLICATION_FILES, "private/"), ...await listProductionObjects(env.APPLICATION_FILES, "public/")]
         .filter(object => !object.key.startsWith(BACKUP_PREFIX) && !object.key.startsWith("private/webhook-inbox/"));
+    if (checkpoint !== null && files.some(file => typeof file.version !== 'string' || file.version === '')) throw new Error('Production checkpoint file version missing');
     for (const file of files) {
         if (file.size > 16 * 1024 * 1024) throw new Error("Application file exceeds production backup size budget");
         const current = await env.APPLICATION_FILES.get(file.key, {onlyIf: {etagMatches: file.etag}});
-        if (!current || !("body" in current) || current.etag !== file.etag) throw new Error("Application file changed during backup");
+        if (!current || !("body" in current) || current.etag !== file.etag || (checkpoint !== null && current.version !== file.version)) throw new Error("Application file changed during backup");
         const bytes = new Uint8Array(await current.arrayBuffer());
         const sha256 = await digest(bytes);
         const blobKey = prefix + "files/" + sha256 + ".json.aes-gcm";
@@ -152,7 +153,7 @@ export async function createProductionBackup(env, at, checkpoint = null) {
     if (checkpoint !== null) {
         const currentFiles = [...await listProductionObjects(env.APPLICATION_FILES, "private/"), ...await listProductionObjects(env.APPLICATION_FILES, "public/")]
             .filter(object => !object.key.startsWith(BACKUP_PREFIX) && !object.key.startsWith("private/webhook-inbox/"));
-        const inventory = values => JSON.stringify(values.map(item => [item.key, item.etag, item.size]).sort());
+        const inventory = values => JSON.stringify(values.map(item => [item.key, item.etag, item.size, item.version]).sort());
         if (inventory(files) !== inventory(currentFiles)) throw new Error('Production file inventory changed during checkpoint');
         const current = await snapshot(env);
         const canonical = rows => JSON.stringify(rows.map(row => JSON.stringify(Object.keys(row).sort().map(key => [key, row[key]]))).sort());
