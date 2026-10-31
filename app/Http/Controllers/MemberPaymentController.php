@@ -220,21 +220,29 @@ class MemberPaymentController extends Controller
         }
 
         if ($transaction->isSuccessful()) {
-            return redirect()->route('pay.index')->with('success', 'Payment already confirmed.');
+            if ($transaction->payment_batch_id !== null && $transaction->allocated_at !== null) {
+                return redirect()->route('pay.index')->with('success', 'Payment already confirmed.');
+            }
+
+            return redirect()->route('pay.index')->with('error', 'Payment may have been successful, but we could not confirm it was recorded. Check your payment history or contact your family admin before trying again.');
         }
 
         try {
             $response = $this->paystack->verifyTransaction($reference);
             $data = $this->responseData($response);
-            $status = $this->stringValue($data['status'] ?? 'failed');
+            $status = $this->stringValue($data['status'] ?? null);
 
             if ($status !== 'success') {
-                return redirect()->route('pay.index')->with('error', 'Payment was not successful. Please try again.');
+                $message = $status === 'failed'
+                    ? 'Payment was not successful. Please try again.'
+                    : 'Could not confirm your payment. Check your payment history or contact your family admin before trying again.';
+
+                return redirect()->route('pay.index')->with('error', $message);
             }
 
             $settledTransaction = $this->settlementService->settle($reference, $data);
 
-            if ($settledTransaction->isSuccessful()) {
+            if ($settledTransaction->isSuccessful() && $settledTransaction->payment_batch_id !== null && $settledTransaction->allocated_at !== null) {
                 return redirect()->route('pay.index')->with('success', 'Payment successful! Your contributions have been updated.');
             }
 

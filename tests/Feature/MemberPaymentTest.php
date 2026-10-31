@@ -610,6 +610,12 @@ it('allocates a successful callback payment', function () {
         ->and($transaction->settled_amount_kobo)->toBe(400_000)
         ->and(Expense::query()->where('family_id', $family->id)->exists())->toBeFalse()
         ->and(Payment::where('contribution_id', $contribution->id)->sum('amount'))->toBe(4000);
+
+    $this->actingAs($member)
+        ->get(route('pay.callback', ['reference' => 'TXN_SUCCESS']))
+        ->assertRedirect(route('pay.index'))
+        ->assertSessionHas('success', 'Payment already confirmed.');
+    expect(Payment::where('contribution_id', $contribution->id)->count())->toBe(1);
 });
 
 it('reports when a verified callback cannot yet be posted to the ledger', function () {
@@ -645,6 +651,27 @@ it('reports when a verified callback cannot yet be posted to the ledger', functi
         ->get(route('pay.callback', ['reference' => 'TXN_UNPOSTED']))
         ->assertRedirect(route('pay.index'))
         ->assertSessionHas('error', 'Payment was verified but not recorded. Contact your family admin before trying again.');
+});
+
+it('does not claim an unallocated successful settlement updated contributions', function () {
+    Http::fake(['api.paystack.co/transaction/verify/TXN_UNALLOCATED' => Http::response([
+        'status' => true, 'data' => ['status' => 'success', 'amount' => 400000, 'reference' => 'TXN_UNALLOCATED'],
+    ])]);
+    $member = User::factory()->member()->employed()->create();
+    $transaction = PaystackTransaction::create([
+        'reference' => 'TXN_UNALLOCATED', 'user_id' => $member->id, 'family_id' => $member->family_id,
+        'type' => TransactionType::Contribution, 'amount' => 4000, 'status' => TransactionStatus::Pending,
+    ]);
+    $unallocated = clone $transaction;
+    $unallocated->status = TransactionStatus::Success;
+    $settlement = Mockery::mock(PaystackContributionSettlementService::class);
+    $settlement->shouldReceive('settle')->once()->andReturn($unallocated);
+    app()->instance(PaystackContributionSettlementService::class, $settlement);
+
+    $this->actingAs($member)->get(route('pay.callback', ['reference' => 'TXN_UNALLOCATED']))
+        ->assertRedirect(route('pay.index'))
+        ->assertSessionHas('error', 'Payment was verified but not recorded. Contact your family admin before trying again.');
+    expect($transaction->refresh()->payment_batch_id)->toBeNull();
 });
 
 it('records only the settlement shortfall as a Paystack fee expense', function () {
@@ -751,7 +778,7 @@ it('rejects successful callbacks when the verified gross amount does not match',
         ->and(Payment::where('contribution_id', $contribution->id)->exists())->toBeFalse();
 });
 
-it('handles successful callbacks that were already processed', function () {
+it('does not claim a legacy successful transaction was recorded without an allocation', function () {
     Http::fake([
         'api.paystack.co/transaction/verify/TXN_ALREADY_SUCCESS' => Http::response([
             'status' => true,
@@ -780,10 +807,10 @@ it('handles successful callbacks that were already processed', function () {
     $this->actingAs($member)
         ->get(route('pay.callback', ['reference' => 'TXN_ALREADY_SUCCESS']))
         ->assertRedirect(route('pay.index'))
-        ->assertSessionHas('success', 'Payment already confirmed.');
+        ->assertSessionHas('error', 'Payment may have been successful, but we could not confirm it was recorded. Check your payment history or contact your family admin before trying again.');
 });
 
-it('returns already confirmed when a non-success callback arrives for a successful transaction', function () {
+it('does not overwrite an unallocated legacy success when a non-success callback arrives', function () {
     Http::fake([
         'api.paystack.co/transaction/verify/TXN_CONFIRMED' => Http::response([
             'status' => true,
@@ -800,7 +827,7 @@ it('returns already confirmed when a non-success callback arrives for a successf
     ]);
 
     $member = User::factory()->member()->employed()->create();
-    PaystackTransaction::create([
+    $transaction = PaystackTransaction::create([
         'reference' => 'TXN_CONFIRMED',
         'user_id' => $member->id,
         'family_id' => $member->family_id,
@@ -812,8 +839,28 @@ it('returns already confirmed when a non-success callback arrives for a successf
     $this->actingAs($member)
         ->get(route('pay.callback', ['reference' => 'TXN_CONFIRMED']))
         ->assertRedirect(route('pay.index'))
-        ->assertSessionHas('success', 'Payment already confirmed.');
+        ->assertSessionHas('error', 'Payment may have been successful, but we could not confirm it was recorded. Check your payment history or contact your family admin before trying again.');
+
+    expect($transaction->refresh()->status)->toBe(TransactionStatus::Success)
+        ->and($transaction->payment_batch_id)->toBeNull();
+    Http::assertNothingSent();
 });
+
+it('treats a nonterminal or missing provider status as unconfirmed', function (?string $status) {
+    $data = $status === null ? [] : ['status' => $status];
+    Http::fake(['api.paystack.co/transaction/verify/TXN_UNCONFIRMED' => Http::response(['status' => true, 'data' => $data])]);
+    $member = User::factory()->member()->employed()->create();
+    $transaction = PaystackTransaction::create([
+        'reference' => 'TXN_UNCONFIRMED', 'user_id' => $member->id, 'family_id' => $member->family_id,
+        'type' => TransactionType::Contribution, 'amount' => 4000, 'status' => TransactionStatus::Pending,
+    ]);
+
+    $this->actingAs($member)->get(route('pay.callback', ['reference' => $transaction->reference]))
+        ->assertRedirect(route('pay.index'))
+        ->assertSessionHas('error', 'Could not confirm your payment. Check your payment history or contact your family admin before trying again.');
+    expect($transaction->refresh()->status)->toBe(TransactionStatus::Pending)
+        ->and($transaction->payment_batch_id)->toBeNull();
+})->with(['pending', 'ongoing', 'processing', 'queued', 'abandoned', 'reversed', 'unknown', null]);
 
 it('shows an error for failed callback verification statuses', function () {
     Http::fake([
