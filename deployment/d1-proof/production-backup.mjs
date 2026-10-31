@@ -141,7 +141,8 @@ export async function createProductionBackup(env, at, checkpoint = null) {
             const restored = await openProductionBackup(envelope, env.BACKUP_KEY);
             if (restored.length !== bytes.length || await digest(restored) !== sha256) throw new Error('Production checkpoint file differs');
         }
-        captured.files.push({path: file.key, bytes: bytes.length, sha256, backup_key: blobKey});
+        captured.files.push({path: file.key, bytes: bytes.length, sha256, backup_key: blobKey,
+            ...(checkpoint !== null ? {http_metadata: current.httpMetadata ?? {}, custom_metadata: current.customMetadata ?? {}} : {})});
     }
     for (const table of ["report_artifacts", "reconciliation_imports"]) {
         for (const row of captured.tables[table] ?? []) {

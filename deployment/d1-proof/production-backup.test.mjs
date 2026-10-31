@@ -47,8 +47,10 @@ function fixture() {
     const schema = [...Array.from({length: 40}, (_, i) => ({type: "table", name: "table_" + i, sql: "create table table_" + i + "(id integer)"})),
         {type: "table", name: "report_artifacts", sql: "create table report_artifacts(id integer,disk text,path text)"}];
     const bytes = Buffer.from("private application PDF fixture");
-    objects.set("private/reports/fixture.pdf", {bytes, etag: "source-etag", version: "source-version", uploaded: at});
-    const describe = (key, object) => ({key, size: object.bytes.length, etag: object.etag, version: object.version, uploaded: object.uploaded});
+    objects.set("private/reports/fixture.pdf", {bytes, etag: "source-etag", version: "source-version", uploaded: at,
+        httpMetadata: {contentType: 'application/pdf', cacheExpiry: new Date('2026-12-01T00:00:00.000Z')}, customMetadata: {kind: 'synthetic'}});
+    const describe = (key, object) => ({key, size: object.bytes.length, etag: object.etag, version: object.version, uploaded: object.uploaded,
+        httpMetadata: object.httpMetadata, customMetadata: object.customMetadata});
     const appObjects = new Map(objects);
     objects.clear();
     const env = {
@@ -96,6 +98,7 @@ test("a production snapshot recovers its private PDF through an authenticated fi
     const database = JSON.parse(new TextDecoder().decode(await openProductionBackup(JSON.parse(f.objects.get(result.key).bytes.toString()), secret)));
     assert.equal(database.tables.report_artifacts[0].id, 1);
     assert.equal(database.files[0].path, "private/reports/fixture.pdf");
+    assert.equal(database.files[0].http_metadata, undefined);
     const file = database.files[0];
     const recovered = await openProductionBackup(JSON.parse(f.objects.get(file.backup_key).bytes.toString()), secret);
     assert.deepEqual(Buffer.from(recovered), f.bytes);
@@ -115,6 +118,8 @@ test('cutover checkpoints capture fresh data without replacing an immutable dail
     assert.equal(f.objects.get(daily.key).bytes.toString(), old);
     const snapshot = JSON.parse(new TextDecoder().decode(await openProductionBackup(JSON.parse(f.objects.get(checkpoint.key).bytes), secret)));
     assert.ok(snapshot.files[0].backup_key.includes('/checkpoints/cutover-20261027t140000z/files/'));
+    assert.deepEqual(snapshot.files[0].http_metadata, {contentType: 'application/pdf', cacheExpiry: '2026-12-01T00:00:00.000Z'});
+    assert.deepEqual(snapshot.files[0].custom_metadata, {kind: 'synthetic'});
     await assert.rejects(createProductionBackup(f.env, at, 'cutover-20261027t140000z'), /checkpoint already exists/i);
     await assert.rejects(createProductionBackup(f.env, new Date('2026-10-27T05:00:00Z'), 'cutover-20261027t140000z'), /checkpoint already exists/i);
     await assert.rejects(() => createProductionBackup(f.env, at, '../escape'));

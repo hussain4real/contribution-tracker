@@ -8,11 +8,12 @@ import {listProductionObjects, openProductionBackup, productionBackupPrefix, pro
 
 function bucket(initial = {}) {
     const data = new Map(Object.entries(initial));
+    const metadata = new Map();
     return {data, async head(key) { return data.has(key) ? {key} : null; },
         async list({prefix}) { return {objects: [...data.keys()].filter(key => key.startsWith(prefix)).map(key => ({key})), truncated: false}; },
         async get(key) { const value = data.get(key); if (value === undefined) return null; const bytes = typeof value === 'string' ? new TextEncoder().encode(value) : value;
-            return {size: bytes.length, arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), text: async () => new TextDecoder().decode(bytes)}; },
-        async put(key, value, options = {}) { if (options.onlyIf?.etagDoesNotMatch === '*' && data.has(key)) return null; data.set(key, value); return {key}; }, async delete(key) { data.delete(key); }};
+            return {size: bytes.length, httpMetadata: metadata.get(key)?.httpMetadata, customMetadata: metadata.get(key)?.customMetadata, arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), text: async () => new TextDecoder().decode(bytes)}; },
+        async put(key, value, options = {}) { if (options.onlyIf?.etagDoesNotMatch === '*' && data.has(key)) return null; data.set(key, value); metadata.set(key, options); return {key}; }, async delete(key) { data.delete(key); metadata.delete(key); }};
 }
 
 function fixture(overrides = {}, clock = Date, cryptography = webcrypto) {
@@ -87,7 +88,8 @@ test('an isolated synthetic checkpoint restores tables, sequence values and veri
         const sha256 = createHash('sha256').update(bytes).digest('hex');
         const backupKey = productionBackupPrefix(checkpoint) + `files/${sha256}.json.aes-gcm`;
         await backups.put(backupKey, JSON.stringify(await sealProductionBackup(bytes, secret, `file:${sha256}`)));
-        files.push({bytes: bytes.length, sha256, backup_key: backupKey});
+        files.push({bytes: bytes.length, sha256, backup_key: backupKey,
+            http_metadata: {contentType: 'text/plain', cacheExpiry: '2026-12-01T00:00:00.000Z'}, custom_metadata: {kind: 'synthetic'}});
     }
     const snapshot = {schema, tables, sequences, files};
     const backupKey = productionBackupPrefix(checkpoint) + `d1/${productionBackupSlot(capturedAt)}.json.aes-gcm`;
@@ -107,6 +109,12 @@ test('an isolated synthetic checkpoint restores tables, sequence values and veri
         assert.equal(db.prepare("select count(*) n from sqlite_master where type='table' and name not glob 'sqlite_*'").get().n, 0);
         backups.data.delete(duplicateKey);
 
+        const malformed = {...snapshot, files: snapshot.files.map((file, index) => index === 0 ? {...file, custom_metadata: null} : file)};
+        backups.data.set(backupKey, JSON.stringify(await sealProductionBackup(new TextEncoder().encode(JSON.stringify(malformed)), secret, 'database')));
+        await assert.rejects(f.recovery.run('restore', checkpoint), /invalid production checkpoint file metadata/i);
+        assert.equal(db.prepare("select count(*) n from sqlite_master where type='table' and name not glob 'sqlite_*'").get().n, 0);
+        backups.data.set(backupKey, original);
+
         const conflictPath = `migration-recovery/actual-20261027/${runId}/${files[0].sha256}`;
         application.data.set(conflictPath, 'existing recovery evidence');
         await assert.rejects(f.recovery.run('restore', checkpoint), /recovery file already exists/i);
@@ -118,6 +126,7 @@ test('an isolated synthetic checkpoint restores tables, sequence values and veri
         assert.equal(result.status, 'passed');
         assert.equal(result.tables.length, 55);
         assert.equal(result.files.length, 7);
+        assert.equal(result.metadata_verified, true);
         assert.equal(result.integrity, 'ok');
         assert.equal(result.tamper_rejected, true);
         assert.deepEqual(db.prepare('select name,seq from sqlite_sequence order by name').all().map(row => ({...row})), sequences);
@@ -126,6 +135,21 @@ test('an isolated synthetic checkpoint restores tables, sequence values and veri
         assert.equal(db.prepare("select count(*) n from sqlite_master where name in ('fixture_users_index','fixture_users_trigger')").get().n, 2);
         assert.deepEqual([...application.data.keys()], ['private/existing.txt']);
         await assert.rejects(f.recovery.run('restore', checkpoint), /must be empty/);
+
+        const legacyDb = new DatabaseSync(':memory:');
+        try {
+            const legacy = {...snapshot, files: snapshot.files.map(file => ({bytes: file.bytes, sha256: file.sha256, backup_key: file.backup_key}))};
+            backups.data.set(backupKey, JSON.stringify(await sealProductionBackup(new TextEncoder().encode(JSON.stringify(legacy)), secret, 'database')));
+            const legacyRecovery = fixture({RECOVERY_DB: makeTarget(legacyDb), BACKUP_FILES: backups, APPLICATION_FILES: bucket(), BACKUP_KEY: secret}, FixedDate,
+                {subtle: webcrypto.subtle, randomUUID: () => runId});
+            const legacyResult = await legacyRecovery.recovery.run('restore', checkpoint);
+            assert.equal(legacyResult.status, 'partial');
+            assert.equal(legacyResult.metadata_verified, false);
+            backups.data.set(backupKey, original);
+        } finally {
+            backups.data.set(backupKey, original);
+            legacyDb.close();
+        }
 
         const racingDb = new DatabaseSync(':memory:');
         try {
@@ -141,6 +165,22 @@ test('an isolated synthetic checkpoint restores tables, sequence values and veri
             assert.equal(racingBucket.data.get(conflictPath), 'competing recovery evidence');
         } finally {
             racingDb.close();
+        }
+
+        const metadataDb = new DatabaseSync(':memory:');
+        try {
+            const changedBucket = bucket();
+            const get = changedBucket.get;
+            changedBucket.get = async key => {
+                const object = await get(key);
+                return object ? {...object, customMetadata: {kind: 'changed'}} : null;
+            };
+            const changed = fixture({RECOVERY_DB: makeTarget(metadataDb), BACKUP_FILES: backups, APPLICATION_FILES: changedBucket, BACKUP_KEY: secret}, FixedDate,
+                {subtle: webcrypto.subtle, randomUUID: () => runId});
+            await assert.rejects(changed.recovery.run('restore', checkpoint), /file metadata differs/i);
+            assert.equal(changedBucket.data.size, 0);
+        } finally {
+            metadataDb.close();
         }
 
         const failedDb = new DatabaseSync(':memory:');

@@ -433,7 +433,7 @@ test('checkpoint refuses a file inventory without upload versions', async () => 
     const list = env.STAGING_FILES.list;
     env.STAGING_FILES.list = async (...args) => {
         const page = await list(...args);
-        return {...page, objects: page.objects.map(({version, ...item}) => item)};
+        return {...page, objects: page.objects.map(item => ({...item, version: undefined}))};
     };
     const checkpoint = 'cutover-20261031t040003z';
     await assert.rejects(new StagingBackupOnly(env).create(checkpoint), /missing staging file version/i);
