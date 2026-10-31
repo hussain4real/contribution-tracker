@@ -194,7 +194,36 @@ it('redirects guests from pay page', function () {
         ->assertRedirect();
 });
 
+it('does not initiate checkout when any selected contribution exceeds the advance limit', function () {
+    $this->travelTo(now()->setDate(2026, 10, 31));
+    Http::fake();
+    $family = Family::factory()->create([
+        'paystack_subaccount_code' => 'ACCT_test',
+        'bank_name' => 'Kuda Bank',
+        'bank_code' => '090267',
+        'account_number' => '1234567890',
+    ]);
+    $member = User::factory()->create(['family_id' => $family->id]);
+    $allowed = Contribution::factory()->create([
+        'family_id' => $family->id, 'user_id' => $member->id,
+        'year' => 2027, 'month' => 4, 'expected_amount' => 4000,
+    ]);
+    $tooFar = Contribution::factory()->create([
+        'family_id' => $family->id, 'user_id' => $member->id,
+        'year' => 2027, 'month' => 5, 'expected_amount' => 4000,
+    ]);
+
+    $this->actingAs($member)
+        ->postJson(route('pay.initiate'), ['contribution_ids' => [$allowed->id, $tooFar->id]])
+        ->assertUnprocessable()
+        ->assertJson(['message' => 'Advance payments are limited to 6 months ahead.']);
+
+    expect(PaystackTransaction::count())->toBe(0);
+    Http::assertNothingSent();
+});
+
 it('initiates a payment for selected contributions', function () {
+    $this->travelTo(now()->setDate(2026, 10, 31));
     Http::fake([
         'api.paystack.co/transaction/initialize' => Http::response([
             'status' => true,
@@ -218,6 +247,8 @@ it('initiates a payment for selected contributions', function () {
     $contribution = Contribution::factory()->create([
         'family_id' => $family->id,
         'user_id' => $member->id,
+        'year' => 2027,
+        'month' => 4,
         'expected_amount' => 4000,
     ]);
 

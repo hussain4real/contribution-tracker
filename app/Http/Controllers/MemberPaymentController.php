@@ -108,6 +108,12 @@ class MemberPaymentController extends Controller
             ], 422);
         }
 
+        $maximumAdvanceDate = now()->startOfMonth()->addMonths(6);
+        if ($contributions->contains(fn (Contribution $contribution): bool => ($contribution->year * 12) + $contribution->month > ($maximumAdvanceDate->year * 12) + $maximumAdvanceDate->month
+        )) {
+            return response()->json(['message' => 'Advance payments are limited to 6 months ahead.'], 422);
+        }
+
         $feeEstimate = $this->feeCalculator->estimateForContributionAmount($totalAmount);
 
         $reference = 'TXN_'.Str::upper(Str::random(16));
