@@ -228,29 +228,35 @@ const payWithPaystack = async () => {
         // Open Paystack Popup (dynamic import to avoid SSR window error)
         const { default: PaystackPop } = await import('@paystack/inline-js');
         const popup = new PaystackPop();
-        popup.resumeTransaction(data.access_code, {
-            onSuccess: () => {
-                router.visit(
-                    payCallback.url(undefined, {
-                        query: { reference: data.reference },
-                    }),
+        let verificationStarted = false;
+        const verifyPayment = () => {
+            if (verificationStarted) return;
+            verificationStarted = true;
+
+            const showUnconfirmed = () => {
+                toast.error(
+                    'Could not confirm your payment. Check your payment history or contact your family admin before trying again.',
                 );
-            },
-            onCancel: () => {
-                processing.value = false;
-                toast.error('Payment was cancelled.');
-            },
-            onClose: () => {
-                if (processing.value) {
-                    processing.value = false;
-                    // If still processing when popup closes, check via callback
-                    router.visit(
-                        payCallback.url(undefined, {
-                            query: { reference: data.reference },
-                        }),
-                    );
-                }
-            },
+                return false;
+            };
+
+            router.visit(
+                payCallback.url(undefined, {
+                    query: { reference: data.reference },
+                }),
+                {
+                    onNetworkError: showUnconfirmed,
+                    onHttpException: showUnconfirmed,
+                    onFinish: () => {
+                        processing.value = false;
+                    },
+                },
+            );
+        };
+        popup.resumeTransaction(data.access_code, {
+            onSuccess: verifyPayment,
+            onCancel: verifyPayment,
+            onError: verifyPayment,
         });
     } catch {
         toast.error(
