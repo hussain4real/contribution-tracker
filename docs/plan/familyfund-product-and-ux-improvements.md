@@ -103,6 +103,8 @@ The existing [product completion roadmap](../familyfund-product-completion-roadm
 
 **Synthetic mobile checkout walkthrough:** At 390 × 844 pixels, a local browser showed the oldest-first explanation and a ₦2,000 contribution with a ₦2,030.46 total. With online availability mocked on and the initialization request intercepted, the browser submitted those same amounts in kobo. A mocked stale-amount response displayed the refresh message and re-enabled the Pay button. No Paystack request or payment was made; this does not verify an actual checkout or provider delivery.
 
+**Advance-payment limit on checkout:** The page now marks periods beyond the existing six-month limit unavailable and excludes them from Select All. A local feature test covers the month-end boundary. In a 390 × 844 synthetic walkthrough with a mocked future period and online availability, Select All selected the payable contribution while leaving the later period disabled. The mocked page does not verify a real provider checkout.
+
 ### 2. Receipt and reminder delivery visibility
 
 - Show channel-specific states such as queued, sent, delivered or failed, only where the provider actually supplies the state. Distinguish provider acceptance from confirmed delivery.

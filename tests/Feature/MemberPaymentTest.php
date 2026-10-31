@@ -223,6 +223,22 @@ it('does not initiate checkout when any selected contribution exceeds the advanc
     Http::assertNothingSent();
 });
 
+it('marks periods beyond the six-month limit as unavailable for online payment at month end', function () {
+    $this->travelTo(now()->setDate(2026, 10, 31));
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $allowed = Contribution::factory()->forUser($member)->forMonth(2027, 4)->create(['expected_amount' => 4000]);
+    $tooFar = Contribution::factory()->forUser($member)->forMonth(2027, 5)->create(['expected_amount' => 4000]);
+
+    $this->actingAs($member)->get(route('pay.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('pending_contributions.0.id', $allowed->id)
+            ->where('pending_contributions.0.can_pay_online', true)
+            ->where('pending_contributions.1.id', $tooFar->id)
+            ->where('pending_contributions.1.can_pay_online', false));
+});
+
 it('initiates a payment for selected contributions', function () {
     $this->travelTo(now()->setDate(2026, 10, 31));
     Http::fake([

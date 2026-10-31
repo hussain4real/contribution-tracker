@@ -38,6 +38,7 @@ class MemberPaymentController extends Controller
     {
         $user = $this->authUser();
         $family = app(Family::class);
+        $maximumAdvanceDate = now()->startOfMonth()->addMonths(6);
 
         $pendingContributions = $user->contributions()
             ->where('family_id', $family->id)
@@ -53,6 +54,7 @@ class MemberPaymentController extends Controller
                 'balance' => $contribution->balance,
                 'status' => $contribution->status,
                 'period_label' => $contribution->period_label,
+                'can_pay_online' => ($contribution->year * 12) + $contribution->month <= ($maximumAdvanceDate->year * 12) + $maximumAdvanceDate->month,
             ]);
 
         $paystackPublicKey = $this->stringConfig('services.paystack.public_key');
