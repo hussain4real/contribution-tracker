@@ -214,8 +214,12 @@ export class StagingRecoveryOnly extends WorkerEntrypoint {
     async restore(checkpoint) {
         if (this.env.STAGING_RESTORE_ONLY_ENABLED !== 'true') throw new Error('Staging recovery is disabled');
         target(this.env);
-        if (this.env.STAGING_RECOVERY_NAME !== 'familyfunds-d1-staging-recovery' || !this.env.RECOVERY_DB || this.env.STAGING_RECOVERY_BUCKET_NAME !== 'familyfunds-d1-staging-recovery-files' || !this.env.RECOVERY_FILES) throw new Error('Wrong staging recovery target');
         if (typeof checkpoint !== 'string' || !/^cutover-[0-9]{8}t[0-9]{6}z$/.test(checkpoint)) throw new Error('Invalid staging checkpoint');
+        const legacy = this.env.STAGING_RECOVERY_NAME === 'familyfunds-d1-staging-recovery'
+            && this.env.STAGING_RECOVERY_BUCKET_NAME === 'familyfunds-d1-staging-recovery-files';
+        const isolated = this.env.STAGING_RECOVERY_NAME === `familyfunds-d1-staging-recovery-${checkpoint.slice(8)}`
+            && this.env.STAGING_RECOVERY_BUCKET_NAME === `${this.env.STAGING_RECOVERY_NAME}-files`;
+        if ((!legacy && !isolated) || !this.env.RECOVERY_DB || !this.env.RECOVERY_FILES) throw new Error('Wrong staging recovery target');
         const existing = await this.env.RECOVERY_DB.prepare("select count(*) n from sqlite_master where type='table' and name not glob 'sqlite_*' and name not glob '_cf_*'").first();
         if (existing.n !== 0) throw new Error('Staging recovery target must be empty');
         const existingFiles = await this.env.RECOVERY_FILES.list({limit: 1});

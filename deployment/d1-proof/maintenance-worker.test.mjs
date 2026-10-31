@@ -194,8 +194,11 @@ test('an isolated empty recovery database restores and verifies a checkpoint wit
         env.STAGING_RESTORE_ONLY_ENABLED = 'true';
         env.STAGING_RECOVERY_NAME = 'familyfunds-production';
         await assert.rejects(restore.restore(checkpoint), /wrong staging recovery target/i);
-        env.STAGING_RECOVERY_NAME = 'familyfunds-d1-staging-recovery';
-        env.STAGING_RECOVERY_BUCKET_NAME = 'familyfunds-d1-staging-recovery-files';
+        env.STAGING_RECOVERY_NAME = 'familyfunds-d1-staging-recovery-20261030t200001z';
+        env.STAGING_RECOVERY_BUCKET_NAME = 'familyfunds-d1-staging-recovery-20261030t200002z-files';
+        await assert.rejects(restore.restore(checkpoint), /wrong staging recovery target/i);
+        env.STAGING_RECOVERY_BUCKET_NAME = `${env.STAGING_RECOVERY_NAME}-files`;
+        await assert.rejects(restore.restore('cutover-20261030t200002z'), /wrong staging recovery target/i);
         recoveryObjects.set('private/existing', new TextEncoder().encode('keep'));
         await assert.rejects(restore.restore(checkpoint), /recovery bucket must be empty/i);
         assert.equal(new TextDecoder().decode(recoveryObjects.get('private/existing')), 'keep');
