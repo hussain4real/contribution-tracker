@@ -2,9 +2,9 @@ const statusPrefix = 'private/staging-backups/d1-web/orchestration/';
 
 function configuration(env) {
     if (env.RUN_ENABLED !== 'true' || env.RUN_MODE !== 'exploratory' || env.DATABASE_NAME !== 'familyfunds-d1-web-staging'
-        || env.RECOVERY_DATABASE_NAME !== 'familyfunds-d1-staging-recovery'
         || env.STATUS_BUCKET_NAME !== 'familyfunds-d1-staging-checkpoints') throw new Error('Staging checkpoint runner is disabled or misconfigured');
     if (typeof env.CHECKPOINT_ID !== 'string' || !/^cutover-[0-9]{8}t[0-9]{6}z$/.test(env.CHECKPOINT_ID)) throw new Error('Invalid checkpoint ID');
+    if (!['familyfunds-d1-staging-recovery', `familyfunds-d1-staging-recovery-${env.CHECKPOINT_ID.slice(8)}`].includes(env.RECOVERY_DATABASE_NAME)) throw new Error('Staging checkpoint runner is disabled or misconfigured');
     const artifacts = JSON.parse(env.EXPECTED_ARTIFACTS ?? 'null');
     if (!Array.isArray(artifacts) || artifacts.length !== 2 || artifacts[0]?.id !== 11 || artifacts[1]?.id !== 13
         || artifacts.some(item => typeof item.uuid !== 'string' || !/^[a-f0-9-]{36}$/.test(item.uuid)

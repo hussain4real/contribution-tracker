@@ -62,6 +62,17 @@ test('runner refuses mismatched target settings before claiming an attempt', asy
     assert.equal((await runner.fetch(new Request('https://example.test/status'),env)).status,503);
 });
 
+test('runner accepts a checkpoint-matched recovery target and rejects another target', async () => {
+    const {env,objects,counts} = fixture();
+    env.RECOVERY_DATABASE_NAME = 'familyfunds-d1-staging-recovery-20261031t090001z';
+    await assert.rejects(runner.scheduled({},env),/disabled or misconfigured/);
+    assert.equal(objects.size,0);
+    env.RECOVERY_DATABASE_NAME = 'familyfunds-d1-staging-recovery-20261031t090000z';
+    await runner.scheduled({},env);
+    assert.deepEqual(counts(),{backups:1,restores:1});
+    assert.equal(JSON.parse([...objects.values()][0].body).consistency,'not-frozen');
+});
+
 test('runner reports failure if recovery verification is incomplete', async () => {
     const {env,counts} = fixture();
     env.RECOVERY.restore = async () => ({status:'passed',tables:40,files:2,missing_file_ids:[11,13],integrity:'unknown'});
