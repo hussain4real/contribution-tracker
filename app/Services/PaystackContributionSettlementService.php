@@ -102,16 +102,19 @@ class PaystackContributionSettlementService
                 return $transaction->fresh(['paymentBatch', 'feeExpense']) ?? $transaction;
             }, 5);
         } catch (Throwable $exception) {
-            $failedTransaction = PaystackTransaction::query()
-                ->where('reference', $reference)
-                ->whereNull('allocated_at')
-                ->first();
+            DB::transaction(function () use ($reference, $exception): void {
+                $failedTransaction = PaystackTransaction::query()
+                    ->where('reference', $reference)
+                    ->whereNull('allocated_at')
+                    ->lockForUpdate()
+                    ->first();
 
-            $failedTransaction?->forceFill([
-                'status' => TransactionStatus::Failed,
-                'failed_at' => now(),
-                'failure_reason' => mb_substr($exception->getMessage(), 0, 255),
-            ])->save();
+                $failedTransaction?->forceFill([
+                    'status' => TransactionStatus::Failed,
+                    'failed_at' => now(),
+                    'failure_reason' => mb_substr($exception->getMessage(), 0, 255),
+                ])->save();
+            }, 5);
 
             throw $exception;
         }

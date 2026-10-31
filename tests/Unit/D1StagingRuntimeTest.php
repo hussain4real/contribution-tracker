@@ -3,14 +3,18 @@
 declare(strict_types=1);
 
 use App\Actions\ReversePaymentBatch;
+use App\Enums\TransactionStatus;
+use App\Enums\TransactionType;
 use App\Jobs\ProcessWhatsAppWebhook;
 use App\Jobs\SendPaymentReceipt;
 use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\FamilyMembership;
+use App\Models\PaystackTransaction;
 use App\Models\User;
 use App\Services\PaymentAllocationPreview;
 use App\Services\PaymentAllocationService;
+use App\Services\PaystackContributionSettlementService;
 use FamilyFunds\D1Staging\D1StagingConnection;
 use FamilyFunds\D1Staging\D1StagingConnector;
 use FamilyFunds\D1Staging\D1StagingRuntime;
@@ -375,6 +379,30 @@ it('commits a receipt job and financial write together through the D1 queue', fu
     }, 1);
     expect(stagingSqlValue($pdo, 'select count(*) from jobs'))->toBe(1)
         ->and(stagingSqlValue($pdo, 'select amount from contributions where id=1'))->toBe(99);
+});
+
+it('records and audits a failed Paystack settlement through the D1 runtime', function (): void {
+    config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
+    DB::purge('sqlite');
+    $this->artisan('migrate', ['--database' => 'sqlite', '--force' => true])->assertSuccessful();
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->create(['family_id' => $family->id]);
+    $transaction = PaystackTransaction::query()->create([
+        'reference' => 'd1-paystack-'.Str::uuid(), 'user_id' => $member->id, 'family_id' => $family->id,
+        'type' => TransactionType::Contribution, 'amount' => 4000, 'gross_amount_kobo' => 400000,
+        'status' => TransactionStatus::Initiated, 'fee_policy' => 'payer_pays',
+    ]);
+    $pdo = DB::connection('sqlite')->getPdo();
+    connectStagingSqlFixture($pdo);
+    $runtime = new D1StagingRuntime;
+
+    expect(fn () => $runtime->run(fn () => app(PaystackContributionSettlementService::class)->settle(
+        $transaction->reference, ['status' => 'success', 'amount' => 399900],
+    ), $family->id))->toThrow(RuntimeException::class, 'does not match');
+
+    expect($transaction->fresh()?->status)->toBe(TransactionStatus::Failed)
+        ->and(stagingSqlValue($pdo, "select count(*) from audit_events where action='paystack.state_changed'"))->toBe(1)
+        ->and(stagingSqlValue($pdo, 'select count(*) from payment_batches'))->toBe(0);
 });
 
 it('allocates payments and queues receipts through the D1 runtime using current balances', function (): void {

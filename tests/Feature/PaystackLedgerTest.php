@@ -104,6 +104,10 @@ it('fails closed on a provider amount mismatch without posting money', function 
         ->and($transaction->allocated_at)->toBeNull()
         ->and($transaction->failed_at)->not->toBeNull()
         ->and(app(EffectiveLedger::class)->paymentsTotal($transaction->family_id))->toBe(0);
+
+    $events = AuditEvent::query()->where('auditable_type', $transaction->getMorphClass())
+        ->where('auditable_id', $transaction->id)->where('action', 'paystack.state_changed')->get();
+    expect($events->pluck('after.status')->all())->toBe(['failed']);
 });
 
 it('leaves a verified charge unallocated when its target exceeds the advance limit', function () {
