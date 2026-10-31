@@ -391,13 +391,29 @@ it('allocates payments and queues receipts through the D1 runtime using current 
     Queue::extend('d1-staging', fn (): D1StagingConnector => new D1StagingConnector);
     $runtime = new D1StagingRuntime;
 
+    $firstReview = $runtime->run(function () use ($member, $family): array {
+        $membership = $member->membershipForFamily($family);
+        if (! $membership instanceof FamilyMembership) {
+            throw new RuntimeException('The synthetic member has no family membership.');
+        }
+
+        return app(PaymentAllocationPreview::class)->preview($member, $family, $membership, 3000);
+    }, $family->id, $officer->id);
     $first = $runtime->run(fn () => app(PaymentAllocationService::class)->createBatch(
         member: $member, amount: 3000, paidAt: now(), recordedBy: $officer, family: $family, idempotencyKey: 'd1-first',
+        expectedAllocations: $firstReview['allocations'], reviewExpiresAt: now()->addMinute()->timestamp,
     ), $family->id, $officer->id);
     $replayed = $runtime->run(fn () => app(PaymentAllocationService::class)->createBatch(
         member: $member, amount: 3000, paidAt: now(), recordedBy: $officer, family: $family, idempotencyKey: 'd1-first',
+        expectedAllocations: $firstReview['allocations'], reviewExpiresAt: now()->subMinute()->timestamp,
     ), $family->id, $officer->id);
     expect($replayed->id)->toBe($first->id)
+        ->and(stagingSqlValue($pdo, 'select count(*) from jobs'))->toBe(1);
+    expect(fn () => $runtime->run(fn () => app(PaymentAllocationService::class)->createBatch(
+        member: $member, amount: 3000, paidAt: now(), recordedBy: $officer, family: $family, idempotencyKey: 'd1-expired-new',
+        expectedAllocations: $firstReview['allocations'], reviewExpiresAt: now()->subMinute()->timestamp,
+    ), $family->id, $officer->id))->toThrow(ValidationException::class);
+    expect(stagingSqlValue($pdo, 'select count(*) from payment_batches'))->toBe(1)
         ->and(stagingSqlValue($pdo, 'select count(*) from jobs'))->toBe(1);
     $review = $runtime->run(function () use ($member, $family): array {
         $membership = $member->membershipForFamily($family);
