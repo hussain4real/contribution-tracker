@@ -291,6 +291,27 @@ it('validates receipt correction and allocation invariants', function () {
     ))->toThrow(InvalidArgumentException::class);
 });
 
+it('leaves the original receipt intact when a correction targets beyond the advance limit', function () {
+    $this->travelTo(now()->setDate(2026, 10, 31));
+    [$family, $admin, $member] = ledgerFixture();
+    $original = app(PaymentAllocationService::class)->createBatch($member, 4000, now(), $admin, family: $family);
+
+    expect(fn () => app(CorrectPaymentBatch::class)->handle(
+        original: $original,
+        actor: $admin,
+        reason: 'Correction',
+        amount: 4000,
+        paidAt: now(),
+        method: PaymentMethod::Cash,
+        targetYear: 2027,
+        targetMonth: 5,
+    ))->toThrow(InvalidArgumentException::class, 'six-month advance-payment limit');
+
+    expect(PaymentBatch::count())->toBe(1)
+        ->and(FinancialReversal::count())->toBe(0)
+        ->and($original->refresh()->allocations)->toHaveCount(1);
+});
+
 it('exposes ledger model relationships, scopes, labels, and policy boundaries', function () {
     [$family, $admin, $member] = ledgerFixture();
     $batch = app(PaymentAllocationService::class)->createBatch(

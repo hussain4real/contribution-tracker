@@ -5,11 +5,55 @@ declare(strict_types=1);
 use App\Jobs\SendPaymentReceipt;
 use App\Models\Contribution;
 use App\Models\Family;
+use App\Models\Payment;
+use App\Models\PaymentBatch;
 use App\Models\User;
 use App\Services\PaymentAllocationService;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
+
+it('does not record a payment explicitly targeting beyond the sixth advance month', function () {
+    $this->travelTo(now()->setDate(2026, 10, 31));
+    $family = Family::factory()->create();
+    $recorder = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+
+    expect(fn () => app(PaymentAllocationService::class)->createBatch(
+        member: $member,
+        amount: 4000,
+        paidAt: now(),
+        recordedBy: $recorder,
+        targetYear: 2027,
+        targetMonth: 5,
+        family: $family,
+    ))->toThrow(InvalidArgumentException::class, 'six-month advance-payment limit');
+
+    expect(PaymentBatch::count())->toBe(0)
+        ->and(Payment::count())->toBe(0);
+});
+
+it('replays a recorded payment even when the current advance limit has changed', function () {
+    $this->travelTo(now()->setDate(2026, 10, 31));
+    $family = Family::factory()->create();
+    $recorder = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $service = app(PaymentAllocationService::class);
+    $batch = $service->createBatch(
+        member: $member, amount: 4000, paidAt: '2026-10-31', recordedBy: $recorder,
+        targetYear: 2027, targetMonth: 4, family: $family, idempotencyKey: 'month-limit-replay',
+    );
+
+    $this->travelTo(now()->setDate(2026, 9, 30));
+    $replay = $service->createBatch(
+        member: $member, amount: 4000, paidAt: '2026-10-31', recordedBy: $recorder,
+        targetYear: 2027, targetMonth: 4, family: $family, idempotencyKey: 'month-limit-replay',
+    );
+
+    expect($replay->id)->toBe($batch->id)
+        ->and(PaymentBatch::count())->toBe(1)
+        ->and(Payment::count())->toBe(1);
+});
 
 it('requires a family context before allocating payments', function () {
     $member = User::factory()->member()->employed()->create();

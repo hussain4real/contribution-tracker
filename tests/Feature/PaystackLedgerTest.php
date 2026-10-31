@@ -106,6 +106,26 @@ it('fails closed on a provider amount mismatch without posting money', function 
         ->and(app(EffectiveLedger::class)->paymentsTotal($transaction->family_id))->toBe(0);
 });
 
+it('leaves a verified charge unallocated when its target exceeds the advance limit', function () {
+    $this->travelTo(now()->setDate(2026, 10, 31));
+    $transaction = initiatedPaystackContribution();
+    $transaction->forceFill(['metadata' => ['target_year' => 2027, 'target_month' => 5]])->save();
+
+    expect(fn () => app(PaystackContributionSettlementService::class)->settle($transaction->reference, [
+        'status' => 'success',
+        'reference' => $transaction->reference,
+        'amount' => 400000,
+        'fees' => 0,
+    ]))->toThrow(InvalidArgumentException::class, 'six-month advance-payment limit');
+
+    $transaction->refresh();
+    expect($transaction->status)->toBe(TransactionStatus::Failed)
+        ->and($transaction->failure_reason)->toContain('six-month advance-payment limit')
+        ->and($transaction->payment_batch_id)->toBeNull()
+        ->and($transaction->allocated_at)->toBeNull()
+        ->and(PaymentBatch::count())->toBe(0);
+});
+
 it('rejects non-contribution transactions and unsuccessful provider verification', function () {
     $nonContribution = initiatedPaystackContribution();
     $nonContribution->forceFill(['type' => TransactionType::Subscription])->save();

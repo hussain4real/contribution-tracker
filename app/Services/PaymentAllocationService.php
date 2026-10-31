@@ -108,6 +108,12 @@ class PaymentAllocationService
 
                 return $existing;
             }
+            if ($targetYear !== null && $targetMonth !== null) {
+                $maximumAdvanceDate = now()->startOfMonth()->addMonths(6);
+                if (($targetYear * 12) + $targetMonth > ($maximumAdvanceDate->year * 12) + $maximumAdvanceDate->month) {
+                    throw new InvalidArgumentException('The payment exceeds the six-month advance-payment limit.');
+                }
+            }
             $membership = FamilyMembership::query()
                 ->where('family_id', $lockedFamily->id)
                 ->where('user_id', $member->id)
