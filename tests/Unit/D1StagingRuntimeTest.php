@@ -504,7 +504,8 @@ it('allocates payments and queues receipts through the D1 runtime using current 
         ->where('year', $contribution->year)
         ->where('month', $contribution->month)
         ->withSum('payments as paid_amount', 'amount')
-        ->get()->sum('paid_amount'), $family->id, $officer->id);
+        ->withCasts(['paid_amount' => 'integer'])
+        ->get()->sum(fn (Contribution $row): int => $row->paid_amount ?? 0), $family->id, $officer->id);
     expect($collected)->toBe(2000);
 });
 
