@@ -26,8 +26,6 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '22'
-      - name: Validate accepted D1 schema and runtime module graph
-        run: python3 deployment/d1-proof/cloudflare-release.py prepare
       - name: Worker behavior and isolation checks
         run: |
           tests=()
@@ -39,6 +37,8 @@ jobs:
           node --test "${tests[@]}"
       - name: Release and image safety checks
         run: python3 -m unittest discover -s deployment/d1-proof -p 'cloudflare_*_test.py' -v
+      - name: Validate accepted D1 schema and runtime module graph
+        run: python3 deployment/d1-proof/cloudflare-release.py prepare
 
   application-tests:
     if: github.event_name != 'pull_request'
