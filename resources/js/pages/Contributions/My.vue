@@ -190,18 +190,18 @@ function checkDownloadConnection(
             </div>
 
             <div
-                v-if="page.props.flash?.error"
+                v-if="page.flash.payment_result?.kind === 'error'"
                 role="alert"
                 class="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
             >
-                {{ page.props.flash.error }}
+                {{ page.flash.payment_result.message }}
             </div>
             <div
-                v-else-if="page.props.flash?.success"
+                v-else-if="page.flash.payment_result?.kind === 'success'"
                 role="status"
                 class="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200"
             >
-                {{ page.props.flash.success }}
+                {{ page.flash.payment_result.message }}
             </div>
 
             <p

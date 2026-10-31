@@ -39,7 +39,10 @@ describe('Member History Flow', function () {
             ->assertSeeIn('[role="alert"]', 'Transaction not found.')
             ->assertVisible('[role="alert"]')
             ->assertNoJavaScriptErrors();
-        $page->click('Dashboard')->back()
+        $page->click('Dashboard')
+            ->assertPathIs("/{$this->family->slug}/dashboard")
+            ->back()
+            ->assertPathIs("/{$this->family->slug}/contributions/my")
             ->assertDontSee('Transaction not found.');
     });
 
@@ -64,6 +67,11 @@ describe('Member History Flow', function () {
             ->assertVisible('[role="status"]')
             ->assertSee("Receipt #{$batch->receipt_number}")
             ->assertNoJavaScriptErrors();
+        $page->click('Dashboard')
+            ->assertPathIs("/{$this->family->slug}/dashboard")
+            ->back()
+            ->assertPathIs("/{$this->family->slug}/contributions/my")
+            ->assertDontSee('Payment already confirmed.');
     });
 
     it('member can view contribution details with payments', function () {

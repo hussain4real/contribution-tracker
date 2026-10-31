@@ -230,7 +230,7 @@ class MemberPaymentController extends Controller
         $reference = $request->query('reference');
 
         if (! is_string($reference) || $reference === '') {
-            return redirect()->route('contributions.my')->with('error', 'Invalid payment reference.');
+            return $this->paymentResult('error', 'Invalid payment reference.');
         }
 
         $transaction = PaystackTransaction::query()
@@ -241,19 +241,19 @@ class MemberPaymentController extends Controller
             ->first();
 
         if (! $transaction) {
-            return redirect()->route('contributions.my')->with('error', 'Transaction not found.');
+            return $this->paymentResult('error', 'Transaction not found.');
         }
 
         if ($transaction->status === TransactionStatus::Reversed) {
-            return redirect()->route('contributions.my')->with('error', 'This payment was reversed and no longer counts toward your contributions. Contact your family admin if you need help.');
+            return $this->paymentResult('error', 'This payment was reversed and no longer counts toward your contributions. Contact your family admin if you need help.');
         }
 
         if ($transaction->isSuccessful()) {
             if ($transaction->payment_batch_id !== null && $transaction->allocated_at !== null) {
-                return redirect()->route('contributions.my')->with('success', 'Payment already confirmed.');
+                return $this->paymentResult('success', 'Payment already confirmed.');
             }
 
-            return redirect()->route('contributions.my')->with('error', 'Payment may have been successful, but we could not confirm it was recorded. Check your payment history or contact your family admin before trying again.');
+            return $this->paymentResult('error', 'Payment may have been successful, but we could not confirm it was recorded. Check your payment history or contact your family admin before trying again.');
         }
 
         try {
@@ -266,19 +266,27 @@ class MemberPaymentController extends Controller
                     ? 'Payment was not successful. Please try again.'
                     : 'Could not confirm your payment. Check your payment history or contact your family admin before trying again.';
 
-                return redirect()->route('contributions.my')->with('error', $message);
+                return $this->paymentResult('error', $message);
             }
 
             $settledTransaction = $this->settlementService->settle($reference, $data);
 
             if ($settledTransaction->isSuccessful() && $settledTransaction->payment_batch_id !== null && $settledTransaction->allocated_at !== null) {
-                return redirect()->route('contributions.my')->with('success', 'Payment successful! Your contributions have been updated.');
+                return $this->paymentResult('success', 'Payment successful! Your contributions have been updated.');
             }
 
-            return redirect()->route('contributions.my')->with('error', 'Payment was verified but not recorded. Contact your family admin before trying again.');
+            return $this->paymentResult('error', 'Payment was verified but not recorded. Contact your family admin before trying again.');
         } catch (Throwable) {
-            return redirect()->route('contributions.my')->with('error', 'Could not confirm your payment. Check your payment history or contact your family admin before trying again.');
+            return $this->paymentResult('error', 'Could not confirm your payment. Check your payment history or contact your family admin before trying again.');
         }
+    }
+
+    /** @param 'success'|'error' $kind */
+    private function paymentResult(string $kind, string $message): RedirectResponse
+    {
+        Inertia::flash('payment_result', ['kind' => $kind, 'message' => $message]);
+
+        return redirect()->route('contributions.my')->with($kind, $message);
     }
 
     private function stringConfig(string $key): string
