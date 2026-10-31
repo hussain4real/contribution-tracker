@@ -86,17 +86,36 @@ try {
     if (! is_array($status) || ($status['pool'] ?? null) !== 'www') {
         throw new RuntimeException('Invalid FPM status pool');
     }
-    foreach (['active processes', 'listen queue', 'total processes', 'start time'] as $field) {
+    foreach (['active processes', 'listen queue', 'listen queue len', 'total processes', 'start time'] as $field) {
         if (! is_int($status[$field] ?? null) || $status[$field] < 0) {
             throw new RuntimeException('Invalid FPM status count');
         }
     }
-    if ($status['total processes'] < 1 || $status['active processes'] > $status['total processes'] || $status['start time'] < 1) {
+    if ($status['total processes'] < 1 || $status['active processes'] > $status['total processes'] || $status['start time'] < 1
+        || $status['listen queue len'] < 1 || $status['listen queue'] > $status['listen queue len'] + 1) {
         throw new RuntimeException('Inconsistent FPM status');
+    }
+    $tcp = @file_get_contents('/proc/net/tcp', false, null, 0, 1048577);
+    if ($tcp === false || strlen($tcp) > 1048576) {
+        throw new RuntimeException('Kernel TCP status unavailable');
+    }
+    $queues = [];
+    foreach (explode("\n", $tcp) as $line) {
+        $fields = preg_split('/\s+/', trim($line));
+        if (is_array($fields) && ($fields[1] ?? '') === '0100007F:2328' && ($fields[3] ?? '') === '0A') {
+            if (! preg_match('/^[0-9A-F]{8}:([0-9A-F]{8})$/', $fields[4] ?? '', $queue)) {
+                throw new RuntimeException('Invalid kernel TCP status');
+            }
+            $queues[] = hexdec($queue[1]);
+        }
+    }
+    if (count($queues) !== 1 || $queues[0] !== $status['listen queue']) {
+        throw new RuntimeException('Inconsistent kernel TCP status');
     }
     echo json_encode([
         'active_processes' => $status['active processes'],
         'listen_queue' => $status['listen queue'],
+        'listen_queue_capacity' => $status['listen queue len'],
         'total_processes' => $status['total processes'],
         'start_time' => $status['start time'],
     ], JSON_THROW_ON_ERROR);

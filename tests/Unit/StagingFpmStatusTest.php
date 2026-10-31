@@ -8,17 +8,21 @@ function stagingFpmTestRecord(int $type, string $body = ''): string
 }
 
 /** @return array{exit: int, stdout: string, stderr: string} */
-function runStagingFpmProbe(?string $response): array
+function runStagingFpmProbe(?string $response, ?string $tcp = '0: 0100007F:2328 00000000:0000 0A 00000000:00000000'): array
 {
     $directory = sys_get_temp_dir().'/ff-fpm-'.bin2hex(random_bytes(6));
     mkdir($directory, 0700);
     $socketPath = $directory.'/status.sock';
     $probePath = $directory.'/probe.php';
+    $tcpPath = $directory.'/tcp';
     $source = file_get_contents(__DIR__.'/../../deployment/d1-proof/staging-fpm-status.php');
     if ($source === false) {
         throw new RuntimeException('Missing FPM probe');
     }
-    file_put_contents($probePath, str_replace('/run/php/familyfunds-staging-status.sock', $socketPath, $source));
+    file_put_contents($probePath, str_replace(['/run/php/familyfunds-staging-status.sock', '/proc/net/tcp'], [$socketPath, $tcpPath], $source));
+    if ($tcp !== null) {
+        file_put_contents($tcpPath, $tcp);
+    }
     $server = null;
     $process = null;
     $pipes = [];
@@ -70,22 +74,52 @@ function runStagingFpmProbe(?string $response): array
             unlink($socketPath);
         }
         unlink($probePath);
+        if (file_exists($tcpPath)) {
+            unlink($tcpPath);
+        }
         rmdir($directory);
     }
 }
 
 it('returns only validated FPM activity counts from the private listener', function (): void {
     $response = "Status: 200\r\nContent-Type: application/json\r\n\r\n".json_encode([
-        'pool' => 'www', 'active processes' => 1, 'listen queue' => 0, 'total processes' => 4, 'start time' => 123,
+        'pool' => 'www', 'active processes' => 1, 'listen queue' => 0, 'listen queue len' => 64, 'total processes' => 4, 'start time' => 123,
         'request uri' => '/private-not-returned',
     ], JSON_THROW_ON_ERROR);
     $result = runStagingFpmProbe($response);
 
     expect($result['exit'])->toBe(0)
         ->and(json_decode($result['stdout'], true, flags: JSON_THROW_ON_ERROR))->toBe([
-            'active_processes' => 1, 'listen_queue' => 0, 'total_processes' => 4, 'start_time' => 123,
+            'active_processes' => 1, 'listen_queue' => 0, 'listen_queue_capacity' => 64, 'total_processes' => 4, 'start_time' => 123,
         ]);
 });
+
+it('accepts a queued request when FPM and the kernel agree', function (): void {
+    $response = "Status: 200\r\n\r\n".json_encode([
+        'pool' => 'www', 'active processes' => 2, 'listen queue' => 1, 'listen queue len' => 64, 'total processes' => 2, 'start time' => 123,
+    ], JSON_THROW_ON_ERROR);
+    $result = runStagingFpmProbe($response, '0: 0100007F:2328 00000000:0000 0A 00000000:00000001');
+    $status = json_decode($result['stdout'], true, flags: JSON_THROW_ON_ERROR);
+    if (! is_array($status)) {
+        throw new RuntimeException('Invalid probe response');
+    }
+    expect($result['exit'])->toBe(0)
+        ->and($status['listen_queue'] ?? null)->toBe(1);
+});
+
+it('rejects missing, malformed, duplicate or inconsistent kernel queue snapshots', function (?string $tcp): void {
+    $response = "Status: 200\r\n\r\n".json_encode([
+        'pool' => 'www', 'active processes' => 0, 'listen queue' => 0, 'listen queue len' => 64, 'total processes' => 1, 'start time' => 123,
+    ], JSON_THROW_ON_ERROR);
+    $result = runStagingFpmProbe($response, $tcp);
+    expect($result['exit'])->toBe(1)->and($result['stdout'])->toBe('');
+})->with([
+    'missing proc file' => [null],
+    'missing listener' => [''],
+    'malformed queue' => ['0: 0100007F:2328 00000000:0000 0A invalid'],
+    'duplicate listener' => ["0: 0100007F:2328 00000000:0000 0A 00000000:00000000\n1: 0100007F:2328 00000000:0000 0A 00000000:00000000"],
+    'queue mismatch' => ['0: 0100007F:2328 00000000:0000 0A 00000000:00000001'],
+]);
 
 it('fails closed when FPM status is unavailable or invalid', function (?string $response): void {
     $result = runStagingFpmProbe($response);
@@ -98,5 +132,7 @@ it('fails closed when FPM status is unavailable or invalid', function (?string $
     'bad status' => ["Status: 500\r\n\r\n{}"],
     'bad JSON' => ["Status: 200\r\n\r\nnot-json"],
     'wrong pool' => ["Status: 200\r\n\r\n".json_encode(['pool' => 'other'], JSON_THROW_ON_ERROR)],
-    'inconsistent counts' => ["Status: 200\r\n\r\n".json_encode(['pool' => 'www', 'active processes' => 2, 'listen queue' => 0, 'total processes' => 1, 'start time' => 123], JSON_THROW_ON_ERROR)],
+    'inconsistent counts' => ["Status: 200\r\n\r\n".json_encode(['pool' => 'www', 'active processes' => 2, 'listen queue' => 0, 'listen queue len' => 64, 'total processes' => 1, 'start time' => 123], JSON_THROW_ON_ERROR)],
+    'unavailable queue capacity' => ["Status: 200\r\n\r\n".json_encode(['pool' => 'www', 'active processes' => 0, 'listen queue' => 0, 'listen queue len' => 0, 'total processes' => 1, 'start time' => 123], JSON_THROW_ON_ERROR)],
+    'impossible queue count' => ["Status: 200\r\n\r\n".json_encode(['pool' => 'www', 'active processes' => 0, 'listen queue' => 8842250, 'listen queue len' => 64, 'total processes' => 2, 'start time' => 123], JSON_THROW_ON_ERROR)],
 ]);

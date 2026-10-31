@@ -305,10 +305,10 @@ test('staging FPM status requires both credentials, an enabled control and pause
     let command;
     container.ctx.container.exec = async args => {
         command = args;
-        return {output: async () => ({exitCode: 0, stdout: new TextEncoder().encode(JSON.stringify({active_processes: 1, listen_queue: 0, total_processes: 4, start_time: 123}))})};
+        return {output: async () => ({exitCode: 0, stdout: new TextEncoder().encode(JSON.stringify({active_processes: 1, listen_queue: 0, listen_queue_capacity: 64, total_processes: 4, start_time: 123}))})};
     };
     const response = await f.handler.fetch(request(headers), f.env);
-    assert.deepEqual(await response.json(), {active_processes: 1, listen_queue: 0, total_processes: 4, start_time: 123});
+    assert.deepEqual(await response.json(), {active_processes: 1, listen_queue: 0, listen_queue_capacity: 64, total_processes: 4, start_time: 123});
     assert.equal(response.headers.get('Cache-Control'), 'no-store');
     assert.deepEqual(Array.from(command), ['php', '/var/www/html/deployment/d1-proof/staging-fpm-status.php']);
     f.env.RUNTIME_PROFILE = 'production';
@@ -322,13 +322,15 @@ test('staging FPM status rejects malformed data or admission changed during insp
     await container.setAdmissionPaused(true);
     container.ctx.container.exec = async () => ({output: async () => ({exitCode: 0, stdout: new TextEncoder().encode('{"active_processes":0}')})});
     await assert.rejects(container.stagingFpmStatus(), /Invalid staging FPM status/);
+    container.ctx.container.exec = async () => ({output: async () => ({exitCode: 0, stdout: new TextEncoder().encode(JSON.stringify({active_processes: 0, listen_queue: 8842250, listen_queue_capacity: 64, total_processes: 2, start_time: 123}))})});
+    await assert.rejects(container.stagingFpmStatus(), /Invalid staging FPM status/);
     let finish;
     container.ctx.container.exec = async () => ({output: () => new Promise(resolve => { finish = resolve; })});
     const pending = container.stagingFpmStatus();
     await new Promise(resolve => setImmediate(resolve));
     await container.setAdmissionPaused(false);
     await container.setAdmissionPaused(true);
-    finish({exitCode: 0, stdout: new TextEncoder().encode(JSON.stringify({active_processes: 0, listen_queue: 0, total_processes: 4, start_time: 123}))});
+    finish({exitCode: 0, stdout: new TextEncoder().encode(JSON.stringify({active_processes: 0, listen_queue: 0, listen_queue_capacity: 64, total_processes: 4, start_time: 123}))});
     await assert.rejects(pending, /unavailable/);
 });
 
