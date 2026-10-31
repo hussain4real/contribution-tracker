@@ -163,6 +163,8 @@ The existing [product completion roadmap](../familyfund-product-completion-roadm
 
 **Advance-payment limit on My Contributions:** The member money home previously offered Pay now when its only outstanding period was more than six months ahead, even though checkout would reject it. It now explains the limit instead. Local feature tests cover overdue, six-month and seven-month periods at a month-end boundary; a synthetic browser test with online payments configured confirmed the explanation beyond the limit and the Pay now action at the limit. This has not been verified on staging or against a payment provider.
 
+**Member aggregate query:** A synthetic Debugbar request showed five separate payment-sum queries for five current-month family contributions. The member money page now calculates the family totals using one aggregate query over the existing effective-payment relationship. A local regression test reproduces the earlier query growth and checks totals with a reversed payment and another family's contribution present. This reduces the observed query pattern; it is not a production latency measurement or staging verification.
+
 ### 2. Receipt and reminder delivery visibility
 
 - Show channel-specific states such as queued, sent, delivered or failed, only where the provider actually supplies the state. Distinguish provider acceptance from confirmed delivery.

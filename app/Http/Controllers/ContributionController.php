@@ -102,10 +102,11 @@ class ContributionController extends Controller
             ->where('family_id', $family->id)
             ->where('year', $currentYear)
             ->where('month', $currentMonth)
+            ->withSum('payments as paid_amount', 'amount')
             ->get();
 
-        $totalExpected = (int) $allContributions->sum(fn (Contribution $contribution): int => $contribution->expected_amount);
-        $totalCollected = (int) $allContributions->sum(fn (Contribution $contribution): int => $contribution->total_paid);
+        $totalExpected = (int) $allContributions->sum('expected_amount');
+        $totalCollected = (int) $allContributions->sum('paid_amount');
         $totalOutstanding = $totalExpected - $totalCollected;
         $collectionRate = $totalExpected > 0
             ? round(($totalCollected / $totalExpected) * 100, 1)
