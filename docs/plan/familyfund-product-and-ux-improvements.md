@@ -145,6 +145,8 @@ The existing [product completion roadmap](../familyfund-product-completion-roadm
 
 **Lost-response retry walkthrough:** On 2026-10-31, the synthetic officer reviewed a ₦1 payment, then the browser forwarded the submission to the demo server and deliberately dropped the response. The page warned that the payment was unconfirmed. Retrying the unchanged form led to the same receipt; a read-only check of the demo database found one batch and one allocation for the test reference. An initial interception mistake produced a separate synthetic receipt without dropping its response; both synthetic receipts were reversed through the demo admin UI, retaining their audit records. This does not verify a real staging payment, a retry after the review expires, or every possible concurrent submission.
 
+**Retry after review expiry:** A valid review that has expired can now retrieve its already-recorded payment when the original officer and payment details match, but cannot create a new payment. The existing replay checks compare the receipt and its allocations inside the allocation transaction. Local feature tests cover an expired replay, changed details, a different officer and an expired review with no recorded payment; remote behavior remains to be verified.
+
 ## Phase 2 — Dashboard clarity and trust
 
 ### 5. Actionable family dashboard

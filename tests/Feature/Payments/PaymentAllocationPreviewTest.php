@@ -186,6 +186,29 @@ it('rejects expired or altered review tokens and tokens from another officer', f
     expect(PaymentBatch::count())->toBe(0);
 });
 
+it('returns the original receipt when an unchanged recorded payment is retried after review expiry', function () {
+    Queue::fake();
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    $otherOfficer = User::factory()->admin()->create(['family_id' => $family->id]);
+    Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
+    $data = ['member_id' => $member->id, 'amount' => 1500, 'paid_at' => now()->toDateString(),
+        'method' => 'cash', 'idempotency_key' => (string) Str::uuid()];
+    $data['review_token'] = $this->actingAs($officer)->postJson(route('payments.review', ['current_family' => $family->slug]), $data)->assertOk()->json('token');
+    $url = route('payments.store', ['current_family' => $family->slug]);
+    $this->actingAs($officer)->post($url, $data)->assertSessionHasNoErrors();
+    $receipt = PaymentBatch::sole();
+
+    $this->travel(16)->minutes();
+    $this->actingAs($officer)->post($url, $data)
+        ->assertRedirect(route('payments.index', ['current_family' => $family->slug, 'receipt' => $receipt->id]))
+        ->assertSessionHasNoErrors();
+    $this->actingAs($officer)->post($url, [...$data, 'amount' => 1000])->assertSessionHasErrors('review');
+    $this->actingAs($otherOfficer)->post($url, $data)->assertSessionHasErrors('review');
+    expect(PaymentBatch::count())->toBe(1)->and(Payment::count())->toBe(1);
+});
+
 it('rejects changed payment details and stale allocations after review', function () {
     Queue::fake();
     $family = Family::factory()->create();

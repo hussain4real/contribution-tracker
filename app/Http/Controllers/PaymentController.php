@@ -190,7 +190,7 @@ class PaymentController extends Controller
         if (! $request->filled('review_token') || ! $request->filled('idempotency_key')) {
             throw ValidationException::withMessages(['review' => 'Review the payment before recording it.']);
         }
-        $expected = $this->reviewedAllocations($request, $family, $recordedBy);
+        $review = $this->reviewedAllocations($request, $family, $recordedBy);
 
         $batch = $this->allocationService->createBatch(
             member: $member,
@@ -205,7 +205,8 @@ class PaymentController extends Controller
             source: PaymentSource::Manual,
             reference: $request->filled('reference') ? $request->string('reference')->toString() : null,
             idempotencyKey: $request->string('idempotency_key')->toString(),
-            expectedAllocations: $expected,
+            expectedAllocations: $review['allocations'],
+            reviewExpiresAt: $review['expires_at'],
         );
 
         $currency = $family->currency;
@@ -227,7 +228,7 @@ class PaymentController extends Controller
         ], JSON_THROW_ON_ERROR));
     }
 
-    /** @return list<array{year: int, month: int, period: string, amount: int}> */
+    /** @return array{allocations: list<array{year: int, month: int, period: string, amount: int}>, expires_at: int} */
     private function reviewedAllocations(StorePaymentRequest $request, Family $family, User $user): array
     {
         try {
@@ -237,7 +238,7 @@ class PaymentController extends Controller
         }
         if (! is_array($payload) || ! is_string($payload['fingerprint'] ?? null)
             || ! hash_equals($this->reviewFingerprint($request, $family, $user), $payload['fingerprint'])
-            || ! is_int($payload['expires_at'] ?? null) || $payload['expires_at'] < now()->timestamp
+            || ! is_int($payload['expires_at'] ?? null)
             || ! is_array($payload['allocations'] ?? null) || ! array_is_list($payload['allocations'])) {
             throw ValidationException::withMessages(['review' => 'The payment details changed or the review expired. Review it again.']);
         }
@@ -250,7 +251,7 @@ class PaymentController extends Controller
             $allocations[] = ['year' => $item['year'], 'month' => $item['month'], 'period' => $item['period'], 'amount' => $item['amount']];
         }
 
-        return $allocations;
+        return ['allocations' => $allocations, 'expires_at' => $payload['expires_at']];
     }
 
     private function currentFamilyFor(User $user): Family

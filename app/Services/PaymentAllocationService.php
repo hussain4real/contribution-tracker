@@ -67,6 +67,7 @@ class PaymentAllocationService
         ?string $idempotencyKey = null,
         ?PaymentBatch $replaces = null,
         ?array $expectedAllocations = null,
+        ?int $reviewExpiresAt = null,
     ): PaymentBatch {
         $family ??= $recordedBy->currentFamily ?? $recordedBy->family;
 
@@ -95,6 +96,7 @@ class PaymentAllocationService
             $idempotencyKey,
             $replaces,
             $expectedAllocations,
+            $reviewExpiresAt,
         ): PaymentBatch {
             $lockedFamily = Family::query()->lockForUpdate()->findOrFail($family->id);
             $existing = PaymentBatch::query()->where('family_id', $family->id)
@@ -107,6 +109,9 @@ class PaymentAllocationService
                 }
 
                 return $existing;
+            }
+            if ($reviewExpiresAt !== null && $reviewExpiresAt < now()->timestamp) {
+                throw ValidationException::withMessages(['review' => 'The payment details changed or the review expired. Review it again.']);
             }
             if ($targetYear !== null && $targetMonth !== null) {
                 $maximumAdvanceDate = now()->startOfMonth()->addMonths(6);
