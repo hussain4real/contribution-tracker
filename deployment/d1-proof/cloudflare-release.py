@@ -358,7 +358,7 @@ def publish(target, directory):
                 failures.append('staging container image')
         if failures:
             raise RuntimeError('Deployment failed and code/image rollback needs operator attention: ' + ', '.join(failures)) from None
-        raise RuntimeError('Deployment failed; previous code/image restored. No database rollback or request replay was attempted.') from None
+        raise RuntimeError('Deployment failed; code/image rollback was requested. Verify the active code and image before proceeding. No database rollback or request replay was attempted.') from None
     result = {'target': target, 'revision': revision, 'runtime_revision': name, 'image': image,
               'prepared': True, 'native_image_verified': True, 'laravel_login_verified': True,
               'managed_image_preparation': target == 'production',
