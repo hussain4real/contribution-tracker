@@ -117,9 +117,11 @@ test('staging gateway health fails closed for wrong configuration and invalid re
         D1_STAGING_URL: 'https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev', D1_STAGING_TOKEN: 'a'.repeat(32)};
     const url = 'https://staging.example/__staging_health/gateway';
     const request = () => new Request(url, {headers: {Authorization: f.env.BASIC_AUTHORIZATION}});
-    for (const change of [{D1_PRODUCTION_ENABLED: 'true'}, {D1_STAGING_DATABASE: 'production'}, {D1_STAGING_URL: 'https://attacker.example'}, {D1_STAGING_TOKEN: 'short'}]) {
+    for (const [change, stage] of [[{D1_PRODUCTION_ENABLED: 'true'}, 'environment_flags'], [{D1_STAGING_DATABASE: 'production'}, 'database_identity'], [{D1_STAGING_URL: 'https://attacker.example'}, 'gateway_url'], [{D1_STAGING_TOKEN: 'short'}, 'gateway_token']]) {
         f.env.CONTAINER_ENV = JSON.stringify({...base, ...change});
-        assert.equal((await f.handler.fetch(request(), f.env)).status, 503);
+        const result = await f.handler.fetch(request(), f.env);
+        assert.equal(result.status, 503);
+        assert.deepEqual(await result.json(), {ok: false, stage});
     }
     assert.equal(calls, 0);
     f.env.CONTAINER_ENV = JSON.stringify(base);
@@ -130,9 +132,16 @@ test('staging gateway health fails closed for wrong configuration and invalid re
         output = invalid;
         const result = await f.handler.fetch(request(), f.env);
         assert.equal(result.status, 503);
-        assert.deepEqual(await result.json(), {ok: false});
+        const body = await result.json();
+        assert.equal(body.ok, false);
+        assert.ok(['gateway_http', 'gateway_response'].includes(body.stage));
+        assert.equal(JSON.stringify(body).includes(base.D1_STAGING_TOKEN), false);
     }
     assert.equal(calls, 5);
+    f.env.STAGING_SQL_GATEWAY = {fetch: async () => new Response('', {status: 401})};
+    assert.deepEqual(await (await f.handler.fetch(request(), f.env)).json(), {ok: false, stage: 'gateway_authentication'});
+    f.env.STAGING_SQL_GATEWAY = {fetch: async () => { throw new Error('sensitive fixture'); }};
+    assert.deepEqual(await (await f.handler.fetch(request(), f.env)).json(), {ok: false, stage: 'service_request'});
 });
 
 test("the deployable bootstrap contains the exact reviewed source bytes", () => {
