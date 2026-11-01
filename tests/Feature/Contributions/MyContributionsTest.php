@@ -373,7 +373,9 @@ describe('My Contributions', function () {
         ]);
         $family->update(['platform_plan_id' => $plan->id, 'bank_code' => '123', 'account_number' => '1234567890']);
 
-        $this->actingAs($this->member)->get(route('contributions.my'))
+        $member = $this->member->fresh();
+        assert($member instanceof User);
+        $this->actingAs($member)->get(route('contributions.my'))
             ->assertOk()->assertInertia(fn (Assert $page) => $page->where('online_payments_available', true));
 
         config(['services.paystack.secret_key' => null]);

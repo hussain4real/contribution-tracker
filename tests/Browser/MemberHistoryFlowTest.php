@@ -8,6 +8,20 @@ use App\Models\FamilyMembership;
 use App\Models\Payment;
 use App\Models\PaymentBatch;
 use App\Models\PlatformPlan;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Session;
+
+final class ResetMoneyHomeBrowserSession
+{
+    public function handle(Request $request, Closure $next): mixed
+    {
+        Session::flush();
+        Auth::forgetGuards();
+
+        return $next($request);
+    }
+}
 
 /**
  * T078 [US5] Browser test for member contribution history navigation
@@ -61,6 +75,7 @@ describe('Member History Flow', function () {
     });
 
     it('explains when an advance contribution is too far away for online payment', function () {
+        app('router')->prependMiddlewareToGroup('web', ResetMoneyHomeBrowserSession::class);
         config(['services.paystack.public_key' => 'pk_test_synthetic', 'services.paystack.secret_key' => 'sk_test_synthetic']);
         $plan = PlatformPlan::create([
             'name' => 'Browser online payments', 'slug' => 'browser-online-payments', 'price' => 0,
