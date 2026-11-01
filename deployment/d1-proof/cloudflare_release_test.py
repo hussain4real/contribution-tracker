@@ -131,7 +131,7 @@ class ReleaseSafetyTest(unittest.TestCase):
 
             target = {**release.CONFIG['staging'], 'companions': []}
             with patch.dict(release.CONFIG, {'staging': target}), patch.dict(os.environ, {'GITHUB_SHA': SHA, 'GITHUB_REF': 'refs/heads/cloudflare-staging', 'GITHUB_ACTIONS': 'true', 'DOCKER_CONFIG': directory}), patch.object(release, 'validate'), patch.object(release, 'public_checks'), patch.object(release, 'prepared') as prepared, patch.object(release, 'rollout_image'), patch.object(release, 'api', side_effect=api), patch.object(release.subprocess, 'run', side_effect=command), patch.object(release.subprocess, 'check_output', side_effect=output), contextlib.redirect_stdout(io.StringIO()):
-                with self.assertRaisesRegex(RuntimeError, 'previous code/image restored'):
+                with self.assertRaisesRegex(RuntimeError, 'code/image rollback was requested'):
                     release.publish('staging', path)
                 prepared.assert_not_called()
             self.assertEqual(len(writes), 2)
@@ -233,6 +233,32 @@ class ReleaseSafetyTest(unittest.TestCase):
             with self.subTest(bindings=broken), self.assertRaises(RuntimeError):
                 release.checked_bindings('familyfunds-d1-staging-sql', {'bindings': broken})
 
+    def test_staging_gateway_allows_only_a_complete_disabled_coordinator(self):
+        base = [
+            {'name': 'DB', 'type': 'd1', 'id': 'f96058f1-0aa3-42f3-9ee2-f796554d6ef4'},
+            {'name': 'DATABASE_NAME', 'type': 'plain_text', 'text': 'familyfunds-d1-web-staging'},
+            {'name': 'PROOF_TOKEN', 'type': 'secret_text'},
+        ]
+        gate = {'name': 'STAGING_GATEWAY_ADMISSION', 'type': 'plain_text', 'text': '0'}
+        coordinator = {'name': 'STAGING_GATEWAY_ADMISSION_OBJECT', 'type': 'durable_object_namespace',
+                       'class_name': 'StagingGatewayAdmission', 'namespace_id': 'a' * 32}
+        admin = {'name': 'STAGING_GATEWAY_ADMIN_TOKEN', 'type': 'secret_text'}
+        self.assertEqual(release.checked_bindings('familyfunds-d1-staging-sql', {'bindings': base + [gate, coordinator, admin]}),
+                         [base[0], base[1], gate, coordinator])
+        invalid = [
+            [gate], [coordinator, admin],
+            [{**gate, 'text': '1'}, coordinator, admin],
+            [{**gate, 'text': 'unexpected'}, coordinator, admin],
+            [gate, {**coordinator, 'class_name': 'Other'}, admin],
+            [gate, {**coordinator, 'namespace_id': 'invalid'}, admin],
+            [gate, {**coordinator, 'script_name': 'other-worker'}, admin],
+            [gate, {**coordinator, 'environment': 'preview'}, admin],
+            [gate, coordinator, {**admin, 'type': 'plain_text'}],
+        ]
+        for bindings in invalid:
+            with self.subTest(bindings=bindings), self.assertRaisesRegex(RuntimeError, 'fully configured and disabled'):
+                release.checked_bindings('familyfunds-d1-staging-sql', {'bindings': base + bindings})
+
     def test_staging_gateway_code_only_update_restores_old_module_on_web_failure(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)
@@ -280,7 +306,7 @@ class ReleaseSafetyTest(unittest.TestCase):
             companion = {**release.CONFIG['staging']['companions'][0], 'accepted_previous_sha256': hashlib.sha256(b'old gateway code').hexdigest()}
             target = {**release.CONFIG['staging'], 'companions': [companion]}
             with patch.dict(release.CONFIG, {'staging': target}), patch.dict(os.environ, {'GITHUB_SHA': SHA, 'GITHUB_REF': 'refs/heads/cloudflare-staging', 'GITHUB_ACTIONS': 'true', 'DOCKER_CONFIG': directory}), patch.object(release, 'validate'), patch.object(release, 'public_checks'), patch.object(release, 'rollout_image'), patch.object(release, 'api', side_effect=api), patch.object(release.subprocess, 'run'), patch.object(release.subprocess, 'check_output', side_effect=output), contextlib.redirect_stdout(io.StringIO()):
-                with self.assertRaisesRegex(RuntimeError, 'previous code/image restored'):
+                with self.assertRaisesRegex(RuntimeError, 'code/image rollback was requested'):
                     release.publish('staging', path)
             self.assertEqual(len(writes), 4)
             self.assertTrue(writes[0][0].endswith('/familyfunds-d1-staging-sql/content'))
@@ -347,7 +373,7 @@ class ReleaseSafetyTest(unittest.TestCase):
                     (path / 'pushed-image.json').write_text(json.dumps({'containerimage.digest': DIGEST}))
 
             with patch.dict(release.CONFIG, {'production': target}), patch.dict(os.environ, {'GITHUB_SHA': SHA, 'GITHUB_REF': 'refs/heads/main', 'GITHUB_ACTIONS': 'true', 'DOCKER_CONFIG': directory}), patch.object(release, 'validate'), patch.object(release, 'checked_bindings', return_value=settings['bindings']), patch.object(release, 'public_checks'), patch.object(release, 'prepared'), patch.object(release, 'api', side_effect=api), patch.object(release.subprocess, 'run', side_effect=command), contextlib.redirect_stdout(io.StringIO()):
-                with self.assertRaisesRegex(RuntimeError, 'previous code/image restored'):
+                with self.assertRaisesRegex(RuntimeError, 'code/image rollback was requested'):
                     release.publish('production', path)
             self.assertEqual(len(writes), 2)
             self.assertIn(b'old reviewed code', writes[-1])

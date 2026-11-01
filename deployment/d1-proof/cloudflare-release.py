@@ -242,8 +242,20 @@ def checked_bindings(worker, settings):
             raise RuntimeError('Staging gateway D1 binding mismatch')
         if names.get('DATABASE_NAME', {}).get('text') != 'familyfunds-d1-web-staging' or names.get('PROOF_TOKEN', {}).get('type') != 'secret_text':
             raise RuntimeError('Staging gateway configuration mismatch')
-        if any(key in names for key in ['STAGING_GATEWAY_ADMISSION', 'STAGING_GATEWAY_ADMISSION_OBJECT', 'STAGING_GATEWAY_ADMIN_TOKEN']):
-            raise RuntimeError('Staging gateway admission must remain disabled during release')
+        coordinator_names = {'STAGING_GATEWAY_ADMISSION', 'STAGING_GATEWAY_ADMISSION_OBJECT', 'STAGING_GATEWAY_ADMIN_TOKEN'}
+        present = coordinator_names.intersection(names)
+        if present:
+            gate = names.get('STAGING_GATEWAY_ADMISSION', {})
+            coordinator = names.get('STAGING_GATEWAY_ADMISSION_OBJECT', {})
+            admin = names.get('STAGING_GATEWAY_ADMIN_TOKEN', {})
+            namespace = coordinator.get('namespace_id')
+            if (present != coordinator_names or gate.get('type') != 'plain_text' or gate.get('text') != '0'
+                    or admin.get('type') != 'secret_text' or coordinator.get('type') != 'durable_object_namespace'
+                    or coordinator.get('class_name') != 'StagingGatewayAdmission'
+                    or coordinator.get('script_name') is not None
+                    or coordinator.get('environment', 'production') != 'production'
+                    or not isinstance(namespace, str) or not re.fullmatch(r'[a-f0-9]{32}', namespace)):
+                raise RuntimeError('Staging gateway coordinator must be fully configured and disabled during release')
     if worker == 'familyfunds-production-offsite' and any(key in names for key in ['DB', 'CONTAINER_ENV', 'CONTAINER_ENV_0', 'APP_KEY', 'BACKUP_KEY']):
         raise RuntimeError('Offsite credential isolation no longer matches the reviewed configuration')
     return [binding for binding in bindings if binding['type'] != 'secret_text']
@@ -398,7 +410,7 @@ def publish(target, directory):
                 failures.append('staging container image')
         if failures:
             raise RuntimeError('Deployment failed and code/image rollback needs operator attention: ' + ', '.join(failures)) from None
-        raise RuntimeError('Deployment failed; previous code/image restored. No database rollback or request replay was attempted.') from None
+        raise RuntimeError('Deployment failed; code/image rollback was requested. Verify the active code and image before proceeding. No database rollback or request replay was attempted.') from None
     result = {'target': target, 'revision': revision, 'runtime_revision': name, 'image': image,
               'prepared': True, 'native_image_verified': True, 'laravel_login_verified': True,
               'managed_image_preparation': target == 'production',

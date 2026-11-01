@@ -119,9 +119,7 @@ describe('Financial and family administration flows (Browser)', function () {
             ->currentMonth()
             ->create(['expected_amount' => 4000]);
 
-        $this->actingAs($member);
-
-        visit("/{$this->family->slug}/pay")
+        loginBrowserAs($member)->navigate("/{$this->family->slug}/pay")
             ->assertSee('Pay Contributions')
             ->assertSee('Bank details are saved, but the Paystack bank code is missing')
             ->assertNoJavaScriptErrors();

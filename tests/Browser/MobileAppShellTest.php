@@ -250,9 +250,7 @@ describe('Mobile app shell', function () {
             'email' => 'platform-link@test.com',
         ]);
 
-        $this->actingAs($superAdmin);
-
-        $page = visit("/{$this->family->slug}/dashboard");
+        $page = loginBrowserAs($superAdmin)->navigate("/{$this->family->slug}/dashboard");
 
         $page->assertSee('Platform Admin')
             ->assertScript(<<<'JS'
