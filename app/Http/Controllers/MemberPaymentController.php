@@ -186,9 +186,10 @@ class MemberPaymentController extends Controller
         } catch (RuntimeException $e) {
             $failureReason = 'Paystack initialization failed.';
             if (config('services.paystack.staging_diagnostics')
-                && str_starts_with((string) config('services.paystack.secret_key'), 'sk_test_')
-                && $e->getCode() >= 400 && $e->getCode() <= 599) {
-                $failureReason = 'Paystack initialization failed (HTTP '.$e->getCode().').';
+                && str_starts_with((string) config('services.paystack.secret_key'), 'sk_test_')) {
+                $failureReason = $e->getCode() >= 400 && $e->getCode() <= 599
+                    ? 'Paystack initialization failed (HTTP '.$e->getCode().').'
+                    : 'Paystack initialization failed (no HTTP status).';
             }
 
             $transaction->update([

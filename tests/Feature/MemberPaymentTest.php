@@ -308,6 +308,7 @@ it('marks the transaction failed when paystack initialization fails', function (
 ]);
 
 it('marks the transaction failed when paystack initialization returns malformed data', function () {
+    config(['services.paystack.staging_diagnostics' => true]);
     Http::fake([
         'api.paystack.co/transaction/initialize' => Http::response([
             'status' => true,
@@ -334,7 +335,9 @@ it('marks the transaction failed when paystack initialization returns malformed 
         ->assertServerError()
         ->assertJson(['message' => 'Failed to initialize payment. Please try again.']);
 
-    expect(PaystackTransaction::query()->firstOrFail()->status)->toBe(TransactionStatus::Failed);
+    $transaction = PaystackTransaction::query()->firstOrFail();
+    expect($transaction->status)->toBe(TransactionStatus::Failed)
+        ->and($transaction->failure_reason)->toBe('Paystack initialization failed (no HTTP status).');
 });
 
 it('marks the transaction failed when paystack initialization omits required checkout fields', function () {
