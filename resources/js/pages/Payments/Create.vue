@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { store } from '@/actions/App/Http/Controllers/PaymentController';
+import {
+    index as paymentsIndex,
+    review,
+    store,
+} from '@/actions/App/Http/Controllers/PaymentController';
 import StatusBadge from '@/components/contributions/StatusBadge.vue';
 import HeadingSmall from '@/components/HeadingSmall.vue';
 import InputError from '@/components/InputError.vue';
@@ -16,9 +20,10 @@ import {
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useCurrencyFormatter } from '@/lib/currency';
 import { dashboard } from '@/routes';
-import type { BreadcrumbItem } from '@/types';
-import { Form, Head } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import type { AppPageProps, BreadcrumbItem } from '@/types';
+import type { FormComponentOptions, VisitOptions } from '@inertiajs/core';
+import { Form, Head, Link, useHttp, usePage } from '@inertiajs/vue3';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 
 interface Member {
     id: number;
@@ -104,6 +109,185 @@ const targetMonth = computed(() => {
     const [, month] = selectedMonth.value.split('-');
     return parseInt(month);
 });
+
+interface ReviewResult {
+    allocations: {
+        year: number;
+        month: number;
+        period: string;
+        amount: number;
+    }[];
+    outstanding: number;
+    advance: number;
+    possible_duplicate: boolean;
+    token: string;
+}
+
+const page = usePage<AppPageProps>();
+const requestKey = ref(props.idempotencyKey);
+const storageReady = ref(false);
+const storageError = ref('');
+const paymentUnconfirmed = ref(false);
+const paymentResponsePending = ref(false);
+let unconfirmedBeforeSubmit = false;
+const storageKey =
+    page.props.family?.id && page.props.auth.user?.id
+        ? `familyfund:payment:${page.props.family.id}:${page.props.auth.user.id}:${props.member.id}`
+        : null;
+
+function saveRequestKey(unconfirmed: boolean): boolean {
+    if (!storageKey) return false;
+    try {
+        sessionStorage.setItem(
+            storageKey,
+            `${requestKey.value}|${unconfirmed ? '1' : '0'}`,
+        );
+        storageError.value = '';
+        return true;
+    } catch {
+        storageError.value =
+            'Payment review requires session storage to protect against duplicate recording. Please enable it and reload this page.';
+        return false;
+    }
+}
+
+onMounted(() => {
+    if (!storageKey) {
+        storageError.value =
+            'Could not establish this payment session. Reload and try again.';
+        return;
+    }
+    try {
+        const saved = sessionStorage.getItem(storageKey);
+        if (saved) {
+            const [key, state] = saved.split('|');
+            if (
+                key &&
+                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                    key,
+                ) &&
+                (state === '0' || state === '1')
+            ) {
+                requestKey.value = key;
+                paymentUnconfirmed.value = state === '1';
+            }
+        }
+        storageReady.value = saveRequestKey(paymentUnconfirmed.value);
+    } catch {
+        storageError.value =
+            'Payment review requires session storage to protect against duplicate recording. Please enable it and reload this page.';
+    }
+});
+
+function beginPayment(): boolean {
+    if (!reviewed.value || !storageReady.value || !saveRequestKey(true))
+        return false;
+    unconfirmedBeforeSubmit = paymentUnconfirmed.value;
+    paymentResponsePending.value = true;
+    paymentUnconfirmed.value = true;
+    return true;
+}
+
+function paymentSucceeded(): void {
+    paymentResponsePending.value = false;
+    paymentUnconfirmed.value = false;
+    if (storageKey) {
+        try {
+            sessionStorage.removeItem(storageKey);
+        } catch {
+            storageReady.value = false;
+        }
+    }
+}
+
+function paymentRejected(): void {
+    paymentResponsePending.value = false;
+    reviewed.value = null;
+    paymentUnconfirmed.value = unconfirmedBeforeSubmit;
+    storageReady.value = saveRequestKey(paymentUnconfirmed.value);
+}
+
+function startNewPayment(): void {
+    if (
+        !window.confirm(
+            'Have you checked Payments for the earlier receipt? Starting a new payment can create another receipt.',
+        )
+    )
+        return;
+    requestKey.value = crypto.randomUUID();
+    paymentUnconfirmed.value = false;
+    reviewed.value = null;
+    storageReady.value = saveRequestKey(false);
+}
+
+const reviewRequest = useHttp<
+    {
+        member_id: number;
+        amount: string;
+        paid_at: string;
+        method: string;
+        reference: string | null;
+        notes: string | null;
+        target_year: number | null;
+        target_month: number | null;
+        idempotency_key: string;
+    },
+    ReviewResult
+>({
+    member_id: props.member.id,
+    amount: '',
+    paid_at: '',
+    method: '',
+    reference: null,
+    notes: null,
+    target_year: null,
+    target_month: null,
+    idempotency_key: requestKey.value,
+});
+const reviewed = ref<ReviewResult | null>(null);
+const reviewHeading = ref<HTMLHeadingElement | null>(null);
+const reviewError = ref('');
+const paymentOptions: FormComponentOptions &
+    Pick<VisitOptions, 'onHttpException' | 'onNetworkError'> = {
+    onHttpException: (response) => (response.status >= 500 ? false : undefined),
+    onNetworkError: () => false,
+};
+const reviewInputs = () => ({
+    member_id: props.member.id,
+    amount: amount.value,
+    paid_at: paidAt.value,
+    method: method.value,
+    reference: reference.value.trim() || null,
+    notes: notes.value.trim() || null,
+    target_year: targetYear.value,
+    target_month: targetMonth.value,
+    idempotency_key: requestKey.value,
+});
+watch([amount, paidAt, method, reference, notes, selectedMonth], () => {
+    reviewed.value = null;
+    reviewError.value = '';
+});
+
+async function reviewPayment(): Promise<void> {
+    const input = reviewInputs();
+    const fingerprint = JSON.stringify(input);
+    Object.assign(reviewRequest, input);
+    reviewError.value = '';
+    try {
+        const result = await reviewRequest.post(review.url());
+        if (fingerprint === JSON.stringify(reviewInputs())) {
+            reviewed.value = result;
+            await nextTick();
+            reviewHeading.value?.focus();
+        }
+    } catch {
+        reviewError.value =
+            Object.values(reviewRequest.errors)
+                .flat()
+                .find((error) => typeof error === 'string') ??
+            'Could not review this payment. Check the details and try again.';
+    }
+}
 </script>
 
 <template>
@@ -156,6 +340,14 @@ const targetMonth = computed(() => {
             <Form
                 :action="store()"
                 class="space-y-6"
+                :options="paymentOptions"
+                :on-before="beginPayment"
+                @success="paymentSucceeded"
+                @error="paymentRejected"
+                @finish="
+                    if (paymentResponsePending) paymentUnconfirmed = true;
+                    paymentResponsePending = false;
+                "
                 #default="{
                     errors,
                     validate,
@@ -166,9 +358,15 @@ const targetMonth = computed(() => {
             >
                 <input type="hidden" name="member_id" :value="member.id" />
                 <input
+                    v-if="reviewed"
+                    type="hidden"
+                    name="review_token"
+                    :value="reviewed.token"
+                />
+                <input
                     type="hidden"
                     name="idempotency_key"
-                    :value="idempotencyKey"
+                    :value="requestKey"
                 />
                 <input
                     v-if="targetYear"
@@ -315,8 +513,100 @@ const targetMonth = computed(() => {
                 </div>
 
                 <!-- Submit Button -->
+                <section
+                    v-if="reviewed"
+                    class="rounded-lg border p-4"
+                    aria-labelledby="review-heading"
+                >
+                    <h2
+                        id="review-heading"
+                        ref="reviewHeading"
+                        tabindex="-1"
+                        class="font-semibold"
+                    >
+                        Review payment
+                    </h2>
+                    <p class="mt-2 text-sm">
+                        {{ member.name }} · {{ formatAmount(Number(amount)) }} ·
+                        {{
+                            paymentMethods.find((item) => item.value === method)
+                                ?.label
+                        }}
+                        · {{ paidAt }}
+                    </p>
+                    <ul class="mt-3 space-y-1 text-sm">
+                        <li
+                            v-for="allocation in reviewed.allocations"
+                            :key="`${allocation.year}-${allocation.month}`"
+                        >
+                            {{ allocation.period }}:
+                            {{ formatAmount(allocation.amount) }}
+                        </li>
+                    </ul>
+                    <p
+                        v-if="reviewed.advance > 0"
+                        class="mt-3 text-sm text-amber-700 dark:text-amber-300"
+                    >
+                        {{ formatAmount(reviewed.advance) }} exceeds recorded
+                        outstanding contributions and will be applied in
+                        advance.
+                    </p>
+                    <p
+                        v-if="reviewed.possible_duplicate"
+                        class="mt-3 text-sm text-amber-700 dark:text-amber-300"
+                    >
+                        This reference is already used by another receipt. Check
+                        for a duplicate before recording.
+                    </p>
+                </section>
+                <p v-if="reviewError" role="alert" class="text-sm text-red-600">
+                    {{ reviewError }}
+                </p>
+                <InputError :message="errors.review" />
+                <p
+                    v-if="storageError"
+                    role="alert"
+                    class="text-sm text-red-600"
+                >
+                    {{ storageError }}
+                </p>
+                <p
+                    v-if="paymentUnconfirmed"
+                    role="alert"
+                    class="text-sm text-red-600"
+                >
+                    We couldn't confirm whether this payment was recorded.
+                    <Link :href="paymentsIndex().url" class="underline">
+                        Check Payments for the receipt
+                    </Link>
+                    before recording another payment.
+                </p>
+                <Button
+                    v-if="paymentUnconfirmed"
+                    type="button"
+                    variant="outline"
+                    :disabled="processing"
+                    @click="startNewPayment"
+                >
+                    Start a new payment
+                </Button>
                 <div class="flex items-center gap-4">
-                    <Button type="submit" :disabled="processing">
+                    <Button
+                        v-if="!reviewed"
+                        type="button"
+                        :disabled="reviewRequest.processing || !storageReady"
+                        @click="reviewPayment"
+                        >{{
+                            reviewRequest.processing
+                                ? 'Preparing review...'
+                                : 'Review payment'
+                        }}</Button
+                    >
+                    <Button
+                        v-else
+                        type="submit"
+                        :disabled="processing || !storageReady"
+                    >
                         {{ processing ? 'Recording...' : 'Record Payment' }}
                     </Button>
 
