@@ -85,11 +85,15 @@ def modules(entry, image=None, revision=None):
     return result
 
 
-def multipart(entry, sources, bindings, container=None):
+def multipart(entry, sources, bindings, container=None, content_only=False):
     metadata = {'main_module': entry, 'compatibility_date': CONFIG['compatibility_date'],
                 'compatibility_flags': ['nodejs_compat'], 'bindings': bindings,
                 'keep_bindings': ['secret_text'], 'observability': {'enabled': True, 'head_sampling_rate': 1}}
-    if container:
+    if content_only:
+        if container is not None:
+            raise ValueError('Code-only updates cannot change container configuration')
+        metadata = {'main_module': entry}
+    elif container:
         metadata['containers'] = [container]
     boundary = 'familyfunds-' + uuid.uuid4().hex
     chunks = []
@@ -182,9 +186,30 @@ def checked_bindings(worker, settings):
             raise RuntimeError('Production D1 binding mismatch')
         if names.get('PRODUCTION_CONTAINER', {}).get('namespace_id') != CONFIG['production']['application_id']:
             raise RuntimeError('Production container namespace mismatch')
+    if worker == 'familyfunds-d1-staging-sql':
+        if names.get('DB', {}).get('id', names.get('DB', {}).get('database_id')) != 'f96058f1-0aa3-42f3-9ee2-f796554d6ef4':
+            raise RuntimeError('Staging gateway D1 binding mismatch')
+        if names.get('DATABASE_NAME', {}).get('text') != 'familyfunds-d1-web-staging' or names.get('PROOF_TOKEN', {}).get('type') != 'secret_text':
+            raise RuntimeError('Staging gateway configuration mismatch')
+        if any(key in names for key in ['STAGING_GATEWAY_ADMISSION', 'STAGING_GATEWAY_ADMISSION_OBJECT', 'STAGING_GATEWAY_ADMIN_TOKEN']):
+            raise RuntimeError('Staging gateway admission must remain disabled during release')
     if worker == 'familyfunds-production-offsite' and any(key in names for key in ['DB', 'CONTAINER_ENV', 'CONTAINER_ENV_0', 'APP_KEY', 'BACKUP_KEY']):
         raise RuntimeError('Offsite credential isolation no longer matches the reviewed configuration')
     return [binding for binding in bindings if binding['type'] != 'secret_text']
+
+
+def verify_gateway_source(previous, candidate, accepted_hash):
+    if not isinstance(accepted_hash, str) or not re.fullmatch(r'[a-f0-9]{64}', accepted_hash):
+        raise RuntimeError('Invalid accepted staging gateway source fingerprint')
+    previous_hash = hashlib.sha256(previous).hexdigest()
+    if previous_hash not in {accepted_hash, hashlib.sha256(candidate).hexdigest()}:
+        raise RuntimeError('Staging gateway source differs from the reviewed revision')
+
+
+def require_disabled_gateway_version_urls(path):
+    subdomain = api('GET', path + '/subdomain')
+    if subdomain.get('previews_enabled') is not False:
+        raise RuntimeError('Staging gateway version URLs must be disabled')
 
 
 def publish(target, directory):
@@ -250,9 +275,16 @@ def publish(target, directory):
         settings = api('GET', path + '/settings')
         bindings = checked_bindings(worker['worker'], settings)
         previous_image = next((binding['text'] for binding in bindings if binding['name'] == 'CONTAINER_IMAGE'), worker.get('image'))
-        raw, mime = api('GET', path, raw=True)
+        content_only = worker.get('content_only') is True
+        if content_only:
+            if target != 'staging' or worker['worker'] != 'familyfunds-d1-staging-sql':
+                raise RuntimeError('Unexpected code-only release target')
+            require_disabled_gateway_version_urls(path)
+        raw, mime = api('GET', path + '/content/v2' if content_only else path, raw=True)
         previous_sources = script_sources(raw, mime)
         previous_entry = next((entry for entry in previous_sources if entry == worker['entry']), None)
+        if content_only and previous_entry is None and set(previous_sources) == {'worker.mjs'}:
+            previous_entry = 'worker.mjs'
         if previous_entry is None and worker['worker'] == 'familyfunds-production-managed':
             previous_entry = 'production-managed-worker.mjs'
         if previous_entry not in previous_sources:
@@ -263,14 +295,16 @@ def publish(target, directory):
         if worker.get('image'):
             prepared(worker['image'])
         rollback_container = {**container, 'images': {'base': previous_image}} if container and target == 'production' else container
-        old_body, old_mime = multipart(previous_entry, previous_sources, bindings, rollback_container)
+        sources = modules(worker['entry'], image if target == 'production' else None, name)
+        if content_only:
+            verify_gateway_source(previous_sources[previous_entry], sources[worker['entry']], worker.get('accepted_previous_sha256'))
+        old_body, old_mime = multipart(previous_entry, previous_sources, bindings, rollback_container, content_only=content_only)
         updated = [dict(binding) for binding in bindings]
         for binding in updated:
             if worker['worker'] == CONFIG[target]['worker'] and binding['name'] in ['RUNTIME_REVISION', 'CONTAINER_IMAGE']:
                 binding['text'] = name if binding['name'] == 'RUNTIME_REVISION' else image
-        sources = modules(worker['entry'], image if target == 'production' else None, name)
-        body, mime = multipart(worker['entry'], sources, updated, container)
-        plans.append({'path': path, 'body': body, 'mime': mime, 'old_body': old_body, 'old_mime': old_mime})
+        body, mime = multipart(worker['entry'], sources, updated, container, content_only=content_only)
+        plans.append({'path': path + '/content' if content_only else path, 'body': body, 'mime': mime, 'old_body': old_body, 'old_mime': old_mime})
     previous_staging = None
     applied = []
     try:
