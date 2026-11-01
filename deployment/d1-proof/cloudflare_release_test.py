@@ -131,7 +131,7 @@ class ReleaseSafetyTest(unittest.TestCase):
 
             target = {**release.CONFIG['staging'], 'companions': []}
             with patch.dict(release.CONFIG, {'staging': target}), patch.dict(os.environ, {'GITHUB_SHA': SHA, 'GITHUB_REF': 'refs/heads/cloudflare-staging', 'GITHUB_ACTIONS': 'true', 'DOCKER_CONFIG': directory}), patch.object(release, 'validate'), patch.object(release, 'public_checks'), patch.object(release, 'prepared') as prepared, patch.object(release, 'rollout_image'), patch.object(release, 'api', side_effect=api), patch.object(release.subprocess, 'run', side_effect=command), patch.object(release.subprocess, 'check_output', side_effect=output), contextlib.redirect_stdout(io.StringIO()):
-                with self.assertRaisesRegex(RuntimeError, 'previous code/image restored'):
+                with self.assertRaisesRegex(RuntimeError, 'code/image rollback was requested'):
                     release.publish('staging', path)
                 prepared.assert_not_called()
             self.assertEqual(len(writes), 2)
@@ -306,7 +306,7 @@ class ReleaseSafetyTest(unittest.TestCase):
             companion = {**release.CONFIG['staging']['companions'][0], 'accepted_previous_sha256': hashlib.sha256(b'old gateway code').hexdigest()}
             target = {**release.CONFIG['staging'], 'companions': [companion]}
             with patch.dict(release.CONFIG, {'staging': target}), patch.dict(os.environ, {'GITHUB_SHA': SHA, 'GITHUB_REF': 'refs/heads/cloudflare-staging', 'GITHUB_ACTIONS': 'true', 'DOCKER_CONFIG': directory}), patch.object(release, 'validate'), patch.object(release, 'public_checks'), patch.object(release, 'rollout_image'), patch.object(release, 'api', side_effect=api), patch.object(release.subprocess, 'run'), patch.object(release.subprocess, 'check_output', side_effect=output), contextlib.redirect_stdout(io.StringIO()):
-                with self.assertRaisesRegex(RuntimeError, 'previous code/image restored'):
+                with self.assertRaisesRegex(RuntimeError, 'code/image rollback was requested'):
                     release.publish('staging', path)
             self.assertEqual(len(writes), 4)
             self.assertTrue(writes[0][0].endswith('/familyfunds-d1-staging-sql/content'))
@@ -373,7 +373,7 @@ class ReleaseSafetyTest(unittest.TestCase):
                     (path / 'pushed-image.json').write_text(json.dumps({'containerimage.digest': DIGEST}))
 
             with patch.dict(release.CONFIG, {'production': target}), patch.dict(os.environ, {'GITHUB_SHA': SHA, 'GITHUB_REF': 'refs/heads/main', 'GITHUB_ACTIONS': 'true', 'DOCKER_CONFIG': directory}), patch.object(release, 'validate'), patch.object(release, 'checked_bindings', return_value=settings['bindings']), patch.object(release, 'public_checks'), patch.object(release, 'prepared'), patch.object(release, 'api', side_effect=api), patch.object(release.subprocess, 'run', side_effect=command), contextlib.redirect_stdout(io.StringIO()):
-                with self.assertRaisesRegex(RuntimeError, 'previous code/image restored'):
+                with self.assertRaisesRegex(RuntimeError, 'code/image rollback was requested'):
                     release.publish('production', path)
             self.assertEqual(len(writes), 2)
             self.assertIn(b'old reviewed code', writes[-1])
