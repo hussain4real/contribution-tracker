@@ -53,6 +53,18 @@ export function containerEnvironment(bindings) {
         if (!extra || typeof extra !== 'object' || Array.isArray(extra) || Object.keys(extra).some(key => !allowed.has(key) || Object.hasOwn(result, key))) throw new Error('Unexpected or duplicate production integration field');
         Object.assign(result, extra);
     }
+    if (bindings.STAGING_PAYSTACK_TEST_ENV !== undefined) {
+        if (result.APP_ENV !== 'd1-staging' || typeof bindings.STAGING_PAYSTACK_TEST_ENV !== 'string'
+            || encoder.encode(bindings.STAGING_PAYSTACK_TEST_ENV).length > 4096) throw new Error('Invalid staging Paystack test environment');
+        const testKeys = JSON.parse(bindings.STAGING_PAYSTACK_TEST_ENV);
+        if (!testKeys || typeof testKeys !== 'object' || Array.isArray(testKeys)
+            || Object.keys(testKeys).length !== 2
+            || typeof testKeys.PAYSTACK_PUBLIC_KEY !== 'string' || !/^pk_test_[A-Za-z0-9]+$/.test(testKeys.PAYSTACK_PUBLIC_KEY)
+            || typeof testKeys.PAYSTACK_SECRET_KEY !== 'string' || !/^sk_test_[A-Za-z0-9]+$/.test(testKeys.PAYSTACK_SECRET_KEY)) {
+            throw new Error('Invalid staging Paystack test keys');
+        }
+        Object.assign(result, testKeys);
+    }
     if (bindings.AI_ENV !== undefined) {
         if (typeof bindings.AI_ENV !== 'string' || encoder.encode(bindings.AI_ENV).length > 4096) throw new Error('Invalid AI environment');
         const extra = JSON.parse(bindings.AI_ENV);
