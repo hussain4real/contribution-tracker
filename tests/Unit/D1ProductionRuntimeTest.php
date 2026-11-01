@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Jobs\ProcessWhatsAppWebhook;
 use App\Services\PaystackService;
 use FamilyFunds\D1Staging\D1ProductionRequest;
 use FamilyFunds\D1Staging\D1ProductionServiceProvider;
@@ -324,4 +325,33 @@ it('serves only the installed Livewire JavaScript path without leasing the ledge
     $before = count(Http::recorded());
     app(D1ProductionRequest::class)->handle(Request::create('/livewire-00000000/livewire.min.js'), fn (): Response => response('unmatched'));
     expect(count(Http::recorded()) - $before)->toBeGreaterThan(0);
+});
+
+it('preserves delivery ordering and queues early callbacks in the production D1 runtime', function (): void {
+    $this->remote->exec('create table whatsapp_messages (id integer primary key autoincrement, wa_message_id text, status text, error_code text, error_message text, read_at text, created_at text, updated_at text)');
+    $this->remote->exec("insert into whatsapp_messages (wa_message_id,status) values ('wamid.fixture','sent')");
+    $runtime = new D1StagingRuntime;
+    foreach (['read', 'sent'] as $status) {
+        $runtime->run(function () use ($status): void {
+            (new ProcessWhatsAppWebhook(['entry' => [['changes' => [[
+                'field' => 'messages', 'value' => ['statuses' => [['id' => 'wamid.fixture', 'status' => $status]]],
+            ]]]]]))->handle();
+        });
+    }
+    $status = $this->remote->query("select status from whatsapp_messages where wa_message_id='wamid.fixture'");
+    if ($status === false) {
+        throw new RuntimeException('Could not query the synthetic message.');
+    }
+    expect($status->fetchColumn())->toBe('read');
+
+    $runtime->run(function (): void {
+        (new ProcessWhatsAppWebhook(['entry' => [['changes' => [[
+            'field' => 'messages', 'value' => ['statuses' => [['id' => 'wamid.early', 'status' => 'delivered']]],
+        ]]]]]))->handle();
+    });
+    $jobs = $this->remote->query('select count(*) from jobs');
+    if ($jobs === false) {
+        throw new RuntimeException('Could not query the synthetic queue.');
+    }
+    expect((int) $jobs->fetchColumn())->toBe(1);
 });

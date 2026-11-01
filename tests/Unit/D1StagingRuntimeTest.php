@@ -2,9 +2,11 @@
 
 declare(strict_types=1);
 
+use App\Jobs\ProcessWhatsAppWebhook;
 use App\Models\Contribution;
 use App\Models\PaymentBatch;
 use FamilyFunds\D1Staging\D1StagingConnection;
+use FamilyFunds\D1Staging\D1StagingConnector;
 use FamilyFunds\D1Staging\D1StagingRuntime;
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Database\QueryException;
@@ -13,6 +15,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -415,3 +418,43 @@ function stagingSqlValue(PDO $pdo, string $sql): mixed
 
     return $statement->fetchColumn();
 }
+
+it('preserves a read WhatsApp receipt when an older callback runs through D1', function (): void {
+    $pdo = stagingSqlFixture();
+    $pdo->exec('create table whatsapp_messages (id integer primary key autoincrement, wa_message_id text, status text, error_code text, error_message text, read_at text, created_at text, updated_at text)');
+    $pdo->exec("insert into whatsapp_messages (wa_message_id,status) values ('wamid.fixture','sent')");
+    D1StagingRuntime::install();
+    $runtime = new D1StagingRuntime;
+    $runtime->run(function (): void {
+        (new ProcessWhatsAppWebhook(['entry' => [['changes' => [[
+            'field' => 'messages', 'value' => ['statuses' => [['id' => 'wamid.fixture', 'status' => 'read']]],
+        ]]]]]))->handle();
+    });
+    expect(stagingSqlValue($pdo, "select status from whatsapp_messages where wa_message_id='wamid.fixture'"))->toBe('read');
+    $runtime->run(function (): void {
+        (new ProcessWhatsAppWebhook(['entry' => [['changes' => [[
+            'field' => 'messages', 'value' => ['statuses' => [['id' => 'wamid.fixture', 'status' => 'sent']]],
+        ]]]]]))->handle();
+    });
+
+    expect(stagingSqlValue($pdo, "select status from whatsapp_messages where wa_message_id='wamid.fixture'"))->toBe('read');
+});
+
+it('queues an early WhatsApp status retry through the D1 runtime', function (): void {
+    $pdo = stagingSqlFixture();
+    foreach (['queue text', 'payload text', 'attempts integer', 'reserved_at integer', 'available_at integer', 'created_at integer'] as $column) {
+        $pdo->exec('alter table jobs add column '.$column);
+    }
+    $pdo->exec('create table whatsapp_messages (id integer primary key autoincrement, wa_message_id text, status text, error_code text, error_message text, read_at text, created_at text, updated_at text)');
+    D1StagingRuntime::install();
+    config(['queue.default' => 'd1-staging', 'queue.connections.d1-staging' => ['driver' => 'd1-staging', 'queue' => 'default']]);
+    Queue::extend('d1-staging', fn (): D1StagingConnector => new D1StagingConnector);
+
+    (new D1StagingRuntime)->run(function (): void {
+        (new ProcessWhatsAppWebhook(['entry' => [['changes' => [[
+            'field' => 'messages', 'value' => ['statuses' => [['id' => 'wamid.early', 'status' => 'delivered']]],
+        ]]]]]))->handle();
+    });
+
+    expect(stagingSqlValue($pdo, 'select count(*) from jobs'))->toBe(1);
+});
