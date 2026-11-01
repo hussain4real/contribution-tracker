@@ -8,6 +8,7 @@ use App\Models\FamilyMembership;
 use App\Models\FinancialReversal;
 use App\Models\Payment;
 use App\Models\PaymentBatch;
+use App\Models\PlatformPlan;
 use App\Models\User;
 use App\Services\PaymentAllocationService;
 use Illuminate\Support\Facades\DB;
@@ -309,6 +310,84 @@ describe('My Contributions', function () {
                     ->etc()
                 )
             );
+    });
+
+    it('shows no next contribution when the member has nothing outstanding', function () {
+        $this->actingAs($this->member)->get(route('contributions.my'))
+            ->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('next_contribution', null)
+            ->where('personal_stats.total_outstanding', 0));
+    });
+
+    it('marks the next contribution payable only within the six-month advance limit', function (int $year, int $month, bool $payable) {
+        $this->travelTo(now()->setDate(2026, 1, 31)->startOfDay());
+        Contribution::factory()->forUser($this->member)->forMonth($year, $month)->create();
+
+        $this->actingAs($this->member)->get(route('contributions.my'))
+            ->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('next_contribution.can_pay_online', $payable));
+    })->with([
+        'overdue' => [2025, 12, true],
+        'six months ahead' => [2026, 7, true],
+        'seven months ahead' => [2026, 8, false],
+    ]);
+
+    it('shows the oldest outstanding period and only the member’s effective receipts', function () {
+        Queue::fake();
+        $family = $this->member->family;
+        assert($family instanceof Family);
+        $recorder = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+        $other = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $otherMembership = $other->membershipForFamily($family);
+        assert($otherMembership instanceof FamilyMembership);
+        Contribution::factory()->forUser($this->member)->forMonth(2025, 10)->create(['expected_amount' => 4000]);
+        Contribution::factory()->forUser($this->member)->forMonth(2025, 11)->create(['expected_amount' => 4000]);
+        $receipt = app(PaymentAllocationService::class)->createBatch(
+            member: $this->member, amount: 1500, paidAt: now(), recordedBy: $recorder, family: $family,
+        );
+        PaymentBatch::factory()->create([
+            'family_id' => $family->id,
+            'family_membership_id' => $otherMembership->id,
+            'receipt_number' => 2,
+        ]);
+
+        $this->actingAs($this->member)->get(route('contributions.my'))
+            ->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('personal_stats.total_outstanding', 6500)
+            ->where('next_contribution.period_label', 'October 2025')
+            ->where('next_contribution.balance', 2500)
+            ->has('receipts.data', 1)
+            ->where('receipts.data.0.id', $receipt->id)
+            ->where('receipts.data.0.amount', 1500)
+            ->where('receipts.data.0.periods.0', 'October 2025')
+            );
+    });
+
+    it('only offers online payment when the plan and payment setup allow it', function () {
+        config(['services.paystack.public_key' => 'public-test-key', 'services.paystack.secret_key' => 'secret-test-key']);
+        $family = $this->member->family;
+        assert($family instanceof Family);
+        $plan = PlatformPlan::create([
+            'name' => 'Test', 'slug' => 'test', 'price' => 0, 'max_members' => null,
+            'features' => ['online_payments'], 'is_active' => true, 'sort_order' => 0,
+        ]);
+        $family->update(['platform_plan_id' => $plan->id, 'bank_code' => '123', 'account_number' => '1234567890']);
+
+        $member = $this->member->fresh();
+        assert($member instanceof User);
+        $this->actingAs($member)->get(route('contributions.my'))
+            ->assertOk()->assertInertia(fn (Assert $page) => $page->where('online_payments_available', true));
+
+        config(['services.paystack.secret_key' => null]);
+        $this->actingAs($this->member)->get(route('contributions.my'))
+            ->assertOk()->assertInertia(fn (Assert $page) => $page->where('online_payments_available', false));
+
+        config(['services.paystack.secret_key' => 'secret-test-key']);
+        $plan->update(['features' => []]);
+        $member = $this->member->fresh();
+        assert($member instanceof User);
+        $this->actingAs($member)->get(route('contributions.my'))
+            ->assertOk()->assertInertia(fn (Assert $page) => $page->where('online_payments_available', false));
     });
 
     it('requires authentication', function () {
