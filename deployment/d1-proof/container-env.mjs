@@ -1,6 +1,6 @@
 const encoder = new TextEncoder();
 
-export function containerEnvironment(bindings) {
+export function containerEnvironment(bindings, {allowStagingPaystackTest = false} = {}) {
     let json;
     if (bindings.CONTAINER_ENV_PARTS === undefined) {
         json = bindings.CONTAINER_ENV;
@@ -54,7 +54,8 @@ export function containerEnvironment(bindings) {
         Object.assign(result, extra);
     }
     if (bindings.STAGING_PAYSTACK_TEST_ENV !== undefined) {
-        if (result.APP_ENV !== 'd1-staging' || typeof bindings.STAGING_PAYSTACK_TEST_ENV !== 'string'
+        if (!allowStagingPaystackTest || bindings.RUNTIME_PROFILE === 'production' || result.D1_PRODUCTION_ENABLED === 'true'
+            || typeof bindings.STAGING_PAYSTACK_TEST_ENV !== 'string'
             || encoder.encode(bindings.STAGING_PAYSTACK_TEST_ENV).length > 4096) throw new Error('Invalid staging Paystack test environment');
         const testKeys = JSON.parse(bindings.STAGING_PAYSTACK_TEST_ENV);
         if (!testKeys || typeof testKeys !== 'object' || Array.isArray(testKeys)

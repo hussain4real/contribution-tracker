@@ -374,6 +374,22 @@ test("the relay retries interrupted forwarding and acknowledges only a durable a
     }
 });
 
+test('staging startup passes the isolated test keys to the container', async () => {
+    const {container} = fixture();
+    const keys = {PAYSTACK_PUBLIC_KEY: 'pk_test_fixture', PAYSTACK_SECRET_KEY: 'sk_test_fixture'};
+    container.env.CONTAINER_ENV = JSON.stringify({APP_ENV: 'production', APP_KEY: 'preserved'});
+    container.env.STAGING_PAYSTACK_TEST_ENV = JSON.stringify(keys);
+    container.ready = false;
+    container.ctx.container.running = false;
+    let startedWith;
+    container.ctx.container.start = options => { startedWith = options.env; container.ctx.container.running = true; };
+    await container.waitForReady();
+    assert.equal(container.ready, true);
+    assert.equal(startedWith.APP_KEY, 'preserved');
+    assert.equal(startedWith.PAYSTACK_PUBLIC_KEY, keys.PAYSTACK_PUBLIC_KEY);
+    assert.equal(startedWith.PAYSTACK_SECRET_KEY, keys.PAYSTACK_SECRET_KEY);
+});
+
 test('outbound binding setup does not hold the Durable Object concurrency lock while waiting for the platform', async () => {
     const {container} = fixture();
     let blocked = false, intercepted = false;
