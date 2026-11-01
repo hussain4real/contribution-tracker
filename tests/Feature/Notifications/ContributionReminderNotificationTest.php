@@ -10,11 +10,110 @@ use App\Models\Payment;
 use App\Models\PaymentBatch;
 use App\Models\User;
 use App\Notifications\ContributionReminderNotification;
+use Illuminate\Http\Client\Request;
 use Illuminate\Queue\Middleware\RateLimited;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\URL;
 use NotificationChannels\WebPush\WebPushChannel;
 
 describe('ContributionReminderNotification', function () {
+    it('suppresses a queued database reminder after the contribution is paid', function () {
+        config(['queue.default' => 'database', 'queue.connections.database.connection' => null]);
+        $family = Family::factory()->create();
+        $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($user)->currentMonth()->create(['expected_amount' => 4000]);
+        $user->notify((new ContributionReminderNotification($contribution))->onlyChannels(['database']));
+
+        Payment::factory()->forContribution($contribution)->create(['amount' => 4000]);
+        $this->artisan('queue:work', ['connection' => 'database', '--once' => true, '--sleep' => 0])->assertSuccessful();
+
+        expect($user->notifications()->count())->toBe(0)
+            ->and(DB::table('failed_jobs')->count())->toBe(0);
+    });
+
+    it('uses the current balance when a partial payment arrives before queued delivery', function () {
+        config(['queue.default' => 'database', 'queue.connections.database.connection' => null]);
+        $family = Family::factory()->create();
+        $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($user)->currentMonth()->create(['expected_amount' => 4000]);
+        $user->notify((new ContributionReminderNotification($contribution))->onlyChannels(['database']));
+
+        Payment::factory()->forContribution($contribution)->create(['amount' => 1500]);
+        $this->artisan('queue:work', ['connection' => 'database', '--once' => true, '--sleep' => 0])->assertSuccessful();
+
+        expect($user->notifications()->sole()->data['amount_owed'])->toBe(2500)
+            ->and(DB::table('failed_jobs')->count())->toBe(0);
+    });
+
+    it('suppresses a queued WhatsApp reminder after full payment', function () {
+        config(['queue.default' => 'database', 'queue.connections.database.connection' => null,
+            'services.whatsapp.access_token' => 'test-token', 'services.whatsapp.phone_number_id' => 'test-id']);
+        Http::fake();
+        $family = Family::factory()->create();
+        $user = User::factory()->member()->employed()->withVerifiedWhatsApp('+2348012345678')->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($user)->currentMonth()->create(['expected_amount' => 4000]);
+        $user->notify((new ContributionReminderNotification($contribution))->onlyChannels(['whatsapp']));
+        Payment::factory()->forContribution($contribution)->create(['amount' => 4000]);
+
+        $this->artisan('queue:work', ['connection' => 'database', '--once' => true, '--sleep' => 0])->assertSuccessful();
+
+        Http::assertNothingSent();
+        expect(DB::table('failed_jobs')->count())->toBe(0);
+    });
+
+    it('sends the updated WhatsApp balance after a partial payment', function () {
+        config(['queue.default' => 'database', 'queue.connections.database.connection' => null,
+            'services.whatsapp.access_token' => 'test-token', 'services.whatsapp.phone_number_id' => 'test-id']);
+        Http::fake(['graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.partial']]])]);
+        $family = Family::factory()->create(['currency' => 'NGN']);
+        $user = User::factory()->member()->employed()->withVerifiedWhatsApp('+2348012345678')->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($user)->currentMonth()->create(['expected_amount' => 4000]);
+        $user->notify((new ContributionReminderNotification($contribution))->onlyChannels(['whatsapp']));
+        Payment::factory()->forContribution($contribution)->create(['amount' => 1500]);
+
+        $this->artisan('queue:work', ['connection' => 'database', '--once' => true, '--sleep' => 0])->assertSuccessful();
+
+        Http::assertSent(fn (Request $request): bool => data_get($request->data(), 'template.components.0.parameters.4.text') === 'NGN 2,500.00');
+        expect(DB::table('failed_jobs')->count())->toBe(0);
+    });
+
+    it('suppresses a queued reminder when the membership is removed', function () {
+        config(['queue.default' => 'database', 'queue.connections.database.connection' => null]);
+        $family = Family::factory()->create();
+        $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($user)->currentMonth()->create();
+        $user->notify((new ContributionReminderNotification($contribution))->onlyChannels(['database']));
+        $user->familyMemberships()->where('family_id', $family->id)->sole()->delete();
+
+        $this->artisan('queue:work', ['connection' => 'database', '--once' => true, '--sleep' => 0])->assertSuccessful();
+
+        expect($user->notifications()->count())->toBe(0)
+            ->and(DB::table('failed_jobs')->count())->toBe(0);
+    });
+
+    it('does not send a reminder to an unsupported recipient', function () {
+        $family = Family::factory()->create();
+        $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($user)->currentMonth()->create();
+
+        expect((new ContributionReminderNotification($contribution))->shouldSend(new stdClass, 'database'))->toBeFalse();
+    });
+
+    it('suppresses a queued reminder when the family is archived', function () {
+        config(['queue.default' => 'database', 'queue.connections.database.connection' => null]);
+        $family = Family::factory()->create();
+        $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($user)->currentMonth()->create();
+        $user->notify((new ContributionReminderNotification($contribution))->onlyChannels(['database']));
+        $family->update(['archived_at' => now()]);
+
+        $this->artisan('queue:work', ['connection' => 'database', '--once' => true, '--sleep' => 0])->assertSuccessful();
+
+        expect($user->notifications()->count())->toBe(0)
+            ->and(DB::table('failed_jobs')->count())->toBe(0);
+    });
+
     it('sends via mail, database, whatsapp, and web push channels', function () {
         $family = Family::factory()->create();
         $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
