@@ -82,6 +82,29 @@ class ContributionReminderNotification extends Notification implements ShouldQue
         return $this->channels ?? ['mail', 'database', WhatsAppChannel::class, WebPushChannel::class];
     }
 
+    public function shouldSend(object $notifiable, string $channel): bool
+    {
+        if (! $notifiable instanceof User) {
+            return false;
+        }
+
+        $contribution = Contribution::query()
+            ->whereKey($this->contribution->id)
+            ->where('user_id', $notifiable->id)
+            ->incomplete()
+            ->with(['family', 'payments'])
+            ->first();
+
+        if (! $contribution || ! $contribution->family || $contribution->family->isArchived()
+            || ! $notifiable->membershipForFamily($contribution->family)) {
+            return false;
+        }
+
+        $this->contribution = $contribution;
+
+        return true;
+    }
+
     /**
      * Get the middleware the queued notification job should pass through.
      *
