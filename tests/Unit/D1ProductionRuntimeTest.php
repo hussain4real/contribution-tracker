@@ -12,8 +12,10 @@ use App\Jobs\ProcessWhatsAppWebhook;
 use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\FamilyMembership;
+use App\Models\Payment;
 use App\Models\PaystackTransaction;
 use App\Models\User;
+use App\Notifications\ContributionReminderNotification;
 use App\Services\PaymentAllocationPreview;
 use App\Services\PaymentAllocationService;
 use App\Services\PaystackContributionSettlementService;
@@ -486,6 +488,28 @@ it('preserves delivery ordering and queues early callbacks in the production D1 
         throw new RuntimeException('Could not query the synthetic queue.');
     }
     expect((int) $jobs->fetchColumn())->toBe(1);
+});
+
+it('rechecks queued reminder balances through the production D1 runtime', function (): void {
+    config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
+    DB::purge('sqlite');
+    $this->artisan('migrate', ['--database' => 'sqlite', '--force' => true, '--no-interaction' => true])->assertSuccessful();
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
+    $notification = new ContributionReminderNotification($contribution);
+    Payment::factory()->forContribution($contribution)->create(['amount' => 1500]);
+    $pdo = DB::connection('sqlite')->getPdo();
+    connectProductionRuntimeFixture($pdo);
+    $runtime = new D1StagingRuntime;
+
+    $delivered = $runtime->run(function () use ($notification, $member): array {
+        return [$notification->shouldSend($member, 'database'), $notification->toArray($member)['amount_owed']];
+    });
+    expect($delivered)->toBe([true, 2500]);
+
+    $pdo->exec('update payments set amount = 4000 where contribution_id = '.$contribution->id);
+    expect($runtime->run(fn (): bool => $notification->shouldSend($member, 'database')))->toBeFalse();
 });
 
 function productionPaymentSqlValue(PDO $pdo, string $sql): mixed
