@@ -109,6 +109,81 @@ describe('Financial and family administration flows (Browser)', function () {
         expect($page->script('() => Object.keys(sessionStorage).filter((key) => key.startsWith("familyfund:expense-")).length'))->toBe(0);
     });
 
+    it('keeps an uncertain financial request key and warning after reload', function (string $kind, bool $committed): void {
+        $isExpense = $kind === 'expense';
+        $page = loginBrowserAs($isExpense ? $this->financialSecretary : $this->admin);
+        $url = $isExpense ? route('expenses.create') : route('fund-adjustments.index');
+        $postPath = json_encode($isExpense ? route('expenses.store', [], false) : route('fund-adjustments.store', [], false), JSON_THROW_ON_ERROR);
+        $page->navigate($url);
+        if (! $isExpense) {
+            $page->click('Record Adjustment');
+        }
+        $key = $page->script('() => document.querySelector("[name=idempotency_key]")?.value');
+        expect($key)->toBeString()->not->toBeEmpty();
+        fillBrowserFieldWithoutChange($page, '[name="amount"]', '1250');
+        fillBrowserFieldWithoutChange($page, 'input[name="description"]', 'Synthetic retry check');
+        fillBrowserFieldWithoutChange($page, $isExpense ? '[name="spent_at"]' : '[name="recorded_at"]', now()->format('Y-m-d'));
+        if ($committed) {
+            $this->withoutMiddleware(ResetBrowserSessionAttributes::class);
+            $data = ['idempotency_key' => $key, 'amount' => 1250, 'description' => 'Synthetic retry check',
+                $isExpense ? 'spent_at' : 'recorded_at' => now()->format('Y-m-d')];
+            $this->actingAs($isExpense ? $this->financialSecretary : $this->admin)
+                ->post(route($isExpense ? 'expenses.store' : 'fund-adjustments.store'), $data)->assertSessionHasNoErrors();
+            $this->withMiddleware(ResetBrowserSessionAttributes::class);
+        }
+        $page->script(<<<JS
+            () => {
+                const originalOpen = XMLHttpRequest.prototype.open;
+                const originalSend = XMLHttpRequest.prototype.send;
+                const interrupted = new WeakSet();
+                XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+                    if (method === 'POST' && new URL(url, window.location.origin).pathname === {$postPath}) interrupted.add(this);
+                    return originalOpen.call(this, method, url, ...rest);
+                };
+                XMLHttpRequest.prototype.send = function (...args) {
+                    if (interrupted.has(this)) {
+                        queueMicrotask(() => this.dispatchEvent(new ProgressEvent('error')));
+                        return;
+                    }
+                    return originalSend.apply(this, args);
+                };
+            }
+        JS);
+        $page->click('form button[type="submit"]')->assertSee('We could not confirm whether');
+        $page->navigate($url);
+        if (! $isExpense) {
+            $page->click('Record Adjustment');
+        }
+        $page->assertSee('We could not confirm whether');
+        expect($page->script('() => document.querySelector("[name=idempotency_key]")?.value'))->toBe($key);
+        $page->script('() => { window.confirm = () => false; }');
+        $page->click($isExpense ? 'Start a new expense' : 'Start a new adjustment');
+        expect($page->script('() => document.querySelector("[name=idempotency_key]")?.value'))->toBe($key);
+
+        fillBrowserFieldWithoutChange($page, '[name="amount"]', '1250');
+        fillBrowserFieldWithoutChange($page, 'input[name="description"]', 'Synthetic retry check');
+        fillBrowserFieldWithoutChange($page, $isExpense ? '[name="spent_at"]' : '[name="recorded_at"]', now()->format('Y-m-d'));
+        $page->click('form button[type="submit"]')->assertSee('Synthetic retry check')->assertNoJavaScriptErrors();
+        $count = $isExpense ? Expense::query()->where('description', 'Synthetic retry check')->count() : FundAdjustment::query()->where('description', 'Synthetic retry check')->count();
+        expect($count)->toBe(1);
+    })->with([['expense', false], ['expense', true], ['adjustment', false], ['adjustment', true]]);
+
+    it('does not record a financial request when its retry key cannot be saved', function (string $kind): void {
+        $isExpense = $kind === 'expense';
+        $page = loginBrowserAs($isExpense ? $this->financialSecretary : $this->admin);
+        $page->navigate($isExpense ? route('expenses.create') : route('fund-adjustments.index'));
+        if (! $isExpense) {
+            $page->click('Record Adjustment');
+        }
+        fillBrowserFieldWithoutChange($page, '[name="amount"]', '1250');
+        fillBrowserFieldWithoutChange($page, 'input[name="description"]', 'Synthetic blocked request');
+        fillBrowserFieldWithoutChange($page, $isExpense ? '[name="spent_at"]' : '[name="recorded_at"]', now()->format('Y-m-d'));
+        $page->script('() => { Storage.prototype.setItem = () => { throw new Error("Synthetic storage failure"); }; }');
+        $page->click('form button[type="submit"]')->assertSee('requires session storage to protect against duplicate entries');
+        expect(Expense::query()->where('description', 'Synthetic blocked request')->count())->toBe(0)
+            ->and(FundAdjustment::query()->where('description', 'Synthetic blocked request')->count())->toBe(0);
+    })->with(['expense', 'adjustment']);
+
     it('shows members when online payments need Paystack setup', function () {
         config(['services.paystack.public_key' => 'pk_test_browser']);
 

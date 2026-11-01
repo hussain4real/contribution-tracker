@@ -17,13 +17,13 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useFinancialRequestKey } from '@/composables/useFinancialRequestKey';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useCurrencyFormatter } from '@/lib/currency';
 import { type BreadcrumbItem } from '@/types';
-import type { FormComponentOptions, VisitOptions } from '@inertiajs/core';
 import { Form, Head, Link, router } from '@inertiajs/vue3';
 import { Landmark, Plus, RotateCcw } from '@lucide/vue';
-import { onMounted, ref } from 'vue';
+import { ref } from 'vue';
 
 interface AdjustmentItem {
     id: number;
@@ -52,42 +52,21 @@ interface Props {
 }
 
 const props = defineProps<Props>();
-const requestKey = ref(props.idempotencyKey);
-const unconfirmed = ref(false);
-const storageKey = `familyfund:${props.idempotencyScope}`;
-const adjustmentOptions: FormComponentOptions &
-    Pick<VisitOptions, 'onHttpException' | 'onNetworkError'> = {
-    onHttpException: (response) => {
-        if (response.status >= 500) {
-            unconfirmed.value = true;
-            return false;
-        }
-    },
-    onNetworkError: () => {
-        unconfirmed.value = true;
-        return false;
-    },
-};
-
-onMounted(() => {
-    try {
-        const saved = sessionStorage.getItem(storageKey);
-        if (saved) requestKey.value = saved;
-        else sessionStorage.setItem(storageKey, requestKey.value);
-    } catch {
-        // The current page still retains its request key if storage is unavailable.
-    }
-});
-
-function startNewAdjustment(): void {
-    requestKey.value = crypto.randomUUID();
-    try {
-        sessionStorage.setItem(storageKey, requestKey.value);
-    } catch {
-        // The current page retains the new key.
-    }
-    unconfirmed.value = false;
-}
+const {
+    requestKey,
+    unconfirmed,
+    storageReady,
+    storageError,
+    options: adjustmentOptions,
+    begin,
+    rejected,
+    renew,
+    startNew,
+} = useFinancialRequestKey(
+    props.idempotencyKey,
+    props.idempotencyScope,
+    'adjustment',
+);
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -152,7 +131,7 @@ function reverseAdjustment(): void {
 }
 
 function resetForm(): void {
-    startNewAdjustment();
+    renew();
     amount.value = '';
     description.value = '';
     recordedAt.value = new Date().toISOString().split('T')[0];
@@ -211,6 +190,8 @@ function resetForm(): void {
                 <Form
                     :action="store()"
                     :options="adjustmentOptions"
+                    :on-before="begin"
+                    @error="rejected"
                     class="mt-4 space-y-4"
                     #default="{ errors, validate, processing, clearErrors }"
                     @success="resetForm"
@@ -220,19 +201,23 @@ function resetForm(): void {
                         name="idempotency_key"
                         :value="requestKey"
                     />
+                    <p v-if="storageError" role="alert">{{ storageError }}</p>
                     <p v-if="unconfirmed" role="alert">
                         We could not confirm whether the adjustment was
                         recorded. Retry with the same details, or check the
                         adjustment list before starting a new adjustment.
                     </p>
-                    <div v-if="errors.idempotency_key" role="alert">
+                    <div
+                        v-if="unconfirmed || errors.idempotency_key"
+                        role="alert"
+                    >
                         <InputError :message="errors.idempotency_key" />
                         <Button
                             type="button"
                             variant="outline"
+                            :disabled="processing"
                             @click="
-                                startNewAdjustment();
-                                clearErrors('idempotency_key');
+                                if (startNew()) clearErrors('idempotency_key');
                             "
                             >Start a new adjustment</Button
                         >
@@ -281,7 +266,10 @@ function resetForm(): void {
                     </div>
 
                     <div class="flex items-center gap-4">
-                        <Button type="submit" :disabled="processing">
+                        <Button
+                            type="submit"
+                            :disabled="processing || !storageReady"
+                        >
                             {{
                                 processing
                                     ? 'Recording...'
