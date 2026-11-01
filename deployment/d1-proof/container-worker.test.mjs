@@ -109,6 +109,30 @@ test('staging gateway health authenticates, uses only the pinned target and retu
     assert.equal(calls.length, 1);
 });
 
+test('staging gateway health uses the staging image defaults without overriding explicit values', async () => {
+    const dockerfile = readFileSync(new URL('./Dockerfile.slim', import.meta.url), 'utf8');
+    const imageEnv = dockerfile.split('\n').find(line => line.startsWith('ENV APP_ENV=d1-staging '));
+    assert.ok(imageEnv);
+    for (const value of ['D1_STAGING_ENABLED=true', 'D1_STAGING_DATABASE=familyfunds-d1-web-staging',
+        'D1_STAGING_URL=https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev']) {
+        assert.ok(imageEnv.split(' ').includes(value));
+    }
+    let calls = 0;
+    const f = fixture(undefined, async () => {
+        calls++;
+        return Response.json({database: 'familyfunds-d1-web-staging', result: {results: [{ok: 1}]}});
+    });
+    const request = () => new Request('https://staging.example/__staging_health/gateway', {headers: {Authorization: f.env.BASIC_AUTHORIZATION}});
+    const base = {D1_STAGING_TOKEN: 'a'.repeat(32)};
+    f.env.CONTAINER_ENV = JSON.stringify(base);
+    assert.deepEqual(await (await f.handler.fetch(request(), f.env)).json(), {ok: true});
+    f.env.CONTAINER_ENV = JSON.stringify({...base, D1_STAGING_ENABLED: 'false'});
+    const result = await f.handler.fetch(request(), f.env);
+    assert.equal(result.status, 503);
+    assert.deepEqual(await result.json(), {ok: false, stage: 'environment_flags'});
+    assert.equal(calls, 1);
+});
+
 test('staging gateway health fails closed for wrong configuration and invalid responses', async () => {
     let output = Response.json({database: 'familyfunds-d1-web-staging', result: {results: [{ok: 1}]}});
     let calls = 0;
@@ -117,9 +141,11 @@ test('staging gateway health fails closed for wrong configuration and invalid re
         D1_STAGING_URL: 'https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev', D1_STAGING_TOKEN: 'a'.repeat(32)};
     const url = 'https://staging.example/__staging_health/gateway';
     const request = () => new Request(url, {headers: {Authorization: f.env.BASIC_AUTHORIZATION}});
-    for (const change of [{D1_PRODUCTION_ENABLED: 'true'}, {D1_STAGING_DATABASE: 'production'}, {D1_STAGING_URL: 'https://attacker.example'}, {D1_STAGING_TOKEN: 'short'}]) {
+    for (const [change, stage] of [[{D1_PRODUCTION_ENABLED: 'true'}, 'environment_flags'], [{D1_STAGING_DATABASE: 'production'}, 'database_identity'], [{D1_STAGING_URL: 'https://attacker.example'}, 'gateway_url'], [{D1_STAGING_TOKEN: 'short'}, 'gateway_token']]) {
         f.env.CONTAINER_ENV = JSON.stringify({...base, ...change});
-        assert.equal((await f.handler.fetch(request(), f.env)).status, 503);
+        const result = await f.handler.fetch(request(), f.env);
+        assert.equal(result.status, 503);
+        assert.deepEqual(await result.json(), {ok: false, stage});
     }
     assert.equal(calls, 0);
     f.env.CONTAINER_ENV = JSON.stringify(base);
@@ -130,9 +156,16 @@ test('staging gateway health fails closed for wrong configuration and invalid re
         output = invalid;
         const result = await f.handler.fetch(request(), f.env);
         assert.equal(result.status, 503);
-        assert.deepEqual(await result.json(), {ok: false});
+        const body = await result.json();
+        assert.equal(body.ok, false);
+        assert.ok(['gateway_http', 'gateway_response'].includes(body.stage));
+        assert.equal(JSON.stringify(body).includes(base.D1_STAGING_TOKEN), false);
     }
     assert.equal(calls, 5);
+    f.env.STAGING_SQL_GATEWAY = {fetch: async () => new Response('', {status: 401})};
+    assert.deepEqual(await (await f.handler.fetch(request(), f.env)).json(), {ok: false, stage: 'gateway_authentication'});
+    f.env.STAGING_SQL_GATEWAY = {fetch: async () => { throw new Error('sensitive fixture'); }};
+    assert.deepEqual(await (await f.handler.fetch(request(), f.env)).json(), {ok: false, stage: 'service_request'});
 });
 
 test("the deployable bootstrap contains the exact reviewed source bytes", () => {

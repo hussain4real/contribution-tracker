@@ -94,20 +94,34 @@ async function receiveWebhook(request, env) {
 }
 
 async function stagingGatewayHealth(env) {
+    let stage = "environment";
     try {
         if (env.RUNTIME_PROFILE === "production") return new Response("Not found", {status: 404});
-        const config = containerEnvironment(env, {allowStagingPaystackTest: true});
-        if (config.D1_STAGING_ENABLED !== "true" || config.D1_PRODUCTION_ENABLED === "true"
-            || config.D1_STAGING_DATABASE !== "familyfunds-d1-web-staging"
-            || config.D1_STAGING_URL !== "https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev"
-            || typeof config.D1_STAGING_TOKEN !== "string" || config.D1_STAGING_TOKEN.length < 32) throw new Error("Invalid staging gateway configuration");
+        const config = {
+            D1_STAGING_ENABLED: "true",
+            D1_STAGING_DATABASE: "familyfunds-d1-web-staging",
+            D1_STAGING_URL: "https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev",
+            ...containerEnvironment(env, {allowStagingPaystackTest: true}),
+        };
+        stage = "environment_flags";
+        if (config.D1_STAGING_ENABLED !== "true" || config.D1_PRODUCTION_ENABLED === "true") throw new Error("Invalid staging gateway configuration");
+        stage = "database_identity";
+        if (config.D1_STAGING_DATABASE !== "familyfunds-d1-web-staging") throw new Error("Invalid staging gateway configuration");
+        stage = "gateway_url";
+        if (config.D1_STAGING_URL !== "https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev") throw new Error("Invalid staging gateway configuration");
+        stage = "gateway_token";
+        if (typeof config.D1_STAGING_TOKEN !== "string" || config.D1_STAGING_TOKEN.length < 32) throw new Error("Invalid staging gateway configuration");
+        stage = "service_binding";
         if (!env.STAGING_SQL_GATEWAY || typeof env.STAGING_SQL_GATEWAY.fetch !== "function") throw new Error("Missing staging gateway binding");
+        stage = "service_request";
         const response = await env.STAGING_SQL_GATEWAY.fetch("https://staging-gateway.internal/query", {
             method: "POST", redirect: "manual", signal: AbortSignal.timeout(8000),
             headers: {"Authorization": "Bearer " + config.D1_STAGING_TOKEN, "Content-Type": "application/json"},
             body: JSON.stringify({sql: "select 1 as ok", params: []}),
         });
+        stage = response.status === 401 ? "gateway_authentication" : "gateway_http";
         if (!response.ok || !response.body) throw new Error("Staging gateway unavailable");
+        stage = "gateway_response";
         const reader = response.body.getReader();
         const chunks = [];
         let length = 0;
@@ -129,7 +143,7 @@ async function stagingGatewayHealth(env) {
             || body.result.results[0]?.ok !== 1) throw new Error("Unexpected staging gateway response");
         return Response.json({ok: true}, {headers: {"Cache-Control": "no-store"}});
     } catch {
-        return Response.json({ok: false}, {status: 503, headers: {"Cache-Control": "no-store"}});
+        return Response.json({ok: false, stage}, {status: 503, headers: {"Cache-Control": "no-store"}});
     }
 }
 

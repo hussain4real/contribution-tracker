@@ -182,12 +182,38 @@ class ReleaseSafetyTest(unittest.TestCase):
             with self.subTest(health=health), patch.dict(os.environ, {'STAGING_BASIC_AUTHORIZATION': 'Basic fixture'}), patch.object(release.urllib.request, 'urlopen', side_effect=responses):
                 with self.assertRaisesRegex(RuntimeError, 'gateway health'):
                     release.public_checks('staging', 'github-fixture')
+        failure = release.urllib.error.HTTPError('https://example.invalid', 503, 'failure', {}, io.BytesIO(b'{"ok":false,"stage":"gateway_token"}'))
+        responses = [Response(b'ok'), Response(b'<html>password</html>'), failure]
+        with patch.dict(os.environ, {'STAGING_BASIC_AUTHORIZATION': 'Basic fixture'}), patch.object(release.urllib.request, 'urlopen', side_effect=responses):
+            with self.assertRaises(release.StagingGatewayHealthError) as raised:
+                release.public_checks('staging', 'github-fixture')
+            self.assertEqual(raised.exception.stage, 'gateway_token')
+
         responses = [Response(b'ok'), Response(b'<html>password</html>'), Response(b'{"ok":true}')]
         with patch.dict(os.environ, {'STAGING_BASIC_AUTHORIZATION': 'Basic fixture'}), patch.object(release.urllib.request, 'urlopen', side_effect=responses) as urlopen:
             release.public_checks('staging', 'github-fixture')
             request = urlopen.call_args.args[0]
             self.assertTrue(request.full_url.endswith('/__staging_health/gateway'))
             self.assertEqual(request.get_header('Authorization'), 'Basic fixture')
+
+    def test_gateway_failure_stage_accepts_only_fixed_nonsecret_stages(self):
+        def error(status, body):
+            return release.urllib.error.HTTPError('https://example.invalid', status, 'failure', {}, io.BytesIO(body))
+
+        for stage in release.GATEWAY_FAILURE_STAGES:
+            body = json.dumps({'ok': False, 'stage': stage}).encode()
+            self.assertEqual(release.gateway_failure_stage(error(503, body)), stage)
+        for status, body in [
+            (401, b'{"ok":false,"stage":"gateway_authentication"}'),
+            (503, b'{"ok":false,"stage":"secret value"}'),
+            (503, b'{"ok":false,"stage":"gateway_http","extra":"secret"}'),
+            (503, b'{"ok":true,"stage":"gateway_http"}'),
+            (503, b'{"ok":false,"stage":[]}'),
+            (503, b' ' * 4097),
+            (503, b'invalid'),
+        ]:
+            with self.subTest(status=status, body=body):
+                self.assertIsNone(release.gateway_failure_stage(error(status, body)))
 
     def test_staging_web_gateway_binding_must_target_the_expected_service(self):
         expected = {'name': 'STAGING_SQL_GATEWAY', 'type': 'service', 'service': 'familyfunds-d1-staging-sql'}

@@ -125,6 +125,34 @@ def prepared(image):
     raise RuntimeError('Container runtime image preparation timed out before any Worker update')
 
 
+GATEWAY_FAILURE_STAGES = frozenset({
+    'environment', 'environment_flags', 'database_identity', 'gateway_url', 'gateway_token',
+    'service_binding', 'service_request', 'gateway_authentication', 'gateway_http', 'gateway_response',
+})
+
+
+class StagingGatewayHealthError(RuntimeError):
+    def __init__(self, stage):
+        self.stage = stage
+        super().__init__('Staging gateway health check failed')
+
+
+def gateway_failure_stage(error):
+    if error.code != 503:
+        return None
+    try:
+        data = error.read(4097)
+        if len(data) > 4096:
+            return None
+        body = json.loads(data)
+    except (ValueError, UnicodeDecodeError, OSError):
+        return None
+    if not isinstance(body, dict) or set(body) != {'ok', 'stage'} or body['ok'] is not False:
+        return None
+    stage = body['stage']
+    return stage if isinstance(stage, str) and stage in GATEWAY_FAILURE_STAGES else None
+
+
 def public_checks(target, revision=None):
     authorization = os.environ.get('STAGING_BASIC_AUTHORIZATION')
     if target == 'staging' and not authorization:
@@ -137,7 +165,14 @@ def public_checks(target, revision=None):
         if target == 'staging':
             headers['Authorization'] = authorization
         request = urllib.request.Request(CONFIG[target]['url'] + path, headers=headers)
-        with urllib.request.urlopen(request, timeout=90) as response:
+        try:
+            response = urllib.request.urlopen(request, timeout=90)
+        except urllib.error.HTTPError as error:
+            stage = gateway_failure_stage(error) if target == 'staging' and path == '/__staging_health/gateway' else None
+            if stage is not None:
+                raise StagingGatewayHealthError(stage) from None
+            raise
+        with response:
             body = response.read(4097 if path == '/__staging_health/gateway' else 1024 * 1024)
             if response.status != 200:
                 raise RuntimeError('Release health check failed')
@@ -346,11 +381,16 @@ def publish(target, directory):
             applied.append(plan)
             api('PUT', plan['path'], plan['body'], raw=True, content_type=plan['mime'])
         deadline = time.monotonic() + 600
+        last_gateway_stage = None
         while True:
             try:
                 public_checks(target, name)
                 if instance_image(target, image):
                     break
+            except StagingGatewayHealthError as error:
+                if error.stage != last_gateway_stage:
+                    print('Staging gateway health failure stage: ' + error.stage, flush=True)
+                    last_gateway_stage = error.stage
             except (RuntimeError, urllib.error.URLError):
                 pass
             if time.monotonic() >= deadline:
