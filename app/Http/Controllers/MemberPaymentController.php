@@ -184,10 +184,19 @@ class MemberPaymentController extends Controller
                 'estimated_fee_kobo' => $feeEstimate['estimated_fee_kobo'],
             ]);
         } catch (RuntimeException $e) {
+            $failureReason = 'Paystack initialization failed.';
+            $paystackSecret = config('services.paystack.secret_key');
+            if (config('services.paystack.staging_diagnostics')
+                && is_string($paystackSecret) && str_starts_with($paystackSecret, 'sk_test_')) {
+                $failureReason = $e->getCode() >= 400 && $e->getCode() <= 599
+                    ? 'Paystack initialization failed (HTTP '.$e->getCode().').'
+                    : 'Paystack initialization failed (no HTTP status).';
+            }
+
             $transaction->update([
                 'status' => TransactionStatus::Failed,
                 'failed_at' => now(),
-                'failure_reason' => 'Paystack initialization failed.',
+                'failure_reason' => $failureReason,
             ]);
 
             return response()->json([

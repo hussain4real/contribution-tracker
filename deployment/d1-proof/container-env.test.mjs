@@ -11,8 +11,8 @@ test('Paystack test credentials are isolated to staging and cannot override unre
     const keys = {PAYSTACK_PUBLIC_KEY: 'pk_test_publicfixture', PAYSTACK_SECRET_KEY: 'sk_test_secretfixture'};
     const bind = (extra, core = base) => ({CONTAINER_ENV: JSON.stringify(core), STAGING_PAYSTACK_TEST_ENV: JSON.stringify(extra)});
     const staging = {allowStagingPaystackTest: true};
-    assert.deepEqual(containerEnvironment(bind(keys), staging), {...base, ...keys});
-    assert.deepEqual(containerEnvironment(bind(keys, {...base, APP_ENV: 'production'}), staging), {...base, APP_ENV: 'production', ...keys});
+    assert.deepEqual(containerEnvironment(bind(keys), staging), {...base, ...keys, PAYSTACK_STAGING_DIAGNOSTICS: 'true'});
+    assert.deepEqual(containerEnvironment(bind(keys, {...base, APP_ENV: 'production'}), staging), {...base, APP_ENV: 'production', ...keys, PAYSTACK_STAGING_DIAGNOSTICS: 'true'});
     for (const extra of [
         {...keys, APP_KEY: 'other'}, {PAYSTACK_PUBLIC_KEY: keys.PAYSTACK_PUBLIC_KEY},
         {...keys, PAYSTACK_SECRET_KEY: 'sk_live_forbidden'}, {...keys, PAYSTACK_PUBLIC_KEY: 'pk_live_forbidden'},
