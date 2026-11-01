@@ -47,6 +47,26 @@ it('keeps D1 reachable when the test payment verification endpoint is enabled', 
         ->toThrow(StrayRequestException::class);
 });
 
+it('uses the checkout key for API requests when a separate webhook test key is configured', function (): void {
+    config([
+        'd1-staging.enabled' => true,
+        'd1-staging.url' => 'https://d1-staging.example.invalid',
+        'd1-staging.r2.bucket' => '',
+        'd1-staging.paystack_test_checkout' => true,
+        'services.paystack.secret_key' => 'sk_test_checkout',
+        'services.paystack.public_key' => 'pk_test_checkout',
+        'services.paystack.base_url' => 'https://api.paystack.co',
+    ]);
+    Http::fake(['api.paystack.co/transaction/initialize' => Http::response(['status' => true])]);
+
+    (new D1StagingServiceProvider($this->app))->boot();
+    $paystack = app(PaystackService::class);
+    $paystack->initializeTransaction(['email' => 'member@example.com', 'amount' => 100]);
+
+    Http::assertSent(fn (Illuminate\Http\Client\Request $request): bool => $request->hasHeader('Authorization', 'Bearer sk_test_checkout'));
+    expect($paystack->verifyWebhookSignature('staging charge', hash_hmac('sha512', 'staging charge', 'sk_test_fixture')))->toBeTrue();
+});
+
 it('resolves push subscription lookups on the current staging snapshot', function (): void {
     config([
         'd1-staging.enabled' => true,

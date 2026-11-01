@@ -93,7 +93,10 @@ final class D1StagingServiceProvider extends ServiceProvider
                 || ! is_string($meta) || ($meta !== '' && preg_match('/^[a-f0-9]{32}$/iD', $meta) !== 1)) {
                 throw new LogicException('Webhook checks require isolated staging provider credentials.');
             }
-            config(['services.paystack.secret_key' => $paystack, 'services.paystack.webhook_secret' => $paystack, 'services.paystack.base_url' => 'https://api.paystack.co', 'services.whatsapp.app_secret' => $meta]);
+            config(['services.paystack.webhook_secret' => $paystack, 'services.paystack.base_url' => 'https://api.paystack.co', 'services.whatsapp.app_secret' => $meta]);
+            if (! config('d1-staging.paystack_test_checkout')) {
+                config(['services.paystack.secret_key' => $paystack]);
+            }
             if ($paystack !== '') {
                 $allowedRequests[] = 'https://api.paystack.co/transaction/verify/*';
             }
