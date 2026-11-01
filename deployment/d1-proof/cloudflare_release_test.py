@@ -159,6 +159,38 @@ class ReleaseSafetyTest(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, 'version URLs must be disabled'):
                     release.require_disabled_gateway_version_urls('/workers/scripts/example')
 
+    def test_staging_public_checks_require_gateway_health(self):
+        class Response:
+            def __init__(self, body):
+                self.status = 200
+                self.headers = {}
+                self.body = body
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                return False
+            def read(self, limit):
+                return self.body
+
+        for health in [b'{"ok":false}', b'{"ok":1}', b'{"ok":true,"extra":1}', b'not json', b' ' * 4097]:
+            responses = [Response(b'ok'), Response(b'<html>password</html>'), Response(health)]
+            with self.subTest(health=health), patch.dict(os.environ, {'STAGING_BASIC_AUTHORIZATION': 'Basic fixture'}), patch.object(release.urllib.request, 'urlopen', side_effect=responses):
+                with self.assertRaisesRegex(RuntimeError, 'gateway health'):
+                    release.public_checks('staging')
+        responses = [Response(b'ok'), Response(b'<html>password</html>'), Response(b'{"ok":true}')]
+        with patch.dict(os.environ, {'STAGING_BASIC_AUTHORIZATION': 'Basic fixture'}), patch.object(release.urllib.request, 'urlopen', side_effect=responses) as urlopen:
+            release.public_checks('staging')
+            request = urlopen.call_args.args[0]
+            self.assertTrue(request.full_url.endswith('/__staging_health/gateway'))
+            self.assertEqual(request.get_header('Authorization'), 'Basic fixture')
+
+    def test_staging_web_gateway_binding_must_target_the_expected_service(self):
+        expected = {'name': 'STAGING_SQL_GATEWAY', 'type': 'service', 'service': 'familyfunds-d1-staging-sql'}
+        self.assertEqual(release.checked_bindings(release.CONFIG['staging']['worker'], {'bindings': [expected]}), [expected])
+        for change in [{'service': 'other'}, {'type': 'plain_text'}, {'environment': 'preview'}, {'entrypoint': 'Other'}]:
+            with self.subTest(change=change), self.assertRaisesRegex(RuntimeError, 'Unexpected staging gateway service binding'):
+                release.checked_bindings(release.CONFIG['staging']['worker'], {'bindings': [{**expected, **change}]})
+
     def test_gateway_target_checks_reject_unexpected_bindings(self):
         expected = [
             {'name': 'DB', 'type': 'd1', 'id': 'f96058f1-0aa3-42f3-9ee2-f796554d6ef4'},
@@ -227,6 +259,8 @@ class ReleaseSafetyTest(unittest.TestCase):
             self.assertEqual(writes[3][2], {'worker.mjs': b'old gateway code'})
             self.assertEqual(writes[1][1]['containers'], [{'class_name': 'FamilyFundsWebStagingContainer'}])
             self.assertEqual(writes[2][1]['containers'], [{'class_name': 'FamilyFundsWebStagingContainer'}])
+            self.assertIn({'name': 'STAGING_SQL_GATEWAY', 'type': 'service', 'service': 'familyfunds-d1-staging-sql'}, writes[1][1]['bindings'])
+            self.assertFalse(any(binding['name'] == 'STAGING_SQL_GATEWAY' for binding in writes[2][1]['bindings']))
 
     def test_modified_original_staging_archive_is_refused_before_credentials_or_docker(self):
         with tempfile.TemporaryDirectory() as directory:

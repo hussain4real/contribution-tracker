@@ -93,6 +93,46 @@ async function receiveWebhook(request, env) {
     return Response.json({message: "Accepted"}, {status: provider === "paystack" ? 202 : 200, headers: {"Cache-Control": "no-store"}});
 }
 
+async function stagingGatewayHealth(env) {
+    try {
+        if (env.RUNTIME_PROFILE === "production") return new Response("Not found", {status: 404});
+        const config = containerEnvironment(env, {allowStagingPaystackTest: true});
+        if (config.D1_STAGING_ENABLED !== "true" || config.D1_PRODUCTION_ENABLED === "true"
+            || config.D1_STAGING_DATABASE !== "familyfunds-d1-web-staging"
+            || config.D1_STAGING_URL !== "https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev"
+            || typeof config.D1_STAGING_TOKEN !== "string" || config.D1_STAGING_TOKEN.length < 32) throw new Error("Invalid staging gateway configuration");
+        if (!env.STAGING_SQL_GATEWAY || typeof env.STAGING_SQL_GATEWAY.fetch !== "function") throw new Error("Missing staging gateway binding");
+        const response = await env.STAGING_SQL_GATEWAY.fetch("https://staging-gateway.internal/query", {
+            method: "POST", redirect: "manual", signal: AbortSignal.timeout(8000),
+            headers: {"Authorization": "Bearer " + config.D1_STAGING_TOKEN, "Content-Type": "application/json"},
+            body: JSON.stringify({sql: "select 1 as ok", params: []}),
+        });
+        if (!response.ok || !response.body) throw new Error("Staging gateway unavailable");
+        const reader = response.body.getReader();
+        const chunks = [];
+        let length = 0;
+        while (true) {
+            const {done, value} = await reader.read();
+            if (done) break;
+            length += value.byteLength;
+            if (length > 4096) {
+                await reader.cancel();
+                throw new Error("Invalid staging gateway response");
+            }
+            chunks.push(value);
+        }
+        const bytes = new Uint8Array(length);
+        let offset = 0;
+        for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+        const body = JSON.parse(new TextDecoder("utf-8", {fatal: true}).decode(bytes));
+        if (body?.database !== "familyfunds-d1-web-staging" || body?.result?.results?.length !== 1
+            || body.result.results[0]?.ok !== 1) throw new Error("Unexpected staging gateway response");
+        return Response.json({ok: true}, {headers: {"Cache-Control": "no-store"}});
+    } catch {
+        return Response.json({ok: false}, {status: 503, headers: {"Cache-Control": "no-store"}});
+    }
+}
+
 function bootstrapParts(env, prefix, content) {
     const characters = Array.from(content);
     const names = [];
@@ -536,6 +576,10 @@ export default {
         const expected = new TextEncoder().encode(env.BASIC_AUTHORIZATION);
         if (actual.length !== expected.length || !crypto.subtle.timingSafeEqual(actual, expected)) {
             return new Response("Authentication required", {status: 401, headers: {"WWW-Authenticate": 'Basic realm="FamilyFunds isolated D1 staging"', "X-Robots-Tag": "noindex, nofollow, noarchive"}});
+        }
+        if (new URL(request.url).pathname === "/__staging_health/gateway") {
+            if (request.method !== "GET") return new Response("Not found", {status: 404});
+            return stagingGatewayHealth(env);
         }
         const candidate = request.headers.get("X-D1-Staging-Candidate");
         if (candidate && (candidate !== "lean" || request.headers.get("X-Staging-Admin") !== env.ADMIN_TOKEN)) {

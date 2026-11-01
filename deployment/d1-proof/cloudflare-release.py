@@ -129,13 +129,14 @@ def public_checks(target, revision=None):
     authorization = os.environ.get('STAGING_BASIC_AUTHORIZATION')
     if target == 'staging' and not authorization:
         raise RuntimeError('Authenticated staging smoke check requires STAGING_BASIC_AUTHORIZATION')
-    for path in ['/up', '/login']:
+    paths = ['/up', '/login', '/__staging_health/gateway'] if target == 'staging' else ['/up', '/login']
+    for path in paths:
         headers = {'User-Agent': 'FamilyFunds-GitHub-release', 'Cache-Control': 'no-cache'}
         if target == 'staging':
             headers['Authorization'] = authorization
         request = urllib.request.Request(CONFIG[target]['url'] + path, headers=headers)
         with urllib.request.urlopen(request, timeout=90) as response:
-            body = response.read(1024 * 1024)
+            body = response.read(4097 if path == '/__staging_health/gateway' else 1024 * 1024)
             if response.status != 200:
                 raise RuntimeError('Release health check failed')
             if target == 'production' and revision and response.headers.get('X-FamilyFunds-Runtime-Revision') != revision:
@@ -144,6 +145,15 @@ def public_checks(target, revision=None):
                 raise RuntimeError('Production activation is not the accepted live phase')
             if path == '/login' and (b'<html' not in body.lower() or b'password' not in body.lower()):
                 raise RuntimeError('Laravel login did not render successfully')
+            if path == '/__staging_health/gateway':
+                if len(body) > 4096:
+                    raise RuntimeError('Staging gateway health response is invalid')
+                try:
+                    status = json.loads(body)
+                except (ValueError, UnicodeDecodeError):
+                    raise RuntimeError('Staging gateway health response is invalid') from None
+                if not isinstance(status, dict) or set(status) != {'ok'} or status['ok'] is not True:
+                    raise RuntimeError('Staging gateway health check failed')
 
 
 def instance_image(target, image):
@@ -186,6 +196,10 @@ def checked_bindings(worker, settings):
             raise RuntimeError('Production D1 binding mismatch')
         if names.get('PRODUCTION_CONTAINER', {}).get('namespace_id') != CONFIG['production']['application_id']:
             raise RuntimeError('Production container namespace mismatch')
+    if worker == CONFIG['staging']['worker'] and 'STAGING_SQL_GATEWAY' in names:
+        gateway = names['STAGING_SQL_GATEWAY']
+        if gateway.get('type') != 'service' or gateway.get('service') != 'familyfunds-d1-staging-sql' or gateway.get('environment', 'production') != 'production' or gateway.get('entrypoint') is not None:
+            raise RuntimeError('Unexpected staging gateway service binding')
     if worker == 'familyfunds-d1-staging-sql':
         if names.get('DB', {}).get('id', names.get('DB', {}).get('database_id')) != 'f96058f1-0aa3-42f3-9ee2-f796554d6ef4':
             raise RuntimeError('Staging gateway D1 binding mismatch')
@@ -300,6 +314,8 @@ def publish(target, directory):
             verify_gateway_source(previous_sources[previous_entry], sources[worker['entry']], worker.get('accepted_previous_sha256'))
         old_body, old_mime = multipart(previous_entry, previous_sources, bindings, rollback_container, content_only=content_only)
         updated = [dict(binding) for binding in bindings]
+        if target == 'staging' and worker['worker'] == CONFIG['staging']['worker'] and not any(binding['name'] == 'STAGING_SQL_GATEWAY' for binding in updated):
+            updated.append({'name': 'STAGING_SQL_GATEWAY', 'type': 'service', 'service': 'familyfunds-d1-staging-sql'})
         for binding in updated:
             if worker['worker'] == CONFIG[target]['worker'] and binding['name'] in ['RUNTIME_REVISION', 'CONTAINER_IMAGE']:
                 binding['text'] = name if binding['name'] == 'RUNTIME_REVISION' else image

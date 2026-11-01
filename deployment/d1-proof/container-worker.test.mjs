@@ -15,7 +15,7 @@ const source = readFileSync(new URL("./container-worker.mjs", import.meta.url), 
     .replace('import { containerEnvironment } from "./container-env.mjs";', "")
     .replace("export class ", "class ").replace("export default ", "const handler = ");
 
-function fixture(assets = [{path: "/var/www/html/deployment/d1-proof/container-nginx-staging.conf", content: "events {}", sha256: "a".repeat(64)}, {path: "/var/www/html/deployment/d1-proof/run-staging.php", content: "<?php echo 1;", sha256: "b".repeat(64)}, ...packagedAssets.filter(asset => asset.path.endsWith('/staging-fpm-status.php'))]) {
+function fixture(assets = [{path: "/var/www/html/deployment/d1-proof/container-nginx-staging.conf", content: "events {}", sha256: "a".repeat(64)}, {path: "/var/www/html/deployment/d1-proof/run-staging.php", content: "<?php echo 1;", sha256: "b".repeat(64)}, ...packagedAssets.filter(asset => asset.path.endsWith('/staging-fpm-status.php'))], gatewayFetch = async () => { throw new Error("Unexpected gateway request"); }) {
     const {handler, Container} = runInNewContext(source + "\n({handler, Container: FamilyFundsWebStagingContainer})", {
         Request, Response, Headers, URL, ReadableStream, AbortSignal, AbortController, TextEncoder, TextDecoder,
         performance, setTimeout, clearTimeout, console,
@@ -43,6 +43,7 @@ function fixture(assets = [{path: "/var/www/html/deployment/d1-proof/container-n
     const container = new Container(ctx, env);
     container.ready = true;
     env.STAGING_CONTAINER = {getByName: () => container};
+    env.STAGING_SQL_GATEWAY = {fetch: gatewayFetch};
     const queued = [];
     const webhook = {enabled: true, database: "familyfunds-d1-web-staging", family_id: 43,
         paystack_test_key: "sk_test_fixture", meta_app_secret: "fixture-secret", meta_verify_token: "fixture-verify",
@@ -78,6 +79,61 @@ function webhookRequest(record) {
     return new Request(`https://staging.example/webhooks/${record.provider}`, {method: "POST", body: record.raw,
         headers: {[record.provider === "paystack" ? "X-Paystack-Signature" : "X-Hub-Signature-256"]: record.signature}});
 }
+
+test('staging gateway health authenticates, uses only the pinned target and returns no credentials', async () => {
+    const calls = [];
+    const f = fixture(undefined, async (url, init) => {
+        calls.push({url, init});
+        return Response.json({database: 'familyfunds-d1-web-staging', result: {results: [{ok: 1}]}});
+    });
+    const token = 'fixture-token-' + 'a'.repeat(32);
+    f.env.CONTAINER_ENV = JSON.stringify({D1_STAGING_ENABLED: 'true', D1_STAGING_DATABASE: 'familyfunds-d1-web-staging',
+        D1_STAGING_URL: 'https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev', D1_STAGING_TOKEN: token});
+    const url = 'https://staging.example/__staging_health/gateway';
+    const unauthorized = await f.handler.fetch(new Request(url), f.env);
+    assert.equal(unauthorized.status, 401);
+    assert.equal(calls.length, 0);
+    const response = await f.handler.fetch(new Request(url, {headers: {Authorization: f.env.BASIC_AUTHORIZATION}}), f.env);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('Cache-Control'), 'no-store');
+    assert.deepEqual(await response.json(), {ok: true});
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, 'https://staging-gateway.internal/query');
+    assert.equal(calls[0].init.headers.Authorization, 'Bearer ' + token);
+    assert.equal(calls[0].init.redirect, 'manual');
+    assert.deepEqual(JSON.parse(calls[0].init.body), {sql: 'select 1 as ok', params: []});
+    const invalidMethod = await f.handler.fetch(new Request(url, {method: 'POST', headers: {Authorization: f.env.BASIC_AUTHORIZATION}}), f.env);
+    assert.equal(invalidMethod.status, 404);
+    f.env.RUNTIME_PROFILE = 'production';
+    assert.equal((await f.handler.fetch(new Request(url, {headers: {Authorization: f.env.BASIC_AUTHORIZATION}}), f.env)).status, 404);
+    assert.equal(calls.length, 1);
+});
+
+test('staging gateway health fails closed for wrong configuration and invalid responses', async () => {
+    let output = Response.json({database: 'familyfunds-d1-web-staging', result: {results: [{ok: 1}]}});
+    let calls = 0;
+    const f = fixture(undefined, async () => { calls++; return output; });
+    const base = {D1_STAGING_ENABLED: 'true', D1_STAGING_DATABASE: 'familyfunds-d1-web-staging',
+        D1_STAGING_URL: 'https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev', D1_STAGING_TOKEN: 'a'.repeat(32)};
+    const url = 'https://staging.example/__staging_health/gateway';
+    const request = () => new Request(url, {headers: {Authorization: f.env.BASIC_AUTHORIZATION}});
+    for (const change of [{D1_PRODUCTION_ENABLED: 'true'}, {D1_STAGING_DATABASE: 'production'}, {D1_STAGING_URL: 'https://attacker.example'}, {D1_STAGING_TOKEN: 'short'}]) {
+        f.env.CONTAINER_ENV = JSON.stringify({...base, ...change});
+        assert.equal((await f.handler.fetch(request(), f.env)).status, 503);
+    }
+    assert.equal(calls, 0);
+    f.env.CONTAINER_ENV = JSON.stringify(base);
+    delete f.env.STAGING_SQL_GATEWAY;
+    assert.equal((await f.handler.fetch(request(), f.env)).status, 503);
+    f.env.STAGING_SQL_GATEWAY = {fetch: async () => { calls++; return output; }};
+    for (const invalid of [Response.json({database: 'other', result: {results: [{ok: 1}]}}), new Response('x'.repeat(4097)), new Response('invalid'), new Response(null, {status: 302, headers: {Location: 'https://attacker.example'}}), new Response('', {status: 503})]) {
+        output = invalid;
+        const result = await f.handler.fetch(request(), f.env);
+        assert.equal(result.status, 503);
+        assert.deepEqual(await result.json(), {ok: false});
+    }
+    assert.equal(calls, 5);
+});
 
 test("the deployable bootstrap contains the exact reviewed source bytes", () => {
     assert.equal(packagedAssets.length, 14);
