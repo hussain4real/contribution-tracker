@@ -7,6 +7,7 @@ use App\Models\Family;
 use App\Models\FamilyMembership;
 use App\Models\Payment;
 use App\Models\PaymentBatch;
+use App\Models\PlatformPlan;
 
 /**
  * T078 [US5] Browser test for member contribution history navigation
@@ -37,7 +38,7 @@ describe('Member History Flow', function () {
             ->fill('password', 'password')
             ->click('@login-button')
             ->assertPathIs('/'.$this->family->slug.'/contributions/my')
-            ->assertSee('My Contribution History')
+            ->assertSee('My money')
             ->assertNoJavaScriptErrors();
     });
 
@@ -87,7 +88,30 @@ describe('Member History Flow', function () {
 
         $page->click('My Contributions')
             ->assertPathIs("/{$this->family->slug}/contributions/my")
-            ->assertSee('My Contribution History');
+            ->assertSee('My money');
+    });
+
+    it('explains when an advance contribution is too far away for online payment', function () {
+        config(['services.paystack.public_key' => 'pk_test_synthetic', 'services.paystack.secret_key' => 'sk_test_synthetic']);
+        $plan = PlatformPlan::create([
+            'name' => 'Browser online payments', 'slug' => 'browser-online-payments', 'price' => 0,
+            'max_members' => null, 'features' => ['online_payments'], 'is_active' => true, 'sort_order' => 0,
+        ]);
+        $this->family->update(['platform_plan_id' => $plan->id, 'bank_code' => '058', 'account_number' => '1234567890']);
+        $period = now()->startOfMonth()->addMonths(7);
+        $contribution = Contribution::factory()->forUser($this->member)->forMonth($period->year, $period->month)->create();
+
+        $page = loginBrowserAs($this->member);
+        $page->navigate(route('contributions.my', ['current_family' => $this->family->slug]))
+            ->assertSee('Online payment is available up to six months before the contribution month.')
+            ->assertDontSee('Pay now')
+            ->assertNoJavaScriptErrors();
+
+        $period = now()->startOfMonth()->addMonths(6);
+        $contribution->update(['year' => $period->year, 'month' => $period->month]);
+        $page->refresh()->assertSee('Pay now')
+            ->assertDontSee('Online payment is available up to six months before the contribution month.')
+            ->assertNoJavaScriptErrors();
     });
 
     it('member can view contribution details with payments', function () {

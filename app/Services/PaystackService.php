@@ -27,6 +27,13 @@ class PaystackService
         $this->secretKey = is_string($secretKey) ? $secretKey : '';
     }
 
+    public function isConfigured(): bool
+    {
+        $publicKey = config('services.paystack.public_key');
+
+        return is_string($publicKey) && filled($publicKey) && filled($this->secretKey);
+    }
+
     /**
      * Initialize a transaction.
      *
