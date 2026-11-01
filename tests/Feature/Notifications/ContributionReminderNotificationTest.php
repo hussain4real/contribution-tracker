@@ -92,6 +92,28 @@ describe('ContributionReminderNotification', function () {
             ->and(DB::table('failed_jobs')->count())->toBe(0);
     });
 
+    it('does not send a reminder to an unsupported recipient', function () {
+        $family = Family::factory()->create();
+        $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($user)->currentMonth()->create();
+
+        expect((new ContributionReminderNotification($contribution))->shouldSend(new stdClass, 'database'))->toBeFalse();
+    });
+
+    it('suppresses a queued reminder when the family is archived', function () {
+        config(['queue.default' => 'database', 'queue.connections.database.connection' => null]);
+        $family = Family::factory()->create();
+        $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($user)->currentMonth()->create();
+        $user->notify((new ContributionReminderNotification($contribution))->onlyChannels(['database']));
+        $family->update(['archived_at' => now()]);
+
+        $this->artisan('queue:work', ['connection' => 'database', '--once' => true, '--sleep' => 0])->assertSuccessful();
+
+        expect($user->notifications()->count())->toBe(0)
+            ->and(DB::table('failed_jobs')->count())->toBe(0);
+    });
+
     it('sends via mail, database, whatsapp, and web push channels', function () {
         $family = Family::factory()->create();
         $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
