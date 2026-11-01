@@ -132,12 +132,12 @@ describe('Financial and family administration flows (Browser)', function () {
     });
 
     it('sends the current XSRF cookie when starting contribution checkout', function () {
-        config(['services.paystack.public_key' => 'pk_test_synthetic']);
+        config(['services.paystack.public_key' => 'pk_test_synthetic', 'services.paystack.secret_key' => 'sk_test_synthetic']);
         $plan = PlatformPlan::create([
             'name' => 'Browser payments', 'slug' => 'browser-payments', 'price' => 0,
             'max_members' => null, 'features' => ['online_payments'], 'is_active' => true, 'sort_order' => 0,
         ]);
-        $this->family->update(['platform_plan_id' => $plan->id, 'bank_code' => '058']);
+        $this->family->update(['platform_plan_id' => $plan->id, 'bank_code' => '058', 'account_number' => '1234567890']);
         $member = createBrowserMember($this->family);
         Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
         $page = loginBrowserAs($member);
@@ -163,12 +163,12 @@ describe('Financial and family administration flows (Browser)', function () {
     });
 
     it('checks an initialized payment after checkout cancellation or load failure', function (string $checkoutEvent, bool $dropVerification) {
-        config(['services.paystack.public_key' => 'pk_test_synthetic']);
+        config(['services.paystack.public_key' => 'pk_test_synthetic', 'services.paystack.secret_key' => 'sk_test_synthetic']);
         $plan = PlatformPlan::create([
             'name' => 'Browser payments', 'slug' => 'browser-payments', 'price' => 0,
             'max_members' => null, 'features' => ['online_payments'], 'is_active' => true, 'sort_order' => 0,
         ]);
-        $this->family->update(['platform_plan_id' => $plan->id, 'bank_code' => '058']);
+        $this->family->update(['platform_plan_id' => $plan->id, 'bank_code' => '058', 'account_number' => '1234567890']);
         $member = createBrowserMember($this->family);
         Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
         $page = loginBrowserAs($member);
