@@ -11,8 +11,11 @@ use App\Models\Family;
 use App\Models\FamilyMembership;
 use App\Models\Payment;
 use App\Models\PaymentBatch;
+use App\Models\PlatformPlan;
 use App\Models\User;
 use App\Services\FamilyContributionReviewService;
+use App\Services\PaystackService;
+use App\Support\PlatformPlanCatalog;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -58,7 +61,7 @@ class ContributionController extends Controller
      * Shows personal contribution history with family aggregate stats.
      * Does NOT show other members' individual details (FR-016).
      */
-    public function my(): Response
+    public function my(PaystackService $paystack): Response
     {
         $user = $this->authUser();
         $family = $user->currentFamily ?? $user->family;
@@ -107,13 +110,15 @@ class ContributionController extends Controller
 
         $personalTotalExpected = (int) $contributionModels->sum(fn (Contribution $contribution): int => $contribution->expected_amount);
         $personalTotalPaid = (int) $contributionModels->sum(fn (Contribution $contribution): int => $contribution->total_paid);
-        $personalTotalOutstanding = $personalTotalExpected - $personalTotalPaid;
+        $personalTotalOutstanding = (int) $contributionModels->sum(fn (Contribution $contribution): int => $contribution->balance);
         $personalPaymentRate = $personalTotalExpected > 0
             ? round(($personalTotalPaid / $personalTotalExpected) * 100, 1)
             : 0;
 
         $membership = $user->membershipForFamily($family);
         abort_unless($membership instanceof FamilyMembership, 403);
+        $nextContribution = $contributionModels->filter(fn (Contribution $contribution): bool => $contribution->balance > 0)
+            ->sortBy([['year', 'asc'], ['month', 'asc']])->first();
         $receipts = PaymentBatch::query()
             ->where('family_id', $family->id)
             ->where('family_membership_id', $membership->id)
@@ -129,10 +134,29 @@ class ContributionController extends Controller
                 'periods' => $batch->allocations->map(fn (Payment $payment): ?string => $payment->contribution?->period_label)
                     ->filter()->unique()->values()->all(),
             ]);
+        $family->loadMissing('platformPlan');
+        $plan = $family->platformPlan ?? PlatformPlan::query()
+            ->where('slug', PlatformPlanCatalog::Free)->where('is_active', true)->first();
+        $onlinePaymentsAvailable = (! $plan || in_array(PlatformPlanCatalog::OnlinePayments, $plan->features, true))
+            && (! $plan?->isPaid() || ! in_array($family->subscription_status, ['cancelled', 'past_due'], true))
+            && $family->hasBankDetails() && $paystack->isConfigured();
+
+        $nextContributionDetails = null;
+        if ($nextContribution !== null) {
+            $maximumAdvanceDate = now()->startOfMonth()->addMonths(6);
+            $nextContributionDetails = [
+                'period_label' => $nextContribution->period_label,
+                'due_date' => $nextContribution->due_date->toDateString(),
+                'balance' => $nextContribution->balance,
+                'can_pay_online' => ($nextContribution->year * 12) + $nextContribution->month <= ($maximumAdvanceDate->year * 12) + $maximumAdvanceDate->month,
+            ];
+        }
 
         return Inertia::render('Contributions/My', [
             'member_id' => $user->id,
+            'next_contribution' => $nextContributionDetails,
             'receipts' => $receipts,
+            'online_payments_available' => $onlinePaymentsAvailable,
             'statement_period' => [
                 'date_from' => now()->startOfYear()->toDateString(),
                 'date_to' => now()->endOfYear()->toDateString(),
