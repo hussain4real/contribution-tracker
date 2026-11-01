@@ -8,6 +8,7 @@ use App\Models\Family;
 use App\Models\FamilyCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -18,6 +19,17 @@ use Laravel\Passkeys\Passkey;
 use Mockery\MockInterface;
 use Pest\Browser\Api\PendingAwaitablePage;
 use Tests\TestCase;
+
+final class ResetBrowserSessionAttributes
+{
+    public function handle(Request $request, Closure $next): mixed
+    {
+        Session::flush();
+        Auth::forgetGuards();
+
+        return $next($request);
+    }
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -37,6 +49,10 @@ pest()->extend(TestCase::class)
 pest()->extend(TestCase::class)
     ->use(LazilyRefreshDatabase::class)
     ->in('Browser');
+
+pest()->beforeEach(function (): void {
+    app('router')->prependMiddlewareToGroup('web', ResetBrowserSessionAttributes::class);
+})->in('Browser');
 
 pest()->browser()->timeout(15_000);
 
