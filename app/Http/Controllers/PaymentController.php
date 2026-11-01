@@ -81,7 +81,7 @@ class PaymentController extends Controller
                 'allocations_count' => $batch->allocations_count,
                 'is_reversed' => $batch->isReversed(),
                 'reversal_reason' => $batch->reversal?->reason,
-                'can_reverse' => $currentUser->can('reverse', $batch),
+                'can_reverse' => $currentUser->can('reverse', $batch) && ! $batch->isReversed(),
                 'deliveries' => $batch->receiptDeliveries->map(fn (PaymentReceiptDelivery $delivery): array => [
                     'id' => $delivery->id,
                     'channel' => $delivery->channel,
