@@ -91,6 +91,11 @@ describe('Financial and family administration flows (Browser)', function () {
             ->click('Record Adjustment')
             ->assertSee('Record Fund Adjustment');
 
+        $key = $page->script('() => document.querySelector("[name=idempotency_key]")?.value');
+        expect($key)->toBeString()->not->toBeEmpty();
+        $page->navigate(route('fund-adjustments.index'))->click('Record Adjustment')->assertSee('Record Fund Adjustment');
+        expect($page->script('() => document.querySelector("[name=idempotency_key]")?.value'))->toBe($key);
+
         fillBrowserFieldWithoutChange($page, '[name="amount"]', '25000');
         fillBrowserFieldWithoutChange($page, '[name="recorded_at"]', now()->format('Y-m-d'));
         fillBrowserFieldWithoutChange($page, 'input[name="description"]', 'Browser workflow opening balance');
@@ -103,6 +108,8 @@ describe('Financial and family administration flows (Browser)', function () {
             ->where('recorded_by', $this->admin->id)
             ->where('description', 'Browser workflow opening balance')
             ->exists())->toBeTrue();
+        $page->click('Record Adjustment')->assertSee('Record Fund Adjustment');
+        expect($page->script('() => document.querySelector("[name=idempotency_key]")?.value'))->not->toBe($key);
     });
 
     it('schedules a member statement with a browser-local first run', function () {

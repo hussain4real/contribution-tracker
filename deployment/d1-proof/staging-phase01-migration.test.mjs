@@ -14,6 +14,7 @@ function fixture() {
         create table family_members(id integer primary key autoincrement);
         create table families(id integer primary key autoincrement);
         create table expenses(id integer primary key autoincrement, family_id integer not null);
+        create table fund_adjustments(id integer primary key autoincrement, family_id integer not null);
         create table d1_staging_assertions (id text primary key, passed integer not null constraint d1_staging_fresh_snapshot check (passed = 1));
         create table d1_staging_sequences(name text primary key,next_id integer not null);
         create table d1_staging_read_revision(id integer primary key,revision integer not null);
@@ -61,6 +62,8 @@ test('staging batch applies schema, tracking, sequences and revision triggers at
         assert.equal(db.prepare("select count(*) n from sqlite_master where type='trigger' and name='existing_parent_trigger'").get().n, 1);
         db.exec("insert into expenses(family_id,idempotency_key) values(1,'request-key')");
         assert.throws(() => db.exec("insert into expenses(family_id,idempotency_key) values(1,'request-key')"));
+        db.exec("insert into fund_adjustments(family_id,idempotency_key) values(1,'request-key')");
+        assert.throws(() => db.exec("insert into fund_adjustments(family_id,idempotency_key) values(1,'request-key')"));
         db.exec("insert into payment_batches default values; insert into payment_receipt_deliveries(payment_batch_id,channel,status) values(1,'email','queued')");
         assert.equal(db.prepare('select revision from d1_staging_read_revision where id=1').get().revision, 1);
         assert.throws(() => applyBatch(db, statements));

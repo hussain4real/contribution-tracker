@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreFundAdjustmentRequest;
+use App\Models\Family;
 use App\Models\FundAdjustment;
 use App\Support\CurrencyFormatter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -47,6 +50,8 @@ class FundAdjustmentController extends Controller
         return Inertia::render('FundAdjustments/Index', [
             'adjustments' => $adjustments,
             'can_create' => $user->canRecordPayments(),
+            'idempotencyKey' => (string) Str::uuid(),
+            'idempotencyScope' => "adjustment-{$family->id}-{$user->id}",
         ]);
     }
 
@@ -61,19 +66,37 @@ class FundAdjustmentController extends Controller
         abort_unless($family !== null, 403);
         $amount = $request->integer('amount');
 
-        DB::transaction(function () use ($amount, $family, $request, $user): void {
+        $wasReversed = DB::transaction(function () use ($amount, $family, $request, $user): bool {
+            Family::query()->lockForUpdate()->findOrFail($family->id);
+            $key = $request->string('idempotency_key')->toString();
+            $existing = FundAdjustment::query()->where('family_id', $family->id)->where('idempotency_key', $key)->first();
+            if ($existing instanceof FundAdjustment) {
+                if ($existing->recorded_by !== $user->id || $existing->amount !== $amount
+                    || $existing->description !== $request->string('description')->toString()
+                    || $existing->recorded_at->toDateString() !== $request->date('recorded_at')?->toDateString()) {
+                    throw ValidationException::withMessages(['idempotency_key' => 'This request was already used for a different adjustment. Check the adjustment list before starting a new adjustment.']);
+                }
+
+                return $existing->isReversed();
+            }
+
             FundAdjustment::create([
                 'family_id' => $family->id,
                 'amount' => $amount,
                 'description' => $request->string('description')->toString(),
                 'recorded_at' => $request->string('recorded_at')->toString(),
                 'recorded_by' => $user->id,
+                'idempotency_key' => $key,
             ]);
+
+            return false;
         }, attempts: 3);
 
         $formattedAmount = CurrencyFormatter::format($amount, $family->currency);
 
         return redirect()->route('fund-adjustments.index')
-            ->with('success', "Fund adjustment of {$formattedAmount} recorded successfully.");
+            ->with('success', $wasReversed
+                ? 'This fund adjustment was already recorded and later reversed.'
+                : "Fund adjustment of {$formattedAmount} recorded successfully.");
     }
 }

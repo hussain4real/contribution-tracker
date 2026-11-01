@@ -20,9 +20,10 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useCurrencyFormatter } from '@/lib/currency';
 import { type BreadcrumbItem } from '@/types';
+import type { FormComponentOptions, VisitOptions } from '@inertiajs/core';
 import { Form, Head, Link, router } from '@inertiajs/vue3';
 import { Landmark, Plus, RotateCcw } from '@lucide/vue';
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 
 interface AdjustmentItem {
     id: number;
@@ -46,9 +47,47 @@ interface PaginatedAdjustments {
 interface Props {
     adjustments?: PaginatedAdjustments;
     can_create?: boolean;
+    idempotencyKey: string;
+    idempotencyScope: string;
 }
 
-defineProps<Props>();
+const props = defineProps<Props>();
+const requestKey = ref(props.idempotencyKey);
+const unconfirmed = ref(false);
+const storageKey = `familyfund:${props.idempotencyScope}`;
+const adjustmentOptions: FormComponentOptions &
+    Pick<VisitOptions, 'onHttpException' | 'onNetworkError'> = {
+    onHttpException: (response) => {
+        if (response.status >= 500) {
+            unconfirmed.value = true;
+            return false;
+        }
+    },
+    onNetworkError: () => {
+        unconfirmed.value = true;
+        return false;
+    },
+};
+
+onMounted(() => {
+    try {
+        const saved = sessionStorage.getItem(storageKey);
+        if (saved) requestKey.value = saved;
+        else sessionStorage.setItem(storageKey, requestKey.value);
+    } catch {
+        // The current page still retains its request key if storage is unavailable.
+    }
+});
+
+function startNewAdjustment(): void {
+    requestKey.value = crypto.randomUUID();
+    try {
+        sessionStorage.setItem(storageKey, requestKey.value);
+    } catch {
+        // The current page retains the new key.
+    }
+    unconfirmed.value = false;
+}
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -113,6 +152,7 @@ function reverseAdjustment(): void {
 }
 
 function resetForm(): void {
+    startNewAdjustment();
     amount.value = '';
     description.value = '';
     recordedAt.value = new Date().toISOString().split('T')[0];
@@ -170,10 +210,33 @@ function resetForm(): void {
 
                 <Form
                     :action="store()"
+                    :options="adjustmentOptions"
                     class="mt-4 space-y-4"
-                    #default="{ errors, validate, processing }"
+                    #default="{ errors, validate, processing, clearErrors }"
                     @success="resetForm"
                 >
+                    <input
+                        type="hidden"
+                        name="idempotency_key"
+                        :value="requestKey"
+                    />
+                    <p v-if="unconfirmed" role="alert">
+                        We could not confirm whether the adjustment was
+                        recorded. Retry with the same details, or check the
+                        adjustment list before starting a new adjustment.
+                    </p>
+                    <div v-if="errors.idempotency_key" role="alert">
+                        <InputError :message="errors.idempotency_key" />
+                        <Button
+                            type="button"
+                            variant="outline"
+                            @click="
+                                startNewAdjustment();
+                                clearErrors('idempotency_key');
+                            "
+                            >Start a new adjustment</Button
+                        >
+                    </div>
                     <div class="grid gap-4 sm:grid-cols-2">
                         <div class="grid gap-2">
                             <Label for="amount">Amount ({{ currency }})</Label>
