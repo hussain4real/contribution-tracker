@@ -147,6 +147,58 @@ async function stagingGatewayHealth(env) {
     }
 }
 
+async function stagingGatewayControl(request, env) {
+    if (env.RUNTIME_PROFILE === "production" || env.STAGING_GATEWAY_CONTROL !== "1") return new Response("Not found", {status: 404});
+    const expected = new TextEncoder().encode(env.STAGING_GATEWAY_ADMIN_TOKEN ?? "");
+    const actual = new TextEncoder().encode(request.headers.get("X-Staging-Gateway-Admin") ?? "");
+    if (expected.length < 32 || actual.length !== expected.length || !crypto.subtle.timingSafeEqual(actual, expected)) {
+        return new Response("Forbidden", {status: 403, headers: {"Cache-Control": "no-store"}});
+    }
+    const input = new URL(request.url);
+    const paused = input.searchParams.getAll("paused");
+    if ((request.method === "GET" && input.search !== "") ||
+        (request.method === "POST" && (paused.length !== 1 || [...input.searchParams.keys()].some(key => key !== "paused") || !["true", "false"].includes(paused[0]))) ||
+        !["GET", "POST"].includes(request.method)) return new Response("Not found", {status: 404});
+    try {
+        const config = {
+            D1_STAGING_ENABLED: "true", D1_STAGING_DATABASE: "familyfunds-d1-web-staging",
+            D1_STAGING_URL: "https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev",
+            ...containerEnvironment(env, {allowStagingPaystackTest: true}),
+        };
+        if (config.D1_STAGING_ENABLED !== "true" || config.D1_PRODUCTION_ENABLED === "true" ||
+            config.D1_STAGING_DATABASE !== "familyfunds-d1-web-staging" ||
+            config.D1_STAGING_URL !== "https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev" ||
+            typeof config.D1_STAGING_TOKEN !== "string" || config.D1_STAGING_TOKEN.length < 32 ||
+            !env.STAGING_SQL_GATEWAY || typeof env.STAGING_SQL_GATEWAY.fetch !== "function") throw new Error("Invalid staging gateway configuration");
+        const destination = "https://staging-gateway.internal/__staging_admin/admission" + (request.method === "POST" ? "?paused=" + paused[0] : "");
+        const response = await env.STAGING_SQL_GATEWAY.fetch(destination, {
+            method: request.method, redirect: "manual", signal: AbortSignal.timeout(8000),
+            headers: {"Authorization": "Bearer " + config.D1_STAGING_TOKEN, "X-Staging-Gateway-Admin": env.STAGING_GATEWAY_ADMIN_TOKEN},
+        });
+        if (!response.ok || !response.body) throw new Error("Gateway control unavailable");
+        const reader = response.body.getReader();
+        const chunks = [];
+        let length = 0;
+        while (true) {
+            const {done, value} = await reader.read();
+            if (done) break;
+            length += value.byteLength;
+            if (length > 4096) { await reader.cancel(); throw new Error("Invalid gateway control response"); }
+            chunks.push(value);
+        }
+        const bytes = new Uint8Array(length);
+        let offset = 0;
+        for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+        const result = JSON.parse(new TextDecoder("utf-8", {fatal: true}).decode(bytes));
+        if (!result || typeof result !== "object" || Array.isArray(result) || Object.keys(result).sort().join(",") !== "paused,unresolved" ||
+            typeof result.paused !== "boolean" || !Number.isSafeInteger(result.unresolved) || result.unresolved < 0 || result.unresolved > 1001 ||
+            (request.method === "POST" && result.paused !== (paused[0] === "true"))) throw new Error("Invalid gateway control response");
+        return Response.json({paused: result.paused, unresolved: result.unresolved}, {headers: {"Cache-Control": "no-store"}});
+    } catch {
+        return Response.json({error: "Gateway control unavailable"}, {status: 503, headers: {"Cache-Control": "no-store"}});
+    }
+}
+
 function bootstrapParts(env, prefix, content) {
     const characters = Array.from(content);
     const names = [];
@@ -595,6 +647,7 @@ export default {
             if (request.method !== "GET") return new Response("Not found", {status: 404});
             return stagingGatewayHealth(env);
         }
+        if (new URL(request.url).pathname === "/__staging_admin/gateway-admission") return stagingGatewayControl(request, env);
         const candidate = request.headers.get("X-D1-Staging-Candidate");
         if (candidate && (candidate !== "lean" || request.headers.get("X-Staging-Admin") !== env.ADMIN_TOKEN)) {
             return new Response("Forbidden", {status: 403});

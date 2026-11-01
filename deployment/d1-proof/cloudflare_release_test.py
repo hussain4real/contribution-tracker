@@ -222,6 +222,15 @@ class ReleaseSafetyTest(unittest.TestCase):
             with self.subTest(change=change), self.assertRaisesRegex(RuntimeError, 'Unexpected staging gateway service binding'):
                 release.checked_bindings(release.CONFIG['staging']['worker'], {'bindings': [{**expected, **change}]})
 
+    def test_staging_gateway_control_must_be_complete_and_disabled(self):
+        worker = release.CONFIG['staging']['worker']
+        flag = {'name': 'STAGING_GATEWAY_CONTROL', 'type': 'plain_text', 'text': '0'}
+        token = {'name': 'STAGING_GATEWAY_ADMIN_TOKEN', 'type': 'secret_text'}
+        self.assertEqual(release.checked_bindings(worker, {'bindings': [flag, token]}), [flag])
+        for bindings in [[flag], [token], [{**flag, 'text': '1'}, token], [flag, {**token, 'type': 'plain_text'}]]:
+            with self.subTest(bindings=bindings), self.assertRaisesRegex(RuntimeError, 'fully configured and disabled'):
+                release.checked_bindings(worker, {'bindings': bindings})
+
     def test_gateway_target_checks_reject_unexpected_bindings(self):
         expected = [
             {'name': 'DB', 'type': 'd1', 'id': 'f96058f1-0aa3-42f3-9ee2-f796554d6ef4'},

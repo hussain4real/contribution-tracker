@@ -237,6 +237,13 @@ def checked_bindings(worker, settings):
         gateway = names['STAGING_SQL_GATEWAY']
         if gateway.get('type') != 'service' or gateway.get('service') != 'familyfunds-d1-staging-sql' or gateway.get('environment', 'production') != 'production' or gateway.get('entrypoint') is not None:
             raise RuntimeError('Unexpected staging gateway service binding')
+    if worker == CONFIG['staging']['worker']:
+        control_names = {'STAGING_GATEWAY_CONTROL', 'STAGING_GATEWAY_ADMIN_TOKEN'}
+        present = control_names.intersection(names)
+        if present and (present != control_names or names['STAGING_GATEWAY_CONTROL'].get('type') != 'plain_text'
+                        or names['STAGING_GATEWAY_CONTROL'].get('text') != '0'
+                        or names['STAGING_GATEWAY_ADMIN_TOKEN'].get('type') != 'secret_text'):
+            raise RuntimeError('Staging gateway control must be fully configured and disabled during release')
     if worker == 'familyfunds-d1-staging-sql':
         if names.get('DB', {}).get('id', names.get('DB', {}).get('database_id')) != 'f96058f1-0aa3-42f3-9ee2-f796554d6ef4':
             raise RuntimeError('Staging gateway D1 binding mismatch')
