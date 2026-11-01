@@ -148,7 +148,7 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
                 try {
                     if (!container.running) {
                         this.startupState.phase = "start";
-                        const env = containerEnvironment(this.env);
+                        const env = containerEnvironment(this.env, {allowStagingPaystackTest: true});
                         if (this.env.STARTUP_PROFILE === "1") {
                             env.FF_STARTUP_PROFILE = "1";
                             env.FF_STAGING_START_REQUEST_MS = String(Date.now());
