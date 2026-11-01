@@ -270,7 +270,11 @@ it('initiates a payment for selected contributions', function () {
         ->and($transaction->fee_policy)->toBe('payer_pays');
 });
 
-it('marks the transaction failed when paystack initialization fails', function () {
+it('marks the transaction failed when paystack initialization fails', function (bool $diagnostics, string $secret, string $reason) {
+    config([
+        'services.paystack.staging_diagnostics' => $diagnostics,
+        'services.paystack.secret_key' => $secret,
+    ]);
     Http::fake([
         'api.paystack.co/transaction/initialize' => Http::response(['message' => 'Gateway down'], 500),
     ]);
@@ -294,8 +298,14 @@ it('marks the transaction failed when paystack initialization fails', function (
         ->assertServerError()
         ->assertJson(['message' => 'Failed to initialize payment. Please try again.']);
 
-    expect(PaystackTransaction::query()->firstOrFail()->status)->toBe(TransactionStatus::Failed);
-});
+    $transaction = PaystackTransaction::query()->firstOrFail();
+    expect($transaction->status)->toBe(TransactionStatus::Failed)
+        ->and($transaction->failure_reason)->toBe($reason);
+})->with([
+    'normal operation' => [false, 'sk_test_secret', 'Paystack initialization failed.'],
+    'staging sandbox diagnostics' => [true, 'sk_test_secret', 'Paystack initialization failed (HTTP 500).'],
+    'live key stays generic' => [true, 'sk_live_secret', 'Paystack initialization failed.'],
+]);
 
 it('marks the transaction failed when paystack initialization returns malformed data', function () {
     Http::fake([
