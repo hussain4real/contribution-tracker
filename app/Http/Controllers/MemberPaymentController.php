@@ -204,38 +204,63 @@ class MemberPaymentController extends Controller
         $reference = $request->query('reference');
 
         if (! is_string($reference) || $reference === '') {
-            return redirect()->route('pay.index')->with('error', 'Invalid payment reference.');
+            return $this->paymentResult('error', 'Invalid payment reference.');
         }
 
-        $transaction = PaystackTransaction::where('reference', $reference)->first();
+        $transaction = PaystackTransaction::query()
+            ->where('reference', $reference)
+            ->where('user_id', $this->authUser()->id)
+            ->where('family_id', app(Family::class)->id)
+            ->where('type', TransactionType::Contribution)
+            ->first();
 
         if (! $transaction) {
-            return redirect()->route('pay.index')->with('error', 'Transaction not found.');
+            return $this->paymentResult('error', 'Transaction not found.');
+        }
+
+        if ($transaction->status === TransactionStatus::Reversed) {
+            return $this->paymentResult('error', 'This payment was reversed and no longer counts toward your contributions. Contact your family admin if you need help.');
         }
 
         if ($transaction->isSuccessful()) {
-            return redirect()->route('pay.index')->with('success', 'Payment already confirmed.');
+            if ($transaction->payment_batch_id !== null && $transaction->allocated_at !== null) {
+                return $this->paymentResult('success', 'Payment already confirmed.');
+            }
+
+            return $this->paymentResult('error', 'Payment may have been successful, but we could not confirm it was recorded. Check your payment history or contact your family admin before trying again.');
         }
 
         try {
             $response = $this->paystack->verifyTransaction($reference);
             $data = $this->responseData($response);
-            $status = $this->stringValue($data['status'] ?? 'failed');
+            $status = $this->stringValue($data['status'] ?? null);
 
             if ($status !== 'success') {
-                return redirect()->route('pay.index')->with('error', 'Payment was not successful. Please try again.');
+                $message = $status === 'failed'
+                    ? 'Payment was not successful. Please try again.'
+                    : 'Could not confirm your payment. Check your payment history or contact your family admin before trying again.';
+
+                return $this->paymentResult('error', $message);
             }
 
             $settledTransaction = $this->settlementService->settle($reference, $data);
 
-            if ($settledTransaction->isSuccessful()) {
-                return redirect()->route('pay.index')->with('success', 'Payment successful! Your contributions have been updated.');
+            if ($settledTransaction->isSuccessful() && $settledTransaction->payment_batch_id !== null && $settledTransaction->allocated_at !== null) {
+                return $this->paymentResult('success', 'Payment successful! Your contributions have been updated.');
             }
 
-            return redirect()->route('pay.index')->with('error', 'Payment was verified but could not be posted. Support has been notified.');
+            return $this->paymentResult('error', 'Payment was verified but not recorded. Contact your family admin before trying again.');
         } catch (Throwable) {
-            return redirect()->route('pay.index')->with('error', 'Could not verify payment. Your payment will be confirmed shortly.');
+            return $this->paymentResult('error', 'Could not confirm your payment. Check your payment history or contact your family admin before trying again.');
         }
+    }
+
+    /** @param 'success'|'error' $kind */
+    private function paymentResult(string $kind, string $message): RedirectResponse
+    {
+        Inertia::flash('payment_result', ['kind' => $kind, 'message' => $message]);
+
+        return redirect()->route('contributions.my');
     }
 
     private function stringConfig(string $key): string
