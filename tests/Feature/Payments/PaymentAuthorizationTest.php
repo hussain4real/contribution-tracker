@@ -20,7 +20,7 @@ describe('Payment Authorization', function () {
         $member = User::factory()->member()->create(['family_id' => $this->family->id]);
 
         $this->actingAs($member)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 4000,
                 'paid_at' => now()->toDateString(),
@@ -40,7 +40,7 @@ describe('Payment Authorization', function () {
         $financialSecretary = User::factory()->financialSecretary()->create(['family_id' => $this->family->id]);
 
         $this->actingAs($financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 4000,
                 'paid_at' => now()->toDateString(),
@@ -57,7 +57,7 @@ describe('Payment Authorization', function () {
         $admin = User::factory()->admin()->create(['family_id' => $this->family->id]);
 
         $this->actingAs($admin)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 4000,
                 'paid_at' => now()->toDateString(),
@@ -71,7 +71,7 @@ describe('Payment Authorization', function () {
     });
 
     it('forbids unauthenticated users from recording payments', function () {
-        $this->post(route('payments.store', $this->family), [
+        $this->postReviewedPayment(route('payments.store', $this->family), [
             'member_id' => $this->member->id,
             'amount' => 4000,
             'paid_at' => now()->toDateString(),
