@@ -2,9 +2,19 @@
 
 declare(strict_types=1);
 
+use App\Actions\ReversePaymentBatch;
+use App\Enums\TransactionStatus;
+use App\Enums\TransactionType;
 use App\Jobs\ProcessWhatsAppWebhook;
 use App\Models\Contribution;
+use App\Models\Family;
+use App\Models\FamilyMembership;
 use App\Models\PaymentBatch;
+use App\Models\PaystackTransaction;
+use App\Models\User;
+use App\Services\PaymentAllocationPreview;
+use App\Services\PaymentAllocationService;
+use App\Services\PaystackContributionSettlementService;
 use FamilyFunds\D1Staging\D1StagingConnection;
 use FamilyFunds\D1Staging\D1StagingConnector;
 use FamilyFunds\D1Staging\D1StagingRuntime;
@@ -17,6 +27,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 pest()->extend(TestCase::class);
@@ -457,4 +468,166 @@ it('queues an early WhatsApp status retry through the D1 runtime', function (): 
     });
 
     expect(stagingSqlValue($pdo, 'select count(*) from jobs'))->toBe(1);
+});
+
+/** @param (Closure(PDO, list<array{sql: string, params: list<scalar|null>}>): void)|null $afterBatch */
+function connectPaymentStagingFixture(PDO $pdo, ?Closure $afterBatch = null): void
+{
+    Http::fake(function (Request $request) use ($pdo, $afterBatch): PromiseInterface {
+        $body = $request->data();
+        /** @var list<array{sql: string, params: list<scalar|null>}> $batch */
+        $batch = $body['batch'] ?? [$body];
+        $results = [];
+        $pdo->beginTransaction();
+        try {
+            foreach ($batch as $query) {
+                $statement = $pdo->prepare($query['sql']);
+                $statement->execute($query['params']);
+                $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
+                $results[] = ['results' => $rows, 'meta' => ['changes' => stagingSqlValue($pdo, 'select changes()')]];
+            }
+            $pdo->commit();
+            if ($afterBatch !== null) {
+                $afterBatch($pdo, $batch);
+            }
+
+            return Http::response(['database' => 'familyfunds-d1-web-staging', 'result' => isset($body['batch']) ? $results : $results[0]]);
+        } catch (Throwable $error) {
+            $pdo->rollBack();
+
+            return Http::response(['error' => $error->getMessage()], 422);
+        }
+    });
+    DB::extend('d1-staging', fn (): D1StagingConnection => new D1StagingConnection(D1StagingConnection::TARGETS['familyfunds-d1-web-staging'], 'synthetic-token', 'familyfunds-d1-web-staging'));
+    config(['database.connections.d1-staging' => ['driver' => 'd1-staging'], 'database.default' => 'd1-staging']);
+    D1StagingRuntime::install();
+
+}
+
+it('allocates payments and queues receipts through the D1 runtime using current balances', function (): void {
+    config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
+    DB::purge('sqlite');
+    $this->artisan('migrate', ['--database' => 'sqlite', '--force' => true])->assertSuccessful();
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
+    $pdo = DB::connection('sqlite')->getPdo();
+    connectPaymentStagingFixture($pdo);
+    config(['queue.default' => 'd1-staging', 'queue.connections.d1-staging' => ['driver' => 'd1-staging', 'queue' => 'default']]);
+    Queue::extend('d1-staging', fn (): D1StagingConnector => new D1StagingConnector);
+    $runtime = new D1StagingRuntime;
+
+    $firstReview = $runtime->run(function () use ($member, $family): array {
+        $membership = $member->membershipForFamily($family);
+        if (! $membership instanceof FamilyMembership) {
+            throw new RuntimeException('The synthetic member has no family membership.');
+        }
+
+        return app(PaymentAllocationPreview::class)->preview($member, $family, $membership, 3000);
+    }, $family->id, $officer->id);
+    $first = $runtime->run(fn () => app(PaymentAllocationService::class)->createBatch(
+        member: $member, amount: 3000, paidAt: now(), recordedBy: $officer, family: $family, idempotencyKey: 'd1-first',
+        expectedAllocations: $firstReview['allocations'], reviewExpiresAt: now()->addMinute()->getTimestamp(),
+    ), $family->id, $officer->id);
+    $replayed = $runtime->run(fn () => app(PaymentAllocationService::class)->createBatch(
+        member: $member, amount: 3000, paidAt: now(), recordedBy: $officer, family: $family, idempotencyKey: 'd1-first',
+        expectedAllocations: $firstReview['allocations'], reviewExpiresAt: now()->subMinute()->getTimestamp(),
+    ), $family->id, $officer->id);
+    expect($replayed->id)->toBe($first->id)
+        ->and(stagingSqlValue($pdo, 'select count(*) from jobs'))->toBe(1);
+    expect(fn () => $runtime->run(fn () => app(PaymentAllocationService::class)->createBatch(
+        member: $member, amount: 3000, paidAt: now(), recordedBy: $officer, family: $family, idempotencyKey: 'd1-expired-new',
+        expectedAllocations: $firstReview['allocations'], reviewExpiresAt: now()->subMinute()->getTimestamp(),
+    ), $family->id, $officer->id))->toThrow(ValidationException::class);
+    expect(stagingSqlValue($pdo, 'select count(*) from payment_batches'))->toBe(1)
+        ->and(stagingSqlValue($pdo, 'select count(*) from jobs'))->toBe(1);
+    $review = $runtime->run(function () use ($member, $family): array {
+        $membership = $member->membershipForFamily($family);
+        if (! $membership instanceof FamilyMembership) {
+            throw new RuntimeException('The synthetic member has no family membership.');
+        }
+
+        return app(PaymentAllocationPreview::class)->preview($member, $family, $membership, 2000);
+    }, $family->id, $officer->id);
+    $runtime->run(fn () => app(PaymentAllocationService::class)->createBatch(
+        member: $member, amount: 2000, paidAt: now(), recordedBy: $officer, family: $family, idempotencyKey: 'd1-second',
+    ), $family->id, $officer->id);
+
+    expect(stagingSqlValue($pdo, 'select sum(amount) from payments where contribution_id='.$contribution->id))->toBe(4000)
+        ->and(stagingSqlValue($pdo, 'select sum(amount) from payments'))->toBe(5000)
+        ->and(stagingSqlValue($pdo, 'select count(*) from payment_batches'))->toBe(2)
+        ->and(stagingSqlValue($pdo, 'select count(*) from jobs'))->toBe(2);
+
+    expect(fn () => $runtime->run(fn () => app(PaymentAllocationService::class)->createBatch(
+        member: $member, amount: 2000, paidAt: now(), recordedBy: $officer, family: $family,
+        idempotencyKey: 'd1-stale-review', expectedAllocations: $review['allocations'],
+    ), $family->id, $officer->id))->toThrow(ValidationException::class);
+    expect(stagingSqlValue($pdo, 'select count(*) from payment_batches'))->toBe(2)
+        ->and(stagingSqlValue($pdo, 'select count(*) from jobs'))->toBe(2);
+
+    $runtime->run(fn () => app(ReversePaymentBatch::class)->handle($first, $officer, 'Synthetic reversal'), $family->id, $officer->id);
+    $runtime->run(fn () => app(PaymentAllocationService::class)->createBatch(
+        member: $member, amount: 1000, paidAt: now(), recordedBy: $officer, family: $family, idempotencyKey: 'd1-third',
+    ), $family->id, $officer->id);
+
+    expect(stagingSqlValue($pdo, 'select sum(payments.amount) from payments where contribution_id='.$contribution->id." and not exists (select 1 from financial_reversals where reversible_type='payment_batch' and reversible_id=payments.payment_batch_id)"))->toBe(2000)
+        ->and(stagingSqlValue($pdo, 'select count(*) from financial_reversals'))->toBe(1)
+        ->and(stagingSqlValue($pdo, 'select count(*) from payment_batches'))->toBe(3);
+
+    $collected = $runtime->runReadOnly(fn (): int => (int) Contribution::query()
+        ->where('family_id', $family->id)
+        ->where('year', $contribution->year)
+        ->where('month', $contribution->month)
+        ->withSum('payments as paid_amount', 'amount')
+        ->withCasts(['paid_amount' => 'integer'])
+        ->get()->sum(fn (Contribution $row): int => $row->paid_amount ?? 0), $family->id, $officer->id);
+    expect($collected)->toBe(2000);
+});
+
+it('records and audits a failed Paystack settlement through the D1 runtime', function (): void {
+    config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
+    DB::purge('sqlite');
+    $this->artisan('migrate', ['--database' => 'sqlite', '--force' => true])->assertSuccessful();
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->create(['family_id' => $family->id]);
+    $transaction = PaystackTransaction::query()->create([
+        'reference' => 'd1-paystack-'.Str::uuid(), 'user_id' => $member->id, 'family_id' => $family->id,
+        'type' => TransactionType::Contribution, 'amount' => 4000, 'gross_amount_kobo' => 400000,
+        'status' => TransactionStatus::Initiated, 'fee_policy' => 'payer_pays',
+    ]);
+    $pdo = DB::connection('sqlite')->getPdo();
+    connectPaymentStagingFixture($pdo);
+    $runtime = new D1StagingRuntime;
+
+    expect(fn () => $runtime->run(fn () => app(PaystackContributionSettlementService::class)->settle(
+        $transaction->reference, ['status' => 'success', 'amount' => 399900],
+    ), $family->id))->toThrow(RuntimeException::class, 'does not match');
+
+    expect($transaction->fresh()?->status)->toBe(TransactionStatus::Failed)
+        ->and(stagingSqlValue($pdo, "select count(*) from audit_events where action='paystack.state_changed'"))->toBe(1)
+        ->and(stagingSqlValue($pdo, 'select count(*) from payment_batches'))->toBe(0);
+});
+
+it('records a provider-reported failure once through the D1 runtime', function (): void {
+    config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
+    DB::purge('sqlite');
+    $this->artisan('migrate', ['--database' => 'sqlite', '--force' => true])->assertSuccessful();
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->create(['family_id' => $family->id]);
+    $transaction = PaystackTransaction::query()->create([
+        'reference' => 'd1-provider-failure-'.Str::uuid(), 'user_id' => $member->id, 'family_id' => $family->id,
+        'type' => TransactionType::Contribution, 'amount' => 4000, 'gross_amount_kobo' => 400000,
+        'status' => TransactionStatus::Initiated, 'fee_policy' => 'payer_pays',
+    ]);
+    $pdo = DB::connection('sqlite')->getPdo();
+    connectPaymentStagingFixture($pdo);
+    $runtime = new D1StagingRuntime;
+
+    $runtime->run(fn () => app(PaystackContributionSettlementService::class)->recordProviderFailure($transaction->reference), $family->id);
+    $runtime->run(fn () => app(PaystackContributionSettlementService::class)->recordProviderFailure($transaction->reference), $family->id);
+
+    expect($transaction->fresh()?->status)->toBe(TransactionStatus::Failed)
+        ->and(stagingSqlValue($pdo, "select count(*) from audit_events where action='paystack.state_changed'"))->toBe(1)
+        ->and(stagingSqlValue($pdo, 'select count(*) from payment_batches'))->toBe(0);
 });

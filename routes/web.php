@@ -192,6 +192,7 @@ Route::prefix('{current_family}')
         Route::get('members/{member}/payments/create', [PaymentController::class, 'create'])->name('payments.create');
         Route::post('payments', [PaymentController::class, 'store'])->name('payments.store')
             ->middleware([HandlePrecognitiveRequests::class]);
+        Route::post('payments/review', [PaymentController::class, 'review'])->name('payments.review');
         Route::post('payment-batches/{payment_batch}/reverse', PaymentBatchReversalController::class)
             ->name('payment-batches.reverse');
         Route::get('payment-batches/{payment_batch}/receipt', PaymentReceiptController::class)

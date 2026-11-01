@@ -58,7 +58,7 @@ describe('Role Access', function () {
 
         // Verify can record payment
         $this->actingAs($newFs)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 1000,
                 'paid_at' => now()->toDateString(),
@@ -112,7 +112,7 @@ describe('Role Access', function () {
 
         // Verify cannot record payment
         $this->actingAs($fs)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 1000,
                 'paid_at' => now()->toDateString(),
