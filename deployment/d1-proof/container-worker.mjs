@@ -97,7 +97,12 @@ async function stagingGatewayHealth(env) {
     let stage = "environment";
     try {
         if (env.RUNTIME_PROFILE === "production") return new Response("Not found", {status: 404});
-        const config = containerEnvironment(env, {allowStagingPaystackTest: true});
+        const config = {
+            D1_STAGING_ENABLED: "true",
+            D1_STAGING_DATABASE: "familyfunds-d1-web-staging",
+            D1_STAGING_URL: "https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev",
+            ...containerEnvironment(env, {allowStagingPaystackTest: true}),
+        };
         stage = "environment_flags";
         if (config.D1_STAGING_ENABLED !== "true" || config.D1_PRODUCTION_ENABLED === "true") throw new Error("Invalid staging gateway configuration");
         stage = "database_identity";
