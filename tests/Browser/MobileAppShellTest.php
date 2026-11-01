@@ -181,6 +181,7 @@ describe('Mobile app shell', function () {
         $page->fill('email', 'admin@test.com')
             ->fill('password', 'password')
             ->click('Log in')
+            ->assertSee('Dashboard')
             ->navigate("/{$this->family->slug}/notifications")
             ->assertSee('Notification Center')
             ->assertSee('Timeline')
