@@ -10,6 +10,7 @@ use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\FamilyMembership;
 use App\Models\Payment;
+use App\Models\PaymentBatch;
 use App\Models\User;
 use App\Services\FamilyContributionReviewService;
 use Carbon\Carbon;
@@ -93,10 +94,12 @@ class ContributionController extends Controller
             ->where('family_id', $family->id)
             ->where('year', $currentYear)
             ->where('month', $currentMonth)
+            ->withSum('payments as paid_amount', 'amount')
+            ->withCasts(['paid_amount' => 'integer'])
             ->get();
 
         $totalExpected = (int) $allContributions->sum(fn (Contribution $contribution): int => $contribution->expected_amount);
-        $totalCollected = (int) $allContributions->sum(fn (Contribution $contribution): int => $contribution->total_paid);
+        $totalCollected = (int) $allContributions->sum(fn (Contribution $contribution): int => $contribution->paid_amount ?? 0);
         $totalOutstanding = $totalExpected - $totalCollected;
         $collectionRate = $totalExpected > 0
             ? round(($totalCollected / $totalExpected) * 100, 1)
@@ -109,8 +112,27 @@ class ContributionController extends Controller
             ? round(($personalTotalPaid / $personalTotalExpected) * 100, 1)
             : 0;
 
+        $membership = $user->membershipForFamily($family);
+        abort_unless($membership instanceof FamilyMembership, 403);
+        $receipts = PaymentBatch::query()
+            ->where('family_id', $family->id)
+            ->where('family_membership_id', $membership->id)
+            ->with(['allocations.contribution', 'reversal'])
+            ->orderByDesc('paid_at')->orderByDesc('id')
+            ->paginate(20, ['*'], 'receipts_page')
+            ->through(fn (PaymentBatch $batch): array => [
+                'id' => $batch->id,
+                'receipt_number' => $batch->receipt_number,
+                'amount' => $batch->total_amount,
+                'paid_at' => $batch->paid_at->toDateString(),
+                'is_reversed' => $batch->isReversed(),
+                'periods' => $batch->allocations->map(fn (Payment $payment): ?string => $payment->contribution?->period_label)
+                    ->filter()->unique()->values()->all(),
+            ]);
+
         return Inertia::render('Contributions/My', [
             'member_id' => $user->id,
+            'receipts' => $receipts,
             'statement_period' => [
                 'date_from' => now()->startOfYear()->toDateString(),
                 'date_to' => now()->endOfYear()->toDateString(),

@@ -37,6 +37,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property FamilyCategory|null $familyCategory
  * @property User|null $user
  * @property Collection<int, Payment> $payments
+ * @property-read int|null $paid_amount
  * @property-read int $total_paid
  * @property-read int $balance
  */

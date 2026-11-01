@@ -71,6 +71,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const selectedIds = ref<number[]>([]);
 const processing = ref(false);
+const paymentUnconfirmed = ref(false);
 const { formatCurrency: formatAmount } = useCurrencyFormatter();
 
 const totalSelected = computed(() => {
@@ -188,6 +189,7 @@ const payWithPaystack = async () => {
         return;
     }
 
+    paymentUnconfirmed.value = false;
     processing.value = true;
 
     try {
@@ -195,14 +197,17 @@ const payWithPaystack = async () => {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRF-TOKEN':
-                    (
-                        document.querySelector(
-                            'meta[name="csrf-token"]',
-                        ) as HTMLMetaElement
-                    )?.content || '',
+                'X-XSRF-TOKEN': decodeURIComponent(
+                    document.cookie
+                        .split('; ')
+                        .find((row) => row.startsWith('XSRF-TOKEN='))
+                        ?.split('=')
+                        .slice(1)
+                        .join('=') ?? '',
+                ),
                 Accept: 'application/json',
             },
+            credentials: 'same-origin',
             body: JSON.stringify({
                 contribution_ids: selectedIds.value,
             }),
@@ -219,32 +224,36 @@ const payWithPaystack = async () => {
         // Open Paystack Popup (dynamic import to avoid SSR window error)
         const { default: PaystackPop } = await import('@paystack/inline-js');
         const popup = new PaystackPop();
+        let verificationStarted = false;
+        const verifyPayment = () => {
+            if (verificationStarted) return;
+            verificationStarted = true;
+
+            const showUnconfirmed = () => {
+                paymentUnconfirmed.value = true;
+                return false;
+            };
+
+            router.visit(
+                payCallback.url(undefined, {
+                    query: { reference: data.reference },
+                }),
+                {
+                    onNetworkError: showUnconfirmed,
+                    onHttpException: showUnconfirmed,
+                    onFinish: () => {
+                        processing.value = false;
+                    },
+                },
+            );
+        };
         popup.resumeTransaction(data.access_code, {
-            onSuccess: () => {
-                router.visit(
-                    payCallback.url(undefined, {
-                        query: { reference: data.reference },
-                    }),
-                );
-            },
-            onCancel: () => {
-                processing.value = false;
-                toast.error('Payment was cancelled.');
-            },
-            onClose: () => {
-                if (processing.value) {
-                    processing.value = false;
-                    // If still processing when popup closes, check via callback
-                    router.visit(
-                        payCallback.url(undefined, {
-                            query: { reference: data.reference },
-                        }),
-                    );
-                }
-            },
+            onSuccess: verifyPayment,
+            onCancel: verifyPayment,
+            onError: verifyPayment,
         });
     } catch {
-        toast.error('An error occurred. Please try again.');
+        paymentUnconfirmed.value = true;
         processing.value = false;
     }
 };
@@ -259,6 +268,15 @@ const payWithPaystack = async () => {
                 title="Pay Contributions"
                 :description="`Monthly contribution: ${formatted_amount}`"
             />
+
+            <div
+                v-if="paymentUnconfirmed"
+                role="alert"
+                class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
+            >
+                Could not confirm your payment. Check your payment history or
+                contact your family admin before trying again.
+            </div>
 
             <!-- No Paystack Setup -->
             <div
@@ -282,6 +300,12 @@ const payWithPaystack = async () => {
 
             <!-- Contributions List -->
             <div v-else class="space-y-4">
+                <p class="text-sm text-muted-foreground">
+                    The periods you select set the payment amount. Payments are
+                    applied to your oldest unpaid contributions first, which may
+                    be different periods. Check your receipt to see which
+                    periods were paid.
+                </p>
                 <div class="flex items-center justify-between">
                     <button
                         type="button"
