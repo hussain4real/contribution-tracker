@@ -109,6 +109,30 @@ test('staging gateway health authenticates, uses only the pinned target and retu
     assert.equal(calls.length, 1);
 });
 
+test('staging gateway health uses the staging image defaults without overriding explicit values', async () => {
+    const dockerfile = readFileSync(new URL('./Dockerfile.slim', import.meta.url), 'utf8');
+    const imageEnv = dockerfile.split('\n').find(line => line.startsWith('ENV APP_ENV=d1-staging '));
+    assert.ok(imageEnv);
+    for (const value of ['D1_STAGING_ENABLED=true', 'D1_STAGING_DATABASE=familyfunds-d1-web-staging',
+        'D1_STAGING_URL=https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev']) {
+        assert.ok(imageEnv.split(' ').includes(value));
+    }
+    let calls = 0;
+    const f = fixture(undefined, async () => {
+        calls++;
+        return Response.json({database: 'familyfunds-d1-web-staging', result: {results: [{ok: 1}]}});
+    });
+    const request = () => new Request('https://staging.example/__staging_health/gateway', {headers: {Authorization: f.env.BASIC_AUTHORIZATION}});
+    const base = {D1_STAGING_TOKEN: 'a'.repeat(32)};
+    f.env.CONTAINER_ENV = JSON.stringify(base);
+    assert.deepEqual(await (await f.handler.fetch(request(), f.env)).json(), {ok: true});
+    f.env.CONTAINER_ENV = JSON.stringify({...base, D1_STAGING_ENABLED: 'false'});
+    const result = await f.handler.fetch(request(), f.env);
+    assert.equal(result.status, 503);
+    assert.deepEqual(await result.json(), {ok: false, stage: 'environment_flags'});
+    assert.equal(calls, 1);
+});
+
 test('staging gateway health fails closed for wrong configuration and invalid responses', async () => {
     let output = Response.json({database: 'familyfunds-d1-web-staging', result: {results: [{ok: 1}]}});
     let calls = 0;
