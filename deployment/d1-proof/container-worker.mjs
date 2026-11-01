@@ -84,7 +84,12 @@ async function receiveWebhook(request, env) {
     const record = {provider, raw: new TextDecoder("utf-8", {fatal: true}).decode(bytes),
         signature: request.headers.get(provider === "paystack" ? "X-Paystack-Signature" : "X-Hub-Signature-256") ?? ""};
     if (!await verifyWebhook(record, config)) return new Response("Forbidden", {status: 403});
-    await env.STAGING_WEBHOOK_QUEUE.send(record, {contentType: "json"});
+    if (env.RUNTIME_PROFILE !== "production" && env.STAGING_ADMISSION_CONTROL === "1") {
+        const admitted = await env.STAGING_CONTAINER.getByName("isolated-staging").enqueueWebhook(record);
+        if (!admitted) return new Response("Staging maintenance in progress. No operation was submitted.", {status: 503, headers: {"Retry-After": "30", "Cache-Control": "no-store"}});
+    } else {
+        await env.STAGING_WEBHOOK_QUEUE.send(record, {contentType: "json"});
+    }
     return Response.json({message: "Accepted"}, {status: provider === "paystack" ? 202 : 200, headers: {"Cache-Control": "no-store"}});
 }
 
@@ -106,8 +111,19 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
         this.starting = null;
         this.inFlight = 0;
         this.waiters = [];
+        this.activeMaintenance = 0;
+        this.activeRestarts = 0;
+        this.activeWebhookSends = 0;
         this.startupState = {attempts: 0, allocations: 0};
         this.label = env.RUNTIME_PROFILE === "production" ? "FamilyFunds" : "Staging";
+        this.admissionEnabled = env.RUNTIME_PROFILE !== "production" && env.STAGING_ADMISSION_CONTROL === "1";
+        this.admissionPaused = false;
+        this.admissionGeneration = 0;
+        this.admissionReady = this.admissionEnabled ? ctx.blockConcurrencyWhile(async () => {
+            const state = await ctx.storage.get("staging-admission-paused");
+            if (state !== undefined && typeof state !== "boolean") throw new Error("Invalid staging admission state");
+            this.admissionPaused = state === true;
+        }) : Promise.resolve();
         this.requestLimit = Number(env.APP_CONCURRENCY ?? 2);
         if (!Number.isInteger(this.requestLimit) || this.requestLimit < 1 || this.requestLimit > 20) {
             throw new Error("Invalid staging application concurrency limit");
@@ -143,7 +159,9 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
         this.startupState = {attempts: 0, allocations: 0, requested_ms: Date.now()};
         const deadline = Date.now() + 25_000;
         while (Date.now() < deadline) {
+            if (this.admissionPaused) return;
             const allocated = await this.ctx.blockConcurrencyWhile(async () => {
+                if (this.admissionPaused) return false;
                 this.startupState.attempts++;
                 try {
                     if (!container.running) {
@@ -159,7 +177,7 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
                                 if (!/^\/var\/www\/html\/[A-Za-z0-9_./-]+$/.test(asset.path) || asset.path.includes("..") || !/^[a-f0-9]{64}$/.test(asset.sha256)) throw new Error("Invalid packaged bootstrap asset");
                                 const name = `FF_STAGING_ASSET_${i}`;
                                 const names = bootstrapParts(env, name, asset.content);
-                                const destination = asset.path.endsWith("/container-nginx.conf") ? "/etc/nginx/nginx.conf"
+                                const destination = asset.path.endsWith("/container-nginx-staging.conf") ? "/etc/nginx/nginx.conf"
                                     : asset.path.endsWith("/container-supervisor.conf") ? "/etc/supervisord.conf" : asset.path;
                                 const mode = asset.path.endsWith("/container-slim-entrypoint.sh") ? "0755" : "0644";
                                 return `["path"=>${JSON.stringify(destination)},"hash"=>${JSON.stringify(asset.sha256)},"names"=>[${names.map(name => JSON.stringify(name)).join(",")}],"mode"=>${mode}]`;
@@ -186,6 +204,7 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
                     return false;
                 }
             });
+            if (this.admissionPaused) return;
             if (allocated) {
                 this.startupState.phase = "idle-timeout";
                 try {
@@ -196,6 +215,7 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
                     await new Promise(resolve => setTimeout(resolve, 500));
                     continue;
                 }
+                if (this.admissionPaused) return;
                 this.startupState.allocations++;
                 if (this.env.RUNTIME_PROFILE === "production") {
                     this.startupState.phase = "outbound-intercept";
@@ -243,6 +263,8 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
     }
 
     async fetch(request) {
+        await this.admissionReady;
+        if (this.admissionPaused) return new Response("Staging maintenance in progress. No operation was submitted.", {status: 503, headers: {"Retry-After": "30", "Cache-Control": "no-store"}});
         const startupStarted = performance.now();
         const container = this.ctx.container;
         if (!container) return new Response(`${this.label} container is not configured`, {status: 503});
@@ -251,12 +273,17 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
             this.starting ??= this.waitForReady().finally(() => { this.starting = null; });
             await this.starting;
         }
+        if (this.admissionPaused) return new Response("Staging maintenance in progress. No operation was submitted.", {status: 503, headers: {"Retry-After": "30", "Cache-Control": "no-store"}});
         if (!this.ready) return new Response(`${this.label} container is starting. Retry shortly.`, {status: 503, headers: {"Retry-After": "2"}});
         const startupMs = performance.now() - startupStarted;
         const url = new URL(request.url);
         const consumesSlot = !url.pathname.startsWith("/build/");
         const queueStarted = performance.now();
         if (consumesSlot && !await this.acquireRequest()) return new Response(`${this.label} is busy. No operation was submitted; retry shortly.`, {status: 503, headers: {"Retry-After": "2"}});
+        if (this.admissionPaused) {
+            if (consumesSlot) this.releaseRequest();
+            return new Response("Staging maintenance in progress. No operation was submitted.", {status: 503, headers: {"Retry-After": "30", "Cache-Control": "no-store"}});
+        }
         const queueMs = performance.now() - queueStarted;
         let released = false;
         const release = () => {
@@ -329,18 +356,93 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
     }
 
     async restart() {
-        if (this.starting) await this.starting;
-        await this.ctx.container.destroy();
-        this.ready = false;
-        return true;
+        await this.admissionReady;
+        if (this.admissionPaused) throw new Error("Staging admission is paused");
+        this.activeRestarts++;
+        try {
+            if (this.starting) await this.starting;
+            if (this.admissionPaused) throw new Error("Staging admission is paused");
+            await this.ctx.container.destroy();
+            this.ready = false;
+            return true;
+        } finally {
+            this.activeRestarts--;
+        }
     }
 
     async inspect() {
+        await this.admissionReady;
         const info = await this.ctx.container.inspect();
-        return {running: this.ctx.container.running, image: info?.image ?? null};
+        const result = {running: this.ctx.container.running, image: info?.image ?? null};
+        if (this.env.RUNTIME_PROFILE === "production") return result;
+        const admission = this.admissionEnabled ? await this.ctx.blockConcurrencyWhile(async () => {
+            const unresolved = await this.ctx.storage.list({prefix: "staging-webhook-send:", limit: 1001});
+            return {admission_paused: this.admissionPaused, unresolved_webhook_sends: unresolved.size};
+        }) : {};
+        return {...result, activity: {request_slots: this.inFlight, waiting_requests: this.waiters.length,
+            starting: this.starting !== null, maintenance_rpcs: this.activeMaintenance},
+            ...(this.admissionEnabled ? {...admission, restart_operations: this.activeRestarts, webhook_sends: this.activeWebhookSends} : {})};
+    }
+
+    async enqueueWebhook(record) {
+        await this.admissionReady;
+        if (!this.admissionEnabled) throw new Error("Staging admission control is disabled");
+        const config = webhookConfig(this.env);
+        if (!config || !await verifyWebhook(record, config)) throw new Error("Invalid staging webhook");
+        const id = await this.ctx.blockConcurrencyWhile(async () => {
+            if (this.admissionPaused) return null;
+            const operation = crypto.randomUUID();
+            await this.ctx.storage.put(`staging-webhook-send:${operation}`, true);
+            return operation;
+        });
+        if (id === null) return false;
+        this.activeWebhookSends++;
+        try {
+            await this.env.STAGING_WEBHOOK_QUEUE.send(record, {contentType: "json"});
+            if (!await this.ctx.storage.delete(`staging-webhook-send:${id}`)) throw new Error("Unknown staging webhook operation");
+            return true;
+        } finally {
+            this.activeWebhookSends--;
+        }
+    }
+
+    async setAdmissionPaused(paused) {
+        await this.admissionReady;
+        if (!this.admissionEnabled || typeof paused !== "boolean") throw new Error("Staging admission control is disabled");
+        await this.ctx.blockConcurrencyWhile(async () => {
+            if (paused) this.admissionPaused = true;
+            this.admissionGeneration++;
+            await this.ctx.storage.put("staging-admission-paused", paused);
+            if (!paused) this.admissionPaused = false;
+        });
+        return {admission_paused: this.admissionPaused};
+    }
+
+    async stagingFpmStatus() {
+        await this.admissionReady;
+        if (!this.admissionEnabled || this.env.STAGING_FPM_STATUS_ENABLED !== "1" || !this.admissionPaused || !this.ctx.container?.running) {
+            throw new Error("Staging FPM status is unavailable");
+        }
+        const generation = this.admissionGeneration;
+        const asset = STAGING_BOOTSTRAP_ASSETS.find(asset => asset.path === "/var/www/html/deployment/d1-proof/staging-fpm-status.php");
+        if (!asset || !/^[a-f0-9]{64}$/.test(asset.sha256)) throw new Error("Staging FPM status is unavailable");
+        const php = `$path=${JSON.stringify(asset.path)};$hash=@hash_file("sha256",$path);if(!is_string($hash)||!hash_equals(${JSON.stringify(asset.sha256)},$hash)){exit(1);}require $path;`;
+        const output = await this.containerOutput(["php", "-r", php], {stdout: "pipe", stderr: "pipe"}, 5000);
+        if (output.exitCode !== 0 || output.stdout.byteLength > 4096 || !this.admissionPaused || this.admissionGeneration !== generation || !this.ctx.container?.running) throw new Error("Staging FPM status is unavailable");
+        const status = JSON.parse(new TextDecoder().decode(output.stdout));
+        const keys = ["active_processes", "listen_queue", "listen_queue_capacity", "total_processes", "start_time"];
+        if (!status || typeof status !== "object" || Object.keys(status).length !== keys.length
+            || keys.some(key => !Number.isSafeInteger(status[key]) || status[key] < 0)
+            || status.total_processes < 1 || status.active_processes > status.total_processes || status.start_time < 1
+            || status.listen_queue_capacity < 1 || status.listen_queue > status.listen_queue_capacity + 1) {
+            throw new Error("Invalid staging FPM status");
+        }
+        return status;
     }
 
     async scheduledProof(kind, familyId, at) {
+        await this.admissionReady;
+        if (this.admissionPaused) throw new Error("Staging admission is paused");
         const families = JSON.parse(this.env.STAGING_SCHEDULE_FAMILIES ?? "{}");
         const expected = kind === "purge" ? families.purge : kind === "reports" ? 43 : families.family;
         if (!["generate", "remind25", "remind28", "purge", "reports", "retry-notifications"].includes(kind)
@@ -349,12 +451,14 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
             throw new Error("Invalid isolated maintenance operation");
         }
         let stage = "startup";
+        this.activeMaintenance++;
         try {
             if (!this.ctx.container.running) this.ready = false;
             if (!this.ready) {
                 this.starting ??= this.waitForReady().finally(() => { this.starting = null; });
                 await this.starting;
             }
+            if (this.admissionPaused) throw new Error("Staging admission is paused");
             if (!this.ready) throw new Error("Staging container is not ready");
             const env = {...JSON.parse(this.env.CONTAINER_ENV), APP_ENV: "d1-staging", D1_STAGING_ENABLED: "true",
                 D1_STAGING_DATABASE: "familyfunds-d1-web-staging", D1_STAGING_URL: "https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev"};
@@ -378,6 +482,8 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
             return decoded;
         } catch {
             throw new Error(`Isolated staging maintenance failed during ${stage}`);
+        } finally {
+            this.activeMaintenance--;
         }
     }
 
@@ -440,11 +546,19 @@ export default {
         const path = new URL(request.url).pathname;
         if (path.startsWith("/__staging_admin/")) {
             if (request.headers.get("X-Staging-Admin") !== env.ADMIN_TOKEN) return new Response("Forbidden", {status: 403});
+            if (request.method === "POST" && ["/__staging_admin/pause-admission", "/__staging_admin/resume-admission"].includes(path)) {
+                if (env.RUNTIME_PROFILE === "production" || env.STAGING_ADMISSION_CONTROL !== "1") return new Response("Not found", {status: 404});
+                return Response.json(await container.setAdmissionPaused(path.endsWith("/pause-admission")), {headers: {"Cache-Control": "no-store"}});
+            }
             if (request.method === "POST" && path === "/__staging_admin/restart") {
                 await container.restart();
                 return Response.json({restarted: true});
             }
             if (request.method === "GET" && path === "/__staging_admin/inspect") return Response.json(await container.inspect(), {headers: {"Cache-Control": "no-store"}});
+            if (request.method === "GET" && path === "/__staging_admin/fpm-status") {
+                if (env.RUNTIME_PROFILE === "production" || env.STAGING_ADMISSION_CONTROL !== "1" || env.STAGING_FPM_STATUS_ENABLED !== "1") return new Response("Not found", {status: 404});
+                return Response.json(await container.stagingFpmStatus(), {headers: {"Cache-Control": "no-store"}});
+            }
             if (request.method === "GET" && path === "/__staging_admin/runtime") return Response.json(await container.runtime(), {headers: {"Cache-Control": "no-store"}});
             return new Response("Not found", {status: 404});
         }
