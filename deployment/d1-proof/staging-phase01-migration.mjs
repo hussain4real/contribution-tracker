@@ -1,18 +1,19 @@
 // Render-only migration batch. Applying it requires a separately verified
 // staging write freeze, checkpoint, isolated restore and target identity.
-export const migrationFingerprint = 'b5fda3883d56174439bb86629002e17f55ed8aa9b36755e410ba605f104760e5';
+export const migrationFingerprint = '35f5099e03917b5174fa10a1d4dab75888740b41b374edf74061897e4eeae022';
 export const stagingDatabaseId = 'f96058f1-0aa3-42f3-9ee2-f796554d6ef4';
 export const migrations = [
     '2026_10_30_143906_create_payment_receipt_deliveries_table',
     '2026_10_30_145419_add_reminder_channels_to_family_members_table',
     '2026_10_30_145656_add_reminder_settings_to_families_table',
     '2026_10_30_150441_create_contribution_reminder_deliveries_table',
+    '2026_11_01_070818_add_idempotency_key_to_expenses_table',
 ];
 
 export const schemaQuery = `select type,name,tbl_name,sql from sqlite_master
-    where (name in ('payment_batches','contributions','family_members','families','migrations',
+    where (name in ('payment_batches','contributions','family_members','families','expenses','migrations',
         'd1_staging_assertions','d1_staging_sequences','d1_staging_read_revision')
-        or tbl_name in ('payment_batches','contributions','family_members','families'))
+        or tbl_name in ('payment_batches','contributions','family_members','families','expenses'))
     and name not like 'sqlite_%' order by type,name`;
 export const migrationsQuery = 'select migration,batch from migrations order by migration,batch';
 
@@ -25,6 +26,8 @@ const schemaStatements = [
     'create table "contribution_reminder_deliveries" ("id" integer primary key autoincrement not null, "contribution_id" integer not null, "reminder_type" varchar not null, "channel" varchar not null, "status" varchar not null, "provider_message_id" varchar, "attempted_at" datetime, "accepted_at" datetime, "failed_at" datetime, "created_at" datetime, "updated_at" datetime, foreign key("contribution_id") references "contributions"("id") on delete cascade)',
     'create index "reminder_deliveries_contribution_created_idx" on "contribution_reminder_deliveries" ("contribution_id", "created_at")',
     'create index "contribution_reminder_deliveries_provider_message_id_index" on "contribution_reminder_deliveries" ("provider_message_id")',
+    'alter table "expenses" add column "idempotency_key" varchar',
+    'create unique index "expenses_family_id_idempotency_key_unique" on "expenses" ("family_id", "idempotency_key")',
 ];
 
 export function buildStagingPhase01Batch({databaseId, fingerprint, schema, migrationRows}) {
@@ -32,7 +35,7 @@ export function buildStagingPhase01Batch({databaseId, fingerprint, schema, migra
     if (!Array.isArray(schema) || !Array.isArray(migrationRows) || schema.length === 0 || migrationRows.length === 0) throw new Error('Missing preflight inventory');
     if (migrationRows.some(row => typeof row.migration !== 'string' || !Number.isSafeInteger(row.batch) || row.batch < 1) || migrationRows.some(row => migrations.includes(row.migration))) throw new Error('Invalid migration inventory');
     if (schema.some(row => !row || !['table', 'index', 'trigger'].includes(row.type) || typeof row.name !== 'string' || typeof row.tbl_name !== 'string' || !(row.sql === null || typeof row.sql === 'string'))) throw new Error('Invalid schema inventory');
-    const required = ['payment_batches','contributions','family_members','families','migrations','d1_staging_assertions','d1_staging_sequences','d1_staging_read_revision'];
+    const required = ['payment_batches','contributions','family_members','families','expenses','migrations','d1_staging_assertions','d1_staging_sequences','d1_staging_read_revision'];
     if (required.some(name => !schema.some(row => row.type === 'table' && row.name === name))) throw new Error('Incomplete schema inventory');
     const assertionTable = schema.find(row => row.type === 'table' && row.name === 'd1_staging_assertions');
     if (assertionTable.sql?.replace(/\s+/g, ' ').trim().toLowerCase() !== 'create table d1_staging_assertions (id text primary key, passed integer not null constraint d1_staging_fresh_snapshot check (passed = 1))') throw new Error('Unexpected staging assertion table');

@@ -31,6 +31,7 @@ class StoreExpenseRequest extends FormRequest
             'amount' => ['required', 'integer', 'min:1'],
             'description' => ['required', 'string', 'max:1000'],
             'spent_at' => ['required', 'date'],
+            'idempotency_key' => ['required', 'uuid'],
         ];
     }
 

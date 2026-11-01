@@ -5,6 +5,8 @@ declare(strict_types=1);
 use App\Actions\ReversePaymentBatch;
 use App\Enums\TransactionStatus;
 use App\Enums\TransactionType;
+use App\Http\Controllers\ExpenseController;
+use App\Http\Requests\StoreExpenseRequest;
 use App\Jobs\ProcessWhatsAppWebhook;
 use App\Jobs\SendPaymentReceipt;
 use App\Models\Contribution;
@@ -346,6 +348,30 @@ it('keeps a nested queue insert and reminder marker together when the transactio
     }, 1);
     expect(stagingSqlValue($pdo, 'select count(*) from jobs'))->toBe(0)
         ->and(stagingSqlValue($pdo, 'select amount from contributions where id=1'))->toBe(10);
+});
+
+it('records an expense once when its request is replayed through the staging runtime', function (): void {
+    config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
+    DB::purge('sqlite');
+    $this->artisan('migrate', ['--database' => 'sqlite', '--force' => true, '--no-interaction' => true])->assertSuccessful();
+    $family = Family::factory()->create();
+    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    $data = ['idempotency_key' => (string) Str::uuid(), 'amount' => 5000, 'description' => 'Transport', 'spent_at' => '2026-03-15'];
+    $pdo = DB::connection('sqlite')->getPdo();
+    connectStagingSqlFixture($pdo);
+    app('url')->defaults(['current_family' => $family->slug]);
+    $runtime = new D1StagingRuntime;
+    $submit = function (array $input) use ($runtime, $officer, $family): void {
+        $request = StoreExpenseRequest::create('/', 'POST', $input);
+        $request->setUserResolver(fn (): User => $officer);
+        $runtime->run(fn () => app(ExpenseController::class)->store($request), $family->id);
+    };
+
+    $submit($data);
+    $submit($data);
+    expect(stagingSqlValue($pdo, 'select count(*) from expenses'))->toBe(1);
+    expect(fn () => $submit([...$data, 'amount' => 6000]))->toThrow(ValidationException::class);
+    expect(stagingSqlValue($pdo, 'select count(*) from expenses'))->toBe(1);
 });
 
 it('commits a receipt job and financial write together through the D1 queue', function (): void {

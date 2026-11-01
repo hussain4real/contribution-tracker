@@ -34,6 +34,11 @@ describe('Financial and family administration flows (Browser)', function () {
         $page->navigate(route('expenses.create'))
             ->assertSee('Record Expense');
 
+        $key = $page->script('() => document.querySelector("[name=idempotency_key]")?.value');
+        expect($key)->toBeString()->not->toBeEmpty();
+        $page->navigate(route('expenses.create'))->assertSee('Record Expense');
+        expect($page->script('() => document.querySelector("[name=idempotency_key]")?.value'))->toBe($key);
+
         fillBrowserFieldWithoutChange($page, '[name="amount"]', '1250');
         fillBrowserFieldWithoutChange($page, 'input[name="description"]', 'Browser workflow transport');
         fillBrowserFieldWithoutChange($page, '[name="spent_at"]', now()->format('Y-m-d'));
@@ -47,6 +52,7 @@ describe('Financial and family administration flows (Browser)', function () {
             ->where('recorded_by', $this->financialSecretary->id)
             ->where('description', 'Browser workflow transport')
             ->exists())->toBeTrue();
+        expect($page->script('() => Object.keys(sessionStorage).filter((key) => key.startsWith("familyfund:expense-")).length'))->toBe(0);
     });
 
     it('shows members when online payments need Paystack setup', function () {

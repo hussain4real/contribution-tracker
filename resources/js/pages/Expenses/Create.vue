@@ -8,8 +8,59 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useCurrencyFormatter } from '@/lib/currency';
 import type { BreadcrumbItem } from '@/types';
+import type { FormComponentOptions, VisitOptions } from '@inertiajs/core';
 import { Form, Head } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
+
+const props = defineProps<{
+    idempotencyKey: string;
+    idempotencyScope: string;
+}>();
+const requestKey = ref(props.idempotencyKey);
+const unconfirmed = ref(false);
+const storageKey = `familyfund:${props.idempotencyScope}`;
+const expenseOptions: FormComponentOptions &
+    Pick<VisitOptions, 'onHttpException' | 'onNetworkError'> = {
+    onHttpException: (response) => {
+        if (response.status >= 500) {
+            unconfirmed.value = true;
+            return false;
+        }
+    },
+    onNetworkError: () => {
+        unconfirmed.value = true;
+        return false;
+    },
+};
+
+onMounted(() => {
+    try {
+        const saved = sessionStorage.getItem(storageKey);
+        if (saved) requestKey.value = saved;
+        else sessionStorage.setItem(storageKey, requestKey.value);
+    } catch {
+        // The current page still retains its request key if storage is unavailable.
+    }
+});
+
+function clearRequestKey(): void {
+    try {
+        sessionStorage.removeItem(storageKey);
+    } catch {
+        // Storage can be unavailable in private browsing.
+    }
+}
+
+function startNewExpense(): void {
+    clearRequestKey();
+    requestKey.value = crypto.randomUUID();
+    try {
+        sessionStorage.setItem(storageKey, requestKey.value);
+    } catch {
+        // The current page retains the new key.
+    }
+    unconfirmed.value = false;
+}
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -40,9 +91,39 @@ const { currency } = useCurrencyFormatter();
 
             <Form
                 :action="store()"
+                :options="expenseOptions"
+                @success="clearRequestKey"
                 class="space-y-6"
-                #default="{ errors, validate, processing, recentlySuccessful }"
+                #default="{
+                    errors,
+                    validate,
+                    processing,
+                    recentlySuccessful,
+                    clearErrors,
+                }"
             >
+                <input
+                    type="hidden"
+                    name="idempotency_key"
+                    :value="requestKey"
+                />
+                <p v-if="unconfirmed" role="alert">
+                    We could not confirm whether the expense was recorded. Retry
+                    with the same details, or check the expense list before
+                    starting a new expense.
+                </p>
+                <div v-if="errors.idempotency_key" role="alert">
+                    <InputError :message="errors.idempotency_key" />
+                    <Button
+                        type="button"
+                        variant="outline"
+                        @click="
+                            startNewExpense();
+                            clearErrors('idempotency_key');
+                        "
+                        >Start a new expense</Button
+                    >
+                </div>
                 <!-- Amount Field -->
                 <div class="grid gap-2">
                     <Label for="amount">Amount ({{ currency }})</Label>

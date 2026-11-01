@@ -13,7 +13,12 @@ use App\Models\Contribution;
 use App\Models\Payment;
 use App\Models\PaymentBatch;
 use App\Models\PaymentReceiptDelivery;
+use FamilyFunds\D1Staging\D1StagingSessionHandler;
+use GuzzleHttp\Promise\PromiseInterface;
+use Illuminate\Contracts\Encryption\Encrypter;
+use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Route;
 
@@ -221,6 +226,78 @@ describe('Payment Recording Flow (Browser)', function () {
         expect(PaymentBatch::count())->toBe(1)->and(Payment::count())->toBe(1)
             ->and($queue->pushed(SendPaymentReceipt::class)->count())->toBe($queuedCount);
     })->with(['server error' => 'server', 'network interruption' => 'network']);
+
+    it('returns the existing receipt after a session conflict following payment recording', function (): void {
+        require_once __DIR__.'/../../deployment/d1-proof/autoload.php';
+        $queue = Queue::fake();
+        $remote = new PDO('sqlite::memory:');
+        $remote->exec('create table sessions(id text primary key,payload text,last_activity integer)');
+        $remote->exec('create table injected_conflicts(id integer primary key)');
+        $conflict = new ArrayObject(['pending' => false]);
+        Http::preventStrayRequests();
+        Http::fake(function (ClientRequest $request) use ($remote, $conflict): PromiseInterface {
+            if ($request->url() !== 'https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev/query') {
+                throw new RuntimeException('Unexpected synthetic session endpoint.');
+            }
+            $sql = $request['sql'];
+            $params = $request['params'];
+            if (! is_string($sql) || ! is_array($params)) {
+                throw new RuntimeException('Invalid synthetic session request.');
+            }
+            if ($conflict['pending'] && PaymentBatch::query()->exists() && str_starts_with($sql, 'update sessions set payload=')) {
+                $session = $remote->prepare('select payload from sessions where id=?');
+                $session->execute([$params[2]]);
+                $encoded = $session->fetchColumn();
+                $encrypted = is_string($encoded) ? base64_decode($encoded, true) : false;
+                if (! is_string($encrypted)) {
+                    throw new RuntimeException('Expected a synthetic encrypted session.');
+                }
+                $encrypter = app(Encrypter::class);
+                $serialized = $encrypter->decrypt($encrypted);
+                $data = is_string($serialized) ? unserialize($serialized, ['allowed_classes' => false]) : false;
+                if (! is_array($data)) {
+                    throw new RuntimeException('Expected synthetic session data.');
+                }
+                $data['synthetic_concurrent_change'] = true;
+                $change = $remote->prepare('update sessions set payload=? where id=?');
+                $change->execute([base64_encode($encrypter->encrypt(serialize($data))), $params[2]]);
+                $remote->exec('insert into injected_conflicts default values');
+                $conflict['pending'] = false;
+            }
+            $statement = $remote->prepare($sql);
+            $statement->execute($params);
+
+            return Http::response(['database' => 'familyfunds-d1-web-staging', 'result' => ['results' => $statement->fetchAll(PDO::FETCH_ASSOC)]]);
+        });
+        config(['d1-staging.enabled' => true, 'session.driver' => 'browser-conflict-session', 'session.encrypt' => true, 'session.serialization' => 'php', 'session.lottery' => [0, 100]]);
+        app('session')->extend('browser-conflict-session', fn (): D1StagingSessionHandler => new D1StagingSessionHandler(
+            'https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev', 'synthetic-token', 'familyfunds-d1-web-staging', 120,
+        ));
+        $this->app->forgetInstance('session.store');
+        app('auth')->forgetGuards();
+        $page = loginBrowserAs($this->financialSecretary);
+        $page->navigate(route('payments.create', ['current_family' => $this->family->slug, 'member' => $this->member]));
+        fillBrowserFieldWithoutChange($page, '[name="amount"]', '4000');
+        fillBrowserFieldWithoutChange($page, '[name="paid_at"]', now()->format('Y-m-d'));
+        $page->click('Review payment')->assertSee($this->contribution->period_label.':');
+        $conflict['pending'] = true;
+
+        $page->click('button[type="submit"]')->assertSee("We couldn't confirm whether this payment was recorded.");
+        $conflicts = $remote->query('select count(*) from injected_conflicts');
+        if ($conflicts === false) {
+            throw new RuntimeException('Could not inspect synthetic conflicts.');
+        }
+        expect($conflicts->fetchColumn())->toBe(1)
+            ->and(PaymentBatch::count())->toBe(1)->and(Payment::count())->toBe(1);
+        $receipt = PaymentBatch::sole();
+        $queuedCount = $queue->pushed(SendPaymentReceipt::class)->count();
+        expect($queuedCount)->toBeGreaterThan(0);
+        $page->click('button[type="submit"]')
+            ->assertSee('Receipt #'.$receipt->receipt_number.': ₦4,000.00 recorded for John Doe.')
+            ->assertNoJavaScriptErrors();
+        expect(PaymentBatch::count())->toBe(1)->and(Payment::count())->toBe(1)
+            ->and($queue->pushed(SendPaymentReceipt::class)->count())->toBe($queuedCount);
+    });
 
     it('quick amount buttons work correctly', function () {
         $page = loginBrowserAs($this->financialSecretary);
