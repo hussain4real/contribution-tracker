@@ -388,6 +388,7 @@ test('staging startup passes the isolated test keys to the container', async () 
     assert.equal(startedWith.APP_KEY, 'preserved');
     assert.equal(startedWith.PAYSTACK_PUBLIC_KEY, keys.PAYSTACK_PUBLIC_KEY);
     assert.equal(startedWith.PAYSTACK_SECRET_KEY, keys.PAYSTACK_SECRET_KEY);
+    assert.equal(startedWith.D1_STAGING_PAYSTACK_TEST_CHECKOUT_ENABLED, 'true');
 });
 
 test('outbound binding setup does not hold the Durable Object concurrency lock while waiting for the platform', async () => {

@@ -98,6 +98,22 @@ final class D1StagingServiceProvider extends ServiceProvider
                 $allowedRequests[] = 'https://api.paystack.co/transaction/verify/*';
             }
         }
+        if (config('d1-staging.paystack_test_checkout')) {
+            $secret = config('services.paystack.secret_key');
+            $public = config('services.paystack.public_key');
+            if (config('d1-staging.database') !== 'familyfunds-d1-web-staging'
+                || config('services.paystack.base_url') !== 'https://api.paystack.co'
+                || ! is_string($secret) || preg_match('/^sk_test_[A-Za-z0-9]+$/D', $secret) !== 1
+                || ! is_string($public) || preg_match('/^pk_test_[A-Za-z0-9]+$/D', $public) !== 1) {
+                throw new LogicException('Test checkout requires isolated staging and Paystack test credentials.');
+            }
+            array_push($allowedRequests,
+                'https://api.paystack.co/transaction/initialize',
+                'https://api.paystack.co/transaction/verify/*',
+                'https://api.paystack.co/bank',
+                'https://api.paystack.co/bank?*',
+            );
+        }
         Http::allowStrayRequests($allowedRequests);
         $kernel = $this->app->make(HttpKernel::class);
         $kernel->prependMiddleware(D1StagingRequest::class.':gate');
