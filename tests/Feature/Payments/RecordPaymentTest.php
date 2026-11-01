@@ -9,6 +9,7 @@ use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\FamilyCategory;
 use App\Models\Payment;
+use App\Models\PaymentBatch;
 use App\Models\User;
 use App\Services\PaymentAllocationService;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -141,7 +142,7 @@ describe('Record Full Payment', function () {
             ->create();
 
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 4000, // ₦4,000 full payment
                 'paid_at' => now()->toDateString(),
@@ -183,12 +184,12 @@ describe('Record Full Payment', function () {
             ]);
 
         $this->actingAs($financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $member->id,
                 'amount' => 100,
                 'paid_at' => now()->toDateString(),
             ])
-            ->assertRedirect(route('dashboard'))
+            ->assertRedirectContains('/payments?receipt=')
             ->assertSessionHas('success', "Receipt #1: QAR 100.00 recorded for {$member->name}.");
     });
 
@@ -202,7 +203,7 @@ describe('Record Full Payment', function () {
             ->create();
 
         $this->actingAs($admin)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 4000,
                 'paid_at' => now()->toDateString(),
@@ -222,7 +223,7 @@ describe('Record Full Payment', function () {
         expect($contribution->status)->not->toBe(PaymentStatus::Paid);
 
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 4000,
                 'paid_at' => now()->toDateString(),
@@ -235,13 +236,13 @@ describe('Record Full Payment', function () {
 
     it('validates required fields', function () {
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [])
+            ->postReviewedPayment(route('payments.store'), [])
             ->assertSessionHasErrors(['member_id', 'amount', 'paid_at']);
     });
 
     it('validates amount is positive', function () {
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => -100,
                 'paid_at' => now()->toDateString(),
@@ -255,7 +256,7 @@ describe('Record Full Payment', function () {
         ]);
 
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $member->id,
                 'amount' => 1000,
                 'paid_at' => now()->toDateString(),
@@ -263,9 +264,24 @@ describe('Record Full Payment', function () {
             ->assertSessionHasErrors('member_id');
     });
 
+    it('rejects a payment for a member of another family', function () {
+        $otherMember = User::factory()->member()->employed()->create();
+
+        $this->actingAs($this->financialSecretary)
+            ->postReviewedPayment(route('payments.store'), [
+                'member_id' => $otherMember->id,
+                'amount' => 1000,
+                'paid_at' => now()->toDateString(),
+            ])
+            ->assertSessionHasErrors(['member_id' => 'The selected member does not belong to this family.']);
+
+        expect(PaymentBatch::count())->toBe(0)
+            ->and(Payment::count())->toBe(0);
+    });
+
     it('validates paid_at is a valid date', function () {
         $this->actingAs($this->financialSecretary)
-            ->post(route('payments.store'), [
+            ->postReviewedPayment(route('payments.store'), [
                 'member_id' => $this->member->id,
                 'amount' => 1000,
                 'paid_at' => 'invalid-date',
@@ -302,12 +318,12 @@ describe('Record Full Payment', function () {
         ]);
 
         $this->actingAs($financialSecretary)
-            ->post("/{$primaryFamily->slug}/payments", [
+            ->postReviewedPayment("/{$primaryFamily->slug}/payments", [
                 'member_id' => $member->id,
                 'amount' => MemberCategory::Employed->monthlyAmount(),
                 'paid_at' => now()->toDateString(),
             ])
-            ->assertRedirect("/{$primaryFamily->slug}/dashboard");
+            ->assertRedirectContains("/{$primaryFamily->slug}/payments?receipt=");
 
         expect($primaryContribution->refresh()->status)->toBe(PaymentStatus::Paid)
             ->and($secondaryContribution->refresh()->total_paid)->toBe(0);
