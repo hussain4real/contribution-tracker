@@ -20,10 +20,10 @@ import {
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useCurrencyFormatter } from '@/lib/currency';
 import { dashboard } from '@/routes';
-import type { BreadcrumbItem } from '@/types';
+import type { AppPageProps, BreadcrumbItem } from '@/types';
 import type { FormComponentOptions, VisitOptions } from '@inertiajs/core';
-import { Form, Head, Link, useHttp } from '@inertiajs/vue3';
-import { computed, nextTick, ref, watch } from 'vue';
+import { Form, Head, Link, useHttp, usePage } from '@inertiajs/vue3';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 
 interface Member {
     id: number;
@@ -123,6 +123,103 @@ interface ReviewResult {
     token: string;
 }
 
+const page = usePage<AppPageProps>();
+const requestKey = ref(props.idempotencyKey);
+const storageReady = ref(false);
+const storageError = ref('');
+const paymentUnconfirmed = ref(false);
+const paymentResponsePending = ref(false);
+let unconfirmedBeforeSubmit = false;
+const storageKey =
+    page.props.family?.id && page.props.auth.user?.id
+        ? `familyfund:payment:${page.props.family.id}:${page.props.auth.user.id}:${props.member.id}`
+        : null;
+
+function saveRequestKey(unconfirmed: boolean): boolean {
+    if (!storageKey) return false;
+    try {
+        sessionStorage.setItem(
+            storageKey,
+            `${requestKey.value}|${unconfirmed ? '1' : '0'}`,
+        );
+        storageError.value = '';
+        return true;
+    } catch {
+        storageError.value =
+            'Payment review requires session storage to protect against duplicate recording. Please enable it and reload this page.';
+        return false;
+    }
+}
+
+onMounted(() => {
+    if (!storageKey) {
+        storageError.value =
+            'Could not establish this payment session. Reload and try again.';
+        return;
+    }
+    try {
+        const saved = sessionStorage.getItem(storageKey);
+        if (saved) {
+            const [key, state] = saved.split('|');
+            if (
+                key &&
+                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                    key,
+                ) &&
+                (state === '0' || state === '1')
+            ) {
+                requestKey.value = key;
+                paymentUnconfirmed.value = state === '1';
+            }
+        }
+        storageReady.value = saveRequestKey(paymentUnconfirmed.value);
+    } catch {
+        storageError.value =
+            'Payment review requires session storage to protect against duplicate recording. Please enable it and reload this page.';
+    }
+});
+
+function beginPayment(): boolean {
+    if (!reviewed.value || !storageReady.value || !saveRequestKey(true))
+        return false;
+    unconfirmedBeforeSubmit = paymentUnconfirmed.value;
+    paymentResponsePending.value = true;
+    paymentUnconfirmed.value = true;
+    return true;
+}
+
+function paymentSucceeded(): void {
+    paymentResponsePending.value = false;
+    paymentUnconfirmed.value = false;
+    if (storageKey) {
+        try {
+            sessionStorage.removeItem(storageKey);
+        } catch {
+            storageReady.value = false;
+        }
+    }
+}
+
+function paymentRejected(): void {
+    paymentResponsePending.value = false;
+    reviewed.value = null;
+    paymentUnconfirmed.value = unconfirmedBeforeSubmit;
+    storageReady.value = saveRequestKey(paymentUnconfirmed.value);
+}
+
+function startNewPayment(): void {
+    if (
+        !window.confirm(
+            'Have you checked Payments for the earlier receipt? Starting a new payment can create another receipt.',
+        )
+    )
+        return;
+    requestKey.value = crypto.randomUUID();
+    paymentUnconfirmed.value = false;
+    reviewed.value = null;
+    storageReady.value = saveRequestKey(false);
+}
+
 const reviewRequest = useHttp<
     {
         member_id: number;
@@ -145,13 +242,11 @@ const reviewRequest = useHttp<
     notes: null,
     target_year: null,
     target_month: null,
-    idempotency_key: props.idempotencyKey,
+    idempotency_key: requestKey.value,
 });
 const reviewed = ref<ReviewResult | null>(null);
 const reviewHeading = ref<HTMLHeadingElement | null>(null);
 const reviewError = ref('');
-const paymentResponsePending = ref(false);
-const paymentUnconfirmed = ref(false);
 const paymentOptions: FormComponentOptions &
     Pick<VisitOptions, 'onHttpException' | 'onNetworkError'> = {
     onHttpException: (response) => (response.status >= 500 ? false : undefined),
@@ -166,7 +261,7 @@ const reviewInputs = () => ({
     notes: notes.value.trim() || null,
     target_year: targetYear.value,
     target_month: targetMonth.value,
-    idempotency_key: props.idempotencyKey,
+    idempotency_key: requestKey.value,
 });
 watch([amount, paidAt, method, reference, notes, selectedMonth], () => {
     reviewed.value = null;
@@ -246,16 +341,9 @@ async function reviewPayment(): Promise<void> {
                 :action="store()"
                 class="space-y-6"
                 :options="paymentOptions"
-                :on-before="() => reviewed !== null"
-                @start="paymentResponsePending = true"
-                @success="
-                    paymentResponsePending = false;
-                    paymentUnconfirmed = false;
-                "
-                @error="
-                    paymentResponsePending = false;
-                    reviewed = null;
-                "
+                :on-before="beginPayment"
+                @success="paymentSucceeded"
+                @error="paymentRejected"
                 @finish="
                     if (paymentResponsePending) paymentUnconfirmed = true;
                     paymentResponsePending = false;
@@ -278,7 +366,7 @@ async function reviewPayment(): Promise<void> {
                 <input
                     type="hidden"
                     name="idempotency_key"
-                    :value="idempotencyKey"
+                    :value="requestKey"
                 />
                 <input
                     v-if="targetYear"
@@ -476,6 +564,13 @@ async function reviewPayment(): Promise<void> {
                 </p>
                 <InputError :message="errors.review" />
                 <p
+                    v-if="storageError"
+                    role="alert"
+                    class="text-sm text-red-600"
+                >
+                    {{ storageError }}
+                </p>
+                <p
                     v-if="paymentUnconfirmed"
                     role="alert"
                     class="text-sm text-red-600"
@@ -486,11 +581,20 @@ async function reviewPayment(): Promise<void> {
                     </Link>
                     before recording another payment.
                 </p>
+                <Button
+                    v-if="paymentUnconfirmed"
+                    type="button"
+                    variant="outline"
+                    :disabled="processing"
+                    @click="startNewPayment"
+                >
+                    Start a new payment
+                </Button>
                 <div class="flex items-center gap-4">
                     <Button
                         v-if="!reviewed"
                         type="button"
-                        :disabled="reviewRequest.processing"
+                        :disabled="reviewRequest.processing || !storageReady"
                         @click="reviewPayment"
                         >{{
                             reviewRequest.processing
@@ -498,7 +602,11 @@ async function reviewPayment(): Promise<void> {
                                 : 'Review payment'
                         }}</Button
                     >
-                    <Button v-else type="submit" :disabled="processing">
+                    <Button
+                        v-else
+                        type="submit"
+                        :disabled="processing || !storageReady"
+                    >
                         {{ processing ? 'Recording...' : 'Record Payment' }}
                     </Button>
 
