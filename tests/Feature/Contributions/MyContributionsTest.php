@@ -133,6 +133,35 @@ describe('My Contributions', function () {
         expect(count($paymentSums))->toBeLessThanOrEqual(1);
     });
 
+    it('shows only the members own receipts', function () {
+        Queue::fake();
+        $family = $this->member->family;
+        assert($family instanceof Family);
+        $recorder = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+        $other = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $otherMembership = $other->membershipForFamily($family);
+        assert($otherMembership instanceof FamilyMembership);
+        Contribution::factory()->forUser($this->member)->forMonth(2025, 10)->create(['expected_amount' => 4000]);
+        Contribution::factory()->forUser($this->member)->forMonth(2025, 11)->create(['expected_amount' => 4000]);
+        $receipt = app(PaymentAllocationService::class)->createBatch(
+            member: $this->member, amount: 1500, paidAt: now(), recordedBy: $recorder, family: $family,
+        );
+        PaymentBatch::factory()->create([
+            'family_id' => $family->id,
+            'family_membership_id' => $otherMembership->id,
+            'receipt_number' => 2,
+        ]);
+
+        $this->actingAs($this->member)->get(route('contributions.my'))
+            ->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('personal_stats.total_outstanding', 6500)
+            ->has('receipts.data', 1)
+            ->where('receipts.data.0.id', $receipt->id)
+            ->where('receipts.data.0.amount', 1500)
+            ->where('receipts.data.0.periods.0', 'October 2025')
+            );
+    });
+
     it('includes family aggregate statistics (FR-015)', function () {
         // Create contributions for multiple members
         $member2 = User::factory()->member()->employed()->create();

@@ -6,6 +6,7 @@ use App\Ai\Tools\RecordPayment;
 use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Laravel\Ai\Tools\Request;
 
 beforeEach(function () {
@@ -70,6 +71,21 @@ test('payment recording preview includes a valid target period', function () {
         ->and($result['message'])->toContain($target->format('F Y'))
         ->and(resultArray($result, 'details')['target_year'])->toBe($target->year)
         ->and(resultArray($result, 'details')['target_month'])->toBe($target->month);
+});
+
+test('payment preview displays the selected month at month end', function () {
+    $this->travelTo(Carbon::parse('2026-08-31 12:00:00'));
+    $tool = new RecordPayment($this->admin);
+
+    $result = decodeToolResult($tool->handle(new Request([
+        'member_name' => 'Aminu',
+        'amount' => 4000,
+        'target_year' => 2027,
+        'target_month' => 2,
+    ])));
+
+    expect($result['status'])->toBe('confirmation_required')
+        ->and($result['message'])->toContain('February 2027');
 });
 
 test('admin can execute payment recording with confirmation', function () {

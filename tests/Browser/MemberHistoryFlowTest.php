@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\Contribution;
+use App\Models\Family;
 use App\Models\FamilyMembership;
 use App\Models\Payment;
 use App\Models\PaymentBatch;
@@ -100,6 +101,34 @@ describe('Member History Flow', function () {
 
         visit('/'.$this->family->slug.'/contributions/my')
             ->assertPathIs('/login')
+            ->assertNoJavaScriptErrors();
+    });
+
+    it('shows only the signed-in member’s receipts with an accessible download link', function () {
+        $family = $this->member->family;
+        assert($family instanceof Family);
+        $membership = $this->member->membershipForFamily($family);
+        assert($membership instanceof FamilyMembership);
+        $other = createBrowserMember($family);
+        $otherMembership = $other->membershipForFamily($family);
+        assert($otherMembership instanceof FamilyMembership);
+        PaymentBatch::factory()->create(['family_id' => $family->id, 'family_membership_id' => $membership->id, 'receipt_number' => 123]);
+        PaymentBatch::factory()->create(['family_id' => $family->id, 'family_membership_id' => $otherMembership->id, 'receipt_number' => 456]);
+
+        $page = loginBrowserAs($this->member);
+        $page->navigate(route('contributions.my', ['current_family' => $family->slug]))
+            ->assertSee('Your receipts')
+            ->assertSee('Receipt #123')
+            ->assertDontSee('Receipt #456')
+            ->assertNoJavaScriptErrors();
+        expect($page->script("() => Boolean(document.querySelector('a[aria-label=\"Download receipt #123\"]'))"))->toBeTrue();
+    });
+
+    it('shows an unconfirmed callback result after a full page return', function () {
+        $page = loginBrowserAs($this->member);
+        $page->navigate(route('pay.callback', ['current_family' => $this->family->slug, 'reference' => 'TXN_MISSING']))
+            ->assertPathIs("/{$this->family->slug}/contributions/my")
+            ->assertSeeIn('[role="alert"]', 'Transaction not found.')
             ->assertNoJavaScriptErrors();
     });
 

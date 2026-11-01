@@ -7,9 +7,63 @@ use App\Models\Expense;
 use App\Models\FamilyCategory;
 use App\Models\FamilyInvitation;
 use App\Models\FundAdjustment;
+use App\Models\PlatformPlan;
 use App\Models\ReportSchedule;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Mail;
+use Pest\Browser\Api\PendingAwaitablePage;
+
+function simulateFinancialContributionCheckout(PendingAwaitablePage $page, string $checkoutEvent, bool $dropVerification = false): void
+{
+    $manifestJson = file_get_contents(public_path('build/manifest.json'));
+    if ($manifestJson === false) {
+        throw new RuntimeException('The frontend build manifest is unavailable.');
+    }
+    $manifest = json_decode($manifestJson, true, flags: JSON_THROW_ON_ERROR);
+    $entry = is_array($manifest) ? ($manifest['node_modules/@paystack/inline-js/es/inline.js'] ?? null) : null;
+    $moduleFile = is_array($entry) ? ($entry['file'] ?? null) : null;
+    if (! is_string($moduleFile)) {
+        throw new RuntimeException('The Paystack module is missing from the frontend build.');
+    }
+    $moduleUrl = json_encode('/build/'.$moduleFile, JSON_THROW_ON_ERROR);
+    $event = json_encode($checkoutEvent, JSON_THROW_ON_ERROR);
+    $drop = json_encode($dropVerification, JSON_THROW_ON_ERROR);
+    $page->script(<<<JS
+        async () => {
+            sessionStorage.setItem('checkout-verifications', '0');
+            const blocked = new WeakSet();
+            const originalOpen = XMLHttpRequest.prototype.open;
+            XMLHttpRequest.prototype.open = function (...args) {
+                if (String(args[1]).includes('/pay/callback')) {
+                    sessionStorage.setItem('checkout-verifications', String(Number(sessionStorage.getItem('checkout-verifications')) + 1));
+                    if ({$drop}) blocked.add(this);
+                }
+                return originalOpen.apply(this, args);
+            };
+            const originalSend = XMLHttpRequest.prototype.send;
+            XMLHttpRequest.prototype.send = function (...args) {
+                if (blocked.has(this)) {
+                    queueMicrotask(() => this.dispatchEvent(new ProgressEvent('error')));
+                    return;
+                }
+                return originalSend.apply(this, args);
+            };
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = (input, options) => {
+                if (!String(input).includes('/pay/initiate')) return originalFetch(input, options);
+                const cookie = document.cookie.split('; ').find(row => row.startsWith('XSRF-TOKEN='))?.slice('XSRF-TOKEN='.length);
+                const header = new Headers(options.headers).get('X-XSRF-TOKEN');
+                sessionStorage.setItem('checkout-xsrf-matches', String(Boolean(cookie) && header === decodeURIComponent(cookie)));
+                return Promise.resolve(new Response(JSON.stringify({ access_code: 'synthetic', reference: 'TXN_MISSING' }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+            };
+            const { default: PaystackPop } = await import({$moduleUrl});
+            PaystackPop.prototype.resumeTransaction = function (accessCode, callbacks) {
+                callbacks[{$event}]({ message: 'Synthetic checkout event' });
+                callbacks.onSuccess({});
+            };
+        }
+        JS);
+}
 
 describe('Financial and family administration flows (Browser)', function () {
     beforeEach(function () {
@@ -76,6 +130,68 @@ describe('Financial and family administration flows (Browser)', function () {
             ->assertSee('Bank details are saved, but the Paystack bank code is missing')
             ->assertNoJavaScriptErrors();
     });
+
+    it('sends the current XSRF cookie when starting contribution checkout', function () {
+        config(['services.paystack.public_key' => 'pk_test_synthetic']);
+        $plan = PlatformPlan::create([
+            'name' => 'Browser payments', 'slug' => 'browser-payments', 'price' => 0,
+            'max_members' => null, 'features' => ['online_payments'], 'is_active' => true, 'sort_order' => 0,
+        ]);
+        $this->family->update(['platform_plan_id' => $plan->id, 'bank_code' => '058']);
+        $member = createBrowserMember($this->family);
+        Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
+        $page = loginBrowserAs($member);
+        $page->navigate(route('pay.index', ['current_family' => $this->family->slug]))->assertSee('Pay Contributions');
+        $page->script(<<<'JS'
+            () => {
+                const originalFetch = window.fetch.bind(window);
+                window.fetch = (input, options) => {
+                    if (!String(input).includes('/pay/initiate')) return originalFetch(input, options);
+                    const cookie = document.cookie.split('; ').find(row => row.startsWith('XSRF-TOKEN='))?.slice('XSRF-TOKEN='.length);
+                    const header = new Headers(options.headers).get('X-XSRF-TOKEN');
+                    sessionStorage.setItem('checkout-xsrf-matches', String(Boolean(cookie) && header === decodeURIComponent(cookie)));
+                    return Promise.resolve(new Response(JSON.stringify({ message: 'Synthetic checkout stopped' }), { status: 422, headers: { 'Content-Type': 'application/json' } }));
+                };
+            }
+            JS);
+
+        $page->click('Select All')
+            ->click('button:has-text("with Paystack")')
+            ->assertSee('Synthetic checkout stopped')
+            ->assertNoJavaScriptErrors();
+        expect($page->script("() => sessionStorage.getItem('checkout-xsrf-matches')"))->toBe('true');
+    });
+
+    it('checks an initialized payment after checkout cancellation or load failure', function (string $checkoutEvent, bool $dropVerification) {
+        config(['services.paystack.public_key' => 'pk_test_synthetic']);
+        $plan = PlatformPlan::create([
+            'name' => 'Browser payments', 'slug' => 'browser-payments', 'price' => 0,
+            'max_members' => null, 'features' => ['online_payments'], 'is_active' => true, 'sort_order' => 0,
+        ]);
+        $this->family->update(['platform_plan_id' => $plan->id, 'bank_code' => '058']);
+        $member = createBrowserMember($this->family);
+        Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
+        $page = loginBrowserAs($member);
+        $page->navigate(route('pay.index', ['current_family' => $this->family->slug]))->assertSee('Pay Contributions');
+        simulateFinancialContributionCheckout($page, $checkoutEvent, $dropVerification);
+
+        $page->click('Select All')->click('button:has-text("with Paystack")');
+        if ($dropVerification) {
+            $page->assertPathIs("/{$this->family->slug}/pay")
+                ->assertSeeIn('[role="alert"]', 'Could not confirm your payment. Check your payment history or contact your family admin before trying again.')
+                ->assertEnabled('button:has-text("with Paystack")');
+        } else {
+            $page->assertPathIs("/{$this->family->slug}/contributions/my")
+                ->assertSeeIn('[role="alert"]', 'Transaction not found.');
+        }
+        $page->assertNoJavaScriptErrors();
+        expect($page->script("() => sessionStorage.getItem('checkout-verifications')"))->toBe('1')
+            ->and($page->script("() => sessionStorage.getItem('checkout-xsrf-matches')"))->toBe('true');
+    })->with([
+        'cancelled' => ['onCancel', false],
+        'load failure' => ['onError', false],
+        'interrupted verification' => ['onCancel', true],
+    ]);
 
     it('records a fund adjustment through the UI', function () {
         FundAdjustment::factory()->recordedBy($this->admin)->create([

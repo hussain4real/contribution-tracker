@@ -14,6 +14,7 @@ use App\Jobs\SendPaymentReceipt;
 use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\FamilyMembership;
+use App\Models\PaymentBatch;
 use App\Models\PaystackTransaction;
 use App\Models\User;
 use App\Services\PaymentAllocationPreview;
@@ -714,3 +715,32 @@ function stagingSqlValue(PDO $pdo, string $sql): mixed
 
     return $statement->fetchColumn();
 }
+
+it('reads family totals and member receipts from the isolated staging snapshot', function (): void {
+    $pdo = stagingReadCacheFixture();
+    $pdo->exec('create table payment_batches (id integer primary key, "family_id" integer not null, family_membership_id integer not null, receipt_number integer not null, total_amount integer not null, paid_at text not null)');
+    $pdo->exec('create table payments (id integer primary key, contribution_id integer not null, payment_batch_id integer, amount integer not null)');
+    $pdo->exec('create table financial_reversals (id integer primary key, "family_id" integer not null, reversible_type text not null, reversible_id integer not null)');
+    $pdo->exec("insert into payment_batches values (1,1,1,1,30,'2026-10-01'),(2,1,1,2,40,'2026-10-02'),(3,2,3,3,90,'2026-10-03')");
+    $pdo->exec('insert into payments values (1,1,1,30),(2,1,2,40),(3,2,3,90)');
+    $pdo->exec("insert into financial_reversals values (1,1,'payment_batch',2)");
+    D1StagingRuntime::installReadCache();
+    $runtime = new D1StagingRuntime;
+
+    $result = $runtime->runReadOnly(function (): array {
+        $total = Contribution::query()->where('family_id', 1)->withSum('payments as paid_amount', 'amount')
+            ->withCasts(['paid_amount' => 'integer'])->get()
+            ->sum(fn (Contribution $contribution): int => $contribution->paid_amount ?? 0);
+        $receipts = PaymentBatch::query()->where('family_id', 1)->where('family_membership_id', 1)
+            ->with(['allocations.contribution', 'reversal'])->orderByDesc('paid_at')->paginate(20);
+
+        return ['total' => $total, 'receipts' => $receipts->map(fn (PaymentBatch $batch): array => [
+            'id' => $batch->id, 'reversed' => $batch->isReversed(), 'allocations' => $batch->allocations->count(),
+        ])->all()];
+    }, 1, 10);
+
+    expect($result)->toBe(['total' => 30, 'receipts' => [
+        ['id' => 2, 'reversed' => true, 'allocations' => 1],
+        ['id' => 1, 'reversed' => false, 'allocations' => 1],
+    ]]);
+});

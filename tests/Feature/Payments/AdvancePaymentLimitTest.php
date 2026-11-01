@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\User;
+use Illuminate\Support\Carbon;
 
 /**
  * FR-018: Advance Payment Limit
@@ -28,6 +29,20 @@ describe('Advance Payment Limit (FR-018)', function () {
                 'target_month' => $sevenMonthsAhead->month,
             ])
             ->assertSessionHasErrors('target_month');
+    });
+
+    it('rejects seven months ahead when today is the last day of a month', function () {
+        $this->travelTo(Carbon::parse('2026-08-31 12:00:00'));
+        $member = User::factory()->member()->employed()->create(['family_id' => $this->financialSecretary->family_id]);
+
+        $this->actingAs($this->financialSecretary)
+            ->post(route('payments.store'), [
+                'member_id' => $member->id,
+                'amount' => 4000,
+                'paid_at' => now()->toDateString(),
+                'target_year' => 2027,
+                'target_month' => 3,
+            ])->assertSessionHasErrors('target_month');
     });
 
     it('rejects payment targeting 12 months ahead', function () {
