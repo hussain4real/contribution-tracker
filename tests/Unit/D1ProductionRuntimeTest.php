@@ -2,6 +2,12 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\ExpenseController;
+use App\Http\Controllers\FundAdjustmentController;
+use App\Http\Requests\StoreExpenseRequest;
+use App\Http\Requests\StoreFundAdjustmentRequest;
+use App\Models\Family;
+use App\Models\User;
 use App\Services\PaystackService;
 use FamilyFunds\D1Staging\D1ProductionRequest;
 use FamilyFunds\D1Staging\D1ProductionServiceProvider;
@@ -22,6 +28,8 @@ use Illuminate\Http\Request;
 use Illuminate\Session\EncryptedStore;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Livewire\Mechanisms\HandleRequests\EndpointResolver;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -98,6 +106,77 @@ it('uses production drivers and private storage without enabling the staging pro
         ->and(config('filesystems.disks.public.visibility'))->toBe('private')
         ->and(config('mail.default'))->toBe('array')
         ->and(config('d1-staging.enabled'))->toBeFalse();
+});
+
+it('records and safely replays web expenses and adjustments through the production runtime', function (): void {
+    config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
+    DB::purge('sqlite');
+    $this->artisan('migrate', ['--database' => 'sqlite', '--force' => true, '--no-interaction' => true])->assertSuccessful();
+    $family = Family::factory()->create();
+    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    $pdo = DB::connection('sqlite')->getPdo();
+    Http::swap(new Factory);
+    Http::fake(function (ClientRequest $request) use ($pdo): PromiseInterface {
+        $body = $request->data();
+        $queries = $body['batch'] ?? [$body];
+        $results = [];
+        $pdo->beginTransaction();
+        try {
+            if (! is_array($queries)) {
+                throw new RuntimeException('Invalid fixture batch.');
+            }
+            foreach ($queries as $query) {
+                if (! is_array($query) || ! is_string($query['sql'] ?? null) || ! is_array($query['params'] ?? null)) {
+                    throw new RuntimeException('Invalid fixture query.');
+                }
+                $statement = $pdo->prepare($query['sql']);
+                $statement->execute($query['params']);
+                $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
+                $changes = $pdo->query('select changes()');
+                if ($changes === false) {
+                    throw new RuntimeException('Unable to inspect fixture changes.');
+                }
+                $results[] = ['results' => $rows, 'meta' => ['changes' => (int) $changes->fetchColumn()]];
+            }
+            $pdo->commit();
+
+            return Http::response(['database' => D1RuntimeProfile::PRODUCTION_DATABASE, 'result' => isset($body['batch']) ? $results : $results[0]]);
+        } catch (Throwable $exception) {
+            $pdo->rollBack();
+
+            return Http::response(['error' => $exception->getMessage()], 422);
+        }
+    });
+    DB::setDefaultConnection('d1');
+    D1StagingRuntime::install();
+    app('url')->defaults(['current_family' => $family->slug]);
+    $runtime = new D1StagingRuntime;
+    $expense = ['idempotency_key' => (string) Str::uuid(), 'amount' => 5000, 'description' => 'Transport', 'spent_at' => '2026-03-15'];
+    $adjustment = ['idempotency_key' => (string) Str::uuid(), 'amount' => 3000, 'description' => 'Donation', 'recorded_at' => '2026-03-15'];
+    $submitExpense = function (array $input) use ($runtime, $officer): void {
+        $request = StoreExpenseRequest::create('/', 'POST', $input);
+        $request->setUserResolver(fn (): User => $officer);
+        $runtime->run(fn () => app(ExpenseController::class)->store($request));
+    };
+    $submitAdjustment = function (array $input) use ($runtime, $officer): void {
+        $request = StoreFundAdjustmentRequest::create('/', 'POST', $input);
+        $request->setUserResolver(fn (): User => $officer);
+        $runtime->run(fn () => app(FundAdjustmentController::class)->store($request));
+    };
+    $submitExpense($expense);
+    $submitExpense($expense);
+    expect(fn () => $submitExpense([...$expense, 'amount' => 7000]))->toThrow(ValidationException::class);
+    $submitAdjustment($adjustment);
+    $submitAdjustment($adjustment);
+    expect(fn () => $submitAdjustment([...$adjustment, 'amount' => 7000]))->toThrow(ValidationException::class);
+
+    $expenseCount = $pdo->query('select count(*) from expenses');
+    $adjustmentCount = $pdo->query('select count(*) from fund_adjustments');
+    if ($expenseCount === false || $adjustmentCount === false) {
+        throw new RuntimeException('Unable to count fixture records.');
+    }
+    expect((int) $expenseCount->fetchColumn())->toBe(1)
+        ->and((int) $adjustmentCount->fetchColumn())->toBe(1);
 });
 
 it('allows only read-only bank listing with an independent test credential while candidate delivery stays disabled', function (): void {
