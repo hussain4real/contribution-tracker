@@ -207,6 +207,32 @@ class ReleaseSafetyTest(unittest.TestCase):
             with self.subTest(bindings=broken), self.assertRaises(RuntimeError):
                 release.checked_bindings('familyfunds-d1-staging-sql', {'bindings': broken})
 
+    def test_staging_gateway_allows_only_a_complete_disabled_coordinator(self):
+        base = [
+            {'name': 'DB', 'type': 'd1', 'id': 'f96058f1-0aa3-42f3-9ee2-f796554d6ef4'},
+            {'name': 'DATABASE_NAME', 'type': 'plain_text', 'text': 'familyfunds-d1-web-staging'},
+            {'name': 'PROOF_TOKEN', 'type': 'secret_text'},
+        ]
+        gate = {'name': 'STAGING_GATEWAY_ADMISSION', 'type': 'plain_text', 'text': '0'}
+        coordinator = {'name': 'STAGING_GATEWAY_ADMISSION_OBJECT', 'type': 'durable_object_namespace',
+                       'class_name': 'StagingGatewayAdmission', 'namespace_id': 'a' * 32}
+        admin = {'name': 'STAGING_GATEWAY_ADMIN_TOKEN', 'type': 'secret_text'}
+        self.assertEqual(release.checked_bindings('familyfunds-d1-staging-sql', {'bindings': base + [gate, coordinator, admin]}),
+                         [base[0], base[1], gate, coordinator])
+        invalid = [
+            [gate], [coordinator, admin],
+            [{**gate, 'text': '1'}, coordinator, admin],
+            [{**gate, 'text': 'unexpected'}, coordinator, admin],
+            [gate, {**coordinator, 'class_name': 'Other'}, admin],
+            [gate, {**coordinator, 'namespace_id': 'invalid'}, admin],
+            [gate, {**coordinator, 'script_name': 'other-worker'}, admin],
+            [gate, {**coordinator, 'environment': 'preview'}, admin],
+            [gate, coordinator, {**admin, 'type': 'plain_text'}],
+        ]
+        for bindings in invalid:
+            with self.subTest(bindings=bindings), self.assertRaisesRegex(RuntimeError, 'fully configured and disabled'):
+                release.checked_bindings('familyfunds-d1-staging-sql', {'bindings': base + bindings})
+
     def test_staging_gateway_code_only_update_restores_old_module_on_web_failure(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)
