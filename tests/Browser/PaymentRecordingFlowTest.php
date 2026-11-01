@@ -94,6 +94,52 @@ describe('Payment Recording Flow (Browser)', function () {
             ->assertSee('remaining');
     });
 
+    it('requires a fresh review when the amount changes during a slow review', function (): void {
+        $page = loginBrowserAs($this->financialSecretary);
+        $page->resize(390, 844)->navigate(route('payments.create', [
+            'current_family' => $this->family->slug,
+            'member' => $this->member,
+        ]));
+        fillBrowserFieldWithoutChange($page, '[name="amount"]', '4000');
+        fillBrowserFieldWithoutChange($page, '[name="paid_at"]', now()->format('Y-m-d'));
+
+        $reviewPath = json_encode(route('payments.review', ['current_family' => $this->family->slug], false), JSON_THROW_ON_ERROR);
+        $page->script(<<<JS
+            () => {
+                const originalOpen = XMLHttpRequest.prototype.open;
+                const originalSend = XMLHttpRequest.prototype.send;
+                const delayed = new WeakSet();
+                let first = true;
+                XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+                    if (first && method === 'POST' && new URL(url, window.location.origin).pathname === {$reviewPath}) {
+                        first = false;
+                        delayed.add(this);
+                    }
+                    return originalOpen.call(this, method, url, ...rest);
+                };
+                XMLHttpRequest.prototype.send = function (...args) {
+                    if (delayed.has(this)) {
+                        window.releasePaymentReview = () => originalSend.apply(this, args);
+                        return;
+                    }
+                    return originalSend.apply(this, args);
+                };
+            }
+        JS);
+
+        $page->click('Review payment')
+            ->assertButtonDisabled('Preparing review...');
+        fillBrowserFieldWithoutChange($page, '[name="amount"]', '2000');
+        $page->script('() => window.releasePaymentReview()');
+        $page->assertButtonEnabled('Review payment')
+            ->assertNotPresent('[name="review_token"]')
+            ->click('Review payment')
+            ->assertSee($this->contribution->period_label.': ₦2,000.00')
+            ->assertNoJavaScriptErrors();
+
+        expect(PaymentBatch::count())->toBe(0)->and(Payment::count())->toBe(0);
+    });
+
     it('warns before retrying an unconfirmed receipt without changing the payment', function () {
         $batch = PaymentBatch::factory()->create([
             'family_id' => $this->family->id,
