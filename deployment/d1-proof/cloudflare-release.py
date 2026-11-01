@@ -129,7 +129,9 @@ def public_checks(target, revision=None):
     authorization = os.environ.get('STAGING_BASIC_AUTHORIZATION')
     if target == 'staging' and not authorization:
         raise RuntimeError('Authenticated staging smoke check requires STAGING_BASIC_AUTHORIZATION')
-    paths = ['/up', '/login', '/__staging_health/gateway'] if target == 'staging' else ['/up', '/login']
+    paths = ['/up', '/login']
+    if target == 'staging' and revision is not None:
+        paths.append('/__staging_health/gateway')
     for path in paths:
         headers = {'User-Agent': 'FamilyFunds-GitHub-release', 'Cache-Control': 'no-cache'}
         if target == 'staging':

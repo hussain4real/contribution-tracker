@@ -172,14 +172,19 @@ class ReleaseSafetyTest(unittest.TestCase):
             def read(self, limit):
                 return self.body
 
+        responses = [Response(b'ok'), Response(b'<html>password</html>')]
+        with patch.dict(os.environ, {'STAGING_BASIC_AUTHORIZATION': 'Basic fixture'}), patch.object(release.urllib.request, 'urlopen', side_effect=responses) as urlopen:
+            release.public_checks('staging')
+            self.assertEqual(urlopen.call_count, 2)
+
         for health in [b'{"ok":false}', b'{"ok":1}', b'{"ok":true,"extra":1}', b'not json', b' ' * 4097]:
             responses = [Response(b'ok'), Response(b'<html>password</html>'), Response(health)]
             with self.subTest(health=health), patch.dict(os.environ, {'STAGING_BASIC_AUTHORIZATION': 'Basic fixture'}), patch.object(release.urllib.request, 'urlopen', side_effect=responses):
                 with self.assertRaisesRegex(RuntimeError, 'gateway health'):
-                    release.public_checks('staging')
+                    release.public_checks('staging', 'github-fixture')
         responses = [Response(b'ok'), Response(b'<html>password</html>'), Response(b'{"ok":true}')]
         with patch.dict(os.environ, {'STAGING_BASIC_AUTHORIZATION': 'Basic fixture'}), patch.object(release.urllib.request, 'urlopen', side_effect=responses) as urlopen:
-            release.public_checks('staging')
+            release.public_checks('staging', 'github-fixture')
             request = urlopen.call_args.args[0]
             self.assertTrue(request.full_url.endswith('/__staging_health/gateway'))
             self.assertEqual(request.get_header('Authorization'), 'Basic fixture')
