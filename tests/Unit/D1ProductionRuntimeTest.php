@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Enums\TransactionStatus;
+use App\Enums\TransactionType;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\FundAdjustmentController;
 use App\Http\Requests\StoreExpenseRequest;
@@ -10,9 +12,11 @@ use App\Jobs\ProcessWhatsAppWebhook;
 use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\FamilyMembership;
+use App\Models\PaystackTransaction;
 use App\Models\User;
 use App\Services\PaymentAllocationPreview;
 use App\Services\PaymentAllocationService;
+use App\Services\PaystackContributionSettlementService;
 use App\Services\PaystackService;
 use FamilyFunds\D1Staging\D1ProductionRequest;
 use FamilyFunds\D1Staging\D1ProductionServiceProvider;
@@ -482,4 +486,61 @@ it('preserves delivery ordering and queues early callbacks in the production D1 
         throw new RuntimeException('Could not query the synthetic queue.');
     }
     expect((int) $jobs->fetchColumn())->toBe(1);
+});
+
+function productionPaymentSqlValue(PDO $pdo, string $sql): mixed
+{
+    $statement = $pdo->query($sql);
+    if ($statement === false) {
+        throw new RuntimeException('Unable to query the synthetic production fixture.');
+    }
+
+    return $statement->fetchColumn();
+}
+
+it('records and audits a failed Paystack settlement through the D1 runtime', function (): void {
+    config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
+    DB::purge('sqlite');
+    $this->artisan('migrate', ['--database' => 'sqlite', '--force' => true])->assertSuccessful();
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->create(['family_id' => $family->id]);
+    $transaction = PaystackTransaction::query()->create([
+        'reference' => 'd1-paystack-'.Str::uuid(), 'user_id' => $member->id, 'family_id' => $family->id,
+        'type' => TransactionType::Contribution, 'amount' => 4000, 'gross_amount_kobo' => 400000,
+        'status' => TransactionStatus::Initiated, 'fee_policy' => 'payer_pays',
+    ]);
+    $pdo = DB::connection('sqlite')->getPdo();
+    connectProductionRuntimeFixture($pdo);
+    $runtime = new D1StagingRuntime;
+
+    expect(fn () => $runtime->run(fn () => app(PaystackContributionSettlementService::class)->settle(
+        $transaction->reference, ['status' => 'success', 'amount' => 399900],
+    ), $family->id))->toThrow(RuntimeException::class, 'does not match');
+
+    expect($transaction->fresh()?->status)->toBe(TransactionStatus::Failed)
+        ->and(productionPaymentSqlValue($pdo, "select count(*) from audit_events where action='paystack.state_changed'"))->toBe(1)
+        ->and(productionPaymentSqlValue($pdo, 'select count(*) from payment_batches'))->toBe(0);
+});
+
+it('records a provider-reported failure once through the D1 runtime', function (): void {
+    config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
+    DB::purge('sqlite');
+    $this->artisan('migrate', ['--database' => 'sqlite', '--force' => true])->assertSuccessful();
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->create(['family_id' => $family->id]);
+    $transaction = PaystackTransaction::query()->create([
+        'reference' => 'd1-provider-failure-'.Str::uuid(), 'user_id' => $member->id, 'family_id' => $family->id,
+        'type' => TransactionType::Contribution, 'amount' => 4000, 'gross_amount_kobo' => 400000,
+        'status' => TransactionStatus::Initiated, 'fee_policy' => 'payer_pays',
+    ]);
+    $pdo = DB::connection('sqlite')->getPdo();
+    connectProductionRuntimeFixture($pdo);
+    $runtime = new D1StagingRuntime;
+
+    $runtime->run(fn () => app(PaystackContributionSettlementService::class)->recordProviderFailure($transaction->reference), $family->id);
+    $runtime->run(fn () => app(PaystackContributionSettlementService::class)->recordProviderFailure($transaction->reference), $family->id);
+
+    expect($transaction->fresh()?->status)->toBe(TransactionStatus::Failed)
+        ->and(productionPaymentSqlValue($pdo, "select count(*) from audit_events where action='paystack.state_changed'"))->toBe(1)
+        ->and(productionPaymentSqlValue($pdo, 'select count(*) from payment_batches'))->toBe(0);
 });
