@@ -64,7 +64,7 @@ export function containerEnvironment(bindings, {allowStagingPaystackTest = false
             || typeof testKeys.PAYSTACK_SECRET_KEY !== 'string' || !/^sk_test_[A-Za-z0-9]+$/.test(testKeys.PAYSTACK_SECRET_KEY)) {
             throw new Error('Invalid staging Paystack test keys');
         }
-        Object.assign(result, testKeys, {PAYSTACK_STAGING_DIAGNOSTICS: 'true'});
+        Object.assign(result, testKeys, {PAYSTACK_STAGING_DIAGNOSTICS: 'true', D1_STAGING_PAYSTACK_TEST_CHECKOUT_ENABLED: 'true'});
     }
     if (bindings.AI_ENV !== undefined) {
         if (typeof bindings.AI_ENV !== 'string' || encoder.encode(bindings.AI_ENV).length > 4096) throw new Error('Invalid AI environment');
