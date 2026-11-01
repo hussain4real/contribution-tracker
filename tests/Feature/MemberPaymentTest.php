@@ -516,6 +516,22 @@ it('redirects callbacks without a reference', function () {
         ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'Invalid payment reference.']);
 });
 
+it('warns when a payment callback references a reversed transaction', function () {
+    Http::fake();
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $transaction = PaystackTransaction::create([
+        'reference' => 'TXN_REVERSED', 'user_id' => $member->id, 'family_id' => $family->id,
+        'type' => TransactionType::Contribution, 'amount' => 4000, 'status' => TransactionStatus::Reversed,
+    ]);
+
+    $this->actingAs($member)->get(route('pay.callback', ['current_family' => $family->slug, 'reference' => $transaction->reference]))
+        ->assertRedirect(route('contributions.my', ['current_family' => $family->slug]))
+        ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'This payment was reversed and no longer counts toward your contributions. Contact your family admin if you need help.']);
+    Http::assertNothingSent();
+    expect($transaction->refresh()->status)->toBe(TransactionStatus::Reversed);
+});
+
 it('redirects callbacks for unknown transactions', function () {
     $member = User::factory()->create();
 
