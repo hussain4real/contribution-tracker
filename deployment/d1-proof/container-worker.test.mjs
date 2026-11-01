@@ -168,6 +168,61 @@ test('staging gateway health fails closed for wrong configuration and invalid re
     assert.deepEqual(await (await f.handler.fetch(request(), f.env)).json(), {ok: false, stage: 'service_request'});
 });
 
+test('gateway control is opt-in, independently authenticated and only forwards fixed admission operations', async () => {
+    const calls = [];
+    let answer = {paused: false, unresolved: 0};
+    const f = fixture(undefined, async (url, init) => { calls.push({url, init}); return Response.json(answer); });
+    const token = 'a'.repeat(40);
+    const proof = 'b'.repeat(40);
+    f.env.CONTAINER_ENV = JSON.stringify({D1_STAGING_TOKEN: proof});
+    f.env.STAGING_GATEWAY_ADMIN_TOKEN = token;
+    const base = 'https://staging.example/__staging_admin/gateway-admission';
+    const request = (url = base, options = {}) => new Request(url, {headers: {Authorization: f.env.BASIC_AUTHORIZATION, 'X-Staging-Gateway-Admin': token}, ...options});
+    assert.equal((await f.handler.fetch(request(), f.env)).status, 404);
+    f.env.STAGING_GATEWAY_CONTROL = '1';
+    assert.equal((await f.handler.fetch(new Request(base), f.env)).status, 401);
+    assert.equal((await f.handler.fetch(request(base, {headers: {Authorization: f.env.BASIC_AUTHORIZATION, 'X-Staging-Gateway-Admin': 'wrong'}}), f.env)).status, 403);
+    assert.equal((await f.handler.fetch(request(base + '?details=1'), f.env)).status, 404);
+    assert.equal((await f.handler.fetch(request(base + '?paused=true&paused=false', {method: 'POST'}), f.env)).status, 404);
+    assert.equal((await f.handler.fetch(request(base + '?paused=true&extra=1', {method: 'POST'}), f.env)).status, 404);
+    assert.equal((await f.handler.fetch(request(base, {method: 'DELETE'}), f.env)).status, 404);
+    const status = await f.handler.fetch(request(), f.env);
+    assert.deepEqual(await status.json(), {paused: false, unresolved: 0});
+    assert.equal(status.headers.get('Cache-Control'), 'no-store');
+    answer = {paused: true, unresolved: 1};
+    const pause = await f.handler.fetch(request(base + '?paused=true', {method: 'POST'}), f.env);
+    const pauseBody = await pause.json();
+    assert.deepEqual(pauseBody, {paused: true, unresolved: 1});
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0].url, 'https://staging-gateway.internal/__staging_admin/admission');
+    assert.equal(calls[1].url, 'https://staging-gateway.internal/__staging_admin/admission?paused=true');
+    assert.equal(calls[1].init.headers.Authorization, 'Bearer ' + proof);
+    assert.equal(calls[1].init.headers['X-Staging-Gateway-Admin'], token);
+    assert.equal(calls[1].init.redirect, 'manual');
+    assert.equal(JSON.stringify(pauseBody).includes(token), false);
+    answer = {paused: false, unresolved: 0};
+    assert.equal((await f.handler.fetch(request(base + '?paused=true', {method: 'POST'}), f.env)).status, 503);
+    answer = {paused: true, unresolved: 0, secret: token};
+    assert.equal((await f.handler.fetch(request(), f.env)).status, 503);
+    f.env.RUNTIME_PROFILE = 'production';
+    assert.equal((await f.handler.fetch(request(), f.env)).status, 404);
+});
+
+test('gateway control refuses conflicting targets and uncertain gateway responses', async () => {
+    let response = new Response('', {status: 503});
+    const f = fixture(undefined, async () => response);
+    f.env.STAGING_GATEWAY_CONTROL = '1';
+    f.env.STAGING_GATEWAY_ADMIN_TOKEN = 'a'.repeat(40);
+    f.env.CONTAINER_ENV = JSON.stringify({D1_STAGING_TOKEN: 'b'.repeat(40)});
+    const request = () => new Request('https://staging.example/__staging_admin/gateway-admission', {headers: {Authorization: f.env.BASIC_AUTHORIZATION, 'X-Staging-Gateway-Admin': f.env.STAGING_GATEWAY_ADMIN_TOKEN}});
+    for (const value of [response, new Response('x'.repeat(4097)), new Response('invalid'), Response.json({paused: false, unresolved: -1}), Response.json({paused: false, unresolved: 1002}), new Response(null, {status: 302})]) {
+        response = value;
+        assert.equal((await f.handler.fetch(request(), f.env)).status, 503);
+    }
+    f.env.CONTAINER_ENV = JSON.stringify({D1_STAGING_TOKEN: 'b'.repeat(40), D1_STAGING_DATABASE: 'other'});
+    assert.equal((await f.handler.fetch(request(), f.env)).status, 503);
+});
+
 test("the deployable bootstrap contains the exact reviewed source bytes", () => {
     assert.equal(packagedAssets.length, 14);
     for (const asset of packagedAssets) {
