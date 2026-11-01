@@ -6,8 +6,12 @@ use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\FundAdjustmentController;
 use App\Http\Requests\StoreExpenseRequest;
 use App\Http\Requests\StoreFundAdjustmentRequest;
+use App\Models\Contribution;
 use App\Models\Family;
+use App\Models\FamilyMembership;
 use App\Models\User;
+use App\Services\PaymentAllocationPreview;
+use App\Services\PaymentAllocationService;
 use App\Services\PaystackService;
 use FamilyFunds\D1Staging\D1ProductionRequest;
 use FamilyFunds\D1Staging\D1ProductionServiceProvider;
@@ -108,15 +112,13 @@ it('uses production drivers and private storage without enabling the staging pro
         ->and(config('d1-staging.enabled'))->toBeFalse();
 });
 
-it('records and safely replays web expenses and adjustments through the production runtime', function (): void {
-    config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
-    DB::purge('sqlite');
-    $this->artisan('migrate', ['--database' => 'sqlite', '--force' => true, '--no-interaction' => true])->assertSuccessful();
-    $family = Family::factory()->create();
-    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
-    $pdo = DB::connection('sqlite')->getPdo();
+function connectProductionRuntimeFixture(PDO $pdo): void
+{
     Http::swap(new Factory);
     Http::fake(function (ClientRequest $request) use ($pdo): PromiseInterface {
+        if (! str_starts_with($request->url(), D1RuntimeProfile::PRODUCTION_URL.'/')) {
+            throw new RuntimeException('Unexpected fixture request.');
+        }
         $body = $request->data();
         $queries = $body['batch'] ?? [$body];
         $results = [];
@@ -149,6 +151,16 @@ it('records and safely replays web expenses and adjustments through the producti
     });
     DB::setDefaultConnection('d1');
     D1StagingRuntime::install();
+}
+
+it('records and safely replays web expenses and adjustments through the production runtime', function (): void {
+    config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
+    DB::purge('sqlite');
+    $this->artisan('migrate', ['--database' => 'sqlite', '--force' => true, '--no-interaction' => true])->assertSuccessful();
+    $family = Family::factory()->create();
+    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    $pdo = DB::connection('sqlite')->getPdo();
+    connectProductionRuntimeFixture($pdo);
     app('url')->defaults(['current_family' => $family->slug]);
     $runtime = new D1StagingRuntime;
     $expense = ['idempotency_key' => (string) Str::uuid(), 'amount' => 5000, 'description' => 'Transport', 'spent_at' => '2026-03-15'];
@@ -177,6 +189,43 @@ it('records and safely replays web expenses and adjustments through the producti
     }
     expect((int) $expenseCount->fetchColumn())->toBe(1)
         ->and((int) $adjustmentCount->fetchColumn())->toBe(1);
+});
+
+it('records one reviewed payment and receipt job when retried through the production runtime', function (): void {
+    config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
+    DB::purge('sqlite');
+    $this->artisan('migrate', ['--database' => 'sqlite', '--force' => true, '--no-interaction' => true])->assertSuccessful();
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
+    $pdo = DB::connection('sqlite')->getPdo();
+    connectProductionRuntimeFixture($pdo);
+    $runtime = new D1StagingRuntime;
+    $review = $runtime->run(function () use ($member, $family): array {
+        $membership = $member->membershipForFamily($family);
+        if (! $membership instanceof FamilyMembership) {
+            throw new RuntimeException('The synthetic member has no family membership.');
+        }
+
+        return app(PaymentAllocationPreview::class)->preview($member, $family, $membership, 3000);
+    });
+    $key = (string) Str::uuid();
+    $paidAt = now()->toDateString();
+    $record = fn (int $amount, int $expiry) => $runtime->run(fn () => app(PaymentAllocationService::class)->createBatch(
+        member: $member, amount: $amount, paidAt: $paidAt, recordedBy: $officer, family: $family,
+        idempotencyKey: $key, expectedAllocations: $review['allocations'], reviewExpiresAt: $expiry,
+    ));
+
+    $first = $record(3000, now()->addMinute()->getTimestamp());
+    $replay = $record(3000, now()->subMinute()->getTimestamp());
+    expect($replay->id)->toBe($first->id);
+    expect(fn () => $record(3500, now()->addMinute()->getTimestamp()))->toThrow(ValidationException::class);
+    $counts = $pdo->query('select (select count(*) from payment_batches) as batches, (select count(*) from payments) as payments, (select sum(amount) from payments) as amount, (select count(*) from payment_receipt_deliveries) as deliveries, (select count(*) from jobs) as jobs');
+    if ($counts === false) {
+        throw new RuntimeException('Unable to count fixture records.');
+    }
+    expect($counts->fetch(PDO::FETCH_ASSOC))->toBe(['batches' => 1, 'payments' => 1, 'amount' => 3000, 'deliveries' => 2, 'jobs' => 1]);
 });
 
 it('allows only read-only bank listing with an independent test credential while candidate delivery stays disabled', function (): void {

@@ -265,6 +265,8 @@ After PR #284 was deployed, the owner retried the staging checkout with the suba
 
 **Retry after review expiry:** A valid review that has expired can now retrieve its already-recorded payment when the original officer and payment details match, but cannot create a new payment. The existing replay checks compare the receipt and its allocations inside the allocation transaction. Local feature tests cover an expired replay, changed details, a different officer and an expired review with no recorded payment; remote behavior remains to be verified.
 
+**Production-profile payment replay:** A synthetic test exercised reviewed payment allocation through the production D1 adapter and journal. An identical retry after the review expired returned the same payment batch; a changed amount was rejected. The fixture contained one ₦3,000 allocation, two channel delivery records and one queued mail job after the retry. Ninety-nine focused payment, receipt and D1 tests passed, along with targeted PHP analysis. The transport used local SQLite, so this does not verify the deployed D1 service, concurrent requests, a real officer's screen or receipt delivery.
+
 **Allocation order on retry:** A synthetic feature test reproduced an unchanged reviewed payment being rejected when its stored allocations were returned in a different order. The draft now compares the complete allocation details without depending on row order, while still rejecting changed periods or amounts. The regression and focused payment and D1 adapter tests pass locally; deployed behavior remains to be verified.
 
 ## Phase 2 — Dashboard clarity and trust
