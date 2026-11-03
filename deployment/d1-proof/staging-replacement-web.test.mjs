@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {createHmac, randomUUID, webcrypto} from 'node:crypto';
+import {createHmac, randomUUID, timingSafeEqual, webcrypto} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {test} from 'node:test';
 import {runInNewContext} from 'node:vm';
@@ -23,7 +23,7 @@ function fixture() {
     }
     Base.webhookConfig = shared.Container.webhookConfig;
     const {Container, handler, Maintenance, Acceptance} = runInNewContext(source + '\n({Container: FamilyFundsReplacementStagingContainer, handler, Maintenance: ReplacementMaintenance, Acceptance: ReplacementAcceptance})',
-        {...shared, FamilyFundsWebStagingContainer: Base, WorkerEntrypoint: Base, URL, Headers, Request, Response});
+        {...shared, FamilyFundsWebStagingContainer: Base, WorkerEntrypoint: Base, URL, Headers, Request, Response, TextEncoder, crypto: {subtle: {timingSafeEqual}}});
     const files = {bucket: database + '-files', accessKeyId: 'a'.repeat(32), secretAccessKey: 'b'.repeat(64)};
     const env = {CONTAINER_IMAGE: image, CONTAINER_ENV: '{}', RUNTIME_PROFILE: 'replacement-preflight', STAGING_ADMISSION_CONTROL: '1',
         REPLACEMENT_SQL: {fetch() {}}, REPLACEMENT_FILES_CREDENTIAL: {get: async () => JSON.stringify(files)},
@@ -189,4 +189,37 @@ test('private acceptance preserves Laravel sessions and review forms without ope
     assert.equal(forwarded.headers.get('cookie'), 'familyfunds_replacement_acceptance_session=test; XSRF-TOKEN=token');
     assert.equal(response.headers.get('location'), '/login');
     assert.match(response.headers.get('set-cookie'), /HttpOnly/);
+});
+
+test('live staging gates browser traffic and identifies the replacement release', async () => {
+    const {handler, Container, ctx, env} = fixture();
+    const origin = 'https://d1-staging.familyfunds.app';
+    const forwarded = [];
+    Object.assign(env, {RUNTIME_PROFILE: 'replacement-live', RUNTIME_REVISION: 'github-abcdef123456',
+        BASIC_AUTHORIZATION: 'Basic dXNlcjpwYXNz', REPLACEMENT_CONTAINER: {getByName(name) {
+            assert.equal(name, 'replacement-staging');
+            return {async fetch(request) { forwarded.push(request); return new Response('laravel'); }};
+        }}});
+    const send = (url, credential) => handler.fetch(new Request(url, {headers: {
+        Authorization: credential ?? '', 'X-D1-Staging-Relay': 'untrusted', Cookie: 'session=member'}}), env);
+    assert.equal((await send(origin + '/login')).status, 401);
+    assert.equal((await send(origin + '/up', 'Basic b3RoZXI6dGVz')).status, 401);
+    assert.equal((await send('https://another.example/login', env.BASIC_AUTHORIZATION)).status, 404);
+    for (const path of ['/__staging_admin/inspect', '/connections', '/webhooks/paystack']) {
+        assert.equal((await send(origin + path, env.BASIC_AUTHORIZATION)).status, 404);
+    }
+    for (const path of ['/up', '/login', '/hussain-family/dashboard']) {
+        const response = await send(origin + path, env.BASIC_AUTHORIZATION);
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get('X-FamilyFunds-Staging-Destination'), 'replacement');
+        assert.equal(response.headers.get('X-FamilyFunds-Runtime-Revision'), env.RUNTIME_REVISION);
+        assert.equal(forwarded.at(-1).url, origin + path);
+        assert.equal(forwarded.at(-1).headers.get('Cookie'), 'session=member');
+        assert.equal(forwarded.at(-1).headers.has('Authorization'), false);
+        assert.equal(forwarded.at(-1).headers.has('X-D1-Staging-Relay'), false);
+    }
+    assert.equal((await new Container(ctx, env).startupOptions()).env.APP_URL, origin);
+    delete env.BASIC_AUTHORIZATION;
+    assert.equal((await send(origin + '/login')).status, 503);
+    assert.equal(forwarded.length, 3);
 });

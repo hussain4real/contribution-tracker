@@ -31,20 +31,41 @@
   },
   "staging": {
     "branch": "cloudflare-staging",
-    "worker": "familyfunds-d1-web-v2",
-    "entry": "container-worker.mjs",
-    "class_name": "FamilyFundsWebStagingContainer",
-    "application_id": "a034af23-f6cf-4c1f-95ee-1099b787b9de",
-    "instance_name": "isolated-staging",
-    "image_repository": "familyfunds-d1-staging",
     "dockerfile": "Dockerfile.slim",
     "url": "https://d1-staging.familyfunds.app",
-    "companions": [
-      {
-        "worker": "familyfunds-d1-maintenance-staging",
-        "entry": "maintenance-worker.mjs"
-      }
-    ],
-    "accepted_migrations_sha256": "41030db19fc50e7d60c54dca72743f7b7277e62cc28872367d79d7f93c66c5b9"
+    "accepted_migrations_sha256": "41030db19fc50e7d60c54dca72743f7b7277e62cc28872367d79d7f93c66c5b9",
+    "destination": "original",
+    "zone_id": "797d252aac4e91a2bae9dd15e5fa65b6",
+    "route_id": "25fb6d8b162e4965afa8be1f87fbcc70"
+  },
+  "staging_destinations": {
+    "original": {
+      "worker": "familyfunds-d1-web-v2",
+      "entry": "container-worker.mjs",
+      "class_name": "FamilyFundsWebStagingContainer",
+      "application_id": "a034af23-f6cf-4c1f-95ee-1099b787b9de",
+      "instance_name": "isolated-staging",
+      "image_repository": "familyfunds-d1-staging",
+      "companions": [
+        {
+          "worker": "familyfunds-d1-maintenance-staging",
+          "entry": "maintenance-worker.mjs"
+        }
+      ]
+    },
+    "replacement": {
+      "worker": "familyfunds-staging-replacement-web",
+      "entry": "staging-replacement-web.mjs",
+      "class_name": "FamilyFundsReplacementStagingContainer",
+      "application_id": "66580639806d4909a2adae4b7f3ea9a3",
+      "instance_name": "replacement-staging",
+      "image_repository": "familyfunds-staging-replacement",
+      "companions": [
+        {
+          "worker": "familyfunds-staging-replacement-maintenance",
+          "entry": "maintenance-worker.mjs"
+        }
+      ]
+    }
   }
 }

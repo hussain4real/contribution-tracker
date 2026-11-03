@@ -32,6 +32,9 @@ class ReleaseSafetyTest(unittest.TestCase):
         result = image.package_config({'Env': ['APP_ENV=production'], 'Entrypoint': ['/entry.sh'], 'Cmd': ['serve']})
         self.assertIn('ENTRYPOINT ["/entry.sh"]', result)
         self.assertIn('CMD ["serve"]', result)
+        result = image.package_config({'Env': ['PHPIZE_DEPS=autoconf\tmake', r'EXAMPLE=literal\t']})
+        self.assertIn('ENV PHPIZE_DEPS="autoconf\tmake"', result)
+        self.assertIn(r'ENV EXAMPLE="literal\\t"', result)
 
     def test_root_filesystem_rejects_environment_cached_config_and_private_files(self):
         for name in ['var/www/html/.env', 'var/www/html/.env.production', 'var/www/html/bootstrap/cache/config.php', 'var/www/html/storage/app/private/key.bin']:
@@ -119,6 +122,9 @@ class ReleaseSafetyTest(unittest.TestCase):
             commands = []
 
             def api(method, url, data=None, **kwargs):
+                if url.startswith('/zones/'):
+                    return {'id': release.CONFIG['staging']['route_id'], 'pattern': 'd1-staging.familyfunds.app/*',
+                            'script': 'familyfunds-d1-web-v2', 'request_limit_fail_open': False}
                 if 'credentials' in url:
                     return {'password': 'synthetic', 'username': 'synthetic', 'registry_host': 'registry.cloudflare.com'}
                 if url.endswith('/settings'):
@@ -158,6 +164,86 @@ class ReleaseSafetyTest(unittest.TestCase):
             self.assertFalse(any('buildx' in args for args in commands))
             for url, metadata in writes:
                 self.assertEqual(metadata.get('containers'), [{'class_name': 'FamilyFundsWebStagingContainer'}] if url.endswith('/familyfunds-d1-web-v2') else None)
+
+    def test_staging_route_must_match_the_selected_destination(self):
+        with patch.dict(release.CONFIG['staging'], {'destination': 'replacement'}):
+            target = release.target_config('staging')
+            route = {'id': target['route_id'], 'pattern': 'd1-staging.familyfunds.app/*',
+                     'script': target['worker'], 'request_limit_fail_open': False}
+            with patch.object(release, 'api', return_value=route):
+                release.check_staging_route(target)
+            for mismatch in [{'script': 'familyfunds-d1-web-v2'}, {'pattern': 'familyfunds.app/*'}, {'request_limit_fail_open': True}]:
+                with patch.object(release, 'api', return_value=route | mismatch), self.assertRaisesRegex(RuntimeError, 'live staging route'):
+                    release.check_staging_route(target)
+
+    def test_replacement_publish_restores_both_previous_versions_after_uncertain_web_update(self):
+        version = 'aacc1716-7924-4014-9c09-dc07c17fdd37'
+        replacement = release.CONFIG['staging_destinations']['replacement']
+        web = replacement['worker']
+        maintenance = replacement['companions'][0]['worker']
+        image = 'registry.cloudflare.com/' + release.ACCOUNT + '/' + replacement['image_repository'] + '@' + DIGEST
+        mutations = []
+
+        def api(method, path, data=None, **kwargs):
+            if path.startswith('/zones/'):
+                return {'id': release.CONFIG['staging']['route_id'], 'pattern': 'd1-staging.familyfunds.app/*',
+                        'script': web, 'request_limit_fail_open': False}
+            if path.endswith('/credentials'):
+                return {'registry_host': 'registry.cloudflare.com', 'username': 'fixture', 'password': 'fixture'}
+            if path.endswith('/deployments') and method == 'GET':
+                return {'deployments': [{'created_on': '2026-11-03', 'versions': [{'version_id': version, 'percentage': 100}]}]}
+            if path.endswith('/settings'):
+                if maintenance in path:
+                    return {'bindings': [{'name': 'REPLACEMENT_DB', 'type': 'd1', 'id': '43e11f90-07d7-49fc-930f-2a33a474d930'},
+                                         {'name': 'STAGING_GATEWAY_ADMISSION_OBJECT', 'type': 'durable_object_namespace', 'namespace_id': '62fa75c5c7c9490eab127ae45d4c7213'},
+                                         {'name': 'REPLACEMENT_WEB_MAINTENANCE', 'type': 'service', 'service': web, 'entrypoint': 'ReplacementMaintenance'}]}
+                return {'bindings': [
+                    {'name': 'REPLACEMENT_CONTAINER', 'type': 'durable_object_namespace', 'namespace_id': replacement['application_id']},
+                    {'name': 'REPLACEMENT_SQL', 'type': 'service', 'service': 'familyfunds-d1-replacement-sql'},
+                    {'name': 'REPLACEMENT_WEBHOOK_QUEUE', 'type': 'queue', 'queue_name': 'familyfunds-replacement-webhook'},
+                    {'name': 'REPLACEMENT_FILES_CREDENTIAL', 'type': 'secrets_store_secret', 'store_id': '5e78cc1e865144e4ab982aeae254ed96', 'secret_name': 'FF_STAGING_REPLACEMENT_R2_20261103T092540Z'},
+                    {'name': 'REPLACEMENT_APP_KEY', 'type': 'secret_text'}, {'name': 'REPLACEMENT_SQL_TOKEN', 'type': 'secret_text'},
+                    {'name': 'BASIC_AUTHORIZATION', 'type': 'secret_text'},
+                    *[{'name': k, 'type': 'plain_text', 'text': v} for k, v in {
+                        'CONTAINER_ENV': '{}', 'STAGING_ADMISSION_CONTROL': '1', 'CONTAINER_IMAGE': image,
+                        'RUNTIME_PROFILE': 'replacement-live'}.items()]]}
+            mutations.append((method, path))
+            if method == 'PUT':
+                if path.endswith(web):
+                    message = release.email.parser.BytesParser(policy=release.email.policy.default).parsebytes(
+                        ('Content-Type: ' + kwargs['content_type'] + '\r\n\r\n').encode() + data)
+                    meta = json.loads(next(message.iter_parts()).get_payload(decode=True))
+                    self.assertEqual(meta['containers'][0]['images']['base'], image)
+                    self.assertEqual(meta['keep_bindings'], ['secret_text'])
+                    self.assertIn('RUNTIME_REVISION', {b['name'] for b in meta['bindings']})
+                    raise RuntimeError('unknown web outcome')
+                return {}
+            if method == 'POST' and path.endswith('/deployments'):
+                self.assertEqual(data['versions'], [{'version_id': version, 'percentage': 100}])
+                return {}
+            self.fail('Unexpected API call ' + path)
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            (path / 'rootfs.tar').write_bytes(b'inspected')
+            (path / 'release.json').write_text(json.dumps({'target': 'staging', 'revision': SHA, 'unstarted_export': True,
+                'runtime_credentials_packaged': False, 'rootfs_sha256': hashlib.sha256(b'inspected').hexdigest()}))
+
+            def docker(args, **kwargs):
+                if 'buildx' in args:
+                    self.assertIn('--provenance=false', args)
+                    (path / 'pushed-image.json').write_text(json.dumps({'containerimage.digest': DIGEST}))
+                self.assertNotIn('load', args)
+
+            with (patch.dict(release.CONFIG['staging'], {'destination': 'replacement'}),
+                  patch.dict(os.environ, {'GITHUB_SHA': SHA, 'GITHUB_REF': 'refs/heads/cloudflare-staging', 'GITHUB_ACTIONS': 'true', 'DOCKER_CONFIG': directory}),
+                  patch.object(release, 'validate'), patch.object(release, 'public_checks'), patch.object(release, 'prepared') as prepare,
+                  patch.object(release, 'api', side_effect=api), patch.object(release.subprocess, 'run', side_effect=docker),
+                  contextlib.redirect_stdout(io.StringIO()), self.assertRaisesRegex(RuntimeError, 'previous code/image restored')):
+                release.publish('staging', path)
+            prepare.assert_called_once_with(image)
+            self.assertEqual(mutations, [(m, '/workers/scripts/' + worker) for m, worker in [
+                ('PUT', maintenance), ('PUT', web), ('POST', web + '/deployments'), ('POST', maintenance + '/deployments')]])
 
     def test_modified_original_staging_archive_is_refused_before_credentials_or_docker(self):
         with tempfile.TemporaryDirectory() as directory:

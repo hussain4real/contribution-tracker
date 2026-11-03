@@ -26,7 +26,8 @@ def api(method, path, data=None, raw=False, content_type='application/json'):
     if not token:
         raise RuntimeError('CLOUDFLARE_API_TOKEN is not configured')
     body = data if raw or data is None else json.dumps(data).encode()
-    request = urllib.request.Request(API + '/accounts/' + ACCOUNT + path, data=body, method=method,
+    resource = path if path.startswith('/zones/') else '/accounts/' + ACCOUNT + path
+    request = urllib.request.Request(API + resource, data=body, method=method,
                                     headers={'Authorization': 'Bearer ' + token, 'Content-Type': content_type})
     try:
         with urllib.request.urlopen(request, timeout=60) as response:
@@ -121,20 +122,51 @@ def prepared(image):
     raise RuntimeError('Container runtime image preparation timed out before any Worker update')
 
 
+def target_config(target):
+    config = CONFIG[target]
+    if target == 'staging':
+        return {**config, **CONFIG['staging_destinations'][config['destination']]}
+    return config
+
+
+def check_staging_route(config):
+    route = api('GET', f"/zones/{config['zone_id']}/workers/routes/{config['route_id']}")
+    if (route.get('id') != config['route_id'] or route.get('script') != config['worker']
+            or route.get('pattern') != 'd1-staging.familyfunds.app/*' or route.get('request_limit_fail_open') is not False):
+        raise RuntimeError('The live staging route does not match the selected release destination')
+
+
+def deployed_version(path):
+    deployments = api('GET', path + '/deployments')['deployments']
+    versions = max(deployments, key=lambda row: row['created_on'])['versions']
+    if len(versions) != 1 or versions[0]['percentage'] != 100:
+        raise RuntimeError('Replacement rollback requires a single fully deployed Worker version')
+    return str(uuid.UUID(versions[0]['version_id']))
+
+
+class RefuseStagingRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise RuntimeError('Authenticated staging smoke check returned a redirect')
+
+
 def public_checks(target, revision=None):
     authorization = os.environ.get('STAGING_BASIC_AUTHORIZATION')
     if target == 'staging' and not authorization:
         raise RuntimeError('Authenticated staging smoke check requires STAGING_BASIC_AUTHORIZATION')
+    replacement = target == 'staging' and CONFIG[target]['destination'] == 'replacement'
+    open_request = urllib.request.build_opener(RefuseStagingRedirect()).open if target == 'staging' else urllib.request.urlopen
     for path in ['/up', '/login']:
         headers = {'User-Agent': 'FamilyFunds-GitHub-release', 'Cache-Control': 'no-cache'}
         if target == 'staging':
             headers['Authorization'] = authorization
         request = urllib.request.Request(CONFIG[target]['url'] + path, headers=headers)
-        with urllib.request.urlopen(request, timeout=90) as response:
+        with open_request(request, timeout=90) as response:
             body = response.read(1024 * 1024)
             if response.status != 200:
                 raise RuntimeError('Release health check failed')
-            if target == 'production' and revision and response.headers.get('X-FamilyFunds-Runtime-Revision') != revision:
+            if replacement and response.headers.get('X-FamilyFunds-Staging-Destination') != 'replacement':
+                raise RuntimeError('The staging edge did not identify the replacement')
+            if (target == 'production' or replacement) and revision and response.headers.get('X-FamilyFunds-Runtime-Revision') != revision:
                 raise RuntimeError('The public edge did not serve the published revision')
             if target == 'production' and response.headers.get('X-FamilyFunds-Activation-Phase') != 'active':
                 raise RuntimeError('Production activation is not the accepted live phase')
@@ -143,11 +175,12 @@ def public_checks(target, revision=None):
 
 
 def instance_image(target, image):
-    result = api('GET', '/containers/applications/' + CONFIG[target]['application_id'] + '/instances-v2?per_page=100')
+    config = target_config(target)
+    result = api('GET', '/containers/applications/' + config['application_id'] + '/instances-v2?per_page=100')
     rows = result if isinstance(result, list) else result.get('instances', [])
     for row in rows:
         actual = row.get('image') or row.get('configuration', {}).get('image')
-        if row.get('status', {}).get('state') == 'running' and actual == image and row.get('name') == CONFIG[target]['instance_name']:
+        if row.get('status', {}).get('state') == 'running' and actual == image and row.get('name') == config['instance_name']:
             return True
     return False
 
@@ -164,7 +197,7 @@ def validate(target=None):
     fingerprint = migration_fingerprint()
     targets = [target] if target else ['production', 'staging']
     for environment in targets:
-        config = CONFIG[environment]
+        config = target_config(environment)
         if fingerprint != config['accepted_migrations_sha256']:
             raise RuntimeError(f'Database migrations differ from the accepted D1 schema for {environment}. Verify the target migration before updating its fingerprint.')
         for worker in [config] + config['companions']:
@@ -185,6 +218,29 @@ def checked_bindings(worker, settings):
             raise RuntimeError('Production D1 binding mismatch')
         if names.get('PRODUCTION_CONTAINER', {}).get('namespace_id') != CONFIG['production']['application_id']:
             raise RuntimeError('Production container namespace mismatch')
+    if worker == 'familyfunds-staging-replacement-web':
+        expected = {
+            'REPLACEMENT_CONTAINER': ('namespace_id', '66580639806d4909a2adae4b7f3ea9a3'),
+            'REPLACEMENT_SQL': ('service', 'familyfunds-d1-replacement-sql'),
+            'REPLACEMENT_WEBHOOK_QUEUE': ('queue_name', 'familyfunds-replacement-webhook'),
+            'REPLACEMENT_FILES_CREDENTIAL': ('secret_name', 'FF_STAGING_REPLACEMENT_R2_20261103T092540Z'),
+            'CONTAINER_ENV': ('text', '{}'), 'STAGING_ADMISSION_CONTROL': ('text', '1'),
+            'RUNTIME_PROFILE': ('text', 'replacement-live'),
+        }
+        if any(names.get(key, {}).get(field) != value for key, (field, value) in expected.items()):
+            raise RuntimeError('Replacement web bindings or activation differ from the release destination')
+        if (names['REPLACEMENT_FILES_CREDENTIAL'].get('store_id') != '5e78cc1e865144e4ab982aeae254ed96'
+                or any(names.get(key, {}).get('type') != 'secret_text' for key in ['REPLACEMENT_APP_KEY', 'REPLACEMENT_SQL_TOKEN', 'BASIC_AUTHORIZATION'])):
+            raise RuntimeError('Replacement credential bindings differ from the release destination')
+        repository = 'registry.cloudflare.com/' + ACCOUNT + '/familyfunds-staging-replacement@sha256:'
+        if not re.fullmatch(re.escape(repository) + '[0-9a-f]{64}', names.get('CONTAINER_IMAGE', {}).get('text', '')):
+            raise RuntimeError('Replacement web image is not pinned to its own repository')
+    if worker == 'familyfunds-staging-replacement-maintenance':
+        if (names.get('REPLACEMENT_DB', {}).get('id') != '43e11f90-07d7-49fc-930f-2a33a474d930'
+                or names.get('STAGING_GATEWAY_ADMISSION_OBJECT', {}).get('namespace_id') != '62fa75c5c7c9490eab127ae45d4c7213'
+                or names.get('REPLACEMENT_WEB_MAINTENANCE', {}).get('service') != 'familyfunds-staging-replacement-web'
+                or names.get('REPLACEMENT_WEB_MAINTENANCE', {}).get('entrypoint') != 'ReplacementMaintenance'):
+            raise RuntimeError('Replacement maintenance bindings differ from the release destination')
     if worker == 'familyfunds-production-offsite' and any(key in names for key in ['DB', 'CONTAINER_ENV', 'CONTAINER_ENV_0', 'APP_KEY', 'BACKUP_KEY']):
         raise RuntimeError('Offsite credential isolation no longer matches the reviewed configuration')
     return [binding for binding in bindings if binding['type'] != 'secret_text']
@@ -193,11 +249,14 @@ def checked_bindings(worker, settings):
 def publish(target, directory):
     refresh_bootstrap_assets()
     validate(target)
+    config = target_config(target)
+    replacement = target == 'staging' and config['destination'] == 'replacement'
+    original_staging = target == 'staging' and not replacement
     release = json.loads((directory / 'release.json').read_text())
     revision = os.environ.get('GITHUB_SHA', '')
     if not re.fullmatch(r'[a-f0-9]{40}', revision) or release['revision'] != revision or release['target'] != target:
         raise RuntimeError('The artifact must match the exact tested Git commit and target')
-    if os.environ.get('GITHUB_REF') != 'refs/heads/' + CONFIG[target]['branch']:
+    if os.environ.get('GITHUB_REF') != 'refs/heads/' + config['branch']:
         raise RuntimeError('Deployments are limited to their configured branch')
     if not release['unstarted_export'] or release['runtime_credentials_packaged']:
         raise RuntimeError('Image credential inspection did not pass')
@@ -206,7 +265,7 @@ def publish(target, directory):
     with (directory / 'rootfs.tar').open('rb') as source:
         if hashlib.file_digest(source, 'sha256').hexdigest() != release['rootfs_sha256']:
             raise RuntimeError('Image artifact checksum mismatch')
-    if target == 'staging':
+    if original_staging:
         with (directory / 'original-image.tar').open('rb') as source:
             if hashlib.file_digest(source, 'sha256').hexdigest() != release.get('image_archive_sha256'):
                 raise RuntimeError('Original staging image archive checksum mismatch')
@@ -216,16 +275,18 @@ def publish(target, directory):
         actual = subprocess.check_output(['docker', 'image', 'inspect', staging_source, '--format', '{{.Id}}'], text=True).strip()
         if not re.fullmatch(r'sha256:[a-f0-9]{64}', actual) or actual != release.get('source_image_id'):
             raise RuntimeError('Loaded staging image differs from the inspected build')
+    if target == 'staging':
+        check_staging_route(config)
     public_checks(target)
     name = 'github-' + revision[:12]
-    tag = 'registry.cloudflare.com/' + ACCOUNT + '/' + CONFIG[target]['image_repository'] + ':' + revision
+    tag = 'registry.cloudflare.com/' + ACCOUNT + '/' + config['image_repository'] + ':' + revision
     credentials = api('POST', '/containers/registries/registry.cloudflare.com/credentials', {'expiration_minutes': 60, 'permissions': ['pull', 'push']})
     try:
         if os.environ.get('GITHUB_ACTIONS') == 'true':
             print('::add-mask::' + credentials['password'], flush=True)
         subprocess.run(['docker', 'login', credentials['registry_host'], '--username', credentials['username'], '--password-stdin'],
                        input=credentials['password'].encode(), check=True, stdout=subprocess.DEVNULL)
-        if target == 'staging':
+        if original_staging:
             subprocess.run(['docker', 'tag', staging_source, tag], check=True)
             subprocess.run(['docker', 'push', tag], check=True)
             digests = json.loads(subprocess.check_output(['docker', 'image', 'inspect', tag, '--format', '{{json .RepoDigests}}'], text=True))
@@ -245,40 +306,48 @@ def publish(target, directory):
     if not re.fullmatch(r'sha256:[a-f0-9]{64}', digest):
         raise RuntimeError('Registry returned an invalid immutable image digest')
     image = tag.rsplit(':', 1)[0] + '@' + digest
-    if target == 'production':
+    if not original_staging:
         prepared(image)
     plans = []
-    for worker in CONFIG[target]['companions'] + [CONFIG[target]]:
+    for worker in config['companions'] + [config]:
         path = '/workers/scripts/' + worker['worker']
         settings = api('GET', path + '/settings')
         bindings = checked_bindings(worker['worker'], settings)
         previous_image = next((binding['text'] for binding in bindings if binding['name'] == 'CONTAINER_IMAGE'), worker.get('image'))
-        raw, mime = api('GET', path, raw=True)
-        previous_sources = script_sources(raw, mime)
-        previous_entry = next((entry for entry in previous_sources if entry == worker['entry']), None)
-        if previous_entry is None and worker['worker'] == 'familyfunds-production-managed':
-            previous_entry = 'production-managed-worker.mjs'
-        if previous_entry not in previous_sources:
-            raise RuntimeError('Cannot identify the existing entry module for safe code rollback')
         container = {'class_name': worker['class_name']} if worker.get('class_name') else None
-        if container and target == 'production':
+        if container and not original_staging:
             container['images'] = {'base': worker.get('image', image)}
         if worker.get('image'):
             prepared(worker['image'])
-        rollback_container = {**container, 'images': {'base': previous_image}} if container and target == 'production' else container
-        old_body, old_mime = multipart(previous_entry, previous_sources, bindings, rollback_container)
+        if replacement:
+            rollback = {'version': deployed_version(path)}
+        else:
+            raw, mime = api('GET', path, raw=True)
+            previous_sources = script_sources(raw, mime)
+            previous_entry = worker['entry']
+            if previous_entry not in previous_sources and worker['worker'] == 'familyfunds-production-managed':
+                previous_entry = 'production-managed-worker.mjs'
+            if previous_entry not in previous_sources:
+                raise RuntimeError('Cannot identify the existing entry module for safe code rollback')
+            rollback_container = {**container, 'images': {'base': previous_image}} if container and target == 'production' else container
+            old_body, old_mime = multipart(previous_entry, previous_sources, bindings, rollback_container)
+            rollback = {'old_body': old_body, 'old_mime': old_mime}
         updated = [dict(binding) for binding in bindings]
+        if replacement and worker['worker'] == config['worker'] and not any(b['name'] == 'RUNTIME_REVISION' for b in updated):
+            updated.append({'name': 'RUNTIME_REVISION', 'type': 'plain_text', 'text': name})
         for binding in updated:
-            if worker['worker'] == CONFIG[target]['worker'] and binding['name'] in ['RUNTIME_REVISION', 'CONTAINER_IMAGE']:
+            if worker['worker'] == config['worker'] and binding['name'] in ['RUNTIME_REVISION', 'CONTAINER_IMAGE']:
                 binding['text'] = name if binding['name'] == 'RUNTIME_REVISION' else image
         sources = modules(worker['entry'], image if target == 'production' else None, name)
         body, mime = multipart(worker['entry'], sources, updated, container)
-        plans.append({'path': path, 'body': body, 'mime': mime, 'old_body': old_body, 'old_mime': old_mime})
+        plans.append({'path': path, 'body': body, 'mime': mime, **rollback})
     previous_staging = None
     applied = []
+    if target == 'staging':
+        check_staging_route(config)
     try:
-        if target == 'staging':
-            app_path = '/containers/applications/' + CONFIG[target]['application_id']
+        if original_staging:
+            app_path = '/containers/applications/' + target_config(target)['application_id']
             previous_staging = api('GET', app_path)['configuration']['image']
             rollout_image(app_path, image)
         for plan in plans:
@@ -299,7 +368,13 @@ def publish(target, directory):
         failures = []
         for plan in reversed(applied):
             try:
-                api('PUT', plan['path'], plan['old_body'], raw=True, content_type=plan['old_mime'])
+                if replacement:
+                    api('POST', plan['path'] + '/deployments', {'strategy': 'percentage', 'versions': [
+                        {'version_id': plan['version'], 'percentage': 100}]})
+                    if deployed_version(plan['path']) != plan['version']:
+                        raise RuntimeError('Previous Worker deployment could not be confirmed')
+                else:
+                    api('PUT', plan['path'], plan['old_body'], raw=True, content_type=plan['old_mime'])
             except Exception:
                 failures.append(plan['path'])
         if previous_staging:
@@ -312,8 +387,8 @@ def publish(target, directory):
         raise RuntimeError('Deployment failed; previous code/image restored. No database rollback or request replay was attempted.') from None
     result = {'target': target, 'revision': revision, 'runtime_revision': name, 'image': image,
               'prepared': True, 'native_image_verified': True, 'laravel_login_verified': True,
-              'managed_image_preparation': target == 'production',
-              'original_image_layers_preserved': target == 'staging',
+              'managed_image_preparation': not original_staging,
+              'original_image_layers_preserved': original_staging,
               'application_secrets_exported': False, 'database_migrations_run': False}
     (directory / 'deployment.json').write_text(json.dumps(result, indent=2) + '\n')
     print(json.dumps(result))

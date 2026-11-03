@@ -3,13 +3,14 @@ import stagingHandler, {FamilyFundsWebStagingContainer} from './container-worker
 
 const database = 'familyfunds-d1-staging-clone-20261103t092540z';
 const gateway = 'familyfunds-d1-replacement-sql.familyfunds-lab.workers.dev';
+const stagingOrigin = 'https://d1-staging.familyfunds.app';
 const acceptanceCookie = 'familyfunds_replacement_acceptance_session';
 const imagePattern = /^registry\.cloudflare\.com\/40344948b73fa9da3008958fdc3faf12\/familyfunds-staging-replacement@sha256:[0-9a-f]{64}$/;
 
 export class FamilyFundsReplacementStagingContainer extends FamilyFundsWebStagingContainer {
     constructor(ctx, env) {
         if (env.CONTAINER_ENV !== '{}' || env.CONTAINER_ENV_PARTS !== undefined || env.OPTIMIZED_BOOTSTRAP !== undefined
-            || !['replacement-preflight', 'replacement-rehearsal', 'replacement-webhook-rehearsal', 'replacement-acceptance'].includes(env.RUNTIME_PROFILE) || env.STAGING_ADMISSION_CONTROL !== '1'
+            || !['replacement-preflight', 'replacement-rehearsal', 'replacement-webhook-rehearsal', 'replacement-acceptance', 'replacement-live'].includes(env.RUNTIME_PROFILE) || env.STAGING_ADMISSION_CONTROL !== '1'
             || !imagePattern.test(env.CONTAINER_IMAGE) || !env.REPLACEMENT_SQL?.fetch) {
             throw new Error('Invalid replacement staging configuration');
         }
@@ -43,7 +44,7 @@ export class FamilyFundsReplacementStagingContainer extends FamilyFundsWebStagin
         if (this.env.RUNTIME_PROFILE === 'replacement-webhook-rehearsal' && !webhook) throw new Error('Missing private rehearsal webhook configuration');
         return {image, instance: 'standard-1', enableInternet: true, env: {
             APP_ENV: 'd1-staging', APP_KEY: appKey, APP_DEBUG: 'false',
-            APP_URL: 'https://replacement-staging.internal', D1_PRODUCTION_ENABLED: 'false',
+            APP_URL: this.env.RUNTIME_PROFILE === 'replacement-live' ? stagingOrigin : 'https://replacement-staging.internal', D1_PRODUCTION_ENABLED: 'false',
             ...(this.env.RUNTIME_PROFILE === 'replacement-acceptance' && {
                 SESSION_COOKIE: acceptanceCookie, SESSION_SECURE_COOKIE: 'true',
             }),
@@ -127,6 +128,30 @@ export default {
     },
     async fetch(request, env) {
         const url = new URL(request.url);
+        if (env.RUNTIME_PROFILE === 'replacement-live') {
+            if (url.origin !== stagingOrigin) return new Response('Not found', {status: 404});
+            if (env.STAGING_ADMISSION_CONTROL !== '1' || !/^github-[0-9a-f]{12}$/.test(env.RUNTIME_REVISION)
+                || typeof env.BASIC_AUTHORIZATION !== 'string' || !/^Basic [A-Za-z0-9+/]+=*$/.test(env.BASIC_AUTHORIZATION)) {
+                return new Response('Staging configuration unavailable', {status: 503});
+            }
+            const actual = new TextEncoder().encode(request.headers.get('Authorization') ?? '');
+            const expected = new TextEncoder().encode(env.BASIC_AUTHORIZATION);
+            if (actual.length !== expected.length || !crypto.subtle.timingSafeEqual(actual, expected)) {
+                return new Response('Authentication required', {status: 401, headers: {'WWW-Authenticate': 'Basic realm="FamilyFunds staging"'}});
+            }
+            if (url.pathname.startsWith('/__') || url.pathname.startsWith('/webhooks/') || url.pathname === '/connections') {
+                return new Response('Not found', {status: 404});
+            }
+            const headers = new Headers(request.headers);
+            for (const name of ['Authorization', 'X-D1-Staging-Relay', 'X-Staging-Admin', 'X-D1-Staging-Candidate']) headers.delete(name);
+            const container = env.REPLACEMENT_CONTAINER.getByName('replacement-staging');
+            const upstream = await container.fetch(new Request(request, {headers, redirect: 'manual'}));
+            const response = new Response(upstream.body, upstream);
+            response.headers.set('X-FamilyFunds-Staging-Destination', 'replacement');
+            response.headers.set('X-FamilyFunds-Runtime-Revision', env.RUNTIME_REVISION);
+            response.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+            return response;
+        }
         if (env.RUNTIME_PROFILE === 'replacement-webhook-rehearsal' && ['/webhooks/paystack', '/webhooks/whatsapp'].includes(url.pathname)) {
             return stagingHandler.fetch(request, env);
         }
