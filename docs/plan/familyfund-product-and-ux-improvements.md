@@ -280,6 +280,10 @@ The owner-only route closed at 16:37 Qatar. The copied passkey showed no new ass
 
 After reopening, the private replacement processed a synthetic reminder for the original scheduler fixture. Redelivery preserved its completion timestamp. The Paystack and WhatsApp test callbacks rejected invalid signatures, accepted correctly signed fixtures and queued `ProcessPaystackWebhook` and `ProcessWhatsAppWebhook` respectively. The two fixture jobs were removed before execution. The original two copied jobs were retained. The temporary owner credential and synthetic callback credentials were removed. The recovery copy, fresh key and checkpoint have been retained.
 
+The owner subsequently confirmed reaching the platform dashboard. A read-only check after that confirmation found that the registered credential on both D1 databases still had a last use of September 22 at 05:12:05 UTC. Neither database had a session associated with the passkey owner at the time of that check. Dashboard access is owner-confirmed. A new assertion on the replacement still needs verification.
+
+The original Worker has a write-only `STAGING_WEBHOOK_SECRETS` binding. The replacement has no permanent callback bundle. The reviewed staging provisioning files contained no recoverable copy. Use the staging Paystack callback account and the staging Meta app to rebuild the bundle, then verify signatures against the running configuration before activating it.
+
 Before another switch, resolve or account for the two candidate admission markers, provision and verify the permanent staging callback signing bundle, and complete a sign-in with the owner’s registered device on the staging origin. Coordinate a fresh window and capture changes since original staging reopened. Keep production’s migration fingerprint gated separately.
 
 **Routine deployments after the traffic switch**
