@@ -60,6 +60,19 @@ class ReleaseSafetyTest(unittest.TestCase):
                 release.validate()
             api.assert_not_called()
 
+    def test_schema_acceptance_is_independent_for_each_deployment(self):
+        for accepted, pending in [('staging', 'production'), ('production', 'staging')]:
+            with (
+                self.subTest(accepted=accepted),
+                patch.dict(release.CONFIG[accepted], {'accepted_migrations_sha256': 'a' * 64}),
+                patch.object(release, 'migration_fingerprint', return_value='a' * 64),
+            ):
+                self.assertEqual(release.validate(accepted)['validated_targets'], [accepted])
+                with self.assertRaisesRegex(RuntimeError, 'accepted D1 schema for ' + pending):
+                    release.validate(pending)
+                with self.assertRaisesRegex(RuntimeError, 'accepted D1 schema for ' + pending):
+                    release.validate()
+
     def test_production_entry_pins_the_exact_image_revision_and_active_phase(self):
         sources = release.modules('cloudflare-production-entry.mjs', 'repo@' + DIGEST, 'github-test')
         entry = sources['cloudflare-production-entry.mjs'].decode()
