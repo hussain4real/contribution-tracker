@@ -524,7 +524,7 @@ test('online clone pins one unfiltered file listing and excludes files that arri
     env.STAGING_BACKUP_ONLY_ENABLED = 'true';
     env.STAGING_ONLINE_CLONE_ENABLED = 'true';
     env.STAGING_CHECKPOINT_BUCKET_NAME = 'familyfunds-d1-staging-clone-20261030t194500z-capture';
-    env.DB.withSession = mode => { assert.equal(mode,'first-primary'); return env.DB; };
+    env.DB.withSession = mode => { assert.equal(mode,'first-primary'); return {...env.DB,prepare:sql=>({...env.DB.prepare(sql),first:async()=>({n:40})}),getBookmark:()=>'current'}; };
     const listing = env.STAGING_FILES.list;
     let calls=0;
     env.STAGING_FILES.list = async options => {
@@ -547,7 +547,7 @@ test('online clone rejects incomplete or unrecognized bucket inventory before pu
         const {env,checkpointObjects} = backupFixture();
         Object.assign(env,{STAGING_BACKUP_ONLY_ENABLED:'true',STAGING_ONLINE_CLONE_ENABLED:'true'});
         env.STAGING_CHECKPOINT_BUCKET_NAME = 'familyfunds-d1-staging-clone-20261030t194500z-capture';
-        env.DB.withSession=()=>env.DB;
+        env.DB.withSession=()=>({...env.DB,getBookmark:()=>'current'});
         env.STAGING_FILES.list=async()=>page;
         await assert.rejects(new StagingBackupOnly(env).create('clone01-20261030t194500z'),/inventory/);
         assert.equal(checkpointObjects.size,1);
@@ -558,4 +558,20 @@ test('online recovery rejects a valid encrypted snapshot with the wrong capture 
     const envelope = await sealBackup({database:'synthetic', rows:[11,13]},secret);
     await assert.rejects(openBackup(envelope.envelope,secret,'0'.repeat(64)),/digest differs/);
     assert.deepEqual(Array.from((await openBackup(envelope.envelope,secret,envelope.sha256)).rows),[11,13]);
+});
+
+test('a changed or absent primary bookmark refuses the clone before publishing files or the database', async () => {
+    for (const snapshots of [['first','next'],[null,null]]) {
+        const {env,checkpointObjects} = backupFixture();
+        Object.assign(env,{STAGING_BACKUP_ONLY_ENABLED:'true',STAGING_ONLINE_CLONE_ENABLED:'true',STAGING_CHECKPOINT_BUCKET_NAME:'familyfunds-d1-staging-clone-20261030t194500z-capture'});
+        env.DB.withSession = mode => {
+            assert.equal(mode,'first-primary');
+            const bookmark = snapshots.shift();
+            return {...env.DB,prepare:sql=>({...env.DB.prepare(sql),first:async()=>({n:40})}),getBookmark:()=>bookmark};
+        };
+        env.STAGING_FILES.list = async () => ({objects:[],truncated:false});
+        await assert.rejects(new StagingBackupOnly(env).create('clone01-20261030t194500z-r2'),/bookmark|changed during clone inventory/);
+        assert.equal(checkpointObjects.size,1);
+        assert.match([...checkpointObjects.keys()][0],/-r2\/claim$/);
+    }
 });

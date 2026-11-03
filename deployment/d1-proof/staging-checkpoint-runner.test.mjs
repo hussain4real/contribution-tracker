@@ -113,24 +113,16 @@ function onlineClone() {
     return f;
 }
 
-test('clone restore requires a stable source bookmark around the complete capture', async t => {
-    for (const changed of [false,true]) {
+test('clone restore requires an attested source bookmark from the capture engine', async () => {
+    for (const bookmark of ['primary-state',null]) {
         const {env,objects,counts} = onlineClone();
-        let calls = 0;
-        const remote = t.mock.method(globalThis,'fetch',async (url, options) => {
-            assert.match(url,/\/f96058f1-0aa3-42f3-9ee2-f796554d6ef4\/time_travel\/bookmark$/);
-            assert.equal(options.redirect,'manual');
-            assert.equal(options.cache,'no-store');
-            calls++;
-            return Response.json({success:true,result:{bookmark:changed && calls===2?'next':'first'}});
-        });
+        const create = env.BACKUP.create;
+        env.BACKUP.create = async (...args) => ({...await create(...args),source_bookmark:bookmark});
         await runner.scheduled({},env);
-        remote.mock.restore();
-        assert.equal(calls,2);
-        assert.deepEqual(counts(),{backups:1,restores:changed?0:1});
+        assert.deepEqual(counts(),{backups:1,restores:bookmark?1:0});
         const report = JSON.parse([...objects.values()][0].body);
-        if (changed) assert.deepEqual([report.state,report.stage],['failed','verify-capture']);
-        else assert.deepEqual([report.consistency,report.source_bookmark],['point-in-time-clone','first']);
+        if (bookmark) assert.deepEqual([report.consistency,report.source_bookmark],['point-in-time-clone',bookmark]);
+        else assert.deepEqual([report.state,report.stage],['failed','verify-capture']);
     }
 });
 

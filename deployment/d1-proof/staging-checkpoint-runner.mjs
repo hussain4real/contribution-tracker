@@ -3,9 +3,9 @@ const statusPrefix = 'private/staging-backups/d1-web/orchestration/';
 function configuration(env) {
     if (env.RUN_ENABLED !== 'true' || !['exploratory', 'online-clone'].includes(env.RUN_MODE) || env.DATABASE_NAME !== 'familyfunds-d1-web-staging') throw new Error('Staging checkpoint runner is disabled or misconfigured');
     const clone = env.RUN_MODE === 'online-clone';
-    const idPattern = clone ? /^clone01-[0-9]{8}t[0-9]{6}z$/ : /^cutover-[0-9]{8}t[0-9]{6}z$/;
+    const idPattern = clone ? /^clone01-[0-9]{8}t[0-9]{6}z(?:-r[1-9][0-9]{0,2})?$/ : /^cutover-[0-9]{8}t[0-9]{6}z$/;
     if (typeof env.CHECKPOINT_ID !== 'string' || !idPattern.test(env.CHECKPOINT_ID)) throw new Error('Invalid checkpoint ID');
-    const stamp = env.CHECKPOINT_ID.slice(8);
+    const stamp = env.CHECKPOINT_ID.split('-')[1];
     const targets = clone ? [`familyfunds-d1-staging-clone-${stamp}`] : ['familyfunds-d1-staging-recovery', `familyfunds-d1-staging-recovery-${stamp}`];
     const captureBucket = clone ? `familyfunds-d1-staging-clone-${stamp}-capture` : 'familyfunds-d1-staging-checkpoints';
     if (env.STATUS_BUCKET_NAME !== captureBucket || !targets.includes(env.RECOVERY_DATABASE_NAME)) throw new Error('Staging checkpoint runner is disabled or misconfigured');
@@ -14,18 +14,6 @@ function configuration(env) {
         || artifacts.some(item => typeof item.uuid !== 'string' || !/^[a-f0-9-]{36}$/.test(item.uuid)
             || typeof item.path_sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(item.path_sha256))) throw new Error('Invalid expected artifacts');
     return {checkpoint: env.CHECKPOINT_ID, artifacts, clone};
-}
-
-async function currentStagingBookmark(env) {
-    const token = env.STAGING_D1_BOOKMARK_TOKEN;
-    if (typeof token !== 'string' || !token.trim()) throw new Error('Missing staging D1 read credential');
-    const response = await fetch('https://api.cloudflare.com/client/v4/accounts/40344948b73fa9da3008958fdc3faf12/d1/database/f96058f1-0aa3-42f3-9ee2-f796554d6ef4/time_travel/bookmark', {
-        headers: {Authorization: 'Bearer ' + token}, cache: 'no-store', redirect: 'manual',
-    });
-    if (!response.ok) throw new Error('Cannot read staging bookmark');
-    const value = await response.json();
-    if (value.success !== true || typeof value.result?.bookmark !== 'string' || !value.result.bookmark.trim()) throw new Error('Missing staging bookmark');
-    return value.result.bookmark;
 }
 
 async function artifactExceptions(db, expected) {
@@ -39,7 +27,7 @@ async function artifactExceptions(db, expected) {
             || typeof row.path !== 'string' || !row.path || /(^\/|\.\.|\\)/.test(row.path)) throw new Error('Expected artifacts changed');
         const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(row.path))), byte => byte.toString(16).padStart(2, '0')).join('');
         if (hash !== item.path_sha256) throw new Error('Expected artifacts changed');
-        exceptions.push({id: row.id, path: row.path});
+        exceptions.push({id: row.id, path: row.path, uuid: row.uuid});
     }
     return exceptions;
 }
@@ -52,7 +40,6 @@ export default {
         if (!claim) return;
         let report, stage = 'preflight';
         try {
-            const start = clone ? await currentStagingBookmark(env) : null;
             const exceptions = await artifactExceptions(clone ? env.DB.withSession('first-primary') : env.DB, artifacts);
             stage = 'backup';
             const backup = await env.BACKUP.create(checkpoint, exceptions);
@@ -61,13 +48,13 @@ export default {
                 || typeof backup.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(backup.sha256)) throw new Error('Backup did not preserve the approved missing-file record');
             if (clone) {
                 stage = 'verify-capture';
-                if (backup.file_inventory !== 'single-list' || start !== await currentStagingBookmark(env)) throw new Error('Staging capture changed');
+                if (backup.file_inventory !== 'single-list' || typeof backup.source_bookmark !== 'string' || !backup.source_bookmark.trim()) throw new Error('Staging capture changed');
             }
             stage = 'recovery';
             const recovery = clone ? await env.RECOVERY.restore(checkpoint, backup.sha256) : await env.RECOVERY.restore(checkpoint);
             if (recovery.status !== 'passed' || recovery.integrity !== 'ok' || JSON.stringify(recovery.missing_file_ids) !== '[11,13]'
                 || recovery.files !== backup.files || recovery.tables !== backup.tables) throw new Error('Recovery verification failed');
-            report = {state: 'passed', consistency: clone ? 'point-in-time-clone' : 'not-frozen', ...(clone ? {source_bookmark: start} : {}), checkpoint, tables: backup.tables, files: backup.files,
+            report = {state: 'passed', consistency: clone ? 'point-in-time-clone' : 'not-frozen', ...(clone ? {source_bookmark: backup.source_bookmark} : {}), checkpoint, tables: backup.tables, files: backup.files,
                 missing_file_ids: backup.missing_file_ids, plaintext_sha256: backup.sha256, integrity: recovery.integrity};
         } catch {
             report = {state: 'failed', checkpoint, stage};

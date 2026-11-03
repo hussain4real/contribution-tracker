@@ -2,6 +2,7 @@ import {WorkerEntrypoint} from 'cloudflare:workers';
 
 const DATABASE = "familyfunds-d1-web-staging";
 const BACKUP_PREFIX = "private/staging-backups/d1-web/";
+const CHECKPOINT_ID = /^(?:cutover-[0-9]{8}t[0-9]{6}z|clone01-[0-9]{8}t[0-9]{6}z(?:-r[1-9][0-9]{0,2})?)$/;
 const encoder = new TextEncoder();
 
 function target(env) {
@@ -92,7 +93,7 @@ async function verifyStoredBackup(bucket, key, expected, secret) {
 }
 
 function checkpointBucket(env, checkpoint) {
-    const expected = checkpoint.startsWith('clone01-') ? `familyfunds-d1-staging-clone-${checkpoint.slice(8)}-capture` : 'familyfunds-d1-staging-checkpoints';
+    const expected = checkpoint.startsWith('clone01-') ? `familyfunds-d1-staging-clone-${checkpoint.split('-')[1]}-capture` : 'familyfunds-d1-staging-checkpoints';
     if (env.STAGING_CHECKPOINT_BUCKET_NAME !== expected || !env.STAGING_CHECKPOINT_FILES) throw new Error('Wrong staging checkpoint bucket');
     return env.STAGING_CHECKPOINT_FILES;
 }
@@ -127,9 +128,9 @@ async function cloneInventory(bucket) {
     return page.objects.filter(item => !item.key.startsWith(BACKUP_PREFIX));
 }
 
-async function checkpointFiles(env, snapshot, checkpoint, exceptions, secret) {
+async function checkpointFiles(env, snapshot, checkpoint, exceptions, secret, pinnedObjects) {
     const clone = checkpoint.startsWith('clone01-');
-    const objects = clone ? await cloneInventory(env.STAGING_FILES) : await stagingFiles(env.STAGING_FILES);
+    const objects = pinnedObjects ?? await stagingFiles(env.STAGING_FILES);
     const paths = new Set(objects.map(item => item.key));
     const missing = [];
     for (const name of ['report_artifacts', 'reconciliation_imports']) {
@@ -170,7 +171,8 @@ async function checkpointFiles(env, snapshot, checkpoint, exceptions, secret) {
 }
 
 async function createBackup(env, at, checkpoint = null, exceptions = []) {
-    if (checkpoint !== null && (typeof checkpoint !== 'string' || !/^(?:cutover|clone01)-[0-9]{8}t[0-9]{6}z$/.test(checkpoint))) throw new Error('Invalid staging checkpoint');
+    const clone = typeof checkpoint === 'string' && checkpoint.startsWith('clone01-');
+    if (checkpoint !== null && (typeof checkpoint !== 'string' || !CHECKPOINT_ID.test(checkpoint))) throw new Error('Invalid staging checkpoint');
     if (!Array.isArray(exceptions) || exceptions.length > 2 || exceptions.some(item => !item || ![11, 13].includes(item.id) || typeof item.path !== 'string' || !item.path || /(^\/|\.\.|\\)/.test(item.path)) || new Set(exceptions.map(item => item.id)).size !== exceptions.length) throw new Error('Invalid staging missing-file exceptions');
     const destination = checkpoint === null ? env.STAGING_FILES : checkpointBucket(env, checkpoint);
     const objectKey = BACKUP_PREFIX + (checkpoint === null ? at.toISOString().slice(0, 10) : 'checkpoints/' + checkpoint) + ".json.aes-gcm";
@@ -188,10 +190,11 @@ async function createBackup(env, at, checkpoint = null, exceptions = []) {
     const before = (await env.DB.prepare(schemaSql).all()).results;
     const tables = before.filter(item => item.type === "table").map(item => item.name);
     if (tables.length < 40 || tables.some(name => !/^[a-z_][a-z0-9_]*$/i.test(name))) throw new Error("Unexpected staging backup schema");
-    const result = await env.DB.batch([
-        ...tables.map(name => env.DB.prepare(`select * from "${name}"`)),
-        env.DB.prepare("select name,seq from sqlite_sequence order by name"),
-        env.DB.prepare("pragma foreign_key_check"), env.DB.prepare("pragma quick_check"), env.DB.prepare(schemaSql),
+    const reader = clone ? env.DB.withSession('first-primary') : env.DB;
+    const result = await reader.batch([
+        ...tables.map(name => reader.prepare(`select * from "${name}"`)),
+        reader.prepare("select name,seq from sqlite_sequence order by name"),
+        reader.prepare("pragma foreign_key_check"), reader.prepare("pragma quick_check"), reader.prepare(schemaSql),
     ]);
     if (JSON.stringify(before) !== JSON.stringify(result[tables.length + 3].results)) throw new Error("Schema changed during staging backup");
     if (result[tables.length + 1].results.length !== 0 || result[tables.length + 2].results[0]?.quick_check !== "ok") throw new Error("Staging backup integrity check failed");
@@ -199,18 +202,35 @@ async function createBackup(env, at, checkpoint = null, exceptions = []) {
         tables: Object.fromEntries(tables.map((name, i) => [name, result[i].results])), sequences: result[tables.length].results};
     if (checkpoint !== null) {
         if (encoder.encode(JSON.stringify(snapshot)).length > 20_000_000) throw new Error('Staging backup exceeds size budget');
-        const files = await checkpointFiles(env, snapshot, checkpoint, exceptions, secret);
+        let pinnedObjects;
+        if (clone) {
+            const bookmark = reader.getBookmark();
+            if (typeof bookmark !== 'string' || !bookmark.trim()) throw new Error('Missing staging snapshot bookmark');
+            pinnedObjects = await cloneInventory(env.STAGING_FILES);
+            const primary = env.DB.withSession('first-primary');
+            await primary.prepare('select count(*) as n from sqlite_schema').first();
+            if (primary.getBookmark() !== bookmark) throw new Error('Staging changed during clone inventory');
+            for (const item of exceptions) {
+                const row = snapshot.tables.report_artifacts?.find(record => record.id === item.id);
+                if (!row || !item.uuid || row.uuid !== item.uuid || row.path !== item.path || row.family_id !== 43 || row.requested_by !== 68
+                    || row.type !== 'fund_statement' || row.format !== 'csv' || row.disk !== 'local') throw new Error('Expected staging artifact changed');
+            }
+            snapshot.source_bookmark = bookmark;
+        }
+        const files = await checkpointFiles(env, snapshot, checkpoint, exceptions, secret, pinnedObjects);
         if (checkpoint.startsWith('clone01-')) snapshot.clone_id = checkpoint;
         snapshot.files = files.manifest;
         snapshot.missing_files = files.missing;
-        const after = await env.DB.batch([
-            ...tables.map(name => env.DB.prepare(`select * from "${name}"`)),
-            env.DB.prepare("select name,seq from sqlite_sequence order by name"), env.DB.prepare(schemaSql),
-        ]);
-        const canonical = rows => JSON.stringify(rows.map(row => JSON.stringify(Object.keys(row).sort().map(key => [key, row[key]]))).sort());
-        if (JSON.stringify(before) !== JSON.stringify(after[tables.length + 1].results)
-            || canonical(snapshot.sequences) !== canonical(after[tables.length].results)
-            || tables.some((name, i) => canonical(snapshot.tables[name]) !== canonical(after[i].results))) throw new Error('Staging database changed during checkpoint');
+        if (!clone) {
+            const after = await env.DB.batch([
+                ...tables.map(name => env.DB.prepare(`select * from "${name}"`)),
+                env.DB.prepare("select name,seq from sqlite_sequence order by name"), env.DB.prepare(schemaSql),
+            ]);
+            const canonical = rows => JSON.stringify(rows.map(row => JSON.stringify(Object.keys(row).sort().map(key => [key, row[key]]))).sort());
+            if (JSON.stringify(before) !== JSON.stringify(after[tables.length + 1].results)
+                || canonical(snapshot.sequences) !== canonical(after[tables.length].results)
+                || tables.some((name, i) => canonical(snapshot.tables[name]) !== canonical(after[i].results))) throw new Error('Staging database changed during checkpoint');
+        }
     }
     const sealed = await sealBackup(snapshot, secret);
     const stored = await destination.put(objectKey, JSON.stringify(sealed.envelope), {
@@ -219,17 +239,17 @@ async function createBackup(env, at, checkpoint = null, exceptions = []) {
     });
     if (!stored && checkpoint !== null) throw new Error('Staging checkpoint already exists');
     if (checkpoint !== null) await verifyStoredBackup(destination, objectKey, snapshot, secret);
-    return {status: stored ? "created" : "already_present", key: objectKey, plaintext_bytes: sealed.bytes, sha256: sealed.sha256, tables: tables.length, ...(checkpoint === null ? {} : {files: snapshot.files.length, missing_file_ids: snapshot.missing_files.map(item => item.id)})};
+    return {status: stored ? "created" : "already_present", key: objectKey, plaintext_bytes: sealed.bytes, sha256: sealed.sha256, tables: tables.length, ...(clone ? {source_bookmark: snapshot.source_bookmark} : {}), ...(checkpoint === null ? {} : {files: snapshot.files.length, missing_file_ids: snapshot.missing_files.map(item => item.id)})};
 }
 
 export class StagingBackupOnly extends WorkerEntrypoint {
     async create(checkpoint, exceptions = []) {
         if (this.env.STAGING_BACKUP_ONLY_ENABLED !== 'true') throw new Error('Staging backup-only operation is disabled');
         target(this.env);
-        if (typeof checkpoint !== 'string' || !/^(?:cutover|clone01)-[0-9]{8}t[0-9]{6}z$/.test(checkpoint)) throw new Error('Invalid staging checkpoint');
+        if (typeof checkpoint !== 'string' || !CHECKPOINT_ID.test(checkpoint)) throw new Error('Invalid staging checkpoint');
         if (checkpoint.startsWith('clone01-')) {
             if (this.env.STAGING_ONLINE_CLONE_ENABLED !== 'true') throw new Error('Online clone disabled');
-            const result = await createBackup({...this.env, DB: this.env.DB.withSession('first-primary')}, new Date(), checkpoint, exceptions);
+            const result = await createBackup(this.env, new Date(), checkpoint, exceptions);
             return {...result, file_inventory: 'single-list'};
         }
         return createBackup(this.env, new Date(), checkpoint, exceptions);
@@ -240,14 +260,14 @@ export class StagingRecoveryOnly extends WorkerEntrypoint {
     async restore(checkpoint, expectedDigest = null) {
         if (this.env.STAGING_RESTORE_ONLY_ENABLED !== 'true') throw new Error('Staging recovery is disabled');
         target(this.env);
-        if (typeof checkpoint !== 'string' || !/^(?:cutover|clone01)-[0-9]{8}t[0-9]{6}z$/.test(checkpoint)) throw new Error('Invalid staging checkpoint');
+        if (typeof checkpoint !== 'string' || !CHECKPOINT_ID.test(checkpoint)) throw new Error('Invalid staging checkpoint');
         const clone = checkpoint.startsWith('clone01-');
         if (clone && this.env.STAGING_ONLINE_CLONE_ENABLED !== 'true') throw new Error('Online clone disabled');
         if (clone && (typeof expectedDigest !== 'string' || !/^[a-f0-9]{64}$/.test(expectedDigest))) throw new Error('Missing staging clone digest');
         const legacy = !clone && this.env.STAGING_RECOVERY_NAME === 'familyfunds-d1-staging-recovery'
             && this.env.STAGING_RECOVERY_BUCKET_NAME === 'familyfunds-d1-staging-recovery-files';
         const prefix = clone ? 'familyfunds-d1-staging-clone-' : 'familyfunds-d1-staging-recovery-';
-        const isolated = this.env.STAGING_RECOVERY_NAME === `${prefix}${checkpoint.slice(8)}`
+        const isolated = this.env.STAGING_RECOVERY_NAME === `${prefix}${checkpoint.split('-')[1]}`
             && this.env.STAGING_RECOVERY_BUCKET_NAME === `${this.env.STAGING_RECOVERY_NAME}-files`;
         if ((!legacy && !isolated) || !this.env.RECOVERY_DB || !this.env.RECOVERY_FILES) throw new Error('Wrong staging recovery target');
         const existing = await this.env.RECOVERY_DB.prepare("select count(*) n from sqlite_master where type='table' and name not glob 'sqlite_*' and name not glob '_cf_*'").first();
