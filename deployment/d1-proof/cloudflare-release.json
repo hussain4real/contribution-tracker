@@ -43,7 +43,7 @@
         "worker": "familyfunds-d1-staging-sql",
         "entry": "staging-worker.mjs",
         "content_only": true,
-        "accepted_previous_sha256": "e583f2456deac63e6a751558f621778cd1ba5e21dc42365682139aa0fe7150ca"
+        "accepted_previous_sha256": "9157f394b0b7a10d6303e4f618352e276d41c06d57830975018e119aa274a3df"
       }
     ]
   },

@@ -16,12 +16,12 @@ describe('Settings password flow', function () {
         $passwordConfirmPath = parse_url(route('password.confirm'), PHP_URL_PATH) ?: '/user/confirm-password';
         $securitySettingsPath = parse_url(route('security.edit'), PHP_URL_PATH) ?: '/settings/security';
 
-        $page = visit('/login');
+        $page = visit(route('security.edit'));
+        $page->assertPathIs('/login');
 
         $page->fill('email', 'settings-password@test.com')
             ->fill('password', 'password')
             ->click('Log in')
-            ->navigate(route('security.edit'))
             ->assertPathIs($passwordConfirmPath)
             ->assertAttribute('label[for]', 'for', 'password')
             ->assertNoJavaScriptErrors()
