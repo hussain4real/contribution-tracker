@@ -1,0 +1,55 @@
+{
+  "name": "familyfunds-staging-replacement-web",
+  "main": "staging-replacement-web.mjs",
+  "compatibility_date": "2026-10-27",
+  "account_id": "40344948b73fa9da3008958fdc3faf12",
+  "workers_dev": false,
+  "preview_urls": false,
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "REPLACEMENT_CONTAINER",
+        "class_name": "FamilyFundsReplacementStagingContainer"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "FamilyFundsReplacementStagingContainer"
+      ]
+    }
+  ],
+  "containers": [
+    {
+      "name": "familyfunds-staging-replacement-web",
+      "class_name": "FamilyFundsReplacementStagingContainer",
+      "scheduling_policy": "durable_object",
+      "images": {
+        "base": {
+          "image": "registry.cloudflare.com/40344948b73fa9da3008958fdc3faf12/familyfunds-staging-replacement@sha256:532fabb6256a5042ca0fb13221faa45381d486384e80faa1decb80987aa18cce"
+        }
+      }
+    }
+  ],
+  "services": [
+    {
+      "binding": "REPLACEMENT_SQL",
+      "service": "familyfunds-d1-replacement-sql"
+    }
+  ],
+  "secrets_store_secrets": [
+    {
+      "binding": "REPLACEMENT_FILES_CREDENTIAL",
+      "store_id": "5e78cc1e865144e4ab982aeae254ed96",
+      "secret_name": "FF_STAGING_REPLACEMENT_R2_20261103T092540Z"
+    }
+  ],
+  "vars": {
+    "CONTAINER_ENV": "{}",
+    "CONTAINER_IMAGE": "registry.cloudflare.com/40344948b73fa9da3008958fdc3faf12/familyfunds-staging-replacement@sha256:532fabb6256a5042ca0fb13221faa45381d486384e80faa1decb80987aa18cce",
+    "RUNTIME_PROFILE": "replacement-preflight",
+    "STAGING_ADMISSION_CONTROL": "1"
+  }
+}
