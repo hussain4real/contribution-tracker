@@ -92,3 +92,22 @@ test('cutover stages preserve credentials and separate inspection from live deli
         assert.throws(() => containerEnvironment({...bindings, ...extra}));
     }
 });
+
+test('Paystack test credentials are isolated to staging and cannot override unrelated values', () => {
+    const base = {APP_ENV: 'd1-staging', APP_KEY: 'unchanged', PAYSTACK_PUBLIC_KEY: '', PAYSTACK_SECRET_KEY: ''};
+    const keys = {PAYSTACK_PUBLIC_KEY: 'pk_test_publicfixture', PAYSTACK_SECRET_KEY: 'sk_test_secretfixture'};
+    const bind = (extra, core = base) => ({CONTAINER_ENV: JSON.stringify(core), STAGING_PAYSTACK_TEST_ENV: JSON.stringify(extra)});
+    const staging = {allowStagingPaystackTest: true};
+    const testFlags = {PAYSTACK_STAGING_DIAGNOSTICS: 'true', D1_STAGING_PAYSTACK_TEST_CHECKOUT_ENABLED: 'true'};
+    assert.deepEqual(containerEnvironment(bind(keys), staging), {...base, ...keys, ...testFlags});
+    assert.deepEqual(containerEnvironment(bind(keys, {...base, APP_ENV: 'production'}), staging), {...base, APP_ENV: 'production', ...keys, ...testFlags});
+    for (const extra of [
+        {...keys, APP_KEY: 'other'}, {PAYSTACK_PUBLIC_KEY: keys.PAYSTACK_PUBLIC_KEY},
+        {...keys, PAYSTACK_SECRET_KEY: 'sk_live_forbidden'}, {...keys, PAYSTACK_PUBLIC_KEY: 'pk_live_forbidden'},
+        {...keys, PAYSTACK_SECRET_KEY: false}, [], null,
+    ]) assert.throws(() => containerEnvironment(bind(extra), staging));
+    assert.throws(() => containerEnvironment(bind(keys)));
+    assert.throws(() => containerEnvironment({...bind(keys), RUNTIME_PROFILE: 'production'}, staging));
+    assert.throws(() => containerEnvironment(bind(keys, {...base, D1_PRODUCTION_ENABLED: 'true'}), staging));
+    assert.throws(() => containerEnvironment({...bind(keys), STAGING_PAYSTACK_TEST_ENV: 'x'.repeat(4097)}, staging));
+});

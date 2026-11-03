@@ -11,6 +11,7 @@ return [
     'read_snapshot_path' => storage_path('app/private/d1-read-snapshots'),
     'database' => env('D1_STAGING_DATABASE', 'familyfunds-d1-web-staging'),
     'url' => env('D1_STAGING_URL', ''),
+    'paystack_test_checkout' => (bool) env('D1_STAGING_PAYSTACK_TEST_CHECKOUT_ENABLED', false),
     'delivery' => [
         'enabled' => (bool) env('D1_STAGING_DELIVERY_ENABLED', false),
         'email' => env('D1_STAGING_DELIVERY_EMAIL', ''),

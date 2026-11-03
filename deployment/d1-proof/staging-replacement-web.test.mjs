@@ -1,3 +1,4 @@
+import {containerEnvironment} from './container-env.mjs';
 import assert from 'node:assert/strict';
 import {createHmac, randomUUID, timingSafeEqual, webcrypto} from 'node:crypto';
 import {readFileSync} from 'node:fs';
@@ -23,7 +24,7 @@ function fixture() {
     }
     Base.webhookConfig = shared.Container.webhookConfig;
     const {Container, handler, Maintenance, Acceptance} = runInNewContext(source + '\n({Container: FamilyFundsReplacementStagingContainer, handler, Maintenance: ReplacementMaintenance, Acceptance: ReplacementAcceptance})',
-        {...shared, FamilyFundsWebStagingContainer: Base, WorkerEntrypoint: Base, URL, Headers, Request, Response, TextEncoder, crypto: {subtle: {timingSafeEqual}}});
+        {...shared, containerEnvironment, FamilyFundsWebStagingContainer: Base, WorkerEntrypoint: Base, URL, Headers, Request, Response, TextEncoder, crypto: {subtle: {timingSafeEqual}}});
     const files = {bucket: database + '-files', accessKeyId: 'a'.repeat(32), secretAccessKey: 'b'.repeat(64)};
     const env = {CONTAINER_IMAGE: image, CONTAINER_ENV: '{}', RUNTIME_PROFILE: 'replacement-preflight', STAGING_ADMISSION_CONTROL: '1',
         REPLACEMENT_SQL: {fetch() {}}, REPLACEMENT_FILES_CREDENTIAL: {get: async () => JSON.stringify(files)},
@@ -93,58 +94,65 @@ test('private maintenance binding only addresses the replacement object in rehea
     assert.deepEqual(forwarded, [['replacement-staging', ...task]]);
 });
 
-test('signed test callbacks enter only the replacement queue and relay with the private token', async () => {
-    const {Container, handler, env, ctx} = fixture();
-    const queued = [], calls = [], stored = new Map();
-    const config = {enabled: true, database, family_id: 43, paystack_test_key: 'sk_test_fixture',
-        meta_app_secret: 'b'.repeat(32), meta_waba: 'test-account', meta_phone: 'test-phone', recipient: 'test-recipient', relay_token: 'a'.repeat(64)};
-    Object.assign(env, {RUNTIME_PROFILE: 'replacement-webhook-rehearsal', REPLACEMENT_WEBHOOK_SECRETS: JSON.stringify(config),
-        REPLACEMENT_WEBHOOK_QUEUE: {send: async record => queued.push(record)}});
-    const receiver = new shared.Container({blockConcurrencyWhile: action => action(), storage: {
-        get: key => stored.get(key), put: (key, value) => stored.set(key, value), delete: key => stored.delete(key),
-    }}, env);
-    let status = 503;
-    env.REPLACEMENT_CONTAINER = {getByName(name) {
-        assert.equal(name, 'replacement-staging');
-        return {enqueueWebhook: record => receiver.enqueueWebhook(record), fetch: async req => {
-            calls.push([req.url, req.headers.get('X-D1-Staging-Relay'), await req.text()]);
-            return new Response(null, {status});
+for (const profile of ['replacement-live', 'replacement-webhook-rehearsal']) {
+    test('signed test callbacks enter only the replacement queue in ' + profile, async () => {
+        const {Container, handler, env, ctx} = fixture();
+        const queued = [], calls = [], stored = new Map();
+        const config = {enabled: true, database, family_id: 43, paystack_test_key: 'sk_test_fixture',
+            meta_app_secret: 'b'.repeat(32), meta_waba: 'test-account', meta_phone: 'test-phone', recipient: 'test-recipient', relay_token: 'a'.repeat(64)};
+        Object.assign(env, {RUNTIME_PROFILE: profile, RUNTIME_REVISION:'github-abcdef123456',
+            STAGING_PAYSTACK_TEST_ENV: JSON.stringify({PAYSTACK_PUBLIC_KEY:'pk_test_checkout',PAYSTACK_SECRET_KEY:'sk_test_checkout'}),
+            AI_ENV: JSON.stringify({AI_AGENT_PROVIDER:'openai',AI_AGENT_MODEL:'gpt-6.1-terra',OPENAI_API_KEY:'fixture'}),
+            REPLACEMENT_WEBHOOK_SECRETS: JSON.stringify(config),
+            REPLACEMENT_WEBHOOK_QUEUE: {send: async record => queued.push(record)}});
+        const receiver = new shared.Container({blockConcurrencyWhile: action => action(), storage: {
+            get: key => stored.get(key), put: (key, value) => stored.set(key, value), delete: key => stored.delete(key),
+        }}, env);
+        let status = 503;
+        env.REPLACEMENT_CONTAINER = {getByName(name) {
+            assert.equal(name, 'replacement-staging');
+            return {enqueueWebhook: record => receiver.enqueueWebhook(record), fetch: async req => {
+                calls.push([req.url, req.headers.get('X-D1-Staging-Relay'), await req.text()]);
+                return new Response(null, {status});
+            }};
         }};
-    }};
-    const options = await new Container(ctx, env).startupOptions();
-    assert.equal(options.env.D1_STAGING_WEBHOOKS_ENABLED, 'true');
-    assert.equal(options.env.D1_STAGING_RELAY_TOKEN, config.relay_token);
-    assert.equal(options.env.D1_STAGING_DELIVERY_ENABLED, 'false');
-    for (const [provider, payload, secret, algorithm, header, prefix] of [
-        ['paystack', {event:'charge.success', data:{domain:'test', reference:'D1-WEBHOOK-UAT-fixture', metadata:{family_id:43}}},
-            config.paystack_test_key, 'sha512', 'X-Paystack-Signature', ''],
-        ['whatsapp', {object:'whatsapp_business_account', entry:[{id:config.meta_waba, changes:[{field:'messages', value:{
-            metadata:{phone_number_id:config.meta_phone}, statuses:[{id:'fixture', status:'delivered', recipient_id:config.recipient}]}}]}]},
-            config.meta_app_secret, 'sha256', 'X-Hub-Signature-256', 'sha256='],
-    ]) {
-        const body = JSON.stringify(payload);
-        const signature = prefix + createHmac(algorithm, secret).update(body).digest('hex');
-        const request = () => new Request('https://caller/webhooks/' + provider, {method:'POST', headers:{[header]:signature}, body});
-        assert.equal((await handler.fetch(request(), {...env, RUNTIME_PROFILE:'replacement-preflight'})).status, 404);
-        assert.equal((await handler.fetch(request(), env)).status, provider === 'paystack' ? 202 : 200);
-        const record = queued.shift();
-        assert.equal(record.database, database);
-        assert.equal(stored.size, 0);
-        let acks = 0, retries = 0;
-        const message = {id:'fixture', body:record, ack() { acks++; }, retry() { retries++; }};
-        const batch = {queue:'familyfunds-replacement-webhook', messages:[message]};
-        await assert.rejects(handler.queue({...batch, queue:'original'}, env), /Unexpected/);
-        await assert.rejects(handler.queue(batch, {...env, RUNTIME_PROFILE:'replacement-preflight'}), /disabled/);
-        const previousCalls = calls.length;
-        for (const invalid of [{...record, database:undefined}, {...record, raw:body + ' '}]) {
-            await handler.queue({...batch, messages:[{...message, body:invalid}]}, env);
+        const options = await new Container(ctx, env).startupOptions();
+        assert.equal(options.env.D1_STAGING_WEBHOOKS_ENABLED, 'true');
+        assert.equal(options.env.D1_STAGING_RELAY_TOKEN, config.relay_token);
+        assert.equal(options.env.D1_STAGING_DELIVERY_ENABLED, 'false');
+        assert.equal(options.env.PAYSTACK_SECRET_KEY, profile === 'replacement-live' ? 'sk_test_checkout' : undefined);
+        assert.equal(options.env.OPENAI_API_KEY, profile === 'replacement-live' ? 'fixture' : undefined);
+        for (const [provider, payload, secret, algorithm, header, prefix] of [
+            ['paystack', {event:'charge.success', data:{domain:'test', reference:'D1-WEBHOOK-UAT-fixture', metadata:{family_id:43}}},
+                config.paystack_test_key, 'sha512', 'X-Paystack-Signature', ''],
+            ['whatsapp', {object:'whatsapp_business_account', entry:[{id:config.meta_waba, changes:[{field:'messages', value:{
+                metadata:{phone_number_id:config.meta_phone}, statuses:[{id:'fixture', status:'delivered', recipient_id:config.recipient}]}}]}]},
+                config.meta_app_secret, 'sha256', 'X-Hub-Signature-256', 'sha256='],
+        ]) {
+            const body = JSON.stringify(payload);
+            const signature = prefix + createHmac(algorithm, secret).update(body).digest('hex');
+            const request = () => new Request('https://d1-staging.familyfunds.app/webhooks/' + provider, {method:'POST', headers:{[header]:signature}, body});
+            assert.equal((await handler.fetch(request(), {...env, RUNTIME_PROFILE:'replacement-preflight'})).status, 404);
+            assert.equal((await handler.fetch(request(), env)).status, provider === 'paystack' ? 202 : 200);
+            const record = queued.shift();
+            assert.equal(record.database, database);
+            assert.equal(stored.size, 0);
+            let acks = 0, retries = 0;
+            const message = {id:'fixture', body:record, ack() { acks++; }, retry() { retries++; }};
+            const batch = {queue:'familyfunds-replacement-webhook', messages:[message]};
+            await assert.rejects(handler.queue({...batch, queue:'original'}, env), /Unexpected/);
+            await assert.rejects(handler.queue(batch, {...env, RUNTIME_PROFILE:'replacement-preflight'}), /disabled/);
+            const previousCalls = calls.length;
+            for (const invalid of [{...record, database:undefined}, {...record, raw:body + ' '}]) {
+                await handler.queue({...batch, messages:[{...message, body:invalid}]}, env);
+            }
+            assert.equal(calls.length, previousCalls);
+            for (status of [503, 200]) await handler.queue(batch, env);
+            assert.deepEqual([acks, retries], [1,3]);
+            assert.deepEqual(calls.at(-1), ['https://replacement-staging.internal/webhooks/' + provider, config.relay_token, body]);
         }
-        assert.equal(calls.length, previousCalls);
-        for (status of [503, 200]) await handler.queue(batch, env);
-        assert.deepEqual([acks, retries], [1,3]);
-        assert.deepEqual(calls.at(-1), ['https://replacement-staging.internal/webhooks/' + provider, config.relay_token, body]);
-    }
-});
+    });
+}
 
 test('private acceptance preserves Laravel sessions and review forms without opening payment submission or integration routes', async () => {
     const {Acceptance, Container, ctx, env, handler} = fixture();
@@ -205,7 +213,7 @@ test('live staging gates browser traffic and identifies the replacement release'
     assert.equal((await send(origin + '/login')).status, 401);
     assert.equal((await send(origin + '/up', 'Basic b3RoZXI6dGVz')).status, 401);
     assert.equal((await send('https://another.example/login', env.BASIC_AUTHORIZATION)).status, 404);
-    for (const path of ['/__staging_admin/inspect', '/connections', '/webhooks/paystack']) {
+    for (const path of ['/__staging_admin/inspect', '/connections']) {
         assert.equal((await send(origin + path, env.BASIC_AUTHORIZATION)).status, 404);
     }
     for (const path of ['/up', '/login', '/hussain-family/dashboard']) {
@@ -218,7 +226,8 @@ test('live staging gates browser traffic and identifies the replacement release'
         assert.equal(forwarded.at(-1).headers.has('Authorization'), false);
         assert.equal(forwarded.at(-1).headers.has('X-D1-Staging-Relay'), false);
     }
-    assert.equal((await new Container(ctx, env).startupOptions()).env.APP_URL, origin);
+    await assert.rejects(new Container(ctx, env).startupOptions(), /Missing replacement staging integrations/);
+    assert.equal((await send(origin + '/webhooks/paystack')).status, 403);
     delete env.BASIC_AUTHORIZATION;
     assert.equal((await send(origin + '/login')).status, 503);
     assert.equal(forwarded.length, 3);

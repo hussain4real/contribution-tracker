@@ -9,7 +9,7 @@ function instanceUnavailable(error) {
 const replacementDatabase = "familyfunds-d1-staging-clone-20261103t092540z";
 
 function replacementWebhooks(env) {
-    return env.RUNTIME_PROFILE === "replacement-webhook-rehearsal";
+    return ["replacement-webhook-rehearsal", "replacement-live"].includes(env.RUNTIME_PROFILE);
 }
 
 function webhookContainer(env) {
@@ -189,7 +189,7 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
                 try {
                     if (!container.running) {
                         this.startupState.phase = "start";
-                        const env = containerEnvironment(this.env);
+                        const env = containerEnvironment(this.env, {allowStagingPaystackTest: true});
                         if (this.env.STARTUP_PROFILE === "1") {
                             env.FF_STARTUP_PROFILE = "1";
                             env.FF_STAGING_START_REQUEST_MS = String(Date.now());
@@ -468,7 +468,7 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
         await this.admissionReady;
         if (this.admissionPaused) throw new Error("Staging admission is paused");
         const families = JSON.parse(this.env.STAGING_SCHEDULE_FAMILIES ?? "{}");
-        const replacement = this.env.RUNTIME_PROFILE === "replacement-rehearsal";
+        const replacement = ["replacement-rehearsal", "replacement-live"].includes(this.env.RUNTIME_PROFILE);
         if (replacement && (!Number.isSafeInteger(families.family) || families.family < 1
             || !Number.isSafeInteger(families.purge) || families.purge < 1 || families.family === families.purge)) {
             throw new Error("Missing synthetic replacement maintenance families");
@@ -481,7 +481,7 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
         }
         const database = replacement ? "familyfunds-d1-staging-clone-20261103t092540z" : "familyfunds-d1-web-staging";
         const url = replacement ? "https://familyfunds-d1-replacement-sql.familyfunds-lab.workers.dev" : "https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev";
-        let configured = containerEnvironment(this.env);
+        let configured = replacement ? {} : containerEnvironment(this.env, {allowStagingPaystackTest: true});
         if (!replacement && ((configured.D1_STAGING_DATABASE !== undefined && configured.D1_STAGING_DATABASE !== database)
             || (configured.D1_STAGING_URL !== undefined && configured.D1_STAGING_URL !== url))) {
             throw new Error("Maintenance CLI requires the original staging target");

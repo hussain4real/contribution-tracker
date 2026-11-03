@@ -1,4 +1,5 @@
 import {WorkerEntrypoint} from 'cloudflare:workers';
+import {containerEnvironment} from './container-env.mjs';
 import stagingHandler, {FamilyFundsWebStagingContainer} from './container-worker.mjs';
 
 const database = 'familyfunds-d1-staging-clone-20261103t092540z';
@@ -42,8 +43,19 @@ export class FamilyFundsReplacementStagingContainer extends FamilyFundsWebStagin
 
         const webhook = FamilyFundsWebStagingContainer.webhookConfig(this.env);
         if (this.env.RUNTIME_PROFILE === 'replacement-webhook-rehearsal' && !webhook) throw new Error('Missing private rehearsal webhook configuration');
+        const live = this.env.RUNTIME_PROFILE === 'replacement-live';
+        if (live && (!webhook || !this.env.STAGING_PAYSTACK_TEST_ENV || !this.env.AI_ENV)) {
+            throw new Error('Missing replacement staging integrations');
+        }
+        const integrations = live ? containerEnvironment({
+            CONTAINER_ENV: '{}', STAGING_PAYSTACK_TEST_ENV: this.env.STAGING_PAYSTACK_TEST_ENV, AI_ENV: this.env.AI_ENV,
+        }, {allowStagingPaystackTest: true}) : {};
+        if (live && (!integrations.OPENAI_API_KEY || integrations.AI_AGENT_PROVIDER !== 'openai' || integrations.AI_AGENT_MODEL !== 'gpt-6.1-terra'
+            || (integrations.OPENAI_URL && !['https://api.openai.com/v1', 'https://api.openai.com/v1/'].includes(integrations.OPENAI_URL)))) {
+            throw new Error('Invalid staging AI configuration');
+        }
         return {image, instance: 'standard-1', enableInternet: true, env: {
-            APP_ENV: 'd1-staging', APP_KEY: appKey, APP_DEBUG: 'false',
+            ...integrations, APP_ENV: 'd1-staging', APP_KEY: appKey, APP_DEBUG: 'false',
             APP_URL: ['replacement-passkey-check', 'replacement-live'].includes(this.env.RUNTIME_PROFILE) ? stagingOrigin : 'https://replacement-staging.internal', D1_PRODUCTION_ENABLED: 'false',
             ...(['replacement-acceptance', 'replacement-passkey-check'].includes(this.env.RUNTIME_PROFILE) && {
                 SESSION_COOKIE: acceptanceCookie, SESSION_SECURE_COOKIE: 'true',
@@ -76,7 +88,7 @@ export class FamilyFundsReplacementStagingContainer extends FamilyFundsWebStagin
     }
 
     async scheduledProof(kind, familyId, at) {
-        if (this.env.RUNTIME_PROFILE !== 'replacement-rehearsal') throw new Error('Replacement preflight has no maintenance tasks');
+        if (!['replacement-rehearsal', 'replacement-live'].includes(this.env.RUNTIME_PROFILE)) throw new Error('Replacement preflight has no maintenance tasks');
         return super.scheduledProof(kind, familyId, at);
     }
 }
@@ -120,14 +132,14 @@ export class ReplacementAcceptance extends WorkerEntrypoint {
 
 export class ReplacementMaintenance extends WorkerEntrypoint {
     async scheduledProof(kind, familyId, at) {
-        if (this.env.RUNTIME_PROFILE !== 'replacement-rehearsal') throw new Error('Replacement maintenance is disabled');
+        if (!['replacement-rehearsal', 'replacement-live'].includes(this.env.RUNTIME_PROFILE)) throw new Error('Replacement maintenance is disabled');
         return this.env.REPLACEMENT_CONTAINER.getByName('replacement-staging').scheduledProof(kind, familyId, at);
     }
 }
 
 export default {
     async queue(batch, env) {
-        if (env.RUNTIME_PROFILE !== 'replacement-webhook-rehearsal') throw new Error('Replacement webhook rehearsal is disabled');
+        if (!['replacement-webhook-rehearsal', 'replacement-live'].includes(env.RUNTIME_PROFILE)) throw new Error('Replacement webhook rehearsal is disabled');
         return stagingHandler.queue(batch, env);
     },
     async fetch(request, env) {
@@ -135,6 +147,10 @@ export default {
         const passkeyCheck = env.RUNTIME_PROFILE === 'replacement-passkey-check';
         if (passkeyCheck || env.RUNTIME_PROFILE === 'replacement-live') {
             if (url.origin !== stagingOrigin) return new Response('Not found', {status: 404});
+            if (!passkeyCheck && ['/webhooks/paystack', '/webhooks/whatsapp'].includes(url.pathname)
+                && /^github-[0-9a-f]{12}$/.test(env.RUNTIME_REVISION) && env.STAGING_ADMISSION_CONTROL === '1') {
+                return stagingHandler.fetch(request, env);
+            }
             const credential = passkeyCheck ? env.REPLACEMENT_OWNER_AUTHORIZATION : env.BASIC_AUTHORIZATION;
             if (passkeyCheck && credential === env.BASIC_AUTHORIZATION) return new Response('Staging maintenance', {status: 503});
             if (env.STAGING_ADMISSION_CONTROL !== '1' || !/^github-[0-9a-f]{12}$/.test(env.RUNTIME_REVISION)
