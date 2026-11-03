@@ -113,6 +113,9 @@ class ContributionController extends Controller
             ? round(($totalCollected / $totalExpected) * 100, 1)
             : 0;
 
+        $payments = $contributionModels->flatMap(fn (Contribution $contribution): array => $contribution->payments->all());
+        $latestPayment = $payments->sortBy([['paid_at', 'desc'], ['id', 'desc']])->first();
+
         $personalTotalExpected = (int) $contributionModels->sum(fn (Contribution $contribution): int => $contribution->expected_amount);
         $personalTotalPaid = (int) $contributionModels->sum(fn (Contribution $contribution): int => $contribution->total_paid);
         $personalTotalOutstanding = (int) $contributionModels->sum(fn (Contribution $contribution): int => $contribution->balance);
@@ -160,6 +163,12 @@ class ContributionController extends Controller
         return Inertia::render('Contributions/My', [
             'member_id' => $user->id,
             'next_contribution' => $nextContributionDetails,
+            'latest_payment' => $latestPayment === null ? null : [
+                'paid_at' => $latestPayment->paid_at->toDateString(),
+                'amount' => $latestPayment->payment_batch_id === null
+                    ? $latestPayment->amount
+                    : $payments->where('payment_batch_id', $latestPayment->payment_batch_id)->sum(fn (Payment $payment): int => $payment->amount),
+            ],
             'receipts' => $receipts,
             'online_payments_available' => $onlinePaymentsAvailable,
             'statement_period' => [

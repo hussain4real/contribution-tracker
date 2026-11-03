@@ -42,6 +42,7 @@ describe('My Contributions', function () {
     it('shows no next contribution when the member has nothing outstanding', function () {
         $this->actingAs($this->member)->get(route('contributions.my'))
             ->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('latest_payment', null)
             ->where('next_contribution', null)
             ->where('personal_stats.total_outstanding', 0));
     });
@@ -315,6 +316,33 @@ describe('My Contributions', function () {
             );
     });
 
+    it('shows the full latest payment across receipt pages and supports payments without a receipt', function () {
+        Queue::fake();
+        $family = $this->member->family;
+        assert($family instanceof Family);
+        $recorder = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+        $first = Contribution::factory()->forUser($this->member)->forMonth(2025, 10)->create(['expected_amount' => 4000]);
+        Contribution::factory()->forUser($this->member)->forMonth(2025, 11)->create(['expected_amount' => 4000]);
+        $paidAt = now()->startOfDay();
+        app(PaymentAllocationService::class)->createBatch(
+            member: $this->member, amount: 5000, paidAt: $paidAt, recordedBy: $recorder, family: $family,
+        );
+        $other = Contribution::factory()->create();
+        Payment::factory()->forContribution($other)->create(['amount' => 999, 'paid_at' => $paidAt->copy()->addDay()]);
+        $url = route('contributions.my', ['current_family' => $family->slug, 'receipts_page' => 2]);
+
+        $this->actingAs($this->member)->get($url)->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->has('receipts.data', 0)
+            ->where('latest_payment.amount', 5000)
+            ->where('latest_payment.paid_at', $paidAt->toDateString()));
+
+        Payment::factory()->forContribution($first)->create(['amount' => 350, 'paid_at' => $paidAt]);
+        Payment::factory()->forContribution($first)->create(['amount' => 125, 'paid_at' => $paidAt->copy()->subDay()]);
+        $this->get($url)->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('latest_payment.amount', 350)
+            ->where('latest_payment.paid_at', $paidAt->toDateString()));
+    });
+
     it('marks reversed receipts and restores the outstanding balance', function () {
         Queue::fake();
         $family = $this->member->family;
@@ -338,6 +366,7 @@ describe('My Contributions', function () {
             ->has('receipts.data', 1)
             ->where('receipts.data.0.id', $receipt->id)
             ->where('receipts.data.0.is_reversed', true)
+            ->where('latest_payment', null)
             );
     });
 

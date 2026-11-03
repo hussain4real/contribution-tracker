@@ -133,16 +133,23 @@ describe('Member History Flow', function () {
     });
 
     it('member can navigate to my contributions page from dashboard', function () {
-        Contribution::factory()
+        $contribution = Contribution::factory()
             ->forUser($this->member)
             ->currentMonth()
             ->create(['expected_amount' => 4000]);
+
+        Payment::factory()->forContribution($contribution)->recordedBy($this->recorder)->create([
+            'amount' => 1250, 'paid_at' => '2026-01-15',
+        ]);
 
         $page = loginBrowserAs($this->member);
 
         $page->click('My Contributions')
             ->assertPathIs("/{$this->family->slug}/contributions/my")
-            ->assertSee('My money');
+            ->assertSee('My money')
+            ->assertSee('Latest payment')
+            ->assertSee('2026-01-15')
+            ->assertSee('No receipts are available yet.');
     });
 
     it('explains when an advance contribution is too far away for online payment', function () {
