@@ -229,8 +229,10 @@ def checked_bindings(worker, settings):
         }
         if any(names.get(key, {}).get(field) != value for key, (field, value) in expected.items()):
             raise RuntimeError('Replacement web bindings or activation differ from the release destination')
+        secrets = ['REPLACEMENT_APP_KEY', 'REPLACEMENT_SQL_TOKEN', 'BASIC_AUTHORIZATION',
+                   'STAGING_PAYSTACK_TEST_ENV', 'REPLACEMENT_WEBHOOK_SECRETS', 'AI_ENV']
         if (names['REPLACEMENT_FILES_CREDENTIAL'].get('store_id') != '5e78cc1e865144e4ab982aeae254ed96'
-                or any(names.get(key, {}).get('type') != 'secret_text' for key in ['REPLACEMENT_APP_KEY', 'REPLACEMENT_SQL_TOKEN', 'BASIC_AUTHORIZATION'])):
+                or any(names.get(key, {}).get('type') != 'secret_text' for key in secrets)):
             raise RuntimeError('Replacement credential bindings differ from the release destination')
         repository = 'registry.cloudflare.com/' + ACCOUNT + '/familyfunds-staging-replacement@sha256:'
         if not re.fullmatch(re.escape(repository) + '[0-9a-f]{64}', names.get('CONTAINER_IMAGE', {}).get('text', '')):

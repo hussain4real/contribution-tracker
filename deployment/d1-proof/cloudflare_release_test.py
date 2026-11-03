@@ -204,6 +204,8 @@ class ReleaseSafetyTest(unittest.TestCase):
                     {'name': 'REPLACEMENT_FILES_CREDENTIAL', 'type': 'secrets_store_secret', 'store_id': '5e78cc1e865144e4ab982aeae254ed96', 'secret_name': 'FF_STAGING_REPLACEMENT_R2_20261103T092540Z'},
                     {'name': 'REPLACEMENT_APP_KEY', 'type': 'secret_text'}, {'name': 'REPLACEMENT_SQL_TOKEN', 'type': 'secret_text'},
                     {'name': 'BASIC_AUTHORIZATION', 'type': 'secret_text'},
+                    *[{'name': name, 'type': 'secret_text'} for name in
+                      ['STAGING_PAYSTACK_TEST_ENV', 'REPLACEMENT_WEBHOOK_SECRETS', 'AI_ENV']],
                     *[{'name': k, 'type': 'plain_text', 'text': v} for k, v in {
                         'CONTAINER_ENV': '{}', 'STAGING_ADMISSION_CONTROL': '1', 'CONTAINER_IMAGE': image,
                         'RUNTIME_PROFILE': 'replacement-live'}.items()]]}
