@@ -70,6 +70,7 @@ interface Props {
         balance: number;
         can_pay_online: boolean;
     } | null;
+    latest_payment: { amount: number; paid_at: string } | null;
     receipts: {
         data: {
             id: number;
@@ -94,6 +95,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
     member_id: 0,
     next_contribution: null,
+    latest_payment: null,
     receipts: () => ({
         data: [],
         current_page: 1,
@@ -282,6 +284,13 @@ function checkDownloadConnection(
                 <h2 id="my-receipts-heading" class="text-lg font-semibold">
                     Your receipts
                 </h2>
+                <p v-if="latest_payment" class="mt-2 text-sm">
+                    Latest payment ·
+                    {{ formatCurrency(latest_payment.amount) }} on
+                    <time :datetime="latest_payment.paid_at">{{
+                        latest_payment.paid_at
+                    }}</time>
+                </p>
                 <p
                     v-if="receipts.data.length === 0"
                     class="mt-3 text-sm text-neutral-600 dark:text-neutral-400"
