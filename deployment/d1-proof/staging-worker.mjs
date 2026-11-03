@@ -55,17 +55,23 @@ export default {
     async fetch(request, env) {
         const supplied = new TextEncoder().encode(request.headers.get("authorization") ?? "");
         const expected = new TextEncoder().encode("Bearer " + env.PROOF_TOKEN);
-        if (supplied.byteLength !== expected.byteLength ||
+        if (typeof env.PROOF_TOKEN !== "string" || !env.PROOF_TOKEN.trim() || supplied.byteLength !== expected.byteLength ||
             !crypto.subtle.timingSafeEqual(supplied, expected)) {
             return Response.json({ error: "Unauthorized" }, { status: 401 });
         }
         const path = new URL(request.url).pathname;
+        const namespace = env.STAGING_GATEWAY_ADMISSION_OBJECT;
+        // The original gateway has neither binding. An installed coordinator requires an explicit mode.
+        const mode = env.STAGING_GATEWAY_ADMISSION === undefined && !namespace ? "0" : env.STAGING_GATEWAY_ADMISSION;
+        if (mode !== "0" && (mode !== "1" || !namespace)) {
+            return Response.json({error: "Invalid gateway admission configuration"}, {status: 503, headers: {"Cache-Control": "no-store"}});
+        }
         if (path === "/__staging_admin/admission") {
-            if (env.STAGING_GATEWAY_ADMISSION !== "1" || env.DATABASE_NAME !== "familyfunds-d1-web-staging") return Response.json({error: "Not found"}, {status: 404});
+            if (mode !== "1" || env.DATABASE_NAME !== "familyfunds-d1-web-staging") return Response.json({error: "Not found"}, {status: 404});
             const actual = new TextEncoder().encode(request.headers.get("X-Staging-Gateway-Admin") ?? "");
             const admin = new TextEncoder().encode(env.STAGING_GATEWAY_ADMIN_TOKEN ?? "");
             if (admin.length < 32 || actual.length !== admin.length || !crypto.subtle.timingSafeEqual(actual, admin)) return Response.json({error: "Forbidden"}, {status: 403});
-            const gate = env.STAGING_GATEWAY_ADMISSION_OBJECT.getByName("staging-gateway");
+            const gate = namespace.getByName("staging-gateway");
             if (request.method === "GET") {
                 const details = new URL(request.url).searchParams.get("details");
                 if (details !== null && details !== "1") return Response.json({error: "Invalid inspection request"}, {status: 400});
@@ -102,9 +108,9 @@ export default {
         let operationId = null;
         try {
             const body = JSON.parse(new TextDecoder().decode(bytes));
-            const gateEnabled = env.STAGING_GATEWAY_ADMISSION === "1";
+            const gateEnabled = mode === "1";
             if (gateEnabled && env.DATABASE_NAME !== "familyfunds-d1-web-staging") throw new Error("Invalid staging admission target");
-            const gate = gateEnabled ? env.STAGING_GATEWAY_ADMISSION_OBJECT.getByName("staging-gateway") : null;
+            const gate = gateEnabled ? namespace.getByName("staging-gateway") : null;
             if (path === "/manifest") {
                 const id = gate ? await gate.begin() : null;
                 if (gate && id === null) return Response.json({error: "Staging maintenance in progress"}, {status: 503, headers: {"Cache-Control": "no-store"}});
