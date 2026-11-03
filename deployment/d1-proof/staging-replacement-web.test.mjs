@@ -223,3 +223,53 @@ test('live staging gates browser traffic and identifies the replacement release'
     assert.equal((await send(origin + '/login')).status, 503);
     assert.equal(forwarded.length, 3);
 });
+
+test('owner window admits the canonical passkey ceremony while other staging traffic stays closed', async () => {
+    const {handler, Container, ctx, env} = fixture();
+    const calls = [];
+    const origin = 'https://d1-staging.familyfunds.app';
+    Object.assign(env, {RUNTIME_PROFILE:'replacement-passkey-check', RUNTIME_REVISION:'github-abcdef123456',
+        BASIC_AUTHORIZATION:'Basic c3RhZ2luZw==', REPLACEMENT_OWNER_AUTHORIZATION:'Basic d2luZG93',
+        REPLACEMENT_CONTAINER:{getByName(name) {
+            assert.equal(name, 'replacement-staging');
+            return {fetch(request) {
+                calls.push(request);
+                return new Response(null, {status:200,headers:{'Set-Cookie':'familyfunds_replacement_acceptance_session=new; Secure; HttpOnly'}});
+            }};
+        }}});
+    function send(path, method = 'GET', extra = {}) {
+        return handler.fetch(new Request(origin + path, {method,headers:{Authorization:env.REPLACEMENT_OWNER_AUTHORIZATION,
+            Origin:origin, Cookie:'old_session=x; XSRF-TOKEN=y; familyfunds_replacement_acceptance_session=z', ...extra}}), env);
+    }
+    for (const credential of ['', env.BASIC_AUTHORIZATION]) {
+        const rejected = await send('/login','GET',{Authorization:credential});
+        assert.equal(rejected.status,401);
+        assert.match(rejected.headers.get('WWW-Authenticate'),/cutover/);
+    }
+    for (const [path,method] of [['/login','POST'],['/platform/users','GET'],['/passkeys/login?x=1','POST'],
+        ['/user/passkeys','POST'],['/hussain-family/payments','POST'],['/webhooks/paystack','POST'],['/connections','GET']]) {
+        assert.equal((await send(path,method)).status,503);
+    }
+    assert.equal((await send('/passkeys/login','POST',{Origin:'https://elsewhere.invalid'})).status,403);
+    assert.equal(calls.length,0);
+    for (const [path,method] of [['/login','GET'],['/build/assets/Login-hash.js','GET'],['/passkeys/login/options','GET'],
+        ['/passkeys/login','POST'],['/platform','GET']]) {
+        const response = await send(path,method);
+        assert.equal(response.status,200);
+        assert.equal(response.headers.get('Cache-Control'),'private, no-store');
+        assert.equal(response.headers.get('X-FamilyFunds-Staging-Destination'),'replacement-passkey-check');
+        assert.match(response.headers.get('Set-Cookie'),/HttpOnly/);
+        assert.equal(calls.at(-1).headers.has('Authorization'),false);
+        assert.equal(calls.at(-1).headers.get('Cookie'),'XSRF-TOKEN=y; familyfunds_replacement_acceptance_session=z');
+    }
+    const runtime = (await new Container(ctx,env).startupOptions()).env;
+    assert.equal(runtime.APP_URL,origin);
+    assert.equal(runtime.SESSION_COOKIE,'familyfunds_replacement_acceptance_session');
+    assert.equal(runtime.D1_STAGING_DELIVERY_ENABLED,'false');
+    assert.equal(runtime.D1_STAGING_WEBHOOKS_ENABLED,'false');
+    env.REPLACEMENT_OWNER_AUTHORIZATION = env.BASIC_AUTHORIZATION;
+    assert.equal((await send('/login')).status,503);
+    delete env.REPLACEMENT_OWNER_AUTHORIZATION;
+    assert.equal((await send('/login')).status,503);
+    assert.equal(calls.length,5);
+});

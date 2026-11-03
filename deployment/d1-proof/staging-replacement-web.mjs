@@ -10,7 +10,7 @@ const imagePattern = /^registry\.cloudflare\.com\/40344948b73fa9da3008958fdc3faf
 export class FamilyFundsReplacementStagingContainer extends FamilyFundsWebStagingContainer {
     constructor(ctx, env) {
         if (env.CONTAINER_ENV !== '{}' || env.CONTAINER_ENV_PARTS !== undefined || env.OPTIMIZED_BOOTSTRAP !== undefined
-            || !['replacement-preflight', 'replacement-rehearsal', 'replacement-webhook-rehearsal', 'replacement-acceptance', 'replacement-live'].includes(env.RUNTIME_PROFILE) || env.STAGING_ADMISSION_CONTROL !== '1'
+            || !['replacement-preflight', 'replacement-rehearsal', 'replacement-webhook-rehearsal', 'replacement-acceptance', 'replacement-passkey-check', 'replacement-live'].includes(env.RUNTIME_PROFILE) || env.STAGING_ADMISSION_CONTROL !== '1'
             || !imagePattern.test(env.CONTAINER_IMAGE) || !env.REPLACEMENT_SQL?.fetch) {
             throw new Error('Invalid replacement staging configuration');
         }
@@ -44,8 +44,8 @@ export class FamilyFundsReplacementStagingContainer extends FamilyFundsWebStagin
         if (this.env.RUNTIME_PROFILE === 'replacement-webhook-rehearsal' && !webhook) throw new Error('Missing private rehearsal webhook configuration');
         return {image, instance: 'standard-1', enableInternet: true, env: {
             APP_ENV: 'd1-staging', APP_KEY: appKey, APP_DEBUG: 'false',
-            APP_URL: this.env.RUNTIME_PROFILE === 'replacement-live' ? stagingOrigin : 'https://replacement-staging.internal', D1_PRODUCTION_ENABLED: 'false',
-            ...(this.env.RUNTIME_PROFILE === 'replacement-acceptance' && {
+            APP_URL: ['replacement-passkey-check', 'replacement-live'].includes(this.env.RUNTIME_PROFILE) ? stagingOrigin : 'https://replacement-staging.internal', D1_PRODUCTION_ENABLED: 'false',
+            ...(['replacement-acceptance', 'replacement-passkey-check'].includes(this.env.RUNTIME_PROFILE) && {
                 SESSION_COOKIE: acceptanceCookie, SESSION_SECURE_COOKIE: 'true',
             }),
             D1_STAGING_ENABLED: 'true', D1_STAGING_DATABASE: database, D1_STAGING_URL: 'https://' + gateway,
@@ -81,6 +81,18 @@ export class FamilyFundsReplacementStagingContainer extends FamilyFundsWebStagin
     }
 }
 
+function forwardAcceptance(request, env) {
+    const headers = new Headers();
+    for (const [name, value] of request.headers) {
+        if (['accept', 'accept-language', 'content-type', 'origin', 'user-agent', 'x-xsrf-token',
+            'x-csrf-token', 'x-requested-with', 'x-inertia'].includes(name) || name.startsWith('x-inertia-')) headers.set(name, value);
+    }
+    const cookies = (request.headers.get('Cookie') ?? '').split(';').map(part => part.trim())
+        .filter(part => part.startsWith(acceptanceCookie + '=') || part.startsWith('XSRF-TOKEN='));
+    if (cookies.length) headers.set('Cookie', cookies.join('; '));
+    return env.REPLACEMENT_CONTAINER.getByName('replacement-staging').fetch(new Request(request, {headers, redirect: 'manual'}));
+}
+
 // Only a private service binding can select this entrypoint. Laravel still authenticates each session.
 export class ReplacementAcceptance extends WorkerEntrypoint {
     async fetch(request) {
@@ -102,15 +114,7 @@ export class ReplacementAcceptance extends WorkerEntrypoint {
         if (!page && !form) return new Response('Not found', {status: 404});
         if (form && request.headers.get('Origin') !== url.origin) return new Response('Forbidden', {status: 403});
 
-        const headers = new Headers();
-        for (const [name, value] of request.headers) {
-            if (['accept', 'accept-language', 'content-type', 'origin', 'user-agent', 'x-xsrf-token',
-                'x-csrf-token', 'x-requested-with', 'x-inertia'].includes(name) || name.startsWith('x-inertia-')) headers.set(name, value);
-        }
-        const cookies = (request.headers.get('Cookie') ?? '').split(';').map(part => part.trim())
-            .filter(part => part.startsWith(acceptanceCookie + '=') || part.startsWith('XSRF-TOKEN='));
-        if (cookies.length) headers.set('Cookie', cookies.join('; '));
-        return this.env.REPLACEMENT_CONTAINER.getByName('replacement-staging').fetch(new Request(request, {headers, redirect: 'manual'}));
+        return forwardAcceptance(request, this.env);
     }
 }
 
@@ -128,16 +132,33 @@ export default {
     },
     async fetch(request, env) {
         const url = new URL(request.url);
-        if (env.RUNTIME_PROFILE === 'replacement-live') {
+        const passkeyCheck = env.RUNTIME_PROFILE === 'replacement-passkey-check';
+        if (passkeyCheck || env.RUNTIME_PROFILE === 'replacement-live') {
             if (url.origin !== stagingOrigin) return new Response('Not found', {status: 404});
+            const credential = passkeyCheck ? env.REPLACEMENT_OWNER_AUTHORIZATION : env.BASIC_AUTHORIZATION;
+            if (passkeyCheck && credential === env.BASIC_AUTHORIZATION) return new Response('Staging maintenance', {status: 503});
             if (env.STAGING_ADMISSION_CONTROL !== '1' || !/^github-[0-9a-f]{12}$/.test(env.RUNTIME_REVISION)
-                || typeof env.BASIC_AUTHORIZATION !== 'string' || !/^Basic [A-Za-z0-9+/]+=*$/.test(env.BASIC_AUTHORIZATION)) {
+                || typeof credential !== 'string' || !/^Basic [A-Za-z0-9+/]+=*$/.test(credential)) {
                 return new Response('Staging configuration unavailable', {status: 503});
             }
             const actual = new TextEncoder().encode(request.headers.get('Authorization') ?? '');
-            const expected = new TextEncoder().encode(env.BASIC_AUTHORIZATION);
+            const expected = new TextEncoder().encode(credential);
             if (actual.length !== expected.length || !crypto.subtle.timingSafeEqual(actual, expected)) {
+                if (passkeyCheck) return new Response('Staging maintenance', {status: 401, headers: {
+                    'WWW-Authenticate': 'Basic realm="FamilyFunds cutover verification"', 'Cache-Control': 'no-store'}});
                 return new Response('Authentication required', {status: 401, headers: {'WWW-Authenticate': 'Basic realm="FamilyFunds staging"'}});
+            }
+            if (passkeyCheck) {
+                const page = request.method === 'GET' && (['/login', '/passkeys/login/options', '/platform'].includes(url.pathname)
+                    || /^\/build\/assets\/[A-Za-z0-9_.-]+\.(?:css|js|woff2?|svg|png)$/.test(url.pathname));
+                const submit = request.method === 'POST' && url.pathname === '/passkeys/login';
+                if ((!page && !submit) || url.search) return new Response('Staging maintenance', {status: 503});
+                if (submit && request.headers.get('Origin') !== stagingOrigin) return new Response('Forbidden', {status: 403});
+                const upstream = await forwardAcceptance(request, env);
+                const response = new Response(upstream.body, upstream);
+                response.headers.set('Cache-Control', 'private, no-store');
+                response.headers.set('X-FamilyFunds-Staging-Destination', 'replacement-passkey-check');
+                return response;
             }
             if (url.pathname.startsWith('/__') || url.pathname.startsWith('/webhooks/') || url.pathname === '/connections') {
                 return new Response('Not found', {status: 404});
