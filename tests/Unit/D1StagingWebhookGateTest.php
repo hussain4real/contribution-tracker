@@ -53,6 +53,7 @@ it('uses the checkout key for API requests when a separate webhook test key is c
         'd1-staging.url' => 'https://d1-staging.example.invalid',
         'd1-staging.r2.bucket' => '',
         'd1-staging.paystack_test_checkout' => true,
+        'd1-staging.webhooks.paystack_signing_secret' => 'whsec_fixture',
         'services.paystack.secret_key' => 'sk_test_checkout',
         'services.paystack.public_key' => 'pk_test_checkout',
         'services.paystack.base_url' => 'https://api.paystack.co',
@@ -64,7 +65,8 @@ it('uses the checkout key for API requests when a separate webhook test key is c
     $paystack->initializeTransaction(['email' => 'member@example.com', 'amount' => 100]);
 
     Http::assertSent(fn (Illuminate\Http\Client\Request $request): bool => $request->hasHeader('Authorization', 'Bearer sk_test_checkout'));
-    expect($paystack->verifyWebhookSignature('staging charge', hash_hmac('sha512', 'staging charge', 'sk_test_fixture')))->toBeTrue();
+    expect($paystack->verifyWebhookSignature('staging charge', hash_hmac('sha512', 'staging charge', 'whsec_fixture')))->toBeTrue();
+    expect($paystack->verifyWebhookSignature('staging charge', hash_hmac('sha512', 'staging charge', 'sk_test_checkout')))->toBeFalse();
 });
 
 it('resolves push subscription lookups on the current staging snapshot', function (): void {

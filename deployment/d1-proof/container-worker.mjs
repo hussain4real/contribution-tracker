@@ -11,6 +11,18 @@ function webhookConfig(env) {
     const config = JSON.parse(env.STAGING_WEBHOOK_SECRETS);
     if (config.enabled !== true) return null;
     if (config.database !== "familyfunds-d1-web-staging" || config.family_id !== 43) throw new Error("Invalid isolated webhook target");
+    if (env.STAGING_WEBHOOK_SIGNING_ENV !== undefined) {
+        if (env.RUNTIME_PROFILE === "production") throw new Error("Invalid staging signing environment");
+        const signing = JSON.parse(env.STAGING_WEBHOOK_SIGNING_ENV);
+        if (!/^whsec_[A-Za-z0-9_-]+$/.test(signing.paystack_webhook_signing_secret ?? "")
+            || !/^[a-f0-9]{32}$/i.test(signing.meta_app_secret ?? "")
+            || typeof signing.meta_verify_token !== "string" || !signing.meta_verify_token) {
+            throw new Error("Invalid staging webhook credentials");
+        }
+        config.paystack_webhook_signing_secret = signing.paystack_webhook_signing_secret;
+        config.meta_app_secret = signing.meta_app_secret;
+        config.meta_verify_token = signing.meta_verify_token;
+    }
     return config;
 }
 
@@ -37,7 +49,7 @@ async function verifyWebhook(record, config) {
     const meta = record.provider === "whatsapp";
     const hex = meta ? record.signature.replace(/^sha256=/, "") : record.signature;
     if (!(meta ? /^[a-f0-9]{64}$/i : /^[a-f0-9]{128}$/i).test(hex) || (meta && !record.signature.startsWith("sha256="))) return false;
-    const secret = meta ? config.meta_app_secret : config.paystack_test_key;
+    const secret = meta ? config.meta_app_secret : (config.paystack_webhook_signing_secret ?? config.paystack_test_key);
     if (typeof secret !== "string" || secret === "") return false;
     const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), {name: "HMAC", hash: meta ? "SHA-256" : "SHA-512"}, false, ["verify"]);
     const bytes = Uint8Array.from(hex.match(/../g), pair => parseInt(pair, 16));
@@ -90,7 +102,7 @@ async function receiveWebhook(request, env) {
     } else {
         await env.STAGING_WEBHOOK_QUEUE.send(record, {contentType: "json"});
     }
-    return Response.json({message: "Accepted"}, {status: provider === "paystack" ? 202 : 200, headers: {"Cache-Control": "no-store"}});
+    return Response.json({message: "Accepted"}, {status: 200, headers: {"Cache-Control": "no-store"}});
 }
 
 async function stagingGatewayHealth(env) {
@@ -273,6 +285,12 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
                     if (!container.running) {
                         this.startupState.phase = "start";
                         const env = containerEnvironment(this.env, {allowStagingPaystackTest: true});
+                        if (this.env.STAGING_WEBHOOK_SIGNING_ENV !== undefined) {
+                            const webhook = webhookConfig(this.env);
+                            if (!webhook) throw new Error("Staging webhooks are disabled");
+                            env.D1_STAGING_PAYSTACK_WEBHOOK_SIGNING_SECRET = webhook.paystack_webhook_signing_secret;
+                            env.D1_STAGING_META_APP_SECRET = webhook.meta_app_secret;
+                        }
                         if (this.env.STARTUP_PROFILE === "1") {
                             env.FF_STARTUP_PROFILE = "1";
                             env.FF_STAGING_START_REQUEST_MS = String(Date.now());
