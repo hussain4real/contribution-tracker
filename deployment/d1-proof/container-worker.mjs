@@ -171,7 +171,7 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
                             env.FF_STARTUP_PROFILE = "1";
                             env.FF_STAGING_START_REQUEST_MS = String(Date.now());
                         }
-                        const options = this.startupOptions(env);
+                        const options = await this.startupOptions(env);
                         if (this.env.OPTIMIZED_BOOTSTRAP === "v1") {
                             const files = STAGING_BOOTSTRAP_ASSETS.filter(asset => asset.path !== "/var/www/html/deployment/d1-proof/run-staging.php").map((asset, i) => {
                                 if (!/^\/var\/www\/html\/[A-Za-z0-9_./-]+$/.test(asset.path) || asset.path.includes("..") || !/^[a-f0-9]{64}$/.test(asset.sha256)) throw new Error("Invalid packaged bootstrap asset");

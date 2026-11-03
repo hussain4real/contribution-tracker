@@ -5,10 +5,15 @@ declare(strict_types=1);
 $path = dirname(__DIR__, 2).'/bootstrap/cache/config.php';
 $configuration = is_file($path) ? require $path : [];
 $staging = $configuration['d1-staging'] ?? [];
+$replacement = 'familyfunds-d1-staging-clone-20261103t092540z';
+$replacementReady = ($staging['database'] ?? null) === $replacement
+    && ($staging['url'] ?? null) === 'https://familyfunds-d1-replacement-sql.familyfunds-lab.workers.dev'
+    && ($staging['r2']['admission'] ?? null) === '1'
+    && ($staging['r2']['bucket'] ?? null) === $replacement.'-files';
 $ready = ($configuration['app']['env'] ?? null) === 'd1-staging'
     && ($configuration['d1-production']['enabled'] ?? false) === false
     && ($staging['enabled'] ?? false) === true
-    && in_array($staging['database'] ?? null, ['familyfunds-d1-web-staging', 'familyfunds-d1-scale-lab'], true)
+    && ($replacementReady || in_array($staging['database'] ?? null, ['familyfunds-d1-web-staging', 'familyfunds-d1-scale-lab'], true))
     && is_string($staging['token'] ?? null) && $staging['token'] !== '';
 $production = $configuration['d1-production'] ?? [];
 $ready = $ready || (($configuration['app']['env'] ?? null) === 'production'

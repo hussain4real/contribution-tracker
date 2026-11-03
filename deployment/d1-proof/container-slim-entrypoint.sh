@@ -24,7 +24,7 @@ case "${FPM_PM_MAX_CHILDREN:-16}" in
     *) echo 'Invalid staging PHP concurrency' >&2; exit 64 ;;
 esac
 mkdir -p /run/nginx /run/php
-if [ "${D1_PRODUCTION_ENABLED:-false}" = "true" ]; then
+if [ "${D1_PRODUCTION_ENABLED:-false}" = "true" ] || [ "${D1_STAGING_DATABASE:-}" = "familyfunds-d1-staging-clone-20261103t092540z" ]; then
     test -f /etc/cloudflare/certs/cloudflare-containers-ca.crt
     cp /etc/cloudflare/certs/cloudflare-containers-ca.crt /usr/local/share/ca-certificates/familyfunds-container-outbound.crt
     update-ca-certificates >/dev/null 2>&1
