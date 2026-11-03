@@ -715,8 +715,10 @@ test("dedicated staging credentials authenticate the webhook without accepting t
     const payload = {event: "charge.success", data: {domain: "test", reference: "D1-WEBHOOK-UAT-signed", metadata: {family_id: 43}}};
     const legacy = signedRecord("paystack", payload, webhook);
     assert.equal((await handler.fetch(webhookRequest(legacy), env)).status, 403);
-    const signed = signedRecord("paystack", payload, {...webhook, paystack_test_key: signing.paystack_webhook_signing_secret});
-    assert.equal((await handler.fetch(webhookRequest(signed), env)).status, 200);
+    const signature = createHmac("sha512", signing.paystack_webhook_signing_secret).update("1793730000." + legacy.raw).digest("hex");
+    const request = webhookRequest(legacy);
+    request.headers.set("Paystack-Signature", "t=1793730000,v1=whk_fixture:" + signature);
+    assert.equal((await handler.fetch(request, env)).status, 200);
     assert.equal(queued.length, 1);
 });
 

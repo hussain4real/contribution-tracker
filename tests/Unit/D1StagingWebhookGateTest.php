@@ -65,7 +65,9 @@ it('uses the checkout key for API requests when a separate webhook test key is c
     $paystack->initializeTransaction(['email' => 'member@example.com', 'amount' => 100]);
 
     Http::assertSent(fn (Illuminate\Http\Client\Request $request): bool => $request->hasHeader('Authorization', 'Bearer sk_test_checkout'));
-    expect($paystack->verifyWebhookSignature('staging charge', hash_hmac('sha512', 'staging charge', 'whsec_fixture')))->toBeTrue();
+    $mac = hash_hmac('sha512', '1793730000.staging charge', 'whsec_fixture');
+    expect($paystack->verifyWebhookSignature('staging charge', 't=1793730000,v1=whk_fixture:'.$mac))->toBeTrue();
+    expect($paystack->verifyWebhookSignature('staging charge', 't=1793730001,v1=whk_fixture:'.$mac))->toBeFalse();
     expect($paystack->verifyWebhookSignature('staging charge', hash_hmac('sha512', 'staging charge', 'sk_test_checkout')))->toBeFalse();
 });
 

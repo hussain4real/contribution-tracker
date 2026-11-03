@@ -43,17 +43,29 @@ function webhookScope(provider, payload, config) {
                 && (change.value.statuses ?? []).every(status => status.recipient_id === config.recipient)));
 }
 
+function signatureHeader(provider, config) {
+    if (provider === "whatsapp") return "X-Hub-Signature-256";
+    return config.paystack_webhook_signing_secret ? "Paystack-Signature" : "X-Paystack-Signature";
+}
+
 async function verifyWebhook(record, config) {
     if (!record || !["paystack", "whatsapp"].includes(record.provider) || typeof record.raw !== "string"
         || new TextEncoder().encode(record.raw).length > 49_152 || typeof record.signature !== "string") return false;
     const meta = record.provider === "whatsapp";
-    const hex = meta ? record.signature.replace(/^sha256=/, "") : record.signature;
+    let hex = meta ? record.signature.replace(/^sha256=/, "") : record.signature;
+    let signedPayload = record.raw;
+    if (!meta && config.paystack_webhook_signing_secret) {
+        const parts = /^t=(\d{10}),v1=whk_[A-Za-z0-9]+:([a-f0-9]{128})$/i.exec(record.signature);
+        if (!parts) return false;
+        hex = parts[2];
+        signedPayload = parts[1] + "." + record.raw;
+    }
     if (!(meta ? /^[a-f0-9]{64}$/i : /^[a-f0-9]{128}$/i).test(hex) || (meta && !record.signature.startsWith("sha256="))) return false;
     const secret = meta ? config.meta_app_secret : (config.paystack_webhook_signing_secret ?? config.paystack_test_key);
     if (typeof secret !== "string" || secret === "") return false;
     const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), {name: "HMAC", hash: meta ? "SHA-256" : "SHA-512"}, false, ["verify"]);
     const bytes = Uint8Array.from(hex.match(/../g), pair => parseInt(pair, 16));
-    if (!await crypto.subtle.verify("HMAC", key, bytes, new TextEncoder().encode(record.raw))) return false;
+    if (!await crypto.subtle.verify("HMAC", key, bytes, new TextEncoder().encode(signedPayload))) return false;
     try {
         return webhookScope(record.provider, JSON.parse(record.raw), config);
     } catch {
@@ -94,7 +106,7 @@ async function receiveWebhook(request, env) {
     let offset = 0;
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
     const record = {provider, raw: new TextDecoder("utf-8", {fatal: true}).decode(bytes),
-        signature: request.headers.get(provider === "paystack" ? "X-Paystack-Signature" : "X-Hub-Signature-256") ?? ""};
+        signature: request.headers.get(signatureHeader(provider, config)) ?? ""};
     if (!await verifyWebhook(record, config)) return new Response("Forbidden", {status: 403});
     if (env.RUNTIME_PROFILE !== "production" && env.STAGING_ADMISSION_CONTROL === "1") {
         const admitted = await env.STAGING_CONTAINER.getByName("isolated-staging").enqueueWebhook(record);
@@ -635,7 +647,7 @@ export default {
                 if (!config || !await verifyWebhook(message.body, config)) throw new Error("Invalid staging relay event");
                 const record = message.body;
                 const headers = {"Content-Type": "application/json", "X-D1-Staging-Relay": env.ADMIN_TOKEN};
-                headers[record.provider === "paystack" ? "X-Paystack-Signature" : "X-Hub-Signature-256"] = record.signature;
+                headers[signatureHeader(record.provider, config)] = record.signature;
                 const container = env.STAGING_CONTAINER.getByName("isolated-staging");
                 const response = await container.fetch(new Request(`https://d1-staging.familyfunds.app/webhooks/${record.provider}`, {method: "POST", headers, body: record.raw}));
                 await response.body?.cancel();
