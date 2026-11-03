@@ -7,6 +7,7 @@ use FamilyFunds\D1Staging\D1StagingServiceProvider;
 use FamilyFunds\D1Staging\D1StagingStorage;
 use GuzzleHttp\Promise\Create;
 use GuzzleHttp\Psr7\Response as HttpResponse;
+use Illuminate\Filesystem\AwsS3V3Adapter;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Filesystem\FilesystemManager;
 use Illuminate\Http\Client\Request;
@@ -42,30 +43,22 @@ it('guards both staging disks before dispatch and keeps an uncertain SDK attempt
         'd1-staging.r2.secret' => 'secret', 'd1-staging.r2.admission' => '1']);
     (new D1StagingServiceProvider($this->app))->register();
 
-    $pending = [];
-    $paused = false;
-    Http::fake(function (Request $request) use (&$pending, &$paused, $url) {
-        expect($request->hasHeader('Authorization', 'Bearer synthetic'))->toBeTrue();
-        if ($request->url() === $url.'/storage-write/begin') {
-            if ($paused) {
-                return Http::response([], 503);
-            }
-            $id = (string) Str::uuid();
-            $pending[$id] = (string) Str::uuid();
+    $first = ['id' => (string) Str::uuid(), 'receipt' => (string) Str::uuid()];
+    $retry = ['id' => (string) Str::uuid(), 'receipt' => (string) Str::uuid()];
+    Http::fake([
+        $url.'/storage-write/begin' => Http::sequence()->push($first)->push($retry)->push([], 503),
+        $url.'/storage-write/complete' => function (Request $request) use ($retry) {
+            expect($request->hasHeader('Authorization', 'Bearer synthetic'))->toBeTrue()
+                ->and($request->hasHeader('X-Storage-Operation', $retry['id']))->toBeTrue()
+                ->and($request->hasHeader('X-Storage-Receipt', $retry['receipt']))->toBeTrue();
 
-            return Http::response(['id' => $id, 'receipt' => $pending[$id]]);
-        }
-        expect($request->url())->toBe($url.'/storage-write/complete');
-        $id = $request->header('X-Storage-Operation')[0];
-        expect($request->header('X-Storage-Receipt')[0])->toBe($pending[$id]);
-        unset($pending[$id]);
-
-        return Http::response('', 204);
-    });
+            return Http::response('', 204);
+        },
+    ]);
 
     $attempts = 0;
     foreach (['local', 'public'] as $name) {
-        $settings = config("filesystems.disks.$name");
+        $settings = config()->array("filesystems.disks.$name");
         $settings['retries'] = 1;
         $settings['http_handler'] = function () use (&$attempts) {
             $attempts++;
@@ -74,12 +67,11 @@ it('guards both staging disks before dispatch and keeps an uncertain SDK attempt
         };
         $disk = app(FilesystemManager::class)->build($settings);
         if ($name === 'public') {
-            $paused = true;
             expect(fn () => $disk->put('synthetic.txt', 'fixture'))->toThrow(UnableToWriteFile::class, 'Staging R2 write admission unavailable.');
         } else {
             expect($disk->put('synthetic.txt', 'fixture'))->toBeTrue();
         }
-        expect($attempts)->toBe(2)->and($pending)->toHaveCount(1);
+        expect($attempts)->toBe(2);
     }
     Http::assertSentCount(4);
 });
@@ -102,7 +94,7 @@ it('returns a confirmed R2 write once when the coordinator acknowledgement is un
         $url.'/storage-write/complete' => Http::response([], 503),
     ]);
     $attempts = 0;
-    $settings = config('filesystems.disks.public');
+    $settings = config()->array('filesystems.disks.public');
     $settings['http_handler'] = function () use (&$attempts) {
         $attempts++;
 
@@ -122,6 +114,9 @@ it('refuses delegated staging writes before issuing a URL or registering an atte
     Http::fake([$url.'/storage-write/begin' => Http::response(['id' => (string) Str::uuid(), 'receipt' => (string) Str::uuid()])]);
     foreach (['local', 'public'] as $name) {
         $disk = app(FilesystemManager::class)->disk($name);
+        if (! $disk instanceof AwsS3V3Adapter) {
+            throw new LogicException('Expected an S3 disk.');
+        }
         expect($disk->providesTemporaryUploadUrls())->toBeFalse();
         expect(fn () => $disk->temporaryUploadUrl('example.txt', now()->addMinute()))
             ->toThrow(LogicException::class, 'Delegated staging writes');
