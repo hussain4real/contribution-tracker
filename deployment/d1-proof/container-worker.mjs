@@ -444,29 +444,48 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
         await this.admissionReady;
         if (this.admissionPaused) throw new Error("Staging admission is paused");
         const families = JSON.parse(this.env.STAGING_SCHEDULE_FAMILIES ?? "{}");
+        const replacement = this.env.RUNTIME_PROFILE === "replacement-rehearsal";
+        if (replacement && (!Number.isSafeInteger(families.family) || families.family < 1
+            || !Number.isSafeInteger(families.purge) || families.purge < 1 || families.family === families.purge)) {
+            throw new Error("Missing synthetic replacement maintenance families");
+        }
         const expected = kind === "purge" ? families.purge : kind === "reports" ? 43 : families.family;
         if (!["generate", "remind25", "remind28", "purge", "reports", "retry-notifications"].includes(kind)
             || !Number.isSafeInteger(familyId) || familyId !== expected || typeof at !== "string"
             || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(at) || !Number.isFinite(Date.parse(at)) || Date.parse(at) > Date.now()) {
             throw new Error("Invalid isolated maintenance operation");
         }
-        const configured = containerEnvironment(this.env);
-        if ((configured.D1_STAGING_DATABASE !== undefined && configured.D1_STAGING_DATABASE !== "familyfunds-d1-web-staging")
-            || (configured.D1_STAGING_URL !== undefined && configured.D1_STAGING_URL !== "https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev")) {
+        const database = replacement ? "familyfunds-d1-staging-clone-20261103t092540z" : "familyfunds-d1-web-staging";
+        const url = replacement ? "https://familyfunds-d1-replacement-sql.familyfunds-lab.workers.dev" : "https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev";
+        let configured = containerEnvironment(this.env);
+        if (!replacement && ((configured.D1_STAGING_DATABASE !== undefined && configured.D1_STAGING_DATABASE !== database)
+            || (configured.D1_STAGING_URL !== undefined && configured.D1_STAGING_URL !== url))) {
             throw new Error("Maintenance CLI requires the original staging target");
         }
+        const generation = this.admissionGeneration;
         let stage = "startup";
         this.activeMaintenance++;
         try {
+            if (replacement) {
+                stage = "replacement maintenance target validation";
+                configured = (await this.startupOptions()).env;
+                if (configured?.D1_STAGING_DATABASE !== database || configured.D1_STAGING_URL !== url
+                    || configured.D1_STAGING_R2_BUCKET !== database + "-files" || configured.D1_STAGING_R2_ADMISSION !== "1"
+                    || this.env.STAGING_ADMISSION_CONTROL !== "1" || this.env.OPTIMIZED_BOOTSTRAP !== undefined) {
+                    throw new Error("Invalid replacement maintenance target");
+                }
+                if (this.admissionPaused || generation !== this.admissionGeneration) throw new Error("Staging admission changed");
+                stage = "startup";
+            }
             if (!this.ctx.container.running) this.ready = false;
             if (!this.ready) {
                 this.starting ??= this.waitForReady().finally(() => { this.starting = null; });
                 await this.starting;
             }
-            if (this.admissionPaused) throw new Error("Staging admission is paused");
+            if (this.admissionPaused || generation !== this.admissionGeneration) throw new Error("Staging admission changed");
             if (!this.ready) throw new Error("Staging container is not ready");
             const env = {...configured, APP_ENV: "d1-staging", D1_STAGING_ENABLED: "true",
-                D1_STAGING_DATABASE: "familyfunds-d1-web-staging", D1_STAGING_URL: "https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev"};
+                D1_STAGING_DATABASE: database, D1_STAGING_URL: url};
             if (this.env.OPTIMIZED_BOOTSTRAP === "v1") {
                 stage = "CLI installation";
                 const asset = STAGING_BOOTSTRAP_ASSETS.find(asset => asset.path === "/var/www/html/deployment/d1-proof/run-staging.php");
@@ -478,7 +497,7 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
                 if (installer.exitCode !== 0) throw new Error("Staging CLI installation failed");
             }
             stage = "command execution";
-            const result = await this.containerOutput(["php", "/var/www/html/deployment/d1-proof/run-staging.php", "scheduled-maintenance-proof", "/nonexistent-staging-secret-file", "web", kind, String(familyId), at],
+            const result = await this.containerOutput(["php", "/var/www/html/deployment/d1-proof/run-staging.php", "scheduled-maintenance-proof", "/nonexistent-staging-secret-file", replacement ? "replacement" : "web", kind, String(familyId), at],
                 {cwd: "/var/www/html", env, stdout: "pipe", stderr: "pipe"}, 65_000);
             if (result.exitCode !== 0 || result.stdout.byteLength > 131072) throw new Error("Invalid maintenance output");
             stage = "result validation";

@@ -1,3 +1,4 @@
+import {WorkerEntrypoint} from 'cloudflare:workers';
 import {FamilyFundsWebStagingContainer} from './container-worker.mjs';
 
 const database = 'familyfunds-d1-staging-clone-20261103t092540z';
@@ -7,7 +8,7 @@ const imagePattern = /^registry\.cloudflare\.com\/40344948b73fa9da3008958fdc3faf
 export class FamilyFundsReplacementStagingContainer extends FamilyFundsWebStagingContainer {
     constructor(ctx, env) {
         if (env.CONTAINER_ENV !== '{}' || env.CONTAINER_ENV_PARTS !== undefined || env.OPTIMIZED_BOOTSTRAP !== undefined
-            || env.RUNTIME_PROFILE !== 'replacement-preflight' || env.STAGING_ADMISSION_CONTROL !== '1'
+            || !['replacement-preflight', 'replacement-rehearsal'].includes(env.RUNTIME_PROFILE) || env.STAGING_ADMISSION_CONTROL !== '1'
             || !imagePattern.test(env.CONTAINER_IMAGE) || !env.REPLACEMENT_SQL?.fetch) {
             throw new Error('Invalid replacement staging configuration');
         }
@@ -52,20 +53,30 @@ export class FamilyFundsReplacementStagingContainer extends FamilyFundsWebStagin
         const health = await this.fetch(new Request('https://replacement-staging.internal/up'));
         await health.body?.cancel();
         if (!health.ok) return false;
-        const php = String.raw`require 'deployment/d1-proof/autoload.php';
-            require 'vendor/autoload.php';
-            $app = require 'bootstrap/app.php';
-            $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
-            $db = Illuminate\Support\Facades\DB::connection('d1-staging');
-            if ((int) $db->selectOne('select 1 as connected')->connected !== 1) exit(1);
-            $files = Illuminate\Support\Facades\Storage::disk('local')->getClient();
-            $result = $files->listObjectsV2(['Bucket' => config('d1-staging.r2.bucket'), 'MaxKeys' => 0]);
-            exit(($result['@metadata']['statusCode'] ?? null) === 200 ? 0 : 1);`;
-        const check = await this.containerOutput(['php', '-r', php], {cwd: '/var/www/html', stdout: 'ignore', stderr: 'ignore'}, 30000);
-        return check.exitCode === 0;
+        const {env} = await this.startupOptions();
+        const check = await this.containerOutput(['php', '/var/www/html/deployment/d1-proof/run-staging.php',
+            'verify-maintenance-target', '/nonexistent-staging-secret-file', 'replacement'],
+            {cwd: '/var/www/html', env, stdout: 'pipe', stderr: 'ignore'}, 30000);
+        if (check.exitCode !== 0 || check.stdout.byteLength > 512) return false;
+        try {
+            const result = JSON.parse(new TextDecoder().decode(check.stdout));
+            return result.database === database && result.files === true;
+        } catch {
+            return false;
+        }
     }
 
-    async scheduledProof() { throw new Error('Replacement preflight has no maintenance tasks'); }
+    async scheduledProof(kind, familyId, at) {
+        if (this.env.RUNTIME_PROFILE !== 'replacement-rehearsal') throw new Error('Replacement preflight has no maintenance tasks');
+        return super.scheduledProof(kind, familyId, at);
+    }
+}
+
+export class ReplacementMaintenance extends WorkerEntrypoint {
+    async scheduledProof(kind, familyId, at) {
+        if (this.env.RUNTIME_PROFILE !== 'replacement-rehearsal') throw new Error('Replacement maintenance is disabled');
+        return this.env.REPLACEMENT_CONTAINER.getByName('replacement-staging').scheduledProof(kind, familyId, at);
+    }
 }
 
 export default {

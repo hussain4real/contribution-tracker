@@ -777,3 +777,36 @@ test('a native command still running at its deadline is aborted once without rep
     await assert.rejects(f.container.containerOutput(['php', '-v'], {}, 10), /Command deadline exceeded/);
     assert.equal(executions, 1);
 });
+
+test("replacement rehearsal executes the fixed synthetic task with the replacement credentials", async () => {
+    const {container, env} = fixture();
+    const database = 'familyfunds-d1-staging-clone-20261103t092540z';
+    const target = {APP_KEY:'fixture', D1_STAGING_TOKEN:'fixture', D1_STAGING_DATABASE:database,
+        D1_STAGING_URL:'https://familyfunds-d1-replacement-sql.familyfunds-lab.workers.dev',
+        D1_STAGING_R2_BUCKET:database+'-files', D1_STAGING_R2_ADMISSION:'1'};
+    Object.assign(env, {CONTAINER_ENV:'{}', RUNTIME_PROFILE:'replacement-rehearsal', STAGING_ADMISSION_CONTROL:'1', STAGING_SCHEDULE_FAMILIES:'{"family":50,"purge":51}'});
+    let calls = 0;
+    container.startupOptions = async () => ({env:target});
+    container.ctx.container.exec = async (argv, options) => {
+        assert.deepEqual(Array.from(argv).slice(2), ['scheduled-maintenance-proof','/nonexistent-staging-secret-file','replacement','remind25','50','2026-01-01T00:00:00.000Z']);
+        assert.equal(options.env.D1_STAGING_URL,target.D1_STAGING_URL);
+        assert.equal(options.env.D1_STAGING_DATABASE,database);
+        calls++;
+        return {output:async () => ({exitCode:0, stdout:new TextEncoder().encode('{"exit_code":0}')})};
+    };
+    await container.scheduledProof('remind25',50,'2026-01-01T00:00:00.000Z');
+    target.D1_STAGING_R2_BUCKET = 'familyfunds-d1-staging-private';
+    await assert.rejects(container.scheduledProof('remind25',50,'2026-01-01T00:00:00.000Z'), /replacement maintenance target/);
+    assert.equal(calls,1);
+    target.D1_STAGING_R2_BUCKET = database+'-files';
+    const entered = Promise.withResolvers(), release = Promise.withResolvers();
+    container.startupOptions = async () => { entered.resolve(); await release.promise; return {env:target}; };
+    const pending = container.scheduledProof('remind25',50,'2026-01-01T00:00:00.000Z');
+    await entered.promise;
+    assert.equal(container.activeMaintenance,1);
+    container.admissionGeneration++;
+    release.resolve();
+    await assert.rejects(pending);
+    assert.equal(container.activeMaintenance,0);
+    assert.equal(calls,1);
+});

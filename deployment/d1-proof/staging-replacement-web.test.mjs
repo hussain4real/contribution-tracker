@@ -4,7 +4,7 @@ import {test} from 'node:test';
 import {runInNewContext} from 'node:vm';
 
 const source = readFileSync(new URL('./staging-replacement-web.mjs', import.meta.url), 'utf8')
-    .replace(/^import .*?;$/m, '').replace('export class ', 'class ').replace('export default ', 'const handler = ');
+    .replace(/^import .*?;$/gm, '').replaceAll('export class ', 'class ').replace('export default ', 'const handler = ');
 const database = 'familyfunds-d1-staging-clone-20261103t092540z';
 const image = 'registry.cloudflare.com/40344948b73fa9da3008958fdc3faf12/familyfunds-staging-replacement@sha256:' + 'a'.repeat(64);
 
@@ -14,14 +14,14 @@ function fixture() {
         constructor(ctx, env) { this.ctx = ctx; this.env = env; }
         async waitForReady() { calls.push('start'); }
     }
-    const {Container, handler} = runInNewContext(source + '\n({Container: FamilyFundsReplacementStagingContainer, handler})',
-        {FamilyFundsWebStagingContainer: Base, URL, Request, Response});
+    const {Container, handler, Maintenance} = runInNewContext(source + '\n({Container: FamilyFundsReplacementStagingContainer, handler, Maintenance: ReplacementMaintenance})',
+        {FamilyFundsWebStagingContainer: Base, WorkerEntrypoint: Base, URL, Request, Response});
     const files = {bucket: database + '-files', accessKeyId: 'a'.repeat(32), secretAccessKey: 'b'.repeat(64)};
     const env = {CONTAINER_IMAGE: image, CONTAINER_ENV: '{}', RUNTIME_PROFILE: 'replacement-preflight', STAGING_ADMISSION_CONTROL: '1',
         REPLACEMENT_SQL: {fetch() {}}, REPLACEMENT_FILES_CREDENTIAL: {get: async () => JSON.stringify(files)},
         REPLACEMENT_APP_KEY: 'base64:' + 'a'.repeat(43) + '=', REPLACEMENT_SQL_TOKEN: 'c'.repeat(64)};
     const ctx = {container: {images: {base: image}, running: false, interceptOutboundHttps: async (...args) => calls.push(args)}};
-    return {Container, handler, env, ctx, files, calls};
+    return {Container, handler, Maintenance, env, ctx, files, calls};
 }
 
 test('preflight starts only after private HTTPS interception and uses the reserved destinations', async () => {
@@ -70,4 +70,17 @@ test('private preflight only forwards its fixed health and connectivity checks',
     connected = true;
     assert.equal((await handler.fetch(new Request('https://caller/connections'), env)).status, 200);
     assert.deepEqual(seen, [['replacement-staging', 'https://replacement-staging.internal/up', []]]);
+});
+
+test('private maintenance binding only addresses the replacement object in rehearsal mode', async () => {
+    const {Maintenance, env} = fixture();
+    const forwarded = [];
+    env.REPLACEMENT_CONTAINER = {getByName: name => ({scheduledProof: async (...args) => forwarded.push([name, ...args])})};
+    const service = new Maintenance({}, env);
+    const task = ['remind25', 50, '2026-11-01T08:00:00.000Z'];
+    await assert.rejects(service.scheduledProof(...task), /disabled/);
+    assert.equal(forwarded.length, 0);
+    env.RUNTIME_PROFILE = 'replacement-rehearsal';
+    await service.scheduledProof(...task);
+    assert.deepEqual(forwarded, [['replacement-staging', ...task]]);
 });

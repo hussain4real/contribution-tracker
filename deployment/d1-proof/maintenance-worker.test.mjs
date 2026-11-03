@@ -672,3 +672,35 @@ test("pausing counts an executing queue message until its outbox update complete
     assert.equal(acknowledged, true);
     assert.equal(gate.pending.size, 0);
 });
+
+test("replacement maintenance validates its queue, coordinator and reserved bindings before executing", async () => {
+    const {env, gate} = admittedMaintenance();
+    const task = {id: 'remind25:2026-11', kind: 'remind25', family_id: 50, at: '2026-11-01T08:00:00.000Z'};
+    let completed = false, executions = 0, acknowledgements = 0, retries = 0;
+    const batch = {queue: 'familyfunds-replacement-maintenance', messages: [{id: 'test-message', body: task,
+        ack() { acknowledgements++; }, retry() { retries++; }}]};
+    delete env.DB;
+    env.DATABASE_NAME = 'familyfunds-d1-staging-clone-20261103t092540z';
+    env.REPLACEMENT_DB = {prepare: () => ({bind(id) { assert.equal(id, task.id); return this; },
+        first: async () => ({kind:task.kind, family_id:50, due_at:task.at, completed_at:completed ? 1 : null}),
+        run: async () => { assert.equal(gate.pending.size, 1); completed = true; }})};
+    env.REPLACEMENT_WEB_MAINTENANCE = {scheduledProof: async (...args) => {
+        assert.equal(gate.pending.size, 1);
+        assert.deepEqual(args, [task.kind, task.family_id, task.at]);
+        executions++;
+        return {exit_code:0};
+    }};
+    for (const mismatch of [{STAGING_GATEWAY_ADMISSION:'0'}, {REPLACEMENT_WEB_MAINTENANCE:null}, {DB:{}}, {STAGING_CONTAINER:{}}]) {
+        await assert.rejects(handler.queue(batch, {...env, ...mismatch}), /configuration/);
+    }
+    await assert.rejects(handler.queue({...batch, queue:'old-maintenance'}, env), /configuration/);
+    await assert.rejects(handler.queue(batch, {...env, DATABASE_NAME:'familyfunds-d1-web-staging'}), /configuration/);
+    await assert.rejects(handler.scheduled({scheduledTime:Date.now()}, env), /disabled/);
+    gate.paused = true;
+    await handler.queue(batch, env);
+    assert.deepEqual([retries, executions, acknowledgements], [1, 0, 0]);
+    gate.paused = false;
+    await handler.queue(batch, env);
+    await handler.queue(batch, env);
+    assert.deepEqual([executions, acknowledgements, gate.pending.size], [1, 2, 0]);
+});

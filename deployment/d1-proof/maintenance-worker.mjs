@@ -5,8 +5,8 @@ const BACKUP_PREFIX = "private/staging-backups/d1-web/";
 const CHECKPOINT_ID = /^(?:cutover-[0-9]{8}t[0-9]{6}z|clone01-[0-9]{8}t[0-9]{6}z(?:-r[1-9][0-9]{0,2})?)$/;
 const encoder = new TextEncoder();
 
-function target(env) {
-    if (env.DATABASE_NAME !== DATABASE || env.ENABLED !== "true") throw new Error("Isolated maintenance is disabled");
+function target(env, expectedDatabase = DATABASE) {
+    if (env.DATABASE_NAME !== expectedDatabase || env.ENABLED !== "true") throw new Error("Isolated maintenance is disabled");
     const family = Number(env.MAINTENANCE_FAMILY_ID);
     const purge = Number(env.PURGE_FAMILY_ID);
     if (!Number.isSafeInteger(family) || family < 1 || !Number.isSafeInteger(purge) || purge < 1 || family === purge) throw new Error("Invalid synthetic maintenance families");
@@ -398,13 +398,13 @@ async function schedule(controller, env, families) {
     console.log(JSON.stringify({event: "staging_schedule_tick", pending: pending.length, php_woken_by_timer: false}));
 }
 
-async function consume(task, env) {
-    const stored = await env.DB.prepare("select kind,family_id,due_at,completed_at from d1_staging_schedule_outbox where id=?").bind(task.id).first();
+async function consume(task, db, runTask) {
+    const stored = await db.prepare("select kind,family_id,due_at,completed_at from d1_staging_schedule_outbox where id=?").bind(task.id).first();
     if (!stored || stored.kind !== task.kind || stored.family_id !== task.family_id || stored.due_at !== task.at) throw new Error("Unrecognized staging task");
     if (stored.completed_at === null) {
-        const result = await env.STAGING_CONTAINER.getByName("isolated-staging").scheduledProof(task.kind, task.family_id, task.at);
+        const result = await runTask(task);
         if (result.exit_code !== 0) throw new Error("Staging maintenance command failed");
-        await env.DB.prepare("update d1_staging_schedule_outbox set completed_at=unixepoch() where id=?").bind(task.id).run();
+        await db.prepare("update d1_staging_schedule_outbox set completed_at=unixepoch() where id=?").bind(task.id).run();
     }
 }
 
@@ -415,13 +415,24 @@ export default {
         await withMaintenanceAdmission(env, "schedule", () => schedule(controller, env, families));
     },
     async queue(batch, env) {
-        const families = target(env);
+        const replacement = env.DATABASE_NAME === "familyfunds-d1-staging-clone-20261103t092540z";
+        if (replacement !== (batch.queue === "familyfunds-replacement-maintenance")
+            || (replacement && (env.STAGING_GATEWAY_ADMISSION !== "1" || !env.STAGING_GATEWAY_ADMISSION_OBJECT
+                || !env.REPLACEMENT_DB || !env.REPLACEMENT_WEB_MAINTENANCE || env.DB || env.STAGING_CONTAINER))) {
+            throw new Error("Invalid replacement maintenance queue configuration");
+        }
+        const families = target(env, replacement ? "familyfunds-d1-staging-clone-20261103t092540z" : DATABASE);
+        const db = replacement ? env.REPLACEMENT_DB : env.DB;
+        const runTask = task => {
+            const service = replacement ? env.REPLACEMENT_WEB_MAINTENANCE : env.STAGING_CONTAINER.getByName("isolated-staging");
+            return service.scheduledProof(task.kind, task.family_id, task.at);
+        };
         for (const message of batch.messages) {
             try {
                 const task = message.body;
                 const expected = task?.kind === "purge" ? families.purge : task?.kind === "reports" ? 43 : families.family;
                 if (!["generate", "remind25", "remind28", "purge", "reports", "retry-notifications"].includes(task?.kind) || task.family_id !== expected) throw new Error("Invalid staging task scope");
-                await withMaintenanceAdmission(env, "queue", () => consume(task, env));
+                await withMaintenanceAdmission(env, "queue", () => consume(task, db, runTask));
                 message.ack();
             } catch (error) {
                 message.retry({delaySeconds: 30});
