@@ -317,6 +317,8 @@ After PR #284 was deployed, the owner retried the staging checkout with the suba
 
 **Local settings walkthrough:** The demo family admin could see reminder days, UTC time, channel controls and an example message on desktop; the form was also inspected at 390 × 844 pixels. On 2026-10-31, after being invited to review reminder days, time, channels and message preview in the synthetic demo, the product owner described the setup as "very clear". This feedback does not establish which device or individual interactions were used.
 
+**Member reminder preview.** Members can read the same example email as family admins when choosing reminder channels in Notifications. A synthetic member signed in on a mobile viewport and saw the example with their family name alongside the notification history. The preview uses placeholders for the period and due date.
+
 ### 4. Payment review
 
 - Before posting a manual payment, summarize the member, amount, method and proposed allocation by contribution period.

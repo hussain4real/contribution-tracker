@@ -9,6 +9,7 @@ import {
     updateCategory,
     updateReminderSettings,
 } from '@/actions/App/Http/Controllers/FamilySettingsController';
+import ContributionReminderPreview from '@/components/ContributionReminderPreview.vue';
 import Heading from '@/components/Heading.vue';
 import HeadingSmall from '@/components/HeadingSmall.vue';
 import InputError from '@/components/InputError.vue';
@@ -269,24 +270,7 @@ function cancelEdit(): void {
                         depends on the family plan and the member's contact
                         setup. In-app reminders remain available.
                     </p>
-                    <div
-                        class="rounded-lg border bg-muted/30 p-4"
-                        aria-label="Example email reminder"
-                    >
-                        <p class="text-sm font-semibold">
-                            Example email reminder
-                        </p>
-                        <p class="mt-2 text-sm">
-                            Hi [member name], your [month] contribution for
-                            {{ family.name }} is due on [due date]. Your
-                            remaining balance includes any earlier unpaid
-                            contributions.
-                        </p>
-                        <p class="mt-1 text-xs text-muted-foreground">
-                            The actual message includes the member's balance and
-                            a link to their contributions.
-                        </p>
-                    </div>
+                    <ContributionReminderPreview :family-name="family.name" />
                     <Button type="submit" :disabled="reminders.processing"
                         >Save reminder settings</Button
                     >

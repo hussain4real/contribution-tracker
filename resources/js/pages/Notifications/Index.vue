@@ -5,12 +5,13 @@ import {
     markAsRead,
     updateReminderPreferences,
 } from '@/actions/App/Http/Controllers/NotificationController';
+import ContributionReminderPreview from '@/components/ContributionReminderPreview.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useCurrencyFormatter } from '@/lib/currency';
 import { dashboard } from '@/routes';
-import type { BreadcrumbItem } from '@/types';
+import type { BreadcrumbItem, Family } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import {
     AlertTriangle,
@@ -70,6 +71,7 @@ interface NotificationFilters {
 }
 
 interface Props {
+    family: Family;
     reminderChannels?: string[];
     notificationFeed?: PaginatedNotifications;
     notificationSummary?: NotificationSummary;
@@ -346,6 +348,9 @@ function toDate(dateString?: string | null): Date | null {
                                 Browser notifications</label
                             >
                         </fieldset>
+                        <ContributionReminderPreview
+                            :family-name="family.name"
+                        />
                         <p
                             v-if="reminderSaveUnconfirmed"
                             role="alert"
