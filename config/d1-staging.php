@@ -28,6 +28,7 @@ return [
     'webhooks' => [
         'enabled' => (bool) env('D1_STAGING_WEBHOOKS_ENABLED', false),
         'relay_token' => env('D1_STAGING_RELAY_TOKEN', ''),
+        'paystack_signing_secret' => env('D1_STAGING_PAYSTACK_WEBHOOK_SIGNING_SECRET'),
         'paystack_test_key' => env('D1_STAGING_PAYSTACK_TEST_KEY', ''),
         'meta_app_secret' => env('D1_STAGING_META_APP_SECRET', ''),
     ],

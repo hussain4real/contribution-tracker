@@ -708,12 +708,24 @@ test("maintenance CLI installation also uses bounded verified parts", async () =
     assert.match(installation.command[2], /hash_equals/);
 });
 
+test("dedicated staging credentials authenticate the webhook without accepting the legacy signature", async () => {
+    const {handler, env, webhook, queued} = fixture();
+    const signing = {paystack_webhook_signing_secret: "whsec_fixture", meta_app_secret: "a".repeat(32), meta_verify_token: "new-token"};
+    env.STAGING_WEBHOOK_SIGNING_ENV = JSON.stringify(signing);
+    const payload = {event: "charge.success", data: {domain: "test", reference: "D1-WEBHOOK-UAT-signed", metadata: {family_id: 43}}};
+    const legacy = signedRecord("paystack", payload, webhook);
+    assert.equal((await handler.fetch(webhookRequest(legacy), env)).status, 403);
+    const signed = signedRecord("paystack", payload, {...webhook, paystack_test_key: signing.paystack_webhook_signing_secret});
+    assert.equal((await handler.fetch(webhookRequest(signed), env)).status, 200);
+    assert.equal(queued.length, 1);
+});
+
 test("a signed test payment is durably queued without waking a cold container", async () => {
     const {handler, env, webhook, queued} = fixture();
     env.STAGING_CONTAINER.getByName = () => { throw new Error("Producer must not wake the container"); };
     const record = signedRecord("paystack", {event: "charge.success", data: {domain: "test", reference: "D1-WEBHOOK-UAT-fixture", metadata: {family_id: 43}}}, webhook);
     const response = await handler.fetch(webhookRequest(record), env);
-    assert.equal(response.status, 202);
+    assert.equal(response.status, 200);
     assert.equal(queued.length, 1);
     assert.deepEqual(JSON.parse(JSON.stringify(queued[0])), record);
 });
@@ -742,13 +754,13 @@ test('staging admission pause rejects new webhooks while an earlier queue send r
     assert.equal(rejected.status, 503);
     assert.equal(f.queued.length, 0);
     finishSend();
-    assert.equal((await first).status, 202);
+    assert.equal((await first).status, 200);
     assert.equal(f.queued.length, 1);
     assert.equal((await container.inspect()).webhook_sends, 0);
     assert.equal((await container.inspect()).unresolved_webhook_sends, 0);
     await container.setAdmissionPaused(false);
     f.env.STAGING_WEBHOOK_QUEUE.send = async value => { f.queued.push(value); };
-    assert.equal((await f.handler.fetch(webhookRequest(record), f.env)).status, 202);
+    assert.equal((await f.handler.fetch(webhookRequest(record), f.env)).status, 200);
     assert.equal(f.queued.length, 2);
 });
 
