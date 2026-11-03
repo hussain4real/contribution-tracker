@@ -10,6 +10,7 @@ use Closure;
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use LogicException;
 use Psr\Http\Message\RequestInterface;
 use RuntimeException;
 use Throwable;
@@ -27,6 +28,11 @@ final class D1StagingStorageAdmission
         return function (CommandInterface $command, RequestInterface $request) use ($next): PromiseInterface {
             if (in_array($request->getMethod(), ['GET', 'HEAD'], true)) {
                 return $next($command, $request);
+            }
+
+            // Presigning serializes the command without the transport signer. The eventual upload runs outside this disk.
+            if (! $request->hasHeader('Authorization')) {
+                throw new LogicException('Delegated staging writes are unavailable while R2 admission is enabled.');
             }
 
             $client = Http::withToken($this->token)->withoutRedirecting()->timeout(5);

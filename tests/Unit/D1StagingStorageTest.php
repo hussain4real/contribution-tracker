@@ -112,3 +112,25 @@ it('returns a confirmed R2 write once when the coordinator acknowledgement is un
         ->and($attempts)->toBe(1);
     Http::assertSentCount(2);
 });
+
+it('refuses delegated staging writes before issuing a URL or registering an attempt', function (): void {
+    $url = D1StagingConnection::TARGETS['familyfunds-d1-web-staging'];
+    config(['d1-staging.enabled' => true, 'd1-staging.url' => $url, 'd1-staging.token' => 'synthetic',
+        'd1-staging.r2.bucket' => 'familyfunds-d1-staging-private', 'd1-staging.r2.key' => 'fixture',
+        'd1-staging.r2.secret' => 'secret', 'd1-staging.r2.admission' => '1']);
+    (new D1StagingServiceProvider($this->app))->register();
+    Http::fake([$url.'/storage-write/begin' => Http::response(['id' => (string) Str::uuid(), 'receipt' => (string) Str::uuid()])]);
+    foreach (['local', 'public'] as $name) {
+        $disk = app(FilesystemManager::class)->disk($name);
+        expect($disk->providesTemporaryUploadUrls())->toBeFalse();
+        expect(fn () => $disk->temporaryUploadUrl('example.txt', now()->addMinute()))
+            ->toThrow(LogicException::class, 'Delegated staging writes');
+        $s3 = $disk->getClient();
+        $delete = $s3->getCommand('DeleteObject', ['Bucket' => $disk->getConfig()['bucket'], 'Key' => 'example.txt']);
+        expect(fn () => $s3->createPresignedRequest($delete, '+1 minute'))
+            ->toThrow(LogicException::class, 'Delegated staging writes');
+        expect(parse_url($disk->temporaryUrl('example.txt', now()->addMinute()), PHP_URL_PATH))
+            ->toBe('/familyfunds-d1-staging-private/'.($name === 'local' ? 'private' : 'public').'/example.txt');
+    }
+    Http::assertNothingSent();
+});

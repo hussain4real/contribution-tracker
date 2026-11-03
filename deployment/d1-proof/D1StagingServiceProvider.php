@@ -50,7 +50,13 @@ final class D1StagingServiceProvider extends ServiceProvider
                 }
                 $disk->getClient()->getHandlerList()->appendAttempt($gateway->wrapAttempt(...), 'staging-r2-admission');
 
-                return $disk;
+                return new class($disk->getDriver(), $disk->getAdapter(), $disk->getConfig(), $disk->getClient()) extends AwsS3V3Adapter
+                {
+                    public function providesTemporaryUploadUrls(): bool
+                    {
+                        return false;
+                    }
+                };
             });
             foreach (['local' => 'private', 'public' => 'public'] as $disk => $prefix) {
                 $config = D1StagingStorage::configuration(config()->string('d1-staging.r2.bucket'),
