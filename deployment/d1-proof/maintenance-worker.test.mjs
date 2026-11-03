@@ -517,3 +517,45 @@ test("the consumer retries failed native execution and skips completed duplicate
 test("maintenance has no public execution or data endpoint", async () => {
     assert.equal((await handler.fetch(new Request("https://staging.example/run"))).status, 404);
 });
+
+test('online clone pins one unfiltered file listing and excludes files that arrive afterwards', async () => {
+    const {env,objects,checkpointObjects} = backupFixture();
+    objects.set('private/existing','first');
+    env.STAGING_BACKUP_ONLY_ENABLED = 'true';
+    env.STAGING_ONLINE_CLONE_ENABLED = 'true';
+    env.STAGING_CHECKPOINT_BUCKET_NAME = 'familyfunds-d1-staging-clone-20261030t194500z-capture';
+    env.DB.withSession = mode => { assert.equal(mode,'first-primary'); return env.DB; };
+    const listing = env.STAGING_FILES.list;
+    let calls=0;
+    env.STAGING_FILES.list = async options => {
+        assert.equal(options.limit,1000);
+        assert.equal(options.prefix,undefined);
+        calls++;
+        const page = await listing({prefix:''});
+        objects.set('private/late','later');
+        return page;
+    };
+    const backup = await new StagingBackupOnly(env).create('clone01-20261030t194500z');
+    assert.equal(calls,1);
+    const snap = await openBackup(JSON.parse(checkpointObjects.get(backup.key)),secret);
+    assert.deepEqual(Array.from(snap.files,f=>[f.path,f.source_version]),[['private/existing','fixture-version']]);
+    assert.equal(backup.file_inventory,'single-list');
+});
+
+test('online clone rejects incomplete or unrecognized bucket inventory before publication', async () => {
+    for (const page of [{truncated:true,objects:[]},{truncated:false,objects:[{key:'unexpected',version:'fixture'}]}]) {
+        const {env,checkpointObjects} = backupFixture();
+        Object.assign(env,{STAGING_BACKUP_ONLY_ENABLED:'true',STAGING_ONLINE_CLONE_ENABLED:'true'});
+        env.STAGING_CHECKPOINT_BUCKET_NAME = 'familyfunds-d1-staging-clone-20261030t194500z-capture';
+        env.DB.withSession=()=>env.DB;
+        env.STAGING_FILES.list=async()=>page;
+        await assert.rejects(new StagingBackupOnly(env).create('clone01-20261030t194500z'),/inventory/);
+        assert.equal(checkpointObjects.size,1);
+    }
+});
+
+test('online recovery rejects a valid encrypted snapshot with the wrong capture digest', async () => {
+    const envelope = await sealBackup({database:'synthetic', rows:[11,13]},secret);
+    await assert.rejects(openBackup(envelope.envelope,secret,'0'.repeat(64)),/digest differs/);
+    assert.deepEqual(Array.from((await openBackup(envelope.envelope,secret,envelope.sha256)).rows),[11,13]);
+});
