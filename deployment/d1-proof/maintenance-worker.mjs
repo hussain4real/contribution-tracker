@@ -81,28 +81,62 @@ async function createBackup(env, at) {
     return {status: stored ? "created" : "already_present", key: objectKey, plaintext_bytes: sealed.bytes, sha256: sealed.sha256, tables: tables.length};
 }
 
+async function withMaintenanceAdmission(env, kind, work) {
+    const mode = env.STAGING_GATEWAY_ADMISSION;
+    const namespace = env.STAGING_GATEWAY_ADMISSION_OBJECT;
+    if (mode === "0" || (mode === undefined && namespace === undefined)) return work();
+    if (mode !== "1" || !namespace) throw new Error("Invalid staging maintenance admission configuration");
+    const gate = namespace.getByName("staging-gateway");
+    const id = await gate.begin();
+    if (id === null) throw new Error("Staging maintenance admission paused");
+    if (typeof id !== "string" || !/^[a-f0-9-]{36}$/.test(id)) throw new Error("Invalid staging admission ID");
+    // A rejected write may have reached storage. Only acknowledge a known successful invocation.
+    try {
+        const result = await work();
+        await gate.complete(id);
+        return result;
+    } catch (error) {
+        console.warn(JSON.stringify({event: "staging_maintenance_outcome_unknown", kind, operation_id: id}));
+        throw error;
+    }
+}
+
+async function schedule(controller, env, families) {
+    const actual = new Date(controller.scheduledTime);
+    const at = env.PROOF_AS_OF ? new Date(env.PROOF_AS_OF) : actual;
+    if (!Number.isFinite(at.getTime()) || at > actual) throw new Error("Invalid maintenance proof time");
+    const backup = await createBackup(env, backupSlot(actual));
+    console.log(JSON.stringify({event: "staging_backup", ...backup}));
+    const tasks = calendarTasks(at, families);
+    const reports = await env.DB.prepare("select count(*) as due from report_schedules where family_id=43 and name like 'D1-SCHEDULE-UAT-%' and is_active=1 and next_run_at<=datetime('now')").first();
+    if (Number(reports?.due) > 0) {
+        const minute = new Date(Math.floor(actual.getTime() / 300000) * 300000).toISOString();
+        tasks.push({id: `reports:${minute}`, kind: "reports", family_id: 43, at: minute});
+    }
+    await env.DB.batch(tasks.map(task => env.DB.prepare("insert into d1_staging_schedule_outbox(id,kind,family_id,due_at) values(?,?,?,?) on conflict(id) do nothing").bind(task.id, task.kind, task.family_id, task.at)));
+    const pending = (await env.DB.prepare("select id,kind,family_id,due_at as at from d1_staging_schedule_outbox where completed_at is null and (dispatched_at is null or dispatched_at<unixepoch()-300) order by due_at,id limit 20").all()).results;
+    for (const task of pending) {
+        await env.MAINTENANCE_QUEUE.send(task, {contentType: "json"});
+        await env.DB.prepare("update d1_staging_schedule_outbox set dispatched_at=unixepoch() where id=? and completed_at is null").bind(task.id).run();
+    }
+    console.log(JSON.stringify({event: "staging_schedule_tick", pending: pending.length, php_woken_by_timer: false}));
+}
+
+async function consume(task, env) {
+    const stored = await env.DB.prepare("select kind,family_id,due_at,completed_at from d1_staging_schedule_outbox where id=?").bind(task.id).first();
+    if (!stored || stored.kind !== task.kind || stored.family_id !== task.family_id || stored.due_at !== task.at) throw new Error("Unrecognized staging task");
+    if (stored.completed_at === null) {
+        const result = await env.STAGING_CONTAINER.getByName("isolated-staging").scheduledProof(task.kind, task.family_id, task.at);
+        if (result.exit_code !== 0) throw new Error("Staging maintenance command failed");
+        await env.DB.prepare("update d1_staging_schedule_outbox set completed_at=unixepoch() where id=?").bind(task.id).run();
+    }
+}
+
 export default {
     async fetch() { return new Response("Not found", {status: 404}); },
     async scheduled(controller, env) {
         const families = target(env);
-        const actual = new Date(controller.scheduledTime);
-        const at = env.PROOF_AS_OF ? new Date(env.PROOF_AS_OF) : actual;
-        if (!Number.isFinite(at.getTime()) || at > actual) throw new Error("Invalid maintenance proof time");
-        const backup = await createBackup(env, backupSlot(actual));
-        console.log(JSON.stringify({event: "staging_backup", ...backup}));
-        const tasks = calendarTasks(at, families);
-        const reports = await env.DB.prepare("select count(*) as due from report_schedules where family_id=43 and name like 'D1-SCHEDULE-UAT-%' and is_active=1 and next_run_at<=datetime('now')").first();
-        if (Number(reports?.due) > 0) {
-            const minute = new Date(Math.floor(actual.getTime() / 300000) * 300000).toISOString();
-            tasks.push({id: `reports:${minute}`, kind: "reports", family_id: 43, at: minute});
-        }
-        await env.DB.batch(tasks.map(task => env.DB.prepare("insert into d1_staging_schedule_outbox(id,kind,family_id,due_at) values(?,?,?,?) on conflict(id) do nothing").bind(task.id, task.kind, task.family_id, task.at)));
-        const pending = (await env.DB.prepare("select id,kind,family_id,due_at as at from d1_staging_schedule_outbox where completed_at is null and (dispatched_at is null or dispatched_at<unixepoch()-300) order by due_at,id limit 20").all()).results;
-        for (const task of pending) {
-            await env.MAINTENANCE_QUEUE.send(task, {contentType: "json"});
-            await env.DB.prepare("update d1_staging_schedule_outbox set dispatched_at=unixepoch() where id=? and completed_at is null").bind(task.id).run();
-        }
-        console.log(JSON.stringify({event: "staging_schedule_tick", pending: pending.length, php_woken_by_timer: false}));
+        await withMaintenanceAdmission(env, "schedule", () => schedule(controller, env, families));
     },
     async queue(batch, env) {
         const families = target(env);
@@ -111,13 +145,7 @@ export default {
                 const task = message.body;
                 const expected = task?.kind === "purge" ? families.purge : task?.kind === "reports" ? 43 : families.family;
                 if (!["generate", "remind25", "remind28", "purge", "reports", "retry-notifications"].includes(task?.kind) || task.family_id !== expected) throw new Error("Invalid staging task scope");
-                const stored = await env.DB.prepare("select kind,family_id,due_at,completed_at from d1_staging_schedule_outbox where id=?").bind(task.id).first();
-                if (!stored || stored.kind !== task.kind || stored.family_id !== task.family_id || stored.due_at !== task.at) throw new Error("Unrecognized staging task");
-                if (stored.completed_at === null) {
-                    const result = await env.STAGING_CONTAINER.getByName("isolated-staging").scheduledProof(task.kind, task.family_id, task.at);
-                    if (result.exit_code !== 0) throw new Error("Staging maintenance command failed");
-                    await env.DB.prepare("update d1_staging_schedule_outbox set completed_at=unixepoch() where id=?").bind(task.id).run();
-                }
+                await withMaintenanceAdmission(env, "queue", () => consume(task, env));
                 message.ack();
             } catch (error) {
                 message.retry({delaySeconds: 30});

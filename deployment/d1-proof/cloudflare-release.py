@@ -263,17 +263,37 @@ def checked_bindings(worker, settings):
                     or coordinator.get('environment', 'production') != 'production'
                     or not isinstance(namespace, str) or not re.fullmatch(r'[a-f0-9]{32}', namespace)):
                 raise RuntimeError('Staging gateway coordinator must be fully configured and disabled during release')
+    if worker == 'familyfunds-d1-maintenance-staging':
+        expected = {
+            'DB': {'type': 'd1', 'id': 'f96058f1-0aa3-42f3-9ee2-f796554d6ef4'},
+            'DATABASE_NAME': {'type': 'plain_text', 'text': 'familyfunds-d1-web-staging'},
+            'STAGING_FILES': {'type': 'r2_bucket', 'bucket_name': 'familyfunds-d1-staging-private'},
+            'MAINTENANCE_QUEUE': {'type': 'queue', 'queue_name': worker},
+            'STAGING_CONTAINER': {'type': 'durable_object_namespace', 'script_name': CONFIG['staging']['worker'],
+                                  'namespace_id': 'a374340e0cb74321b3fb3d46b52f9240'},
+            'BACKUP_APP_KEY': {'type': 'secret_text'},
+        }
+        if any(any(names.get(name, {}).get(k) != v for k, v in fields.items()) for name, fields in expected.items()):
+            raise RuntimeError('Unexpected staging maintenance binding')
+        if 'STAGING_GATEWAY_ADMISSION' in names or 'STAGING_GATEWAY_ADMISSION_OBJECT' in names:
+            flag = names.get('STAGING_GATEWAY_ADMISSION', {})
+            gate = names.get('STAGING_GATEWAY_ADMISSION_OBJECT', {})
+            if (flag.get('type') != 'plain_text' or flag.get('text') != '0'
+                    or gate.get('type') != 'durable_object_namespace' or gate.get('script_name') != 'familyfunds-d1-staging-sql'
+                    or gate.get('class_name') != 'StagingGatewayAdmission' or gate.get('environment', 'production') != 'production'
+                    or not re.fullmatch(r'[a-f0-9]{32}', gate.get('namespace_id') or '')):
+                raise RuntimeError('Staging maintenance coordinator must be fully configured and disabled during release')
     if worker == 'familyfunds-production-offsite' and any(key in names for key in ['DB', 'CONTAINER_ENV', 'CONTAINER_ENV_0', 'APP_KEY', 'BACKUP_KEY']):
         raise RuntimeError('Offsite credential isolation no longer matches the reviewed configuration')
     return [binding for binding in bindings if binding['type'] != 'secret_text']
 
 
-def verify_gateway_source(previous, candidate, accepted_hash):
+def verify_staging_module_source(previous, candidate, accepted_hash):
     if not isinstance(accepted_hash, str) or not re.fullmatch(r'[a-f0-9]{64}', accepted_hash):
-        raise RuntimeError('Invalid accepted staging gateway source fingerprint')
+        raise RuntimeError('Invalid accepted staging module source fingerprint')
     previous_hash = hashlib.sha256(previous).hexdigest()
     if previous_hash not in {accepted_hash, hashlib.sha256(candidate).hexdigest()}:
-        raise RuntimeError('Staging gateway source differs from the reviewed revision')
+        raise RuntimeError('Staging module source differs from the reviewed revision')
 
 
 def require_disabled_gateway_version_urls(path):
@@ -347,7 +367,7 @@ def publish(target, directory):
         previous_image = next((binding['text'] for binding in bindings if binding['name'] == 'CONTAINER_IMAGE'), worker.get('image'))
         content_only = worker.get('content_only') is True
         if content_only:
-            if target != 'staging' or worker['worker'] != 'familyfunds-d1-staging-sql':
+            if target != 'staging' or worker['worker'] not in {'familyfunds-d1-staging-sql', 'familyfunds-d1-maintenance-staging'}:
                 raise RuntimeError('Unexpected code-only release target')
             require_disabled_gateway_version_urls(path)
         raw, mime = api('GET', path + '/content/v2' if content_only else path, raw=True)
@@ -367,7 +387,9 @@ def publish(target, directory):
         rollback_container = {**container, 'images': {'base': previous_image}} if container and target == 'production' else container
         sources = modules(worker['entry'], image if target == 'production' else None, name)
         if content_only:
-            verify_gateway_source(previous_sources[previous_entry], sources[worker['entry']], worker.get('accepted_previous_sha256'))
+            if set(previous_sources) != {previous_entry} or set(sources) != {worker['entry']}:
+                raise RuntimeError('Unexpected code-only staging module inventory')
+            verify_staging_module_source(previous_sources[previous_entry], sources[worker['entry']], worker.get('accepted_previous_sha256'))
         old_body, old_mime = multipart(previous_entry, previous_sources, bindings, rollback_container, content_only=content_only)
         updated = [dict(binding) for binding in bindings]
         if target == 'staging' and worker['worker'] == CONFIG['staging']['worker'] and not any(binding['name'] == 'STAGING_SQL_GATEWAY' for binding in updated):

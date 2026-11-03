@@ -143,12 +143,12 @@ class ReleaseSafetyTest(unittest.TestCase):
 
     def test_staging_gateway_requires_reviewed_previous_or_matching_candidate_source(self):
         reviewed = hashlib.sha256(b'reviewed').hexdigest()
-        release.verify_gateway_source(b'reviewed', b'new', reviewed)
-        release.verify_gateway_source(b'new', b'new', reviewed)
+        release.verify_staging_module_source(b'reviewed', b'new', reviewed)
+        release.verify_staging_module_source(b'new', b'new', reviewed)
         with self.assertRaisesRegex(RuntimeError, 'differs from the reviewed'):
-            release.verify_gateway_source(b'unexpected', b'new', reviewed)
+            release.verify_staging_module_source(b'unexpected', b'new', reviewed)
         with self.assertRaisesRegex(RuntimeError, 'fingerprint'):
-            release.verify_gateway_source(b'reviewed', b'new', None)
+            release.verify_staging_module_source(b'reviewed', b'new', None)
 
     def test_staging_gateway_requires_version_urls_disabled(self):
         with patch.object(release, 'api', return_value={'enabled': True, 'previews_enabled': False}) as api:
@@ -268,7 +268,7 @@ class ReleaseSafetyTest(unittest.TestCase):
             with self.subTest(bindings=bindings), self.assertRaisesRegex(RuntimeError, 'fully configured and disabled'):
                 release.checked_bindings('familyfunds-d1-staging-sql', {'bindings': base + bindings})
 
-    def test_staging_gateway_code_only_update_restores_old_module_on_web_failure(self):
+    def test_staging_companion_updates_restore_both_old_modules_on_web_failure(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)
             (path / 'rootfs.tar').write_bytes(b'inspected image')
@@ -285,15 +285,34 @@ class ReleaseSafetyTest(unittest.TestCase):
                 {'name': 'PROOF_TOKEN', 'type': 'secret_text'},
             ]
 
+            maintenance_bindings = [
+                *gateway_bindings[:2],
+                {'name': 'STAGING_FILES', 'type': 'r2_bucket', 'bucket_name': 'familyfunds-d1-staging-private'},
+                {'name': 'MAINTENANCE_QUEUE', 'type': 'queue', 'queue_name': 'familyfunds-d1-maintenance-staging'},
+                {'name': 'STAGING_CONTAINER', 'type': 'durable_object_namespace', 'script_name': 'familyfunds-d1-web-v2',
+                 'namespace_id': 'a374340e0cb74321b3fb3d46b52f9240'},
+                {'name': 'BACKUP_APP_KEY', 'type': 'secret_text'},
+            ]
+            maintenance = 'familyfunds-d1-maintenance-staging'
+            for binding in maintenance_bindings:
+                with self.subTest(binding=binding['name']), self.assertRaisesRegex(RuntimeError, 'staging maintenance binding'):
+                    release.checked_bindings(maintenance, {'bindings': [item for item in maintenance_bindings if item != binding]})
+            with self.assertRaisesRegex(RuntimeError, 'fully configured and disabled'):
+                release.checked_bindings(maintenance, {'bindings': maintenance_bindings + [
+                    {'name': 'STAGING_GATEWAY_ADMISSION', 'type': 'plain_text', 'text': '1'}]})
+            old_maintenance = release.multipart('maintenance-worker.mjs', {'maintenance-worker.mjs': b'old maintenance'}, [], content_only=True)
+
             def api(method, url, data=None, **kwargs):
                 if 'credentials' in url:
                     return {'password': 'synthetic', 'username': 'synthetic', 'registry_host': 'registry.cloudflare.com'}
                 if method == 'GET' and url.endswith('/subdomain'):
                     return {'enabled': True, 'previews_enabled': False}
                 if method == 'GET' and url.endswith('/settings'):
+                    if maintenance in url:
+                        return {'bindings': maintenance_bindings}
                     return {'bindings': gateway_bindings if 'staging-sql' in url else []}
                 if method == 'GET' and url.endswith('/content/v2'):
-                    return old_gateway
+                    return old_maintenance if maintenance in url else old_gateway
                 if method == 'GET' and '/containers/applications/' in url:
                     return {'configuration': {'image': 'old@' + DIGEST}}
                 if method == 'GET':
@@ -303,7 +322,7 @@ class ReleaseSafetyTest(unittest.TestCase):
                         ('Content-Type: ' + kwargs['content_type'] + '\r\n\r\n').encode() + data)
                     metadata = json.loads(next(message.iter_parts()).get_payload(decode=True))
                     writes.append((url, metadata, release.script_sources(data, kwargs['content_type'])))
-                    if len(writes) == 2:
+                    if len(writes) == 3:
                         raise RuntimeError('simulated unknown web update outcome')
                     return {}
                 raise AssertionError('Unexpected or database API call: ' + url)
@@ -313,20 +332,25 @@ class ReleaseSafetyTest(unittest.TestCase):
                     'registry.cloudflare.com/' + release.ACCOUNT + '/familyfunds-d1-staging@' + DIGEST])
 
             companion = {**release.CONFIG['staging']['companions'][0], 'accepted_previous_sha256': hashlib.sha256(b'old gateway code').hexdigest()}
-            target = {**release.CONFIG['staging'], 'companions': [companion]}
+            maintenance_companion = {**release.CONFIG['staging']['companions'][1], 'accepted_previous_sha256': hashlib.sha256(b'old maintenance').hexdigest()}
+            target = {**release.CONFIG['staging'], 'companions': [companion, maintenance_companion]}
             with patch.dict(release.CONFIG, {'staging': target}), patch.dict(os.environ, {'GITHUB_SHA': SHA, 'GITHUB_REF': 'refs/heads/cloudflare-staging', 'GITHUB_ACTIONS': 'true', 'DOCKER_CONFIG': directory}), patch.object(release, 'validate'), patch.object(release, 'public_checks'), patch.object(release, 'rollout_image'), patch.object(release, 'api', side_effect=api), patch.object(release.subprocess, 'run'), patch.object(release.subprocess, 'check_output', side_effect=output), contextlib.redirect_stdout(io.StringIO()):
                 with self.assertRaisesRegex(RuntimeError, 'code/image rollback was requested'):
                     release.publish('staging', path)
-            self.assertEqual(len(writes), 4)
+            self.assertEqual(len(writes), 6)
             self.assertTrue(writes[0][0].endswith('/familyfunds-d1-staging-sql/content'))
             self.assertEqual(writes[0][1], {'main_module': 'staging-worker.mjs'})
-            self.assertTrue(writes[3][0].endswith('/familyfunds-d1-staging-sql/content'))
-            self.assertEqual(writes[3][1], {'main_module': 'worker.mjs'})
-            self.assertEqual(writes[3][2], {'worker.mjs': b'old gateway code'})
-            self.assertEqual(writes[1][1]['containers'], [{'class_name': 'FamilyFundsWebStagingContainer'}])
+            self.assertTrue(writes[5][0].endswith('/familyfunds-d1-staging-sql/content'))
+            self.assertEqual(writes[5][1], {'main_module': 'worker.mjs'})
+            self.assertEqual(writes[5][2], {'worker.mjs': b'old gateway code'})
             self.assertEqual(writes[2][1]['containers'], [{'class_name': 'FamilyFundsWebStagingContainer'}])
-            self.assertIn({'name': 'STAGING_SQL_GATEWAY', 'type': 'service', 'service': 'familyfunds-d1-staging-sql'}, writes[1][1]['bindings'])
-            self.assertFalse(any(binding['name'] == 'STAGING_SQL_GATEWAY' for binding in writes[2][1]['bindings']))
+            self.assertEqual(writes[3][1]['containers'], [{'class_name': 'FamilyFundsWebStagingContainer'}])
+            self.assertIn({'name': 'STAGING_SQL_GATEWAY', 'type': 'service', 'service': 'familyfunds-d1-staging-sql'}, writes[2][1]['bindings'])
+            self.assertFalse(any(binding['name'] == 'STAGING_SQL_GATEWAY' for binding in writes[3][1]['bindings']))
+            self.assertEqual(writes[1][0], writes[4][0])
+            self.assertTrue(writes[4][0].endswith('/familyfunds-d1-maintenance-staging/content'))
+            self.assertEqual(writes[1][1], {'main_module': 'maintenance-worker.mjs'})
+            self.assertEqual(writes[4][2], {'maintenance-worker.mjs': b'old maintenance'})
 
     def test_modified_original_staging_archive_is_refused_before_credentials_or_docker(self):
         with tempfile.TemporaryDirectory() as directory:
