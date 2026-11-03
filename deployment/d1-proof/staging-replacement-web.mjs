@@ -3,12 +3,13 @@ import stagingHandler, {FamilyFundsWebStagingContainer} from './container-worker
 
 const database = 'familyfunds-d1-staging-clone-20261103t092540z';
 const gateway = 'familyfunds-d1-replacement-sql.familyfunds-lab.workers.dev';
+const acceptanceCookie = 'familyfunds_replacement_acceptance_session';
 const imagePattern = /^registry\.cloudflare\.com\/40344948b73fa9da3008958fdc3faf12\/familyfunds-staging-replacement@sha256:[0-9a-f]{64}$/;
 
 export class FamilyFundsReplacementStagingContainer extends FamilyFundsWebStagingContainer {
     constructor(ctx, env) {
         if (env.CONTAINER_ENV !== '{}' || env.CONTAINER_ENV_PARTS !== undefined || env.OPTIMIZED_BOOTSTRAP !== undefined
-            || !['replacement-preflight', 'replacement-rehearsal', 'replacement-webhook-rehearsal'].includes(env.RUNTIME_PROFILE) || env.STAGING_ADMISSION_CONTROL !== '1'
+            || !['replacement-preflight', 'replacement-rehearsal', 'replacement-webhook-rehearsal', 'replacement-acceptance'].includes(env.RUNTIME_PROFILE) || env.STAGING_ADMISSION_CONTROL !== '1'
             || !imagePattern.test(env.CONTAINER_IMAGE) || !env.REPLACEMENT_SQL?.fetch) {
             throw new Error('Invalid replacement staging configuration');
         }
@@ -43,6 +44,9 @@ export class FamilyFundsReplacementStagingContainer extends FamilyFundsWebStagin
         return {image, instance: 'standard-1', enableInternet: true, env: {
             APP_ENV: 'd1-staging', APP_KEY: appKey, APP_DEBUG: 'false',
             APP_URL: 'https://replacement-staging.internal', D1_PRODUCTION_ENABLED: 'false',
+            ...(this.env.RUNTIME_PROFILE === 'replacement-acceptance' && {
+                SESSION_COOKIE: acceptanceCookie, SESSION_SECURE_COOKIE: 'true',
+            }),
             D1_STAGING_ENABLED: 'true', D1_STAGING_DATABASE: database, D1_STAGING_URL: 'https://' + gateway,
             D1_STAGING_TOKEN: token, D1_STAGING_R2_ADMISSION: '1', D1_STAGING_R2_BUCKET: files.bucket,
             D1_STAGING_R2_ACCESS_KEY_ID: files.accessKeyId, D1_STAGING_R2_SECRET_ACCESS_KEY: files.secretAccessKey,
@@ -73,6 +77,39 @@ export class FamilyFundsReplacementStagingContainer extends FamilyFundsWebStagin
     async scheduledProof(kind, familyId, at) {
         if (this.env.RUNTIME_PROFILE !== 'replacement-rehearsal') throw new Error('Replacement preflight has no maintenance tasks');
         return super.scheduledProof(kind, familyId, at);
+    }
+}
+
+// Only a private service binding can select this entrypoint. Laravel still authenticates each session.
+export class ReplacementAcceptance extends WorkerEntrypoint {
+    async fetch(request) {
+        const url = new URL(request.url);
+        if (this.env.RUNTIME_PROFILE !== 'replacement-acceptance' || this.env.STAGING_ADMISSION_CONTROL !== '1'
+            || url.origin !== 'https://replacement-staging.internal') return new Response('Not found', {status: 404});
+
+        const [, family, ...segments] = url.pathname.split('/');
+        const familyPage = ['hussain-family', 'd1-uat-family'].includes(family) ? segments.join('/') : '';
+        const page = request.method === 'GET' && (
+            ['/', '/login', '/two-factor-challenge', '/dashboard'].includes(url.pathname)
+            || /^\/build\/assets\/[A-Za-z0-9_.-]+\.(?:css|js|woff2?|svg|png)$/.test(url.pathname)
+            || /^(?:dashboard|notifications|payments|pay|family\/settings|contributions(?:\/my(?:\/statement)?|\/[0-9]+)?|payment-batches\/[0-9]+\/receipt|members\/[0-9]+\/payments\/create)$/.test(familyPage)
+        );
+        const form = request.method === 'POST' && (
+            ['/login', '/logout', '/two-factor-challenge'].includes(url.pathname)
+            || familyPage === 'payments/review'
+        );
+        if (!page && !form) return new Response('Not found', {status: 404});
+        if (form && request.headers.get('Origin') !== url.origin) return new Response('Forbidden', {status: 403});
+
+        const headers = new Headers();
+        for (const [name, value] of request.headers) {
+            if (['accept', 'accept-language', 'content-type', 'origin', 'user-agent', 'x-xsrf-token',
+                'x-csrf-token', 'x-requested-with', 'x-inertia'].includes(name) || name.startsWith('x-inertia-')) headers.set(name, value);
+        }
+        const cookies = (request.headers.get('Cookie') ?? '').split(';').map(part => part.trim())
+            .filter(part => part.startsWith(acceptanceCookie + '=') || part.startsWith('XSRF-TOKEN='));
+        if (cookies.length) headers.set('Cookie', cookies.join('; '));
+        return this.env.REPLACEMENT_CONTAINER.getByName('replacement-staging').fetch(new Request(request, {headers, redirect: 'manual'}));
     }
 }
 

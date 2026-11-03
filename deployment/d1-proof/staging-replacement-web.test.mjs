@@ -22,14 +22,14 @@ function fixture() {
         async waitForReady() { calls.push('start'); }
     }
     Base.webhookConfig = shared.Container.webhookConfig;
-    const {Container, handler, Maintenance} = runInNewContext(source + '\n({Container: FamilyFundsReplacementStagingContainer, handler, Maintenance: ReplacementMaintenance})',
-        {...shared, FamilyFundsWebStagingContainer: Base, WorkerEntrypoint: Base, URL, Request, Response});
+    const {Container, handler, Maintenance, Acceptance} = runInNewContext(source + '\n({Container: FamilyFundsReplacementStagingContainer, handler, Maintenance: ReplacementMaintenance, Acceptance: ReplacementAcceptance})',
+        {...shared, FamilyFundsWebStagingContainer: Base, WorkerEntrypoint: Base, URL, Headers, Request, Response});
     const files = {bucket: database + '-files', accessKeyId: 'a'.repeat(32), secretAccessKey: 'b'.repeat(64)};
     const env = {CONTAINER_IMAGE: image, CONTAINER_ENV: '{}', RUNTIME_PROFILE: 'replacement-preflight', STAGING_ADMISSION_CONTROL: '1',
         REPLACEMENT_SQL: {fetch() {}}, REPLACEMENT_FILES_CREDENTIAL: {get: async () => JSON.stringify(files)},
         REPLACEMENT_APP_KEY: 'base64:' + 'a'.repeat(43) + '=', REPLACEMENT_SQL_TOKEN: 'c'.repeat(64)};
     const ctx = {container: {images: {base: image}, running: false, interceptOutboundHttps: async (...args) => calls.push(args)}};
-    return {Container, handler, Maintenance, env, ctx, files, calls};
+    return {Container, handler, Maintenance, Acceptance, env, ctx, files, calls};
 }
 
 test('preflight starts only after private HTTPS interception and uses the reserved destinations', async () => {
@@ -144,4 +144,49 @@ test('signed test callbacks enter only the replacement queue and relay with the 
         assert.deepEqual([acks, retries], [1,3]);
         assert.deepEqual(calls.at(-1), ['https://replacement-staging.internal/webhooks/' + provider, config.relay_token, body]);
     }
+});
+
+test('private acceptance preserves Laravel sessions and review forms without opening payment submission or integration routes', async () => {
+    const {Acceptance, Container, ctx, env, handler} = fixture();
+    const calls = [];
+    env.REPLACEMENT_CONTAINER = {getByName(name) {
+        assert.equal(name, 'replacement-staging');
+        return {async fetch(request) {
+            calls.push(request);
+            return new Response('login', {status: 302, headers: {Location:'/login', 'Set-Cookie':'session=test; Secure; HttpOnly'}});
+        }};
+    }};
+    const origin = 'https://replacement-staging.internal';
+    const page = (path, init) => new Request(origin + path, init);
+    const service = new Acceptance({}, env);
+    assert.equal((await service.fetch(page('/login'))).status, 404);
+    env.RUNTIME_PROFILE = 'replacement-acceptance';
+    const options = await new Container(ctx, env).startupOptions();
+    assert.equal(options.env.SESSION_COOKIE, 'familyfunds_replacement_acceptance_session');
+    assert.equal(options.env.D1_STAGING_DELIVERY_ENABLED, 'false');
+    assert.equal(options.env.D1_STAGING_WEBHOOKS_ENABLED, 'false');
+    assert.equal((await handler.fetch(page('/login'), env)).status, 404);
+    assert.equal((await service.fetch(new Request('https://d1-staging.familyfunds.app/login'))).status, 404);
+    for (const [path, method] of [['/d1-uat-family/payments','POST'], ['/d1-uat-family/pay/callback','GET'], ['/platform/dashboard','GET'], ['/other-family/dashboard','GET'],
+        ['/d1-uat-family/payment-batches/5/reverse','POST'], ['/webhooks/paystack','POST'], ['/d1-uat-family/family/reminder-settings','PUT']]) {
+        assert.equal((await service.fetch(page(path,{method}))).status, 404);
+    }
+    assert.equal((await service.fetch(page('/login',{method:'POST',headers:{Origin:'https://elsewhere.invalid'}}))).status, 403);
+    assert.equal(calls.length, 0);
+    for (const path of ['/login', '/build/assets/app-synthetic.js', '/d1-uat-family/contributions/my?year=2026', '/d1-uat-family/payment-batches/5/receipt', '/d1-uat-family/family/settings']) {
+        assert.equal((await service.fetch(page(path))).status, 302);
+        assert.equal(calls.at(-1).url, origin + path);
+    }
+    const response = await service.fetch(page('/d1-uat-family/payments/review',{method:'POST',body:'amount=1',headers:{
+        Origin:origin, Cookie:'old_session=x; familyfunds_replacement_acceptance_session=test; remember_web=old; XSRF-TOKEN=token', 'X-XSRF-Token':'csrf', 'X-Inertia':'true',
+        'X-D1-Staging-Relay':'drop', 'Forwarded':'host=old.invalid', 'Authorization':'drop', 'X-Forwarded-Host':'old.invalid',
+    }}));
+    const forwarded = calls.at(-1);
+    assert.equal(await forwarded.text(), 'amount=1');
+    assert.equal(forwarded.redirect, 'manual');
+    for (const name of ['cookie', 'x-xsrf-token', 'x-inertia']) assert.ok(forwarded.headers.has(name));
+    for (const name of ['x-d1-staging-relay','forwarded','authorization','x-forwarded-host']) assert.equal(forwarded.headers.has(name), false);
+    assert.equal(forwarded.headers.get('cookie'), 'familyfunds_replacement_acceptance_session=test; XSRF-TOKEN=token');
+    assert.equal(response.headers.get('location'), '/login');
+    assert.match(response.headers.get('set-cookie'), /HttpOnly/);
 });
