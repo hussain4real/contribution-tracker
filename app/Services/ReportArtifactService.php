@@ -47,6 +47,7 @@ class ReportArtifactService
         $contents = Pdf::view('pdf.receipt', [
             'family' => $family,
             'batch' => $batch,
+            'reversal' => $batch->reversal()->first(),
             'allocations' => $batch->allocations,
             'generatedAt' => now(),
         ])->driver('dompdf')->format('a4')->generatePdfContent();
