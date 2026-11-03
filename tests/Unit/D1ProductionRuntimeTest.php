@@ -20,6 +20,7 @@ use App\Services\PaymentAllocationPreview;
 use App\Services\PaymentAllocationService;
 use App\Services\PaystackContributionSettlementService;
 use App\Services\PaystackService;
+use FamilyFunds\D1Staging\D1ProductionMaintenance;
 use FamilyFunds\D1Staging\D1ProductionRequest;
 use FamilyFunds\D1Staging\D1ProductionServiceProvider;
 use FamilyFunds\D1Staging\D1RuntimeCacheStore;
@@ -488,6 +489,34 @@ it('preserves delivery ordering and queues early callbacks in the production D1 
         throw new RuntimeException('Could not query the synthetic queue.');
     }
     expect((int) $jobs->fetchColumn())->toBe(1);
+});
+
+it('queues each scheduled reminder channel once when a leased D1 task is replayed', function (): void {
+    config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
+    DB::purge('sqlite');
+    $this->artisan('migrate', ['--database' => 'sqlite', '--force' => true, '--no-interaction' => true])->assertSuccessful();
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->forUser($member)->forMonth(2026, 1)->create();
+    $pdo = DB::connection('sqlite')->getPdo();
+    connectProductionRuntimeFixture($pdo);
+
+    $maintenance = app(D1ProductionMaintenance::class);
+    $maintenance->install();
+    $task = ['id' => "remind25:2026-01:{$family->id}", 'kind' => 'remind25', 'family_id' => $family->id,
+        'at' => '2026-01-25T08:00:00.000Z', 'cursor' => 0, 'lease_token' => 'fixture'];
+    $pdo->prepare('insert into d1_runtime_schedule_outbox(id,kind,family_id,due_at,lease_token,lease_until) values(?,?,?,?,?,unixepoch()+240)')
+        ->execute([$task['id'], $task['kind'], $family->id, $task['at'], $task['lease_token']]);
+
+    $expected = ['exit_code' => 0, 'complete' => true, 'cursor' => $contribution->id];
+    expect($maintenance->execute($task))->toBe($expected);
+    $channels = productionPaymentSqlValue($pdo, 'select count(distinct channel) from contribution_reminder_deliveries');
+    expect($channels)->toBeInt()->toBeGreaterThan(0)
+        ->and(productionPaymentSqlValue($pdo, 'select count(*) from jobs'))->toBe($channels);
+    expect($maintenance->execute($task))->toBe($expected);
+    expect(productionPaymentSqlValue($pdo, 'select count(*) from contribution_reminder_deliveries'))->toBe($channels)
+        ->and(productionPaymentSqlValue($pdo, 'select count(*) from jobs'))->toBe($channels)
+        ->and(productionPaymentSqlValue($pdo, 'select reminder_sent_at from contributions'))->not->toBeNull();
 });
 
 it('rechecks queued reminder balances through the production D1 runtime', function (): void {

@@ -158,6 +158,32 @@ describe('Send Contribution Reminders Command', function () {
         expect($contribution->reminder_sent_at)->not->toBeNull();
     });
 
+    it('leaves the reminder eligible for a later run when its :dataset is archived after selection', function (string $target) {
+        config(['queue.default' => 'database', 'queue.connections.database.connection' => null]);
+        $family = Family::factory()->create();
+        $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
+        $record = $target === 'family' ? $family : $member->familyMemberships()->where('family_id', $family->id)->sole();
+        $simulateRace = true;
+        Contribution::retrieved(function (Contribution $retrieved) use (&$simulateRace, $contribution, $record): void {
+            if ($simulateRace && $retrieved->is($contribution)) {
+                $simulateRace = false;
+                $record->update(['archived_at' => now()]);
+            }
+        });
+
+        $this->artisan('contributions:remind', ['--day' => 25])
+            ->expectsOutput('Sent 0 reminder notifications.')->assertSuccessful();
+        expect($contribution->refresh()->reminder_sent_at)->toBeNull();
+        $this->assertDatabaseCount('jobs', 0);
+        $this->assertDatabaseCount('contribution_reminder_deliveries', 0);
+
+        $record->update(['archived_at' => null]);
+        $this->artisan('contributions:remind', ['--day' => 25])
+            ->expectsOutput('Sent 1 reminder notifications.')->assertSuccessful();
+        expect($contribution->refresh()->reminder_sent_at)->not->toBeNull();
+    })->with(['membership', 'family']);
+
     it('tracks follow-up reminders independently from early reminders', function () {
         Notification::fake();
 

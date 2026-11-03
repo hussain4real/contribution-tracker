@@ -62,7 +62,7 @@ class SendContributionReminders extends Command
 
         $totalSent = 0;
 
-        $contributions = Contribution::query();
+        $contributions = $this->pendingReminders($sentAtColumn);
         if (isset($filters['family'])) {
             $contributions->where('family_id', $filters['family']);
         }
@@ -73,15 +73,7 @@ class SendContributionReminders extends Command
             $contributions->where('id', '<=', $filters['through']);
         }
         $contributions
-            ->whereNull($sentAtColumn)
-            ->whereHas('family', fn (Builder $query): Builder => $query->has('members'))
-            ->whereHas('user.familyMemberships', function ($query): void {
-                $query->whereColumn('family_members.family_id', 'contributions.family_id')
-                    ->whereNull('family_members.archived_at');
-            })
             ->forMonth($year, $month)
-            ->incomplete()
-            ->with(['user', 'family', 'payments'])
             ->chunkById(200, function ($contributions) use (&$totalSent, $sentAtColumn, $type): void {
                 foreach ($contributions as $contribution) {
                     $totalSent += (int) $this->sendReminderIfUnsent($contribution, $sentAtColumn, $type);
@@ -91,6 +83,20 @@ class SendContributionReminders extends Command
         $this->info("Sent {$totalSent} {$type} notifications.");
 
         return self::SUCCESS;
+    }
+
+    /** @return Builder<Contribution> */
+    private function pendingReminders(string $sentAtColumn): Builder
+    {
+        return Contribution::query()
+            ->whereNull($sentAtColumn)
+            ->whereHas('family', fn (Builder $query): Builder => $query->whereNull('archived_at')->has('members'))
+            ->whereHas('user.familyMemberships', function ($query): void {
+                $query->whereColumn('family_members.family_id', 'contributions.family_id')
+                    ->whereNull('family_members.archived_at');
+            })
+            ->incomplete()
+            ->with(['user', 'family', 'payments']);
     }
 
     /**
@@ -118,12 +124,9 @@ class SendContributionReminders extends Command
             $this->reminderLockKey($contribution, $sentAtColumn),
             self::REMINDER_DELIVERY_LOCK_SECONDS,
         )->get(fn (): bool => DB::transaction(function () use ($contribution, $sentAtColumn, $type): bool {
-            $freshContribution = Contribution::query()
+            $freshContribution = $this->pendingReminders($sentAtColumn)
                 ->whereKey($contribution->id)
-                ->whereNull($sentAtColumn)
-                ->incomplete()
                 ->lockForUpdate()
-                ->with(['user', 'family', 'payments'])
                 ->first();
 
             if (! $freshContribution || ! $freshContribution->user) {
