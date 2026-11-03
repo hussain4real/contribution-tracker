@@ -1,5 +1,5 @@
 import {WorkerEntrypoint} from 'cloudflare:workers';
-import stagingHandler, {FamilyFundsWebStagingContainer, webhookConfig} from './container-worker.mjs';
+import stagingHandler, {FamilyFundsWebStagingContainer} from './container-worker.mjs';
 
 const database = 'familyfunds-d1-staging-clone-20261103t092540z';
 const gateway = 'familyfunds-d1-replacement-sql.familyfunds-lab.workers.dev';
@@ -38,7 +38,7 @@ export class FamilyFundsReplacementStagingContainer extends FamilyFundsWebStagin
         if (files?.bucket !== database + '-files' || !/^[a-f0-9]{32}$/.test(files.accessKeyId)
             || !/^[a-f0-9]{64}$/.test(files.secretAccessKey)) throw new Error('Invalid replacement file credentials');
 
-        const webhook = webhookConfig(this.env);
+        const webhook = FamilyFundsWebStagingContainer.webhookConfig(this.env);
         if (this.env.RUNTIME_PROFILE === 'replacement-webhook-rehearsal' && !webhook) throw new Error('Missing private rehearsal webhook configuration');
         return {image, instance: 'standard-1', enableInternet: true, env: {
             APP_ENV: 'd1-staging', APP_KEY: appKey, APP_DEBUG: 'false',

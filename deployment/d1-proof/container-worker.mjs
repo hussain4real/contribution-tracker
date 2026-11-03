@@ -12,25 +12,6 @@ function replacementWebhooks(env) {
     return env.RUNTIME_PROFILE === "replacement-webhook-rehearsal";
 }
 
-export function webhookConfig(env) {
-    const replacement = replacementWebhooks(env);
-    if (!replacement && env.RUNTIME_PROFILE?.startsWith("replacement-")) return null;
-    const raw = replacement ? env.REPLACEMENT_WEBHOOK_SECRETS : env.STAGING_WEBHOOK_SECRETS;
-    if (!raw) return null;
-    const config = JSON.parse(raw);
-    if (config.enabled !== true) return null;
-    if (config.database !== (replacement ? replacementDatabase : "familyfunds-d1-web-staging") || config.family_id !== 43) {
-        throw new Error("Invalid isolated webhook target");
-    }
-    if (replacement && (env.STAGING_ADMISSION_CONTROL !== "1" || !env.REPLACEMENT_WEBHOOK_QUEUE?.send
-        || !env.REPLACEMENT_CONTAINER?.getByName || !/^sk_test_[a-zA-Z0-9_-]+$/.test(config.paystack_test_key ?? "")
-        || !/^[a-f0-9]{32}$/i.test(config.meta_app_secret ?? "") || !/^[a-f0-9]{64}$/.test(config.relay_token ?? "")
-        || config.relay_token === env.REPLACEMENT_SQL_TOKEN || !config.meta_phone || !config.meta_waba || !config.recipient)) {
-        throw new Error("Invalid replacement webhook configuration");
-    }
-    return config;
-}
-
 function webhookContainer(env) {
     return replacementWebhooks(env) ? env.REPLACEMENT_CONTAINER.getByName("replacement-staging") : env.STAGING_CONTAINER.getByName("isolated-staging");
 }
@@ -72,7 +53,7 @@ async function verifyWebhook(record, config) {
 }
 
 async function receiveWebhook(request, env) {
-    const config = webhookConfig(env);
+    const config = FamilyFundsWebStagingContainer.webhookConfig(env);
     if (!config) return new Response("Forbidden", {status: 403});
     const provider = new URL(request.url).pathname === "/webhooks/paystack" ? "paystack" : "whatsapp";
     if (provider === "whatsapp" && request.method === "GET") {
@@ -128,6 +109,25 @@ function bootstrapParts(env, prefix, content) {
 }
 
 export class FamilyFundsWebStagingContainer extends DurableObject {
+    static webhookConfig(env) {
+        const replacement = replacementWebhooks(env);
+        if (!replacement && env.RUNTIME_PROFILE?.startsWith("replacement-")) return null;
+        const raw = replacement ? env.REPLACEMENT_WEBHOOK_SECRETS : env.STAGING_WEBHOOK_SECRETS;
+        if (!raw) return null;
+        const config = JSON.parse(raw);
+        if (config.enabled !== true) return null;
+        if (config.database !== (replacement ? replacementDatabase : "familyfunds-d1-web-staging") || config.family_id !== 43) {
+            throw new Error("Invalid isolated webhook target");
+        }
+        if (replacement && (env.STAGING_ADMISSION_CONTROL !== "1" || !env.REPLACEMENT_WEBHOOK_QUEUE?.send
+            || !env.REPLACEMENT_CONTAINER?.getByName || !/^sk_test_[a-zA-Z0-9_-]+$/.test(config.paystack_test_key ?? "")
+            || !/^[a-f0-9]{32}$/i.test(config.meta_app_secret ?? "") || !/^[a-f0-9]{64}$/.test(config.relay_token ?? "")
+            || config.relay_token === env.REPLACEMENT_SQL_TOKEN || !config.meta_phone || !config.meta_waba || !config.recipient)) {
+            throw new Error("Invalid replacement webhook configuration");
+        }
+        return config;
+    }
+
     constructor(ctx, env) {
         super(ctx, env);
         this.ready = false;
@@ -410,7 +410,7 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
     async enqueueWebhook(record) {
         await this.admissionReady;
         if (!this.admissionEnabled) throw new Error("Staging admission control is disabled");
-        const config = webhookConfig(this.env);
+        const config = FamilyFundsWebStagingContainer.webhookConfig(this.env);
         if (!config || !await verifyWebhook(record, config)) throw new Error("Invalid staging webhook");
         const id = await this.ctx.blockConcurrencyWhile(async () => {
             if (this.admissionPaused) return null;
@@ -555,7 +555,7 @@ export default {
     async queue(batch, env) {
         const replacement = replacementWebhooks(env);
         if (replacement && batch.queue !== "familyfunds-replacement-webhook") throw new Error("Unexpected replacement webhook queue");
-        const config = webhookConfig(env);
+        const config = FamilyFundsWebStagingContainer.webhookConfig(env);
         for (const message of batch.messages) {
             try {
                 if (!config || !await verifyWebhook(message.body, config)) throw new Error("Invalid staging relay event");

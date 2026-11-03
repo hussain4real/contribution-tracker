@@ -7,8 +7,8 @@ import {runInNewContext} from 'node:vm';
 const source = readFileSync(new URL('./staging-replacement-web.mjs', import.meta.url), 'utf8')
     .replace(/^import .*?;$/gm, '').replaceAll('export class ', 'class ').replace('export default ', 'const handler = ');
 const stagingSource = readFileSync(new URL('./container-worker.mjs', import.meta.url), 'utf8')
-    .replace(/^import .*?;$/gm, '').replace('export function ', 'function ').replace('export class ', 'class ').replace('export default ', 'const stagingHandler = ');
-const shared = runInNewContext(stagingSource + '\n({stagingHandler, webhookConfig, Container: FamilyFundsWebStagingContainer})', {
+    .replace(/^import .*?;$/gm, '').replace('export class ', 'class ').replace('export default ', 'const stagingHandler = ');
+const shared = runInNewContext(stagingSource + '\n({stagingHandler, Container: FamilyFundsWebStagingContainer})', {
     DurableObject: class { constructor(ctx, env) { this.ctx = ctx; this.env = env; } },
     TextEncoder, TextDecoder, Request, Response, URL, console, crypto: {randomUUID, subtle: webcrypto.subtle},
 });
@@ -21,6 +21,7 @@ function fixture() {
         constructor(ctx, env) { this.ctx = ctx; this.env = env; }
         async waitForReady() { calls.push('start'); }
     }
+    Base.webhookConfig = shared.Container.webhookConfig;
     const {Container, handler, Maintenance} = runInNewContext(source + '\n({Container: FamilyFundsReplacementStagingContainer, handler, Maintenance: ReplacementMaintenance})',
         {...shared, FamilyFundsWebStagingContainer: Base, WorkerEntrypoint: Base, URL, Request, Response});
     const files = {bucket: database + '-files', accessKeyId: 'a'.repeat(32), secretAccessKey: 'b'.repeat(64)};
