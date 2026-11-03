@@ -14,6 +14,8 @@
         .label { color: #64748b; font-size: 9px; text-transform: uppercase; }
         .value { color: #0f172a; font-size: 12px; font-weight: bold; }
         .amount { background: #ecfdf5; border: 1px solid #99f6e4; color: #115e59; font-size: 22px; font-weight: bold; margin-bottom: 22px; padding: 14px; text-align: center; }
+        .amount.reversed { background: #f8fafc; border-color: #cbd5e1; color: #334155; }
+        .reversal { margin-top: 8px; font-size: 12px; }
         .allocations { border-collapse: collapse; width: 100%; }
         .allocations th { background: #f1f5f9; padding: 8px; text-align: left; }
         .allocations td { border-bottom: 1px solid #e2e8f0; padding: 8px; }
@@ -39,7 +41,18 @@
         </tr>
     </table>
 
-    <div class="amount">{{ $family->currency }} {{ number_format($batch->total_amount, 2) }}</div>
+    <div @class(['amount', 'reversed' => $reversal])>
+        @if ($reversal)
+            <div class="label">Original payment amount</div>
+        @endif
+        {{ $family->currency }} {{ number_format($batch->total_amount, 2) }}
+        @if ($reversal)
+            <div class="reversal">
+                Payment reversed on {{ $reversal->created_at->format('d M Y') }}.
+                This payment no longer counts towards your balance.
+            </div>
+        @endif
+    </div>
 
     <table class="allocations">
         <thead><tr><th>Contribution Period</th><th class="right">Amount</th></tr></thead>
