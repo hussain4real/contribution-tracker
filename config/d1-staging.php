@@ -18,6 +18,7 @@ return [
         'whatsapp_token' => env('D1_STAGING_DELIVERY_WHATSAPP_TOKEN', ''),
     ],
     'r2' => [
+        'admission' => env('D1_STAGING_R2_ADMISSION', '0'),
         'bucket' => env('D1_STAGING_R2_BUCKET', ''),
         'key' => env('D1_STAGING_R2_ACCESS_KEY_ID', ''),
         'secret' => env('D1_STAGING_R2_SECRET_ACCESS_KEY', ''),

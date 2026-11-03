@@ -5,11 +5,24 @@ const MAX_BATCH = 1000;
 
 export class StagingGatewayAdmission extends DurableObject {
     async begin() {
+        return this.#begin(false);
+    }
+
+    async beginStorageWrite() {
+        return this.#begin(true);
+    }
+
+    async #begin(storageWrite) {
         return this.ctx.blockConcurrencyWhile(async () => {
             const paused = await this.ctx.storage.get("paused");
             if (paused !== undefined && typeof paused !== "boolean") throw new Error("Invalid stored admission state");
             if (paused) return null;
             const id = crypto.randomUUID();
+            if (storageWrite) {
+                const receipt = crypto.randomUUID();
+                await this.ctx.storage.put(`operation:${id}`, {createdAt: Date.now(), receipt});
+                return {id, receipt};
+            }
             await this.ctx.storage.put(`operation:${id}`, Date.now());
             return id;
         });
@@ -18,6 +31,14 @@ export class StagingGatewayAdmission extends DurableObject {
     async complete(id) {
         if (typeof id !== "string" || !/^[a-f0-9-]{36}$/.test(id)) throw new Error("Invalid operation ID");
         if (!await this.ctx.storage.delete(`operation:${id}`)) throw new Error("Unknown gateway operation");
+    }
+
+    async completeStorageWrite(id, receipt) {
+        return this.ctx.blockConcurrencyWhile(async () => {
+            const entry = await this.ctx.storage.get(`operation:${id}`);
+            if (!entry || typeof entry !== "object" || typeof receipt !== "string" || entry.receipt !== receipt) return false;
+            return this.ctx.storage.delete(`operation:${id}`);
+        });
     }
 
     async setPaused(paused) {
@@ -42,7 +63,8 @@ export class StagingGatewayAdmission extends DurableObject {
         if (paused !== undefined && typeof paused !== "boolean") throw new Error("Invalid stored admission state");
         const status = {paused: paused === true, unresolved: pending.size};
         if (!details) return status;
-        const operations = [...pending].slice(0, 1000).map(([key, createdAt]) => {
+        const operations = [...pending].slice(0, 1000).map(([key, entry]) => {
+            const createdAt = entry?.createdAt ?? entry;
             const id = key.slice("operation:".length);
             if (!/^[a-f0-9-]{36}$/.test(id) || !Number.isSafeInteger(createdAt) || createdAt < 0) throw new Error("Invalid stored gateway operation");
             return {id, created_at_ms: createdAt};
@@ -65,6 +87,24 @@ export default {
         const mode = env.STAGING_GATEWAY_ADMISSION === undefined && !namespace ? "0" : env.STAGING_GATEWAY_ADMISSION;
         if (mode !== "0" && (mode !== "1" || !namespace)) {
             return Response.json({error: "Invalid gateway admission configuration"}, {status: 503, headers: {"Cache-Control": "no-store"}});
+        }
+        if (path === "/storage-write/begin" || path === "/storage-write/complete") {
+            const headers = {"Cache-Control": "no-store"};
+            if (request.method !== "POST" || mode !== "1" || env.DATABASE_NAME !== "familyfunds-d1-web-staging") {
+                return Response.json({error: "Storage admission unavailable"}, {status: 404, headers});
+            }
+            const gate = namespace.getByName("staging-gateway");
+            if (path === "/storage-write/begin") {
+                const operation = await gate.beginStorageWrite();
+                return operation ? Response.json(operation, {headers}) : Response.json({error: "Paused"}, {status: 503, headers});
+            }
+            const id = request.headers.get("X-Storage-Operation");
+            const receipt = request.headers.get("X-Storage-Receipt");
+            const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+            if (!uuid.test(id) || !uuid.test(receipt) || !await gate.completeStorageWrite(id, receipt)) {
+                return Response.json({error: "Unknown storage operation"}, {status: 409, headers});
+            }
+            return new Response(null, {status: 204, headers});
         }
         if (path === "/__staging_admin/admission") {
             if (mode !== "1" || env.DATABASE_NAME !== "familyfunds-d1-web-staging") return Response.json({error: "Not found"}, {status: 404});

@@ -80,7 +80,8 @@ function webhookRequest(record) {
 }
 
 test("the deployable bootstrap contains the exact reviewed source bytes", () => {
-    assert.equal(packagedAssets.length, 14);
+    assert.equal(packagedAssets.length, 15);
+    assert.ok(packagedAssets.some(asset => asset.path.endsWith('/D1StagingStorageAdmission.php')));
     for (const asset of packagedAssets) {
         const relative = asset.path.replace("/var/www/html/", "");
         assert.equal(asset.content, readFileSync(new URL("../../" + relative, import.meta.url), "utf8"));

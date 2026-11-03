@@ -186,3 +186,35 @@ test('gateway status cannot combine a stale count with a newer paused state', as
     assert.deepEqual(JSON.parse(JSON.stringify(await pause)), {paused: true, unresolved: 1});
     await gate.complete(id);
 });
+
+test('storage writes share the pause and require their own acknowledgement after restart', async () => {
+    const f = fixture();
+    const request = (path, headers = {}) => handler.fetch(new Request('https://fixture/storage-write/' + path,
+        {method: 'POST', headers: {Authorization: 'Bearer fixture', ...headers}}), f.env);
+    const begin = () => request('begin');
+    const complete = (id, receipt) => request('complete', {'X-Storage-Operation': id, 'X-Storage-Receipt': receipt});
+    assert.equal((await request('begin', {Authorization: 'Bearer wrong'})).status, 401);
+    const sqlId = await f.gate.begin();
+    const response = await begin();
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('Cache-Control'), 'no-store');
+    const first = await response.json();
+    const lost = await (await begin()).json();
+    assert.deepEqual(await (await handler.fetch(f.admin('POST', true), f.env)).json(), {paused: true, unresolved: 3});
+    const restored = new Gate({storage: f.storage, blockConcurrencyWhile: callback => callback()}, {});
+    f.env.STAGING_GATEWAY_ADMISSION_OBJECT = {getByName: () => restored};
+    assert.equal((await begin()).status, 503);
+    assert.equal((await complete(sqlId, first.receipt)).status, 409);
+    assert.equal((await complete(lost.id, first.receipt)).status, 409);
+    assert.equal((await complete(first.id, first.receipt)).status, 204);
+    assert.equal((await complete(first.id, first.receipt)).status, 409);
+    const inspected = await restored.inspectOperations();
+    assert.equal(inspected.unresolved, 2);
+    assert.ok(inspected.operations.some(operation => operation.id === lost.id));
+    assert.ok(!JSON.stringify(inspected).includes(lost.receipt));
+    f.env.STAGING_GATEWAY_ADMISSION = '0';
+    assert.equal((await begin()).status, 404);
+    f.env.STAGING_GATEWAY_ADMISSION = '1';
+    f.env.DATABASE_NAME = 'familyfunds-production';
+    assert.equal((await begin()).status, 404);
+});
