@@ -199,6 +199,28 @@ The existing [product completion roadmap](../familyfund-product-completion-roadm
 - **Mailbox support-source check:** A read-only search of the personal Gmail account associated with the production user for `familyfund` or `familyfunds.app`, dated 2026-09-30 through 2026-10-30, returned 12 messages in 12 threads. Their visible subjects were automated notifications, infrastructure messages, a test and a CI result; none was identifiable from its subject as a member support request. This keyword search can miss requests that do not mention the product, and subject inspection is not a complete classification. A support-request count remains unavailable until a reliable identification method is agreed.
 - **Owner-reported support state:** On 2026-10-30, Aminu reported that there are currently no support requests. This is a point-in-time owner report; it does not establish a complete count for the proposed historical 30-day window.
 
+### Production baseline reviewed November 3
+
+Aminu owns the baseline. The production Nightwatch route view allowed a 14-day lookback and disabled its 30-day option. The first measured window ran from October 20 at 06:55 UTC through November 3 at 06:55 UTC, 2026. All 710 distinct request events across 29 pages reconciled to the route total. They comprised 552 HTTP 200 responses, six redirects (302), 150 conflicts (409) and two server errors (500). All were GET requests. [Family dashboard route in Nightwatch](https://nightwatch.laravel.com/eu/environments/a1529fa7-7ff6-403c-ab13-cebac05b258d/requests/routes/aaa56fb5931793a2d0227bb6209b7b83?period=14d)
+
+| Measure | Observed result | Interpretation |
+| --- | --- | --- |
+| Successful dashboard GETs | Median 1.155 s, P95 2.76 s. 539 of 552 (97.6%) took at most 3 s. | Application duration from displayed Nightwatch timings. Count each unique request event once. Initial page and deferred requests can both be present. Sampling, synthetic traffic and browser paint time are unverified. |
+| All dashboard GETs | Mean 1.12 s, P95 2.71 s | Recomputing these from the displayed rows reproduced both route summary values at their displayed precision. |
+| Recorded Paystack contribution attempts | 0 distinct references | Read-only D1 aggregates for both the 14-day window and the 30 days ending at the same cutoff found no recorded attempts. The completion percentage is undefined. |
+| Manual payments and WhatsApp receipt messages | 14 manual batches. Of 10 outbound messages with the exact receipt template, two were delivered, six were read and two failed. | Counts matched across both windows. Provider status was read on November 3. Messages and batches have different denominators and may include tests. Email inbox confirmations and per-receipt channel coverage remain unavailable. |
+| Support requests | The owner reported none on October 30. | A historical window count remains unavailable from the personal mailbox. |
+
+**Working performance target for owner review.** Keep at least 95% of recorded successful family-dashboard GETs at or below 3 seconds over a 30-day window, and report the full status counts alongside it. This uses the existing three-second threshold and the measured 97.6% as a reference. An authenticated 20-user load test and member-perceived page speed are separate measures.
+
+**Extending the baseline.** Start the next event window at November 3, 06:55 UTC and collect before Nightwatch’s 14-day lookback expires. Use adjoining half-open UTC intervals, deduplicate on request event ID, restrict to HTTP 200 GETs on the named family dashboard route, and pool duration counts across intervals. Calculate the median from the central observation(s) and P95 at sorted rank `ceil(0.95 × n)`. For pooling, the first window’s counts in successive 100 ms buckets (upper bounds 100 through 3,600 ms, inclusive) are:
+
+```text
+0,4,9,148,37,26,15,14,4,3,8,19,11,26,25,17,13,8,5,17,21,23,21,12,13,8,10,9,10,3,5,1,4,1,1,1
+```
+
+They sum to 552. Pooled percentiles from these counts can be reported as 100 ms ranges. No request IDs or member details are needed in the saved baseline.
+
 ## Phase 1 — Make payments clear and dependable
 
 ### 1. Member money home
