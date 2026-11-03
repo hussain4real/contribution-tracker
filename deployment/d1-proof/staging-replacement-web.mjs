@@ -147,6 +147,9 @@ export default {
         const passkeyCheck = env.RUNTIME_PROFILE === 'replacement-passkey-check';
         if (passkeyCheck || env.RUNTIME_PROFILE === 'replacement-live') {
             if (url.origin !== stagingOrigin) return new Response('Not found', {status: 404});
+            if (passkeyCheck && url.pathname.startsWith('/webhooks/')) {
+                return new Response('Staging maintenance', {status: 503, headers: {'Retry-After': '120', 'Cache-Control': 'no-store'}});
+            }
             if (!passkeyCheck && ['/webhooks/paystack', '/webhooks/whatsapp'].includes(url.pathname)
                 && /^github-[0-9a-f]{12}$/.test(env.RUNTIME_REVISION) && env.STAGING_ADMISSION_CONTROL === '1') {
                 return stagingHandler.fetch(request, env);

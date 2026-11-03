@@ -250,6 +250,9 @@ test('owner window admits the canonical passkey ceremony while other staging tra
         return handler.fetch(new Request(origin + path, {method,headers:{Authorization:env.REPLACEMENT_OWNER_AUTHORIZATION,
             Origin:origin, Cookie:'old_session=x; XSRF-TOKEN=y; familyfunds_replacement_acceptance_session=z', ...extra}}), env);
     }
+    const webhook = await send('/webhooks/paystack','POST',{Authorization:''});
+    assert.equal(webhook.status,503);
+    assert.equal(webhook.headers.get('Retry-After'),'120');
     for (const credential of ['', env.BASIC_AUTHORIZATION]) {
         const rejected = await send('/login','GET',{Authorization:credential});
         assert.equal(rejected.status,401);
