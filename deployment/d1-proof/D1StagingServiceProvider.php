@@ -35,12 +35,20 @@ final class D1StagingServiceProvider extends ServiceProvider
         if (! in_array($admission, ['0', '1'], true)) {
             throw new LogicException('Invalid staging R2 admission setting.');
         }
+        $database = config()->string('d1-staging.database');
+        $replacement = D1StagingConnection::REPLACEMENT_DATABASE;
+        if ($database === $replacement || config('d1-staging.url') === D1StagingConnection::TARGETS[$replacement]
+            || config('d1-staging.r2.bucket') === $replacement.'-files') {
+            if ($database !== $replacement || $admission !== '1') {
+                throw new LogicException('Replacement staging requires R2 admission and its own database.');
+            }
+        }
         if ($admission === '1') {
-            if ($this->app->resolved('filesystem') || config('d1-staging.database') !== 'familyfunds-d1-web-staging') {
+            if ($this->app->resolved('filesystem') || ! in_array($database, ['familyfunds-d1-web-staging', D1StagingConnection::REPLACEMENT_DATABASE], true)) {
                 throw new LogicException('Staging R2 admission requires the isolated target before filesystem resolution.');
             }
             $gateway = new D1StagingStorageAdmission(
-                config()->string('d1-staging.url'), config()->string('d1-staging.token'),
+                $database, config()->string('d1-staging.url'), config()->string('d1-staging.token'),
             );
             $manager = $this->app->make('filesystem');
             $manager->extend('staging-admitted-s3', function (Application $app, array $config) use ($manager, $gateway): AwsS3V3Adapter {

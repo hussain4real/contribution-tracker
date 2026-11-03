@@ -2,6 +2,10 @@
 // staging write freeze, checkpoint, isolated restore and target identity.
 export const migrationFingerprint = '66079cf9ea98cd29209f5886719bbe45b3c56a9c6cc1c1e4b5f91ee15d6d0150';
 export const stagingDatabaseId = 'f96058f1-0aa3-42f3-9ee2-f796554d6ef4';
+export const replacementDatabase = Object.freeze({
+    name: 'familyfunds-d1-staging-clone-20261103t092540z',
+    id: '43e11f90-07d7-49fc-930f-2a33a474d930',
+});
 export const migrations = [
     '2026_10_30_143906_create_payment_receipt_deliveries_table',
     '2026_10_30_145419_add_reminder_channels_to_family_members_table',
@@ -33,8 +37,20 @@ const schemaStatements = [
     'create unique index "fund_adjustments_family_id_idempotency_key_unique" on "fund_adjustments" ("family_id", "idempotency_key")',
 ];
 
-export function buildStagingPhase01Batch({databaseId, fingerprint, schema, migrationRows}) {
-    if (databaseId !== stagingDatabaseId || fingerprint !== migrationFingerprint) throw new Error('Unexpected staging target or migration fingerprint');
+export function buildStagingPhase01Batch(inventory) {
+    if (inventory.databaseId !== stagingDatabaseId) throw new Error('Unexpected staging target');
+    return buildPhase01Batch(inventory);
+}
+
+export function buildReplacementPhase01Batch(inventory) {
+    if (inventory.databaseId !== replacementDatabase.id || inventory.databaseName !== replacementDatabase.name) {
+        throw new Error('Unexpected replacement target');
+    }
+    return buildPhase01Batch(inventory);
+}
+
+function buildPhase01Batch({fingerprint, schema, migrationRows}) {
+    if (fingerprint !== migrationFingerprint) throw new Error('Unexpected migration fingerprint');
     if (!Array.isArray(schema) || !Array.isArray(migrationRows) || schema.length === 0 || migrationRows.length === 0) throw new Error('Missing preflight inventory');
     if (migrationRows.some(row => typeof row.migration !== 'string' || !Number.isSafeInteger(row.batch) || row.batch < 1) || migrationRows.some(row => migrations.includes(row.migration))) throw new Error('Invalid migration inventory');
     if (schema.some(row => !row || !['table', 'index', 'trigger'].includes(row.type) || typeof row.name !== 'string' || typeof row.tbl_name !== 'string' || !(row.sql === null || typeof row.sql === 'string'))) throw new Error('Invalid schema inventory');

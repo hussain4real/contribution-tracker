@@ -3,7 +3,7 @@ import {createHash} from 'node:crypto';
 import {readFileSync, readdirSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {test} from 'node:test';
-import {buildStagingPhase01Batch, migrationFingerprint, migrations, migrationsQuery, schemaQuery, stagingDatabaseId} from './staging-phase01-migration.mjs';
+import {buildReplacementPhase01Batch, buildStagingPhase01Batch, replacementDatabase, migrationFingerprint, migrations, migrationsQuery, schemaQuery, stagingDatabaseId} from './staging-phase01-migration.mjs';
 
 function fixture() {
     const db = new DatabaseSync(':memory:');
@@ -119,5 +119,22 @@ test('staging batch refuses wrong target and changed migration fingerprint', () 
         assert.throws(() => buildStagingPhase01Batch({...before,fingerprint:'changed'}), /fingerprint/);
         const changedSchema = before.schema.map(row => row.name === 'd1_staging_assertions' ? {...row,sql:'create table d1_staging_assertions(id text,passed integer)'} : row);
         assert.throws(() => buildStagingPhase01Batch({...before,schema:changedSchema}), /assertion table/);
+    } finally { db.close(); }
+});
+
+test('replacement renderer uses the reviewed batch only for its reserved database', () => {
+    const db = fixture();
+    try {
+        const source = inventory(db);
+        const replacement = {...source, databaseId: replacementDatabase.id, databaseName: replacementDatabase.name};
+        assert.throws(() => buildReplacementPhase01Batch({...replacement, databaseId: stagingDatabaseId}), /replacement target/);
+        assert.throws(() => buildReplacementPhase01Batch({...replacement, databaseName: 'familyfunds-production'}), /replacement target/);
+        assert.throws(() => buildStagingPhase01Batch(replacement), /staging target/);
+        assert.throws(() => buildReplacementPhase01Batch({...replacement, fingerprint: 'changed'}), /fingerprint/);
+        const batch = buildReplacementPhase01Batch(replacement);
+        assert.deepEqual(batch, buildStagingPhase01Batch(source));
+        applyBatch(db, batch);
+        assert.equal(db.prepare('select count(*) n from migrations where batch=15').get().n, migrations.length);
+        assert.throws(() => applyBatch(db, batch));
     } finally { db.close(); }
 });

@@ -450,6 +450,11 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
             || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(at) || !Number.isFinite(Date.parse(at)) || Date.parse(at) > Date.now()) {
             throw new Error("Invalid isolated maintenance operation");
         }
+        const configured = containerEnvironment(this.env);
+        if ((configured.D1_STAGING_DATABASE !== undefined && configured.D1_STAGING_DATABASE !== "familyfunds-d1-web-staging")
+            || (configured.D1_STAGING_URL !== undefined && configured.D1_STAGING_URL !== "https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev")) {
+            throw new Error("Maintenance CLI requires the original staging target");
+        }
         let stage = "startup";
         this.activeMaintenance++;
         try {
@@ -460,7 +465,7 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
             }
             if (this.admissionPaused) throw new Error("Staging admission is paused");
             if (!this.ready) throw new Error("Staging container is not ready");
-            const env = {...JSON.parse(this.env.CONTAINER_ENV), APP_ENV: "d1-staging", D1_STAGING_ENABLED: "true",
+            const env = {...configured, APP_ENV: "d1-staging", D1_STAGING_ENABLED: "true",
                 D1_STAGING_DATABASE: "familyfunds-d1-web-staging", D1_STAGING_URL: "https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev"};
             if (this.env.OPTIMIZED_BOOTSTRAP === "v1") {
                 stage = "CLI installation";

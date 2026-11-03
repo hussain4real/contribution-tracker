@@ -546,6 +546,15 @@ test("maintenance RPC executes only the fixed isolated CLI with an explicit envi
     assert.equal(captured.options.env.APP_ENV, "d1-staging");
 });
 
+test("replacement maintenance never starts the legacy staging CLI", async () => {
+    const {container, env, commands} = fixture();
+    env.STAGING_SCHEDULE_FAMILIES = JSON.stringify({family: 50});
+    env.CONTAINER_ENV_PARTS = '1';
+    env.CONTAINER_ENV_0 = JSON.stringify({D1_STAGING_DATABASE: 'familyfunds-d1-staging-clone-20261103t092540z'});
+    await assert.rejects(container.scheduledProof("generate", 50, "2026-01-01T00:00:00.000Z"), /original staging target/);
+    assert.equal(commands.length, 0);
+});
+
 test("maintenance CLI installation also uses bounded verified parts", async () => {
     const content = "😀".repeat(9000);
     const {container, env} = fixture([{path: "/var/www/html/deployment/d1-proof/run-staging.php", content, sha256: createHash("sha256").update(content).digest("hex")}]);
