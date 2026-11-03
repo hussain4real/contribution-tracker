@@ -13,7 +13,7 @@ const source = readFileSync(new URL("./container-worker.mjs", import.meta.url), 
     .replace('import { DurableObject } from "cloudflare:workers";', "class DurableObject { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }")
     .replace('import { STAGING_BOOTSTRAP_ASSETS } from "./container-bootstrap-assets.mjs";', "")
     .replace('import { containerEnvironment } from "./container-env.mjs";', "")
-    .replace("export class ", "class ").replace("export default ", "const handler = ");
+    .replace("export function ", "function ").replace("export class ", "class ").replace("export default ", "const handler = ");
 
 function fixture(assets = [{path: "/var/www/html/deployment/d1-proof/container-nginx-staging.conf", content: "events {}", sha256: "a".repeat(64)}, {path: "/var/www/html/deployment/d1-proof/run-staging.php", content: "<?php echo 1;", sha256: "b".repeat(64)}, ...packagedAssets.filter(asset => asset.path.endsWith('/staging-fpm-status.php'))]) {
     const {handler, Container} = runInNewContext(source + "\n({handler, Container: FamilyFundsWebStagingContainer})", {

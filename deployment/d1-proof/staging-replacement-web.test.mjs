@@ -1,10 +1,17 @@
 import assert from 'node:assert/strict';
+import {createHmac, randomUUID, webcrypto} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {test} from 'node:test';
 import {runInNewContext} from 'node:vm';
 
 const source = readFileSync(new URL('./staging-replacement-web.mjs', import.meta.url), 'utf8')
     .replace(/^import .*?;$/gm, '').replaceAll('export class ', 'class ').replace('export default ', 'const handler = ');
+const stagingSource = readFileSync(new URL('./container-worker.mjs', import.meta.url), 'utf8')
+    .replace(/^import .*?;$/gm, '').replace('export function ', 'function ').replace('export class ', 'class ').replace('export default ', 'const stagingHandler = ');
+const shared = runInNewContext(stagingSource + '\n({stagingHandler, webhookConfig, Container: FamilyFundsWebStagingContainer})', {
+    DurableObject: class { constructor(ctx, env) { this.ctx = ctx; this.env = env; } },
+    TextEncoder, TextDecoder, Request, Response, URL, console, crypto: {randomUUID, subtle: webcrypto.subtle},
+});
 const database = 'familyfunds-d1-staging-clone-20261103t092540z';
 const image = 'registry.cloudflare.com/40344948b73fa9da3008958fdc3faf12/familyfunds-staging-replacement@sha256:' + 'a'.repeat(64);
 
@@ -15,7 +22,7 @@ function fixture() {
         async waitForReady() { calls.push('start'); }
     }
     const {Container, handler, Maintenance} = runInNewContext(source + '\n({Container: FamilyFundsReplacementStagingContainer, handler, Maintenance: ReplacementMaintenance})',
-        {FamilyFundsWebStagingContainer: Base, WorkerEntrypoint: Base, URL, Request, Response});
+        {...shared, FamilyFundsWebStagingContainer: Base, WorkerEntrypoint: Base, URL, Request, Response});
     const files = {bucket: database + '-files', accessKeyId: 'a'.repeat(32), secretAccessKey: 'b'.repeat(64)};
     const env = {CONTAINER_IMAGE: image, CONTAINER_ENV: '{}', RUNTIME_PROFILE: 'replacement-preflight', STAGING_ADMISSION_CONTROL: '1',
         REPLACEMENT_SQL: {fetch() {}}, REPLACEMENT_FILES_CREDENTIAL: {get: async () => JSON.stringify(files)},
@@ -83,4 +90,57 @@ test('private maintenance binding only addresses the replacement object in rehea
     env.RUNTIME_PROFILE = 'replacement-rehearsal';
     await service.scheduledProof(...task);
     assert.deepEqual(forwarded, [['replacement-staging', ...task]]);
+});
+
+test('signed test callbacks enter only the replacement queue and relay with the private token', async () => {
+    const {Container, handler, env, ctx} = fixture();
+    const queued = [], calls = [], stored = new Map();
+    const config = {enabled: true, database, family_id: 43, paystack_test_key: 'sk_test_fixture',
+        meta_app_secret: 'b'.repeat(32), meta_waba: 'test-account', meta_phone: 'test-phone', recipient: 'test-recipient', relay_token: 'a'.repeat(64)};
+    Object.assign(env, {RUNTIME_PROFILE: 'replacement-webhook-rehearsal', REPLACEMENT_WEBHOOK_SECRETS: JSON.stringify(config),
+        REPLACEMENT_WEBHOOK_QUEUE: {send: async record => queued.push(record)}});
+    const receiver = new shared.Container({blockConcurrencyWhile: action => action(), storage: {
+        get: key => stored.get(key), put: (key, value) => stored.set(key, value), delete: key => stored.delete(key),
+    }}, env);
+    let status = 503;
+    env.REPLACEMENT_CONTAINER = {getByName(name) {
+        assert.equal(name, 'replacement-staging');
+        return {enqueueWebhook: record => receiver.enqueueWebhook(record), fetch: async req => {
+            calls.push([req.url, req.headers.get('X-D1-Staging-Relay'), await req.text()]);
+            return new Response(null, {status});
+        }};
+    }};
+    const options = await new Container(ctx, env).startupOptions();
+    assert.equal(options.env.D1_STAGING_WEBHOOKS_ENABLED, 'true');
+    assert.equal(options.env.D1_STAGING_RELAY_TOKEN, config.relay_token);
+    assert.equal(options.env.D1_STAGING_DELIVERY_ENABLED, 'false');
+    for (const [provider, payload, secret, algorithm, header, prefix] of [
+        ['paystack', {event:'charge.success', data:{domain:'test', reference:'D1-WEBHOOK-UAT-fixture', metadata:{family_id:43}}},
+            config.paystack_test_key, 'sha512', 'X-Paystack-Signature', ''],
+        ['whatsapp', {object:'whatsapp_business_account', entry:[{id:config.meta_waba, changes:[{field:'messages', value:{
+            metadata:{phone_number_id:config.meta_phone}, statuses:[{id:'fixture', status:'delivered', recipient_id:config.recipient}]}}]}]},
+            config.meta_app_secret, 'sha256', 'X-Hub-Signature-256', 'sha256='],
+    ]) {
+        const body = JSON.stringify(payload);
+        const signature = prefix + createHmac(algorithm, secret).update(body).digest('hex');
+        const request = () => new Request('https://caller/webhooks/' + provider, {method:'POST', headers:{[header]:signature}, body});
+        assert.equal((await handler.fetch(request(), {...env, RUNTIME_PROFILE:'replacement-preflight'})).status, 404);
+        assert.equal((await handler.fetch(request(), env)).status, provider === 'paystack' ? 202 : 200);
+        const record = queued.shift();
+        assert.equal(record.database, database);
+        assert.equal(stored.size, 0);
+        let acks = 0, retries = 0;
+        const message = {id:'fixture', body:record, ack() { acks++; }, retry() { retries++; }};
+        const batch = {queue:'familyfunds-replacement-webhook', messages:[message]};
+        await assert.rejects(handler.queue({...batch, queue:'original'}, env), /Unexpected/);
+        await assert.rejects(handler.queue(batch, {...env, RUNTIME_PROFILE:'replacement-preflight'}), /disabled/);
+        const previousCalls = calls.length;
+        for (const invalid of [{...record, database:undefined}, {...record, raw:body + ' '}]) {
+            await handler.queue({...batch, messages:[{...message, body:invalid}]}, env);
+        }
+        assert.equal(calls.length, previousCalls);
+        for (status of [503, 200]) await handler.queue(batch, env);
+        assert.deepEqual([acks, retries], [1,3]);
+        assert.deepEqual(calls.at(-1), ['https://replacement-staging.internal/webhooks/' + provider, config.relay_token, body]);
+    }
 });

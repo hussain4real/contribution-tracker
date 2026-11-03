@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Services\PaystackService;
+use FamilyFunds\D1Staging\D1StagingConnection;
 use FamilyFunds\D1Staging\D1StagingRequest;
 use FamilyFunds\D1Staging\D1StagingRuntime;
 use FamilyFunds\D1Staging\D1StagingServiceProvider;
@@ -89,3 +90,22 @@ it('admits only the explicitly enabled private test-provider relay', function (s
     'platform still blocked' => ['/platform/dashboard', 'POST', str_repeat('a', 64), null, null, false],
     'OAuth still blocked' => ['/oauth/token', 'POST', str_repeat('a', 64), null, null, false],
 ]);
+
+it('requires the replacement gateway, bucket and write admission for the replacement relay', function (): void {
+    $database = D1StagingConnection::REPLACEMENT_DATABASE;
+    $target = [
+        'd1-staging.database' => $database,
+        'd1-staging.url' => D1StagingConnection::TARGETS[$database],
+        'd1-staging.r2.bucket' => $database.'-files',
+        'd1-staging.r2.admission' => '1',
+    ];
+    $request = Request::create('/webhooks/whatsapp', 'POST');
+    $request->headers->set('X-D1-Staging-Relay', str_repeat('a', 64));
+    $run = fn (): Response => (new D1StagingRequest(new D1StagingRuntime))->handle($request, fn () => response('accepted'), 'gate');
+    config($target);
+    expect($run()->getStatusCode())->toBe(200);
+    foreach (['d1-staging.url', 'd1-staging.r2.bucket', 'd1-staging.r2.admission'] as $setting) {
+        config([$setting => 'wrong'] + $target);
+        expect($run)->toThrow(HttpException::class);
+    }
+});

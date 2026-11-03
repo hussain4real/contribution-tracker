@@ -25,6 +25,17 @@ class D1StagingConnection extends SQLiteConnection
         'familyfunds-d1-scale-lab' => 'https://familyfunds-d1-scale-sql.familyfunds-lab.workers.dev',
     ];
 
+    public static function isWebhookTarget(): bool
+    {
+        $database = config('d1-staging.database');
+
+        return $database === 'familyfunds-d1-web-staging'
+            || ($database === self::REPLACEMENT_DATABASE
+                && config('d1-staging.url') === self::TARGETS[$database]
+                && config('d1-staging.r2.admission') === '1'
+                && config('d1-staging.r2.bucket') === $database.'-files');
+    }
+
     public function __construct(private readonly string $url, private readonly string $token, private readonly string $databaseName)
     {
         D1RuntimeProfile::assertTarget($databaseName, $url, $token);

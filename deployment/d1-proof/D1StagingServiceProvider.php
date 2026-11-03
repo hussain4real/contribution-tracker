@@ -132,7 +132,7 @@ final class D1StagingServiceProvider extends ServiceProvider
         if (config('d1-staging.webhooks.enabled')) {
             $paystack = config('d1-staging.webhooks.paystack_test_key');
             $meta = config('d1-staging.webhooks.meta_app_secret');
-            if (config('d1-staging.database') !== 'familyfunds-d1-web-staging'
+            if (! D1StagingConnection::isWebhookTarget()
                 || ! is_string($paystack) || ($paystack !== '' && ! str_starts_with($paystack, 'sk_test_'))
                 || ! is_string($meta) || ($meta !== '' && preg_match('/^[a-f0-9]{32}$/iD', $meta) !== 1)) {
                 throw new LogicException('Webhook checks require isolated staging provider credentials.');

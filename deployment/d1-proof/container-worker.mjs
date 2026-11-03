@@ -6,12 +6,33 @@ function instanceUnavailable(error) {
     return error instanceof Error && error.message.includes("There is no container instance that can be provided");
 }
 
-function webhookConfig(env) {
-    if (!env.STAGING_WEBHOOK_SECRETS) return null;
-    const config = JSON.parse(env.STAGING_WEBHOOK_SECRETS);
+const replacementDatabase = "familyfunds-d1-staging-clone-20261103t092540z";
+
+function replacementWebhooks(env) {
+    return env.RUNTIME_PROFILE === "replacement-webhook-rehearsal";
+}
+
+export function webhookConfig(env) {
+    const replacement = replacementWebhooks(env);
+    if (!replacement && env.RUNTIME_PROFILE?.startsWith("replacement-")) return null;
+    const raw = replacement ? env.REPLACEMENT_WEBHOOK_SECRETS : env.STAGING_WEBHOOK_SECRETS;
+    if (!raw) return null;
+    const config = JSON.parse(raw);
     if (config.enabled !== true) return null;
-    if (config.database !== "familyfunds-d1-web-staging" || config.family_id !== 43) throw new Error("Invalid isolated webhook target");
+    if (config.database !== (replacement ? replacementDatabase : "familyfunds-d1-web-staging") || config.family_id !== 43) {
+        throw new Error("Invalid isolated webhook target");
+    }
+    if (replacement && (env.STAGING_ADMISSION_CONTROL !== "1" || !env.REPLACEMENT_WEBHOOK_QUEUE?.send
+        || !env.REPLACEMENT_CONTAINER?.getByName || !/^sk_test_[a-zA-Z0-9_-]+$/.test(config.paystack_test_key ?? "")
+        || !/^[a-f0-9]{32}$/i.test(config.meta_app_secret ?? "") || !/^[a-f0-9]{64}$/.test(config.relay_token ?? "")
+        || config.relay_token === env.REPLACEMENT_SQL_TOKEN || !config.meta_phone || !config.meta_waba || !config.recipient)) {
+        throw new Error("Invalid replacement webhook configuration");
+    }
     return config;
+}
+
+function webhookContainer(env) {
+    return replacementWebhooks(env) ? env.REPLACEMENT_CONTAINER.getByName("replacement-staging") : env.STAGING_CONTAINER.getByName("isolated-staging");
 }
 
 function webhookScope(provider, payload, config) {
@@ -34,6 +55,7 @@ function webhookScope(provider, payload, config) {
 async function verifyWebhook(record, config) {
     if (!record || !["paystack", "whatsapp"].includes(record.provider) || typeof record.raw !== "string"
         || new TextEncoder().encode(record.raw).length > 49_152 || typeof record.signature !== "string") return false;
+    if (config.database === replacementDatabase ? record.database !== replacementDatabase : record.database !== undefined) return false;
     const meta = record.provider === "whatsapp";
     const hex = meta ? record.signature.replace(/^sha256=/, "") : record.signature;
     if (!(meta ? /^[a-f0-9]{64}$/i : /^[a-f0-9]{128}$/i).test(hex) || (meta && !record.signature.startsWith("sha256="))) return false;
@@ -83,9 +105,10 @@ async function receiveWebhook(request, env) {
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
     const record = {provider, raw: new TextDecoder("utf-8", {fatal: true}).decode(bytes),
         signature: request.headers.get(provider === "paystack" ? "X-Paystack-Signature" : "X-Hub-Signature-256") ?? ""};
+    if (replacementWebhooks(env)) record.database = config.database;
     if (!await verifyWebhook(record, config)) return new Response("Forbidden", {status: 403});
     if (env.RUNTIME_PROFILE !== "production" && env.STAGING_ADMISSION_CONTROL === "1") {
-        const admitted = await env.STAGING_CONTAINER.getByName("isolated-staging").enqueueWebhook(record);
+        const admitted = await webhookContainer(env).enqueueWebhook(record);
         if (!admitted) return new Response("Staging maintenance in progress. No operation was submitted.", {status: 503, headers: {"Retry-After": "30", "Cache-Control": "no-store"}});
     } else {
         await env.STAGING_WEBHOOK_QUEUE.send(record, {contentType: "json"});
@@ -398,7 +421,8 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
         if (id === null) return false;
         this.activeWebhookSends++;
         try {
-            await this.env.STAGING_WEBHOOK_QUEUE.send(record, {contentType: "json"});
+            const queue = replacementWebhooks(this.env) ? this.env.REPLACEMENT_WEBHOOK_QUEUE : this.env.STAGING_WEBHOOK_QUEUE;
+            await queue.send(record, {contentType: "json"});
             if (!await this.ctx.storage.delete(`staging-webhook-send:${id}`)) throw new Error("Unknown staging webhook operation");
             return true;
         } finally {
@@ -529,15 +553,18 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
 
 export default {
     async queue(batch, env) {
+        const replacement = replacementWebhooks(env);
+        if (replacement && batch.queue !== "familyfunds-replacement-webhook") throw new Error("Unexpected replacement webhook queue");
         const config = webhookConfig(env);
         for (const message of batch.messages) {
             try {
                 if (!config || !await verifyWebhook(message.body, config)) throw new Error("Invalid staging relay event");
                 const record = message.body;
-                const headers = {"Content-Type": "application/json", "X-D1-Staging-Relay": env.ADMIN_TOKEN};
+                const headers = {"Content-Type": "application/json", "X-D1-Staging-Relay": replacement ? config.relay_token : env.ADMIN_TOKEN};
                 headers[record.provider === "paystack" ? "X-Paystack-Signature" : "X-Hub-Signature-256"] = record.signature;
-                const container = env.STAGING_CONTAINER.getByName("isolated-staging");
-                const response = await container.fetch(new Request(`https://d1-staging.familyfunds.app/webhooks/${record.provider}`, {method: "POST", headers, body: record.raw}));
+                const container = webhookContainer(env);
+                const origin = replacement ? "https://replacement-staging.internal" : "https://d1-staging.familyfunds.app";
+                const response = await container.fetch(new Request(`${origin}/webhooks/${record.provider}`, {method: "POST", headers, body: record.raw}));
                 await response.body?.cancel();
                 if (![200, 202].includes(response.status)) throw new Error(`Staging webhook relay returned ${response.status}`);
                 message.ack();

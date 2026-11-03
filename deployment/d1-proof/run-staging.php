@@ -81,7 +81,7 @@ if (! $app->environment('d1-staging') || config('d1-production.enabled') || ! co
     exit(1);
 }
 if ($target === 'replacement' && (! $app->configurationIsCached() || config('d1-staging.r2.admission') !== '1'
-    || config('d1-staging.r2.bucket') !== $database.'-files' || config('d1-staging.delivery.enabled') || config('d1-staging.webhooks.enabled')
+    || config('d1-staging.r2.bucket') !== $database.'-files' || config('d1-staging.delivery.enabled') || ($operation !== 'verify-maintenance-target' && config('d1-staging.webhooks.enabled'))
     || config('mail.default') !== 'array' || config('app.key') !== $environment['APP_KEY']
     || config('d1-staging.token') !== $environment['D1_STAGING_TOKEN'])) {
     fwrite(STDERR, "Replacement maintenance requires the isolated cached application configuration.\n");

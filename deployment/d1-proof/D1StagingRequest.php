@@ -32,7 +32,7 @@ final class D1StagingRequest
             ? str_starts_with($providerSecret, 'sk_test_')
             : preg_match('/^[a-f0-9]{32}$/iD', $providerSecret) === 1);
         $webhookRelay = $request->isMethod('POST') && $request->is('webhooks/paystack', 'webhooks/whatsapp')
-            && config('d1-staging.webhooks.enabled') && config('d1-staging.database') === 'familyfunds-d1-web-staging'
+            && config('d1-staging.webhooks.enabled') && D1StagingConnection::isWebhookTarget()
             && $providerEnabled && is_string($relayToken) && strlen($relayToken) >= 32
             && hash_equals($relayToken, (string) $request->header('X-D1-Staging-Relay'));
         if (! D1RuntimeProfile::production() && $request->is('webhooks/*', 'mcp/*', 'mcp', 'oauth/*', 'platform/*') && ! $webhookRelay) {

@@ -1,5 +1,5 @@
 import {WorkerEntrypoint} from 'cloudflare:workers';
-import {FamilyFundsWebStagingContainer} from './container-worker.mjs';
+import stagingHandler, {FamilyFundsWebStagingContainer, webhookConfig} from './container-worker.mjs';
 
 const database = 'familyfunds-d1-staging-clone-20261103t092540z';
 const gateway = 'familyfunds-d1-replacement-sql.familyfunds-lab.workers.dev';
@@ -8,7 +8,7 @@ const imagePattern = /^registry\.cloudflare\.com\/40344948b73fa9da3008958fdc3faf
 export class FamilyFundsReplacementStagingContainer extends FamilyFundsWebStagingContainer {
     constructor(ctx, env) {
         if (env.CONTAINER_ENV !== '{}' || env.CONTAINER_ENV_PARTS !== undefined || env.OPTIMIZED_BOOTSTRAP !== undefined
-            || !['replacement-preflight', 'replacement-rehearsal'].includes(env.RUNTIME_PROFILE) || env.STAGING_ADMISSION_CONTROL !== '1'
+            || !['replacement-preflight', 'replacement-rehearsal', 'replacement-webhook-rehearsal'].includes(env.RUNTIME_PROFILE) || env.STAGING_ADMISSION_CONTROL !== '1'
             || !imagePattern.test(env.CONTAINER_IMAGE) || !env.REPLACEMENT_SQL?.fetch) {
             throw new Error('Invalid replacement staging configuration');
         }
@@ -38,6 +38,8 @@ export class FamilyFundsReplacementStagingContainer extends FamilyFundsWebStagin
         if (files?.bucket !== database + '-files' || !/^[a-f0-9]{32}$/.test(files.accessKeyId)
             || !/^[a-f0-9]{64}$/.test(files.secretAccessKey)) throw new Error('Invalid replacement file credentials');
 
+        const webhook = webhookConfig(this.env);
+        if (this.env.RUNTIME_PROFILE === 'replacement-webhook-rehearsal' && !webhook) throw new Error('Missing private rehearsal webhook configuration');
         return {image, instance: 'standard-1', enableInternet: true, env: {
             APP_ENV: 'd1-staging', APP_KEY: appKey, APP_DEBUG: 'false',
             APP_URL: 'https://replacement-staging.internal', D1_PRODUCTION_ENABLED: 'false',
@@ -45,7 +47,9 @@ export class FamilyFundsReplacementStagingContainer extends FamilyFundsWebStagin
             D1_STAGING_TOKEN: token, D1_STAGING_R2_ADMISSION: '1', D1_STAGING_R2_BUCKET: files.bucket,
             D1_STAGING_R2_ACCESS_KEY_ID: files.accessKeyId, D1_STAGING_R2_SECRET_ACCESS_KEY: files.secretAccessKey,
             QUEUE_WORKER_ENABLED: 'false', STAGING_QUEUE_WORKER_ENABLED: 'false', D1_STAGING_DELIVERY_ENABLED: 'false',
-            D1_STAGING_WEBHOOKS_ENABLED: 'false', NIGHTWATCH_ENABLED: 'false', MAIL_MAILER: 'array',
+            D1_STAGING_WEBHOOKS_ENABLED: webhook ? 'true' : 'false',
+            ...(webhook && {D1_STAGING_PAYSTACK_TEST_KEY: webhook.paystack_test_key, D1_STAGING_META_APP_SECRET: webhook.meta_app_secret,
+                D1_STAGING_RELAY_TOKEN: webhook.relay_token}), NIGHTWATCH_ENABLED: 'false', MAIL_MAILER: 'array',
         }};
     }
 
@@ -80,8 +84,15 @@ export class ReplacementMaintenance extends WorkerEntrypoint {
 }
 
 export default {
+    async queue(batch, env) {
+        if (env.RUNTIME_PROFILE !== 'replacement-webhook-rehearsal') throw new Error('Replacement webhook rehearsal is disabled');
+        return stagingHandler.queue(batch, env);
+    },
     async fetch(request, env) {
         const url = new URL(request.url);
+        if (env.RUNTIME_PROFILE === 'replacement-webhook-rehearsal' && ['/webhooks/paystack', '/webhooks/whatsapp'].includes(url.pathname)) {
+            return stagingHandler.fetch(request, env);
+        }
         if (request.method !== 'GET' || !['/up', '/connections'].includes(url.pathname) || url.search) return new Response('Not found', {status: 404});
         const container = env.REPLACEMENT_CONTAINER.getByName('replacement-staging');
         if (url.pathname === '/connections') {

@@ -1,0 +1,45 @@
+{
+  "name": "familyfunds-staging-replacement-checkpoint",
+  "main": "staging-checkpoint-runner.mjs",
+  "account_id": "40344948b73fa9da3008958fdc3faf12",
+  "compatibility_date": "2026-10-27",
+  "workers_dev": false,
+  "preview_urls": false,
+  "triggers": {
+    "crons": []
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "familyfunds-d1-web-staging",
+      "database_id": "f96058f1-0aa3-42f3-9ee2-f796554d6ef4"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "STATUS_FILES",
+      "bucket_name": "familyfunds-d1-staging-clone-20261103t092540z-capture"
+    }
+  ],
+  "services": [
+    {
+      "binding": "BACKUP",
+      "service": "familyfunds-staging-replacement-recovery",
+      "entrypoint": "StagingBackupOnly"
+    },
+    {
+      "binding": "RECOVERY",
+      "service": "familyfunds-staging-replacement-recovery",
+      "entrypoint": "StagingRecoveryOnly"
+    }
+  ],
+  "vars": {
+    "RUN_ENABLED": "false",
+    "RUN_MODE": "online-clone",
+    "CHECKPOINT_ID": "clone01-20261103t092540z",
+    "DATABASE_NAME": "familyfunds-d1-web-staging",
+    "RECOVERY_DATABASE_NAME": "familyfunds-d1-staging-clone-20261103t092540z",
+    "STATUS_BUCKET_NAME": "familyfunds-d1-staging-clone-20261103t092540z-capture",
+    "EXPECTED_ARTIFACTS": "[{\"id\":11,\"uuid\":\"2fcc3d76-e26c-465e-af54-90b98e40d101\",\"path_sha256\":\"c9de7ae6601271f4cb4de5cbf20b30fc8e3bceeb379fe8605f6498dbb8c27c1a\"},{\"id\":13,\"uuid\":\"3f900a0b-1c2c-4945-ab44-a8e214af047c\",\"path_sha256\":\"17535f23a751ff10c16b22ec09c5d859d5abcc6167e31c52a3cd3247be2a0f44\"}]"
+  }
+}
