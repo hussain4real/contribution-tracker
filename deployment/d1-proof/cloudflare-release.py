@@ -3,6 +3,7 @@
 import argparse
 import email.parser
 import email.policy
+import http.client
 import hashlib
 import json
 import os
@@ -420,12 +421,13 @@ def publish(target, directory):
                 if error.stage != last_gateway_stage:
                     print('Staging gateway health failure stage: ' + error.stage, flush=True)
                     last_gateway_stage = error.stage
-            except (RuntimeError, urllib.error.URLError):
+            except (RuntimeError, OSError, http.client.HTTPException):
                 pass
             if time.monotonic() >= deadline:
                 raise RuntimeError('Release verification failed: edge, Laravel readiness or native running image mismatch')
             time.sleep(10)
-    except Exception:
+    except Exception as error:
+        print(f"Staging or production release failed during publication or verification ({type(error).__name__})", flush=True)
         failures = []
         for plan in reversed(applied):
             try:
