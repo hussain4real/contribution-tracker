@@ -109,3 +109,100 @@ test("the consumer retries failed native execution and skips completed duplicate
 test("maintenance has no public execution or data endpoint", async () => {
     assert.equal((await handler.fetch(new Request("https://staging.example/run"))).status, 404);
 });
+
+function admittedMaintenance() {
+    const fixture = backupFixture();
+    const gate = {
+        paused: false, pending: new Set(),
+        async begin() {
+            if (this.paused) return null;
+            const id = webcrypto.randomUUID();
+            this.pending.add(id);
+            return id;
+        },
+        async complete(id) { assert.equal(this.pending.delete(id), true); },
+    };
+    Object.assign(fixture.env, {
+        STAGING_GATEWAY_ADMISSION: "1",
+        STAGING_GATEWAY_ADMISSION_OBJECT: {getByName(name) { assert.equal(name, "staging-gateway"); return gate; }},
+    });
+    const prepare = fixture.env.DB.prepare;
+    fixture.env.DB.prepare = sql => ({
+        ...prepare(sql), bind() { return this; }, first: async () => ({due: 0}),
+        ...(sql.startsWith("select id,kind") ? {all: async () => ({results: []})} : {}),
+    });
+    const tick = () => handler.scheduled({scheduledTime: Date.UTC(2026, 10, 1)}, fixture.env);
+    return {...fixture, gate, tick};
+}
+
+test("a paused maintenance worker waits for its admitted backup and denies new scheduler and queue work", async () => {
+    const {env, objects, gate, tick, reads} = admittedMaintenance();
+    const started = Promise.withResolvers(), finish = Promise.withResolvers();
+    const put = env.STAGING_FILES.put;
+    env.STAGING_FILES.put = async (...args) => {
+        started.resolve();
+        await finish.promise;
+        return put(...args);
+    };
+    const first = tick();
+    await started.promise;
+    gate.paused = true;
+    assert.equal(gate.pending.size, 1);
+    await assert.rejects(tick, /paused/);
+    let retries = 0;
+    await handler.queue({messages: [{body: {kind: "generate", family_id: 50}, retry() { retries++; }}]}, env);
+    assert.equal(retries, 1);
+    assert.equal(reads(), 1);
+    assert.equal(objects.size, 0);
+    finish.resolve();
+    await first;
+    assert.equal(objects.size, 1);
+    assert.equal(gate.pending.size, 0);
+});
+
+test("a backup committed before its acknowledgement was lost stays unresolved after retry", async () => {
+    const {env, objects, gate, tick} = admittedMaintenance();
+    const put = env.STAGING_FILES.put;
+    env.STAGING_FILES.put = async (...args) => {
+        await put(...args);
+        throw new Error("Lost acknowledgement");
+    };
+    await assert.rejects(tick, /Lost acknowledgement/);
+    assert.equal(objects.size, 1);
+    const unresolved = [...gate.pending];
+    assert.equal(unresolved.length, 1);
+    await tick();
+    assert.deepEqual([...gate.pending], unresolved);
+});
+
+test("incomplete maintenance admission configuration refuses work before storage access", async () => {
+    for (const [mode, bound] of [[undefined, true], ["1", false], ["invalid", true]]) {
+        const {env, reads, tick} = admittedMaintenance();
+        env.STAGING_GATEWAY_ADMISSION = mode;
+        if (!bound) delete env.STAGING_GATEWAY_ADMISSION_OBJECT;
+        await assert.rejects(tick, /configuration/);
+        assert.equal(reads(), 0);
+    }
+});
+
+test("pausing counts an executing queue message until its outbox update completes", async () => {
+    const {env, gate} = admittedMaintenance();
+    const updating = Promise.withResolvers(), finish = Promise.withResolvers();
+    const task = {id: "fixture", kind: "generate", family_id: 50, at: "2026-11-01T00:00:00Z"};
+    env.DB.prepare = () => ({
+        bind() { return this; },
+        first: async () => ({...task, due_at: task.at, completed_at: null}),
+        run: async () => { updating.resolve(); await finish.promise; },
+    });
+    env.STAGING_CONTAINER = {getByName: () => ({scheduledProof: async () => ({exit_code: 0})})};
+    let acknowledged = false;
+    const result = handler.queue({messages: [{body: task, ack() { acknowledged = true; }}]}, env);
+    await updating.promise;
+    gate.paused = true;
+    assert.equal(gate.pending.size, 1);
+    assert.equal(acknowledged, false);
+    finish.resolve();
+    await result;
+    assert.equal(acknowledged, true);
+    assert.equal(gate.pending.size, 0);
+});
