@@ -284,6 +284,8 @@ The owner subsequently confirmed reaching the platform dashboard. A read-only ch
 
 The original Worker has a write-only `STAGING_WEBHOOK_SECRETS` binding. The replacement has no permanent callback bundle. The reviewed staging provisioning files contained no recoverable copy. Use the staging Paystack callback account and the staging Meta app to rebuild the bundle, then verify signatures against the running configuration before activating it.
 
+A private comparison against the enabled original staging webhook configuration found that none of the three supplied values matched. The Paystack test secret matched the verified staging checkout key. The original callback signing key is separate. The supplied Meta app secret and webhook verification token also differed. The comparison exposed only match results and left the original Worker version and route intact. Permanent replacement webhook credentials are still pending.
+
 Before another switch, resolve or account for the two candidate admission markers, provision and verify the permanent staging callback signing bundle, and complete a sign-in with the owner’s registered device on the staging origin. Coordinate a fresh window and capture changes since original staging reopened. Keep production’s migration fingerprint gated separately.
 
 **Routine deployments after the traffic switch**
