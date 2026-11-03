@@ -400,12 +400,13 @@ async function schedule(controller, env, families) {
 
 async function consume(task, db, runTask) {
     const stored = await db.prepare("select kind,family_id,due_at,completed_at from d1_staging_schedule_outbox where id=?").bind(task.id).first();
-    if (!stored || stored.kind !== task.kind || stored.family_id !== task.family_id || stored.due_at !== task.at) throw new Error("Unrecognized staging task");
+    if (!stored || stored.kind !== task.kind || stored.family_id !== task.family_id || stored.due_at !== task.at) return false;
     if (stored.completed_at === null) {
         const result = await runTask(task);
         if (result.exit_code !== 0) throw new Error("Staging maintenance command failed");
         await db.prepare("update d1_staging_schedule_outbox set completed_at=unixepoch() where id=?").bind(task.id).run();
     }
+    return true;
 }
 
 export default {
@@ -432,7 +433,8 @@ export default {
                 const task = message.body;
                 const expected = task?.kind === "purge" ? families.purge : task?.kind === "reports" ? 43 : families.family;
                 if (!["generate", "remind25", "remind28", "purge", "reports", "retry-notifications"].includes(task?.kind) || task.family_id !== expected) throw new Error("Invalid staging task scope");
-                await withMaintenanceAdmission(env, "queue", () => consume(task, db, runTask));
+                const recognized = await withMaintenanceAdmission(env, "queue", () => consume(task, db, runTask));
+                if (!recognized) throw new Error("Unrecognized staging task");
                 message.ack();
             } catch (error) {
                 message.retry({delaySeconds: 30});

@@ -703,4 +703,7 @@ test("replacement maintenance validates its queue, coordinator and reserved bind
     await handler.queue(batch, env);
     await handler.queue(batch, env);
     assert.deepEqual([executions, acknowledgements, gate.pending.size], [1, 2, 0]);
+    env.REPLACEMENT_DB.prepare = () => ({bind() { return this; }, first: async () => null});
+    await handler.queue(batch, env);
+    assert.deepEqual([retries, executions, acknowledgements, gate.pending.size], [2, 1, 2, 0]);
 });
