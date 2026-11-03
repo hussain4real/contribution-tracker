@@ -6,6 +6,7 @@ use App\Enums\PaymentSource;
 use App\Jobs\SendPaymentReceipt;
 use App\Mail\PaymentReceiptMail;
 use App\Models\Family;
+use App\Models\FinancialReversal;
 use App\Models\PaymentBatch;
 use App\Models\ReportArtifact;
 use App\Models\User;
@@ -19,6 +20,8 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Spatie\LaravelPdf\Drivers\DomPdfDriver;
+use Spatie\LaravelPdf\PdfOptions;
 use Tests\TestCase;
 
 beforeEach(function () {
@@ -129,6 +132,34 @@ it('renders the member receipt amount date method family and authorized download
     $mail->assertSeeInHtml($batch->paid_at->toFormattedDateString());
     $mail->assertSeeInHtml('Cash');
     $mail->assertSeeInHtml($url);
+});
+
+it('shows the reversal on newly downloaded receipts and preserves the original allocation amount', function () {
+    $batch = recordReceiptPayment($this);
+    $url = route('payment-batches.receipt', ['current_family' => $this->family->slug, 'payment_batch' => $batch->id]);
+    $driver = new class extends DomPdfDriver
+    {
+        /** @var list<string> */
+        public array $rendered = [];
+
+        public function generatePdf(string $html, ?string $headerHtml, ?string $footerHtml, PdfOptions $options): string
+        {
+            $this->rendered[] = $html;
+
+            return parent::generatePdf($html, $headerHtml, $footerHtml, $options);
+        }
+    };
+    $this->app->instance('laravel-pdf.driver.dompdf', $driver);
+
+    $this->actingAs($this->member)->get($url)->assertOk();
+    FinancialReversal::factory()->create([
+        'family_id' => $this->family->id, 'reversible_type' => PaymentBatch::MORPH_TYPE,
+        'reversible_id' => $batch->id, 'reason' => 'Internal officer note',
+    ]);
+    $this->get($url)->assertOk();
+    expect($driver->rendered[0])->not->toContain('Payment reversed')
+        ->and($driver->rendered[1])->toContain('Payment reversed', 'This payment no longer counts towards your balance.', 'NGN 1,000.00')
+        ->not->toContain('Internal officer note');
 });
 
 it('sends the approved WhatsApp template with receipt details and the member download link', function () {
