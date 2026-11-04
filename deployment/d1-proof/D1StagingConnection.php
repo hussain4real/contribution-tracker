@@ -17,10 +17,10 @@ class D1StagingConnection extends SQLiteConnection
 {
     private readonly D1RuntimeClient $client;
 
-    public const REPLACEMENT_DATABASE = 'familyfunds-d1-staging-clone-20261103t092540z';
+    public const REPLACEMENT_DATABASE = 'familyfunds-d1-staging-clone-20261104t044139z';
 
     public const TARGETS = [
-        self::REPLACEMENT_DATABASE => 'https://familyfunds-d1-replacement-sql.familyfunds-lab.workers.dev',
+        self::REPLACEMENT_DATABASE => 'https://familyfunds-d1-replacement-sql-nov04.familyfunds-lab.workers.dev',
         'familyfunds-d1-web-staging' => 'https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev',
         'familyfunds-d1-scale-lab' => 'https://familyfunds-d1-scale-sql.familyfunds-lab.workers.dev',
     ];

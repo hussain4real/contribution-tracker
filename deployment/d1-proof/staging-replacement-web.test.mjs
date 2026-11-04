@@ -13,7 +13,7 @@ const shared = runInNewContext(stagingSource + '\n({stagingHandler, Container: F
     DurableObject: class { constructor(ctx, env) { this.ctx = ctx; this.env = env; } },
     TextEncoder, TextDecoder, Request, Response, URL, console, crypto: {randomUUID, subtle: webcrypto.subtle},
 });
-const database = 'familyfunds-d1-staging-clone-20261103t092540z';
+const database = 'familyfunds-d1-staging-clone-20261104t044139z';
 const image = 'registry.cloudflare.com/40344948b73fa9da3008958fdc3faf12/familyfunds-staging-replacement@sha256:' + 'a'.repeat(64);
 
 function fixture() {
@@ -28,7 +28,7 @@ function fixture() {
     const files = {bucket: database + '-files', accessKeyId: 'a'.repeat(32), secretAccessKey: 'b'.repeat(64)};
     const env = {CONTAINER_IMAGE: image, CONTAINER_ENV: '{}', RUNTIME_PROFILE: 'replacement-preflight', STAGING_ADMISSION_CONTROL: '1',
         REPLACEMENT_SQL: {fetch() {}}, REPLACEMENT_FILES_CREDENTIAL: {get: async () => JSON.stringify(files)},
-        REPLACEMENT_APP_KEY: 'base64:' + 'a'.repeat(43) + '=', REPLACEMENT_SQL_TOKEN: 'c'.repeat(64)};
+        REPLACEMENT_APP_KEY: {get: async () => 'base64:' + 'a'.repeat(43) + '='}, REPLACEMENT_SQL_TOKEN: 'c'.repeat(64)};
     const ctx = {container: {images: {base: image}, running: false, interceptOutboundHttps: async (...args) => calls.push(args)}};
     return {Container, handler, Maintenance, Acceptance, env, ctx, files, calls};
 }
@@ -37,7 +37,7 @@ test('preflight starts only after private HTTPS interception and uses the reserv
     const {Container, env, ctx, calls, files} = fixture();
     const candidate = new Container(ctx, env);
     await candidate.waitForReady();
-    assert.deepEqual(calls, [['familyfunds-d1-replacement-sql.familyfunds-lab.workers.dev', env.REPLACEMENT_SQL], 'start']);
+    assert.deepEqual(calls, [['familyfunds-d1-replacement-sql-nov04.familyfunds-lab.workers.dev', env.REPLACEMENT_SQL], 'start']);
     const options = await candidate.startupOptions();
     assert.equal(options.image, image);
     assert.equal(options.env.D1_STAGING_DATABASE, database);
@@ -147,7 +147,7 @@ for (const profile of ['replacement-live', 'replacement-webhook-rehearsal']) {
             assert.equal(stored.size, 0);
             let acks = 0, retries = 0;
             const message = {id:'fixture', body:record, ack() { acks++; }, retry() { retries++; }};
-            const batch = {queue:'familyfunds-replacement-webhook', messages:[message]};
+            const batch = {queue:'familyfunds-replacement-webhook-nov04', messages:[message]};
             await assert.rejects(handler.queue({...batch, queue:'original'}, env), /Unexpected/);
             await assert.rejects(handler.queue(batch, {...env, RUNTIME_PROFILE:'replacement-preflight'}), /disabled/);
             const previousCalls = calls.length;

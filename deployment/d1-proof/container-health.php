@@ -5,9 +5,9 @@ declare(strict_types=1);
 $path = dirname(__DIR__, 2).'/bootstrap/cache/config.php';
 $configuration = is_file($path) ? require $path : [];
 $staging = $configuration['d1-staging'] ?? [];
-$replacement = 'familyfunds-d1-staging-clone-20261103t092540z';
+$replacement = 'familyfunds-d1-staging-clone-20261104t044139z';
 $replacementReady = ($staging['database'] ?? null) === $replacement
-    && ($staging['url'] ?? null) === 'https://familyfunds-d1-replacement-sql.familyfunds-lab.workers.dev'
+    && ($staging['url'] ?? null) === 'https://familyfunds-d1-replacement-sql-nov04.familyfunds-lab.workers.dev'
     && ($staging['r2']['admission'] ?? null) === '1'
     && ($staging['r2']['bucket'] ?? null) === $replacement.'-files';
 $ready = ($configuration['app']['env'] ?? null) === 'd1-staging'

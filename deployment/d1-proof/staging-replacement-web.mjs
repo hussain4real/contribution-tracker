@@ -2,8 +2,8 @@ import {WorkerEntrypoint} from 'cloudflare:workers';
 import {containerEnvironment} from './container-env.mjs';
 import stagingHandler, {FamilyFundsWebStagingContainer} from './container-worker.mjs';
 
-const database = 'familyfunds-d1-staging-clone-20261103t092540z';
-const gateway = 'familyfunds-d1-replacement-sql.familyfunds-lab.workers.dev';
+const database = 'familyfunds-d1-staging-clone-20261104t044139z';
+const gateway = 'familyfunds-d1-replacement-sql-nov04.familyfunds-lab.workers.dev';
 const stagingOrigin = 'https://d1-staging.familyfunds.app';
 const acceptanceCookie = 'familyfunds_replacement_acceptance_session';
 const imagePattern = /^registry\.cloudflare\.com\/40344948b73fa9da3008958fdc3faf12\/familyfunds-staging-replacement@sha256:[0-9a-f]{64}$/;
@@ -27,7 +27,8 @@ export class FamilyFundsReplacementStagingContainer extends FamilyFundsWebStagin
     }
 
     async startupOptions() {
-        const {CONTAINER_IMAGE: image, REPLACEMENT_SQL_TOKEN: token, REPLACEMENT_APP_KEY: appKey} = this.env;
+        const {CONTAINER_IMAGE: image, REPLACEMENT_SQL_TOKEN: token} = this.env;
+        const appKey = await this.env.REPLACEMENT_APP_KEY.get();
         if (this.ctx.container.images?.base !== image || typeof token !== 'string' || token.length < 32
             || typeof appKey !== 'string' || !/^base64:[a-zA-Z0-9+/]{43}=$/.test(appKey)) {
             throw new Error('Missing replacement image or credentials');
