@@ -28,7 +28,7 @@
       "scheduling_policy": "durable_object",
       "images": {
         "base": {
-          "image": "registry.cloudflare.com/40344948b73fa9da3008958fdc3faf12/familyfunds-staging-replacement@sha256:e107eb83d1a3bf1a7b0ad25e4eb1a04b2680a5c8642c0f620c0dd8b33d9d29b8"
+          "image": "registry.cloudflare.com/40344948b73fa9da3008958fdc3faf12/familyfunds-staging-replacement@sha256:4f3e3b32080ef0fce419693d4b8ddbeb6fe5989f4588264822d8b8982a5257eb"
         }
       }
     }
@@ -56,7 +56,7 @@
   ],
   "vars": {
     "CONTAINER_ENV": "{}",
-    "CONTAINER_IMAGE": "registry.cloudflare.com/40344948b73fa9da3008958fdc3faf12/familyfunds-staging-replacement@sha256:e107eb83d1a3bf1a7b0ad25e4eb1a04b2680a5c8642c0f620c0dd8b33d9d29b8",
+    "CONTAINER_IMAGE": "registry.cloudflare.com/40344948b73fa9da3008958fdc3faf12/familyfunds-staging-replacement@sha256:4f3e3b32080ef0fce419693d4b8ddbeb6fe5989f4588264822d8b8982a5257eb",
     "RUNTIME_PROFILE": "replacement-preflight",
     "STAGING_ADMISSION_CONTROL": "1"
   }

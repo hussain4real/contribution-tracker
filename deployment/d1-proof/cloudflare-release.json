@@ -54,15 +54,15 @@
       ]
     },
     "replacement": {
-      "worker": "familyfunds-staging-replacement-web",
+      "worker": "familyfunds-staging-replacement-web-nov04",
       "entry": "staging-replacement-web.mjs",
       "class_name": "FamilyFundsReplacementStagingContainer",
-      "application_id": "66580639806d4909a2adae4b7f3ea9a3",
+      "application_id": "cfdc86004a7447c1a673ba606129d011",
       "instance_name": "replacement-staging",
       "image_repository": "familyfunds-staging-replacement",
       "companions": [
         {
-          "worker": "familyfunds-staging-replacement-maintenance",
+          "worker": "familyfunds-staging-replacement-maintenance-nov04",
           "entry": "maintenance-worker.mjs"
         }
       ]

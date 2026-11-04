@@ -194,15 +194,16 @@ class ReleaseSafetyTest(unittest.TestCase):
                 return {'deployments': [{'created_on': '2026-11-03', 'versions': [{'version_id': version, 'percentage': 100}]}]}
             if path.endswith('/settings'):
                 if maintenance in path:
-                    return {'bindings': [{'name': 'REPLACEMENT_DB', 'type': 'd1', 'id': '43e11f90-07d7-49fc-930f-2a33a474d930'},
-                                         {'name': 'STAGING_GATEWAY_ADMISSION_OBJECT', 'type': 'durable_object_namespace', 'namespace_id': '62fa75c5c7c9490eab127ae45d4c7213'},
+                    return {'bindings': [{'name': 'REPLACEMENT_DB', 'type': 'd1', 'id': '821325ae-6a5f-440a-af64-ebe2c336a314'},
+                                         {'name': 'STAGING_GATEWAY_ADMISSION_OBJECT', 'type': 'durable_object_namespace', 'namespace_id': 'aa1360266e0c46fcad453105e41d24a9'},
                                          {'name': 'REPLACEMENT_WEB_MAINTENANCE', 'type': 'service', 'service': web, 'entrypoint': 'ReplacementMaintenance'}]}
                 return {'bindings': [
                     {'name': 'REPLACEMENT_CONTAINER', 'type': 'durable_object_namespace', 'namespace_id': replacement['application_id']},
-                    {'name': 'REPLACEMENT_SQL', 'type': 'service', 'service': 'familyfunds-d1-replacement-sql'},
-                    {'name': 'REPLACEMENT_WEBHOOK_QUEUE', 'type': 'queue', 'queue_name': 'familyfunds-replacement-webhook'},
-                    {'name': 'REPLACEMENT_FILES_CREDENTIAL', 'type': 'secrets_store_secret', 'store_id': '5e78cc1e865144e4ab982aeae254ed96', 'secret_name': 'FF_STAGING_REPLACEMENT_R2_20261103T092540Z'},
-                    {'name': 'REPLACEMENT_APP_KEY', 'type': 'secret_text'}, {'name': 'REPLACEMENT_SQL_TOKEN', 'type': 'secret_text'},
+                    {'name': 'REPLACEMENT_SQL', 'type': 'service', 'service': 'familyfunds-d1-replacement-sql-nov04'},
+                    {'name': 'REPLACEMENT_WEBHOOK_QUEUE', 'type': 'queue', 'queue_name': 'familyfunds-replacement-webhook-nov04'},
+                    {'name': 'REPLACEMENT_FILES_CREDENTIAL', 'type': 'secrets_store_secret', 'store_id': '5e78cc1e865144e4ab982aeae254ed96', 'secret_name': 'FF_STAGING_REPLACEMENT_R2_20261104T044139Z'},
+                    {'name': 'REPLACEMENT_APP_KEY', 'type': 'secrets_store_secret', 'store_id': '5e78cc1e865144e4ab982aeae254ed96', 'secret_name': 'FF_STAGING_REPLACEMENT_LARAVEL_KEY_20261103T1243Z'},
+                    {'name': 'REPLACEMENT_SQL_TOKEN', 'type': 'secret_text'},
                     {'name': 'BASIC_AUTHORIZATION', 'type': 'secret_text'},
                     *[{'name': name, 'type': 'secret_text'} for name in
                       ['STAGING_PAYSTACK_TEST_ENV', 'REPLACEMENT_WEBHOOK_SECRETS', 'AI_ENV']],
@@ -224,6 +225,14 @@ class ReleaseSafetyTest(unittest.TestCase):
                 self.assertEqual(data['versions'], [{'version_id': version, 'percentage': 100}])
                 return {}
             self.fail('Unexpected API call ' + path)
+
+        for mismatch in [{'type': 'secret_text'}, {'store_id': 'other-store'}, {'secret_name': 'old-key'}]:
+            with self.subTest(mismatch=mismatch):
+                settings = api('GET', '/workers/scripts/' + web + '/settings')
+                key = next(binding for binding in settings['bindings'] if binding['name'] == 'REPLACEMENT_APP_KEY')
+                key.update(mismatch)
+                with self.assertRaisesRegex(RuntimeError, 'Replacement (web|credential) bindings'):
+                    release.checked_bindings(web, settings)
 
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)

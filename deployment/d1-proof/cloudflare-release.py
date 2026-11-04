@@ -218,29 +218,32 @@ def checked_bindings(worker, settings):
             raise RuntimeError('Production D1 binding mismatch')
         if names.get('PRODUCTION_CONTAINER', {}).get('namespace_id') != CONFIG['production']['application_id']:
             raise RuntimeError('Production container namespace mismatch')
-    if worker == 'familyfunds-staging-replacement-web':
+    replacement = CONFIG['staging_destinations']['replacement']
+    if worker == replacement['worker']:
         expected = {
-            'REPLACEMENT_CONTAINER': ('namespace_id', '66580639806d4909a2adae4b7f3ea9a3'),
-            'REPLACEMENT_SQL': ('service', 'familyfunds-d1-replacement-sql'),
-            'REPLACEMENT_WEBHOOK_QUEUE': ('queue_name', 'familyfunds-replacement-webhook'),
-            'REPLACEMENT_FILES_CREDENTIAL': ('secret_name', 'FF_STAGING_REPLACEMENT_R2_20261103T092540Z'),
+            'REPLACEMENT_CONTAINER': ('namespace_id', replacement['application_id']),
+            'REPLACEMENT_SQL': ('service', 'familyfunds-d1-replacement-sql-nov04'),
+            'REPLACEMENT_WEBHOOK_QUEUE': ('queue_name', 'familyfunds-replacement-webhook-nov04'),
+            'REPLACEMENT_APP_KEY': ('secret_name', 'FF_STAGING_REPLACEMENT_LARAVEL_KEY_20261103T1243Z'),
+            'REPLACEMENT_FILES_CREDENTIAL': ('secret_name', 'FF_STAGING_REPLACEMENT_R2_20261104T044139Z'),
             'CONTAINER_ENV': ('text', '{}'), 'STAGING_ADMISSION_CONTROL': ('text', '1'),
             'RUNTIME_PROFILE': ('text', 'replacement-live'),
         }
         if any(names.get(key, {}).get(field) != value for key, (field, value) in expected.items()):
             raise RuntimeError('Replacement web bindings or activation differ from the release destination')
-        secrets = ['REPLACEMENT_APP_KEY', 'REPLACEMENT_SQL_TOKEN', 'BASIC_AUTHORIZATION',
+        secrets = ['REPLACEMENT_SQL_TOKEN', 'BASIC_AUTHORIZATION',
                    'STAGING_PAYSTACK_TEST_ENV', 'REPLACEMENT_WEBHOOK_SECRETS', 'AI_ENV']
-        if (names['REPLACEMENT_FILES_CREDENTIAL'].get('store_id') != '5e78cc1e865144e4ab982aeae254ed96'
+        if (any(names[key].get('type') != 'secrets_store_secret' or names[key].get('store_id') != '5e78cc1e865144e4ab982aeae254ed96'
+                for key in ['REPLACEMENT_APP_KEY', 'REPLACEMENT_FILES_CREDENTIAL'])
                 or any(names.get(key, {}).get('type') != 'secret_text' for key in secrets)):
             raise RuntimeError('Replacement credential bindings differ from the release destination')
         repository = 'registry.cloudflare.com/' + ACCOUNT + '/familyfunds-staging-replacement@sha256:'
         if not re.fullmatch(re.escape(repository) + '[0-9a-f]{64}', names.get('CONTAINER_IMAGE', {}).get('text', '')):
             raise RuntimeError('Replacement web image is not pinned to its own repository')
-    if worker == 'familyfunds-staging-replacement-maintenance':
-        if (names.get('REPLACEMENT_DB', {}).get('id') != '43e11f90-07d7-49fc-930f-2a33a474d930'
-                or names.get('STAGING_GATEWAY_ADMISSION_OBJECT', {}).get('namespace_id') != '62fa75c5c7c9490eab127ae45d4c7213'
-                or names.get('REPLACEMENT_WEB_MAINTENANCE', {}).get('service') != 'familyfunds-staging-replacement-web'
+    if worker == 'familyfunds-staging-replacement-maintenance-nov04':
+        if (names.get('REPLACEMENT_DB', {}).get('id') != '821325ae-6a5f-440a-af64-ebe2c336a314'
+                or names.get('STAGING_GATEWAY_ADMISSION_OBJECT', {}).get('namespace_id') != 'aa1360266e0c46fcad453105e41d24a9'
+                or names.get('REPLACEMENT_WEB_MAINTENANCE', {}).get('service') != replacement['worker']
                 or names.get('REPLACEMENT_WEB_MAINTENANCE', {}).get('entrypoint') != 'ReplacementMaintenance'):
             raise RuntimeError('Replacement maintenance bindings differ from the release destination')
     if worker == 'familyfunds-production-offsite' and any(key in names for key in ['DB', 'CONTAINER_ENV', 'CONTAINER_ENV_0', 'APP_KEY', 'BACKUP_KEY']):
