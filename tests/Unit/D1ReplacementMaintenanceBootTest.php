@@ -29,9 +29,9 @@ it('isolates the maintenance CLI from cached web callbacks and still rejects out
     try {
         (new Process([PHP_BINARY, 'artisan', 'config:cache', '--no-interaction'], base_path(), $environment))->mustRun();
         $cache = require $environment['APP_CONFIG_CACHE'];
-        expect($cache['d1-staging']['webhooks']['enabled'])->toBeTrue();
+        expect(data_get($cache, 'd1-staging.webhooks.enabled'))->toBeTrue();
         if ($deliveryEnabled) {
-            $cache['d1-staging']['delivery']['enabled'] = true;
+            data_set($cache, 'd1-staging.delivery.enabled', true);
             File::put($environment['APP_CONFIG_CACHE'], '<?php return '.var_export($cache, true).';');
         }
         $digest = hash_file('sha256', $environment['APP_CONFIG_CACHE']);
