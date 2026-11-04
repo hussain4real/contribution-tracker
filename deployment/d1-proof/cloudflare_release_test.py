@@ -182,6 +182,8 @@ class ReleaseSafetyTest(unittest.TestCase):
         web = replacement['worker']
         maintenance = replacement['companions'][0]['worker']
         image = 'registry.cloudflare.com/' + release.ACCOUNT + '/' + replacement['image_repository'] + '@' + DIGEST
+        previous_image = image.replace('2' * 64, '3' * 64)
+        previous_revision = 'github-0123456789ab'
         mutations = []
 
         def api(method, path, data=None, **kwargs):
@@ -208,8 +210,8 @@ class ReleaseSafetyTest(unittest.TestCase):
                     *[{'name': name, 'type': 'secret_text'} for name in
                       ['STAGING_PAYSTACK_TEST_ENV', 'REPLACEMENT_WEBHOOK_SECRETS', 'AI_ENV']],
                     *[{'name': k, 'type': 'plain_text', 'text': v} for k, v in {
-                        'CONTAINER_ENV': '{}', 'STAGING_ADMISSION_CONTROL': '1', 'CONTAINER_IMAGE': image,
-                        'RUNTIME_PROFILE': 'replacement-live'}.items()]]}
+                        'CONTAINER_ENV': '{}', 'STAGING_ADMISSION_CONTROL': '1', 'CONTAINER_IMAGE': previous_image,
+                        'RUNTIME_REVISION': previous_revision, 'RUNTIME_PROFILE': 'replacement-live'}.items()]]}
             mutations.append((method, path))
             if method == 'PUT':
                 if path.endswith(web):
@@ -246,15 +248,24 @@ class ReleaseSafetyTest(unittest.TestCase):
                     (path / 'pushed-image.json').write_text(json.dumps({'containerimage.digest': DIGEST}))
                 self.assertNotIn('load', args)
 
-            with (patch.dict(release.CONFIG['staging'], {'destination': 'replacement'}),
-                  patch.dict(os.environ, {'GITHUB_SHA': SHA, 'GITHUB_REF': 'refs/heads/cloudflare-staging', 'GITHUB_ACTIONS': 'true', 'DOCKER_CONFIG': directory}),
-                  patch.object(release, 'validate'), patch.object(release, 'public_checks'), patch.object(release, 'prepared') as prepare,
-                  patch.object(release, 'api', side_effect=api), patch.object(release.subprocess, 'run', side_effect=docker),
-                  contextlib.redirect_stdout(io.StringIO()), self.assertRaisesRegex(RuntimeError, 'previous code/image restored')):
-                release.publish('staging', path)
-            prepare.assert_called_once_with(image)
-            self.assertEqual(mutations, [(m, '/workers/scripts/' + worker) for m, worker in [
-                ('PUT', maintenance), ('PUT', web), ('POST', web + '/deployments'), ('POST', maintenance + '/deployments')]])
+            for healthy in [True, False]:
+                with self.subTest(healthy=healthy):
+                    mutations.clear()
+                    error = 'previous code/image restored' if healthy else 'rollback needs operator attention'
+                    with (patch.dict(release.CONFIG['staging'], {'destination': 'replacement'}),
+                          patch.dict(os.environ, {'GITHUB_SHA': SHA, 'GITHUB_REF': 'refs/heads/cloudflare-staging', 'GITHUB_ACTIONS': 'true', 'DOCKER_CONFIG': directory}),
+                          patch.object(release, 'validate'), patch.object(release, 'public_checks') as public,
+                          patch.object(release, 'instance_image', return_value=healthy) as running,
+                          patch.object(release.time, 'monotonic', side_effect=[0, 601]),
+                          patch.object(release, 'prepared') as prepare, patch.object(release, 'api', side_effect=api),
+                          patch.object(release.subprocess, 'run', side_effect=docker), contextlib.redirect_stdout(io.StringIO()),
+                          self.assertRaisesRegex(RuntimeError, error)):
+                        release.publish('staging', path)
+                    prepare.assert_called_once_with(image)
+                    public.assert_called_with('staging', previous_revision)
+                    running.assert_called_once_with('staging', previous_image)
+                    self.assertEqual(mutations, [(m, '/workers/scripts/' + worker) for m, worker in [
+                        ('PUT', maintenance), ('PUT', web), ('POST', web + '/deployments'), ('POST', maintenance + '/deployments')]])
 
     def test_modified_original_staging_archive_is_refused_before_credentials_or_docker(self):
         with tempfile.TemporaryDirectory() as directory:

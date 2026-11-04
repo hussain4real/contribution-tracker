@@ -185,6 +185,20 @@ def instance_image(target, image):
     return False
 
 
+def verify_running_release(target, revision, image):
+    deadline = time.monotonic() + 600
+    while True:
+        try:
+            public_checks(target, revision)
+            if instance_image(target, image):
+                return
+        except (RuntimeError, urllib.error.URLError):
+            pass
+        if time.monotonic() >= deadline:
+            raise RuntimeError('Release verification failed: edge, Laravel readiness or native running image mismatch')
+        time.sleep(10)
+
+
 def rollout_image(path, image):
     return api('POST', path + '/rollouts', {
         'description': 'FamilyFunds verified GitHub Actions image release',
@@ -326,6 +340,9 @@ def publish(target, directory):
             prepared(worker['image'])
         if replacement:
             rollback = {'version': deployed_version(path)}
+            if worker['worker'] == config['worker']:
+                rollback['previous_revision'] = next((b['text'] for b in bindings if b['name'] == 'RUNTIME_REVISION'), None)
+                rollback['previous_image'] = previous_image
         else:
             raw, mime = api('GET', path, raw=True)
             previous_sources = script_sources(raw, mime)
@@ -358,17 +375,7 @@ def publish(target, directory):
         for plan in plans:
             applied.append(plan)
             api('PUT', plan['path'], plan['body'], raw=True, content_type=plan['mime'])
-        deadline = time.monotonic() + 600
-        while True:
-            try:
-                public_checks(target, name)
-                if instance_image(target, image):
-                    break
-            except (RuntimeError, urllib.error.URLError):
-                pass
-            if time.monotonic() >= deadline:
-                raise RuntimeError('Release verification failed: edge, Laravel readiness or native running image mismatch')
-            time.sleep(10)
+        verify_running_release(target, name, image)
     except Exception:
         failures = []
         for plan in reversed(applied):
@@ -382,6 +389,12 @@ def publish(target, directory):
                     api('PUT', plan['path'], plan['old_body'], raw=True, content_type=plan['old_mime'])
             except Exception:
                 failures.append(plan['path'])
+        if replacement and not failures:
+            web = plans[-1]
+            try:
+                verify_running_release(target, web['previous_revision'], web['previous_image'])
+            except Exception:
+                failures.append('replacement Laravel revision and running image')
         if previous_staging:
             try:
                 rollout_image(app_path, previous_staging)

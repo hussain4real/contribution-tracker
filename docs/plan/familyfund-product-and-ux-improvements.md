@@ -214,7 +214,9 @@ The existing [product completion roadmap](../familyfund-product-completion-roadm
 
 On November 3 the owner selected a replacement environment for staging. Old staging remains the system of record until a coordinated traffic switch. The earlier rehearsal clone is a separate test resource. Use a fresh online capture for the replacement. The capture includes the D1 state and the application files visible at its recorded boundary. An upload that finishes later can still land in old staging.
 
-| Reserved for the replacement | Verified during preparation |
+**Next staging window.** Use the November 4 restore destination `familyfunds-d1-staging-clone-20261104t044139z` (UUID `821325ae-6a5f-440a-af64-ebe2c336a314`), its `-files` and `-capture` buckets, and the `-nov04` Workers. The [November 4 checks](#november-4-restore-destination-and-admission-reconciliation) identify the active private image and bindings. The table below records the retained November 3 rehearsal. Its database already contains restored data. Keep it intact.
+
+| November 3 rehearsal resource | Verified during preparation |
 | --- | --- |
 | D1 `familyfunds-d1-staging-clone-20261103t092540z` | Database ID `43e11f90-07d7-49fc-930f-2a33a474d930`. Zero application schema objects before restore. |
 | R2 file and encrypted capture buckets | The database name followed by `-files` and `-capture`, respectively. Both were empty, with managed public access disabled and no custom domains. |
@@ -299,7 +301,7 @@ The private replacement now has a persistent callback bundle scoped to the stagi
 
 The callback credential prerequisite is satisfied. For the next cutover, preserve the November 3 checkpoint and restored rehearsal, provide an empty restore destination for a fresh capture, and account for the two earlier admission markers. Recheck the owner’s registered passkey on the replacement at the canonical hostname during a newly coordinated window. Production schema acceptance remains separate.
 
-**November 4 restore destination and admission reconciliation**
+#### November 4 restore destination and admission reconciliation
 
 The next capture has a separate WEUR D1 database, `familyfunds-d1-staging-clone-20261104t044139z` (UUID `821325ae-6a5f-440a-af64-ebe2c336a314`). A D1 query found zero application schema objects. A private binding listed both the `-capture` and `-files` buckets and found zero objects. Neither bucket had a custom domain or managed public access. The new private recovery and checkpoint Workers carry the `-nov04` suffix. Their D1, bucket and service bindings were checked after deployment. Capture and restore are disabled, and neither Worker has a schedule. The recovery Worker has a separate capture key in Secrets Store. Recheck these controls and both destinations immediately before use. The November 3 database, buckets and capture key are retained.
 
@@ -319,7 +321,9 @@ The draft publisher now checks this generation’s database, gateway, container,
 
 The draft release configuration has separate original and replacement destinations. It still selects the original. Before either registry publication or Worker updates, the publisher reads the zone route and checks the selected Worker, hostname pattern and fail-closed setting. Verify the GitHub staging credential has Workers Routes Read on the FamilyFunds zone before merging this change. The replacement publisher validates the web and maintenance bindings, prepares the image in the replacement registry repository, and checks the public destination marker, release revision, Laravel login and named running container. In local tests the live profile serves the canonical staging hostname, challenges for Basic authentication, strips edge credentials before forwarding to Laravel, and marks responses with the destination and revision. Install the staging Basic credential and privately check this profile against the actual replacement before selecting this destination. Provider webhooks, delivery and scheduled work require separate activation and verification before cutover.
 
-The release test simulated an uncertain web update after the maintenance update and verified rollback of both replacement Workers to their recorded versions. During the window, rehearse rollback on the hosted replacement and verify the running image and application health. Route rollback and reconciliation of late writes remain separate cutover steps.
+A November 4 private rehearsal selected the preceding web version and verified its running image and Laravel D1 and R2 connections. On reselecting the current web version, the first check still saw the previous image after a private restart, even though the connection check returned HTTP 200. A later guarded restart and check verified the current image `sha256:cd5fb3d31aefe52aa730b2a23a43a25c522cd0155b5b36c54c497971032777e6`. Login and callbacks stayed closed, and the gateway and webhook sender had zero unresolved operations. The public staging route continued serving the original Worker.
+
+The publisher now verifies Laravel and the named running image after restoring the prior Worker versions. When the previous revision marker is present, the edge must serve that revision as well. The release test covers an uncertain web update after the maintenance update, recovery of both versions, and the case where the running image still fails verification. Verify the authenticated live profile at cutover. Route rollback and reconciliation of late writes remain separate steps.
 
 **Private member and officer verification**
 
