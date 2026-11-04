@@ -21,6 +21,8 @@ use LogicException;
  * @property int $amount
  * @property Carbon|null $created_at
  * @property string $description
+ * @property string|null $idempotency_key
+ * @property int|null $recorded_by
  * @property Carbon $recorded_at
  * @property User|null $recorder
  * @property-read FinancialReversal|null $reversal
@@ -44,6 +46,7 @@ class FundAdjustment extends Model
         'description',
         'recorded_at',
         'recorded_by',
+        'idempotency_key',
     ];
 
     /**

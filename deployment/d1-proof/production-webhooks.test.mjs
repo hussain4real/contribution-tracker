@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {createHmac} from "node:crypto";
 import test from "node:test";
 import {productionWebhookConfig, receiveProductionWebhook, relayProductionWebhooks} from "./production-webhooks.mjs";
+import {pendingProductionWebhookReferences} from "./production-backup.mjs";
 import sqlWorker from "./production-sql-worker.mjs";
 import {PRODUCTION_CONTAINER_NAME} from './production-container-target.mjs';
 
@@ -94,6 +95,23 @@ test("a relay acknowledges only durable application acceptance and skips a previ
     await relayProductionWebhooks({messages: [message]}, f.env);
     await relayProductionWebhooks({messages: [message]}, f.env);
     assert.equal(acknowledged, 2); assert.equal(retried, 0); assert.equal(f.forwarded(), 1); assert.equal(f.objects.size, 0);
+});
+
+test('a synthetic pending inbox record reconstructs the relay reference without enqueueing it', async () => {
+    const f = fixture();
+    await receiveProductionWebhook(request(f.config), f.env);
+    const original = f.queued[0];
+    const rows = [...f.inbox].map(([id, row]) => ({id, ...row}));
+    const reconstructed = pendingProductionWebhookReferences(rows);
+    assert.deepEqual(reconstructed, [original]);
+    assert.equal(f.queued.length, 1);
+    let acknowledged = 0, retried = 0;
+    const message = {id: 'synthetic-recovery', body: reconstructed[0], ack: () => acknowledged++, retry: () => retried++};
+    await relayProductionWebhooks({messages: [message]}, f.env);
+    assert.equal(acknowledged, 1);
+    assert.equal(retried, 0);
+    assert.equal(f.forwarded(), 1);
+    assert.deepEqual(pendingProductionWebhookReferences([...f.inbox].map(([id, row]) => ({id, ...row}))), []);
 });
 
 test("a changed private object is retained for recovery without forwarding or acknowledgement", async () => {

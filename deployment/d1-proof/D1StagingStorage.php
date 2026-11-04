@@ -14,7 +14,10 @@ final class D1StagingStorage
         if (D1RuntimeProfile::production()) {
             D1RuntimeProfile::assertEnabled();
         }
-        $expected = D1RuntimeProfile::production() ? D1RuntimeProfile::PRODUCTION_BUCKET : 'familyfunds-d1-staging-private';
+        $expected = D1RuntimeProfile::production() ? D1RuntimeProfile::PRODUCTION_BUCKET : match (config('d1-staging.database')) {
+            D1StagingConnection::REPLACEMENT_DATABASE => D1StagingConnection::REPLACEMENT_DATABASE.'-files',
+            default => 'familyfunds-d1-staging-private',
+        };
         if ($bucket !== $expected || $key === '' || $secret === '' || ! in_array($prefix, ['private', 'public'], true)) {
             throw new LogicException('R2 storage requires the isolated staging bucket and credentials.');
         }

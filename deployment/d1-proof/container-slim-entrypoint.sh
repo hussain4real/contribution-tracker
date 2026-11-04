@@ -8,12 +8,23 @@ case "$QUEUE_WORKER_ENABLED" in
 esac
 export QUEUE_WORKER_ENABLED
 
+if [ "${APP_ENV:-}" = "d1-staging" ] && [ "${D1_STAGING_ENABLED:-false}" = "true" ]; then
+    STAGING_QUEUE_WORKER_ENABLED="${STAGING_QUEUE_WORKER_ENABLED:-true}"
+    case "$STAGING_QUEUE_WORKER_ENABLED" in
+        true|false) ;;
+        *) echo 'Invalid staging queue worker activation flag' >&2; exit 64 ;;
+    esac
+else
+    STAGING_QUEUE_WORKER_ENABLED=true
+fi
+export STAGING_QUEUE_WORKER_ENABLED
+
 case "${FPM_PM_MAX_CHILDREN:-16}" in
     1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20) ;;
     *) echo 'Invalid staging PHP concurrency' >&2; exit 64 ;;
 esac
 mkdir -p /run/nginx /run/php
-if [ "${D1_PRODUCTION_ENABLED:-false}" = "true" ]; then
+if [ "${D1_PRODUCTION_ENABLED:-false}" = "true" ] || [ "${D1_STAGING_DATABASE:-}" = "familyfunds-d1-staging-clone-20261104t044139z" ]; then
     test -f /etc/cloudflare/certs/cloudflare-containers-ca.crt
     cp /etc/cloudflare/certs/cloudflare-containers-ca.crt /usr/local/share/ca-certificates/familyfunds-container-outbound.crt
     update-ca-certificates >/dev/null 2>&1

@@ -1,0 +1,30 @@
+{
+  "name": "familyfunds-staging-replacement-maintenance-nov04",
+  "main": "maintenance-worker.mjs",
+  "account_id": "40344948b73fa9da3008958fdc3faf12",
+  "compatibility_date": "2026-10-27",
+  "workers_dev": false,
+  "preview_urls": false,
+  "vars": {
+    "ENABLED": "false",
+    "DATABASE_NAME": "familyfunds-d1-staging-clone-20261104t044139z",
+    "STAGING_GATEWAY_ADMISSION": "1"
+  },
+  "d1_databases": [{
+    "binding": "REPLACEMENT_DB",
+    "database_name": "familyfunds-d1-staging-clone-20261104t044139z",
+    "database_id": "821325ae-6a5f-440a-af64-ebe2c336a314"
+  }],
+  "durable_objects": {
+    "bindings": [{
+      "name": "STAGING_GATEWAY_ADMISSION_OBJECT",
+      "class_name": "StagingGatewayAdmission",
+      "script_name": "familyfunds-d1-replacement-sql-nov04"
+    }]
+  },
+  "services": [{
+    "binding": "REPLACEMENT_WEB_MAINTENANCE",
+    "service": "familyfunds-staging-replacement-web-nov04",
+    "entrypoint": "ReplacementMaintenance"
+  }]
+}
