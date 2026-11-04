@@ -3,8 +3,8 @@
 export const migrationFingerprint = '66079cf9ea98cd29209f5886719bbe45b3c56a9c6cc1c1e4b5f91ee15d6d0150';
 export const stagingDatabaseId = 'f96058f1-0aa3-42f3-9ee2-f796554d6ef4';
 export const replacementDatabase = Object.freeze({
-    name: 'familyfunds-d1-staging-clone-20261104t165309z',
-    id: '507d231f-bc0f-4eff-b861-8d1083c4c0ec',
+    name: 'familyfunds-d1-staging-clone-20261104t184003z',
+    id: 'fbd9042a-367d-45af-895e-96589ee680ab',
 });
 export const migrations = [
     '2026_10_30_143906_create_payment_receipt_deliveries_table',

@@ -126,7 +126,7 @@ function restoredCapture(db) {
     const config = JSON.parse(readFileSync(new URL('./wrangler.staging-replacement-recovery.jsonc', import.meta.url)));
     const binding = config.d1_databases.find(item => item.binding === 'RECOVERY_DB');
     const capture = {databaseName: binding.database_name, databaseId: binding.database_id, fingerprint: migrationFingerprint,
-        checkpoint: 'clone01-20261104t165309z-r2', expectedDigest: 'a'.repeat(64), expectedBookmark: 'capture-bookmark'};
+        checkpoint: 'clone01-20261104t184003z-r2', expectedDigest: 'a'.repeat(64), expectedBookmark: 'capture-bookmark'};
     const report = {state: 'passed', checkpoint: capture.checkpoint, integrity: 'ok', consistency: 'point-in-time-clone',
         plaintext_sha256: capture.expectedDigest, source_bookmark: capture.expectedBookmark, missing_file_ids: [11,13], tables: 51, files: 62};
     const archive = {customMetadata: {database: config.vars.DATABASE_NAME, plaintext_sha256: capture.expectedDigest}};
@@ -160,7 +160,7 @@ test('replacement preview rejects other databases, checkpoints and incomplete ca
     for (const change of [
         {databaseId: stagingDatabaseId}, {databaseName: 'familyfunds-production'},
         {databaseId: '43e11f90-07d7-49fc-930f-2a33a474d930'}, {checkpoint: 'clone01-20261103t092540z'},
-        {checkpoint: 'clone01-20261104t165309z-r0'}, {expectedDigest: ''}, {expectedBookmark: ' '},
+        {checkpoint: 'clone01-20261104t184003z-r0'}, {expectedDigest: ''}, {expectedBookmark: ' '},
     ]) {
         const {capture, env} = restoredCapture();
         delete env.STAGING_CHECKPOINT_FILES;
@@ -175,7 +175,7 @@ test('replacement preview rejects incomplete or mismatched R2 evidence before to
         item => { item.report.state = 'failed'; }, item => { item.report.integrity = 'failed'; },
         item => { item.report.consistency = 'not-frozen'; }, item => { item.report.tables = 0; },
         item => { item.report.files = -1; }, item => { item.report.missing_file_ids = [11,11]; },
-        item => { item.report.checkpoint = 'clone01-20261104t165309z-r1'; },
+        item => { item.report.checkpoint = 'clone01-20261104t184003z-r1'; },
         item => { item.report.plaintext_sha256 = 'b'.repeat(64); }, item => { item.report.source_bookmark = 'other'; },
         item => { item.archive.customMetadata.plaintext_sha256 = 'b'.repeat(64); },
         item => { item.archive.customMetadata.database = 'familyfunds-production'; },

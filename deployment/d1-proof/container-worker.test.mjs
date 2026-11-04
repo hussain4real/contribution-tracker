@@ -550,7 +550,7 @@ test("replacement maintenance never starts the legacy staging CLI", async () => 
     const {container, env, commands} = fixture();
     env.STAGING_SCHEDULE_FAMILIES = JSON.stringify({family: 50});
     env.CONTAINER_ENV_PARTS = '1';
-    env.CONTAINER_ENV_0 = JSON.stringify({D1_STAGING_DATABASE: 'familyfunds-d1-staging-clone-20261104t165309z'});
+    env.CONTAINER_ENV_0 = JSON.stringify({D1_STAGING_DATABASE: 'familyfunds-d1-staging-clone-20261104t184003z'});
     await assert.rejects(container.scheduledProof("generate", 50, "2026-01-01T00:00:00.000Z"), /original staging target/);
     assert.equal(commands.length, 0);
 });
@@ -801,9 +801,9 @@ test('a native command still running at its deadline is aborted once without rep
 
 test("replacement rehearsal executes the fixed synthetic task with the replacement credentials", async () => {
     const {container, env} = fixture();
-    const database = 'familyfunds-d1-staging-clone-20261104t165309z';
+    const database = 'familyfunds-d1-staging-clone-20261104t184003z';
     const target = {APP_KEY:'fixture', D1_STAGING_TOKEN:'fixture', D1_STAGING_DATABASE:database,
-        D1_STAGING_URL:'https://familyfunds-d1-replacement-sql-nov04b.familyfunds-lab.workers.dev',
+        D1_STAGING_URL:'https://familyfunds-d1-replacement-sql-nov04c.familyfunds-lab.workers.dev',
         D1_STAGING_R2_BUCKET:database+'-files', D1_STAGING_R2_ADMISSION:'1'};
     Object.assign(env, {CONTAINER_ENV:'{}', RUNTIME_PROFILE:'replacement-rehearsal', STAGING_ADMISSION_CONTROL:'1', STAGING_SCHEDULE_FAMILIES:'{"family":50,"purge":51}'});
     let calls = 0;

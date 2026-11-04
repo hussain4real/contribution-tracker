@@ -13,7 +13,7 @@ const shared = runInNewContext(stagingSource + '\n({stagingHandler, Container: F
     DurableObject: class { constructor(ctx, env) { this.ctx = ctx; this.env = env; } },
     TextEncoder, TextDecoder, Request, Response, URL, console, crypto: {randomUUID, subtle: webcrypto.subtle},
 });
-const database = 'familyfunds-d1-staging-clone-20261104t165309z';
+const database = 'familyfunds-d1-staging-clone-20261104t184003z';
 const image = 'registry.cloudflare.com/40344948b73fa9da3008958fdc3faf12/familyfunds-staging-replacement@sha256:' + 'a'.repeat(64);
 
 function fixture() {
@@ -37,7 +37,7 @@ test('preflight starts only after private HTTPS interception and uses the reserv
     const {Container, env, ctx, calls, files} = fixture();
     const candidate = new Container(ctx, env);
     await candidate.waitForReady();
-    assert.deepEqual(calls, [['familyfunds-d1-replacement-sql-nov04b.familyfunds-lab.workers.dev', env.REPLACEMENT_SQL], 'start']);
+    assert.deepEqual(calls, [['familyfunds-d1-replacement-sql-nov04c.familyfunds-lab.workers.dev', env.REPLACEMENT_SQL], 'start']);
     const options = await candidate.startupOptions();
     assert.equal(options.image, image);
     assert.equal(options.env.D1_STAGING_DATABASE, database);
@@ -147,7 +147,7 @@ for (const profile of ['replacement-live', 'replacement-webhook-rehearsal']) {
             assert.equal(stored.size, 0);
             let acks = 0, retries = 0;
             const message = {id:'fixture', body:record, ack() { acks++; }, retry() { retries++; }};
-            const batch = {queue:'familyfunds-replacement-webhook-nov04b', messages:[message]};
+            const batch = {queue:'familyfunds-replacement-webhook-nov04c', messages:[message]};
             await assert.rejects(handler.queue({...batch, queue:'original'}, env), /Unexpected/);
             await assert.rejects(handler.queue(batch, {...env, RUNTIME_PROFILE:'replacement-preflight'}), /disabled/);
             const previousCalls = calls.length;

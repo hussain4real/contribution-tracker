@@ -416,13 +416,13 @@ export default {
         await withMaintenanceAdmission(env, "schedule", () => schedule(controller, env, families));
     },
     async queue(batch, env) {
-        const replacement = env.DATABASE_NAME === "familyfunds-d1-staging-clone-20261104t165309z";
-        if (replacement !== (batch.queue === "familyfunds-replacement-maintenance-nov04b")
+        const replacement = env.DATABASE_NAME === "familyfunds-d1-staging-clone-20261104t184003z";
+        if (replacement !== (batch.queue === "familyfunds-replacement-maintenance-nov04c")
             || (replacement && (env.STAGING_GATEWAY_ADMISSION !== "1" || !env.STAGING_GATEWAY_ADMISSION_OBJECT
                 || !env.REPLACEMENT_DB || !env.REPLACEMENT_WEB_MAINTENANCE || env.DB || env.STAGING_CONTAINER))) {
             throw new Error("Invalid replacement maintenance queue configuration");
         }
-        const families = target(env, replacement ? "familyfunds-d1-staging-clone-20261104t165309z" : DATABASE);
+        const families = target(env, replacement ? "familyfunds-d1-staging-clone-20261104t184003z" : DATABASE);
         const db = replacement ? env.REPLACEMENT_DB : env.DB;
         const runTask = task => {
             const service = replacement ? env.REPLACEMENT_WEB_MAINTENANCE : env.STAGING_CONTAINER.getByName("isolated-staging");

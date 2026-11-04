@@ -76,7 +76,7 @@ it('guards both staging disks before dispatch and keeps an uncertain SDK attempt
     Http::assertSentCount(4);
 })->with([
     ['familyfunds-d1-web-staging', 'familyfunds-d1-staging-private'],
-    ['familyfunds-d1-staging-clone-20261104t165309z', 'familyfunds-d1-staging-clone-20261104t165309z-files'],
+    ['familyfunds-d1-staging-clone-20261104t184003z', 'familyfunds-d1-staging-clone-20261104t184003z-files'],
 ]);
 
 it('refuses storage admission when the application could already hold a disk', function (): void {

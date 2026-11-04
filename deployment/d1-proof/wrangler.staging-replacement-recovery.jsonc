@@ -1,5 +1,5 @@
 {
-  "name": "familyfunds-staging-replacement-recovery-nov04b",
+  "name": "familyfunds-staging-replacement-recovery-nov04c",
   "main": "staging-replacement-recovery.mjs",
   "account_id": "40344948b73fa9da3008958fdc3faf12",
   "compatibility_date": "2026-10-27",
@@ -16,8 +16,8 @@
     },
     {
       "binding": "RECOVERY_DB",
-      "database_name": "familyfunds-d1-staging-clone-20261104t165309z",
-      "database_id": "507d231f-bc0f-4eff-b861-8d1083c4c0ec"
+      "database_name": "familyfunds-d1-staging-clone-20261104t184003z",
+      "database_id": "fbd9042a-367d-45af-895e-96589ee680ab"
     }
   ],
   "r2_buckets": [
@@ -27,18 +27,18 @@
     },
     {
       "binding": "RECOVERY_FILES",
-      "bucket_name": "familyfunds-d1-staging-clone-20261104t165309z-files"
+      "bucket_name": "familyfunds-d1-staging-clone-20261104t184003z-files"
     },
     {
       "binding": "STAGING_CHECKPOINT_FILES",
-      "bucket_name": "familyfunds-d1-staging-clone-20261104t165309z-capture"
+      "bucket_name": "familyfunds-d1-staging-clone-20261104t184003z-capture"
     }
   ],
   "secrets_store_secrets": [
     {
       "binding": "BACKUP_APP_KEY",
       "store_id": "5e78cc1e865144e4ab982aeae254ed96",
-      "secret_name": "FF_REPLACEMENT_CAPTURE_KEY_20261104T165309Z"
+      "secret_name": "FF_REPLACEMENT_CAPTURE_KEY_20261104T184003Z"
     }
   ],
   "vars": {
@@ -49,8 +49,8 @@
     "STAGING_BACKUP_ONLY_ENABLED": "false",
     "STAGING_RESTORE_ONLY_ENABLED": "false",
     "STAGING_ONLINE_CLONE_ENABLED": "true",
-    "STAGING_CHECKPOINT_BUCKET_NAME": "familyfunds-d1-staging-clone-20261104t165309z-capture",
-    "STAGING_RECOVERY_NAME": "familyfunds-d1-staging-clone-20261104t165309z",
-    "STAGING_RECOVERY_BUCKET_NAME": "familyfunds-d1-staging-clone-20261104t165309z-files"
+    "STAGING_CHECKPOINT_BUCKET_NAME": "familyfunds-d1-staging-clone-20261104t184003z-capture",
+    "STAGING_RECOVERY_NAME": "familyfunds-d1-staging-clone-20261104t184003z",
+    "STAGING_RECOVERY_BUCKET_NAME": "familyfunds-d1-staging-clone-20261104t184003z-files"
   }
 }

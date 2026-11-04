@@ -197,14 +197,14 @@ class ReleaseSafetyTest(unittest.TestCase):
                 return {'deployments': [{'created_on': '2026-11-03', 'versions': [{'version_id': version, 'percentage': 100}]}]}
             if path.endswith('/settings'):
                 if maintenance in path:
-                    return {'bindings': [{'name': 'REPLACEMENT_DB', 'type': 'd1', 'id': '507d231f-bc0f-4eff-b861-8d1083c4c0ec'},
+                    return {'bindings': [{'name': 'REPLACEMENT_DB', 'type': 'd1', 'id': 'fbd9042a-367d-45af-895e-96589ee680ab'},
                                          {'name': 'STAGING_GATEWAY_ADMISSION_OBJECT', 'type': 'durable_object_namespace', 'namespace_id': 'aa1360266e0c46fcad453105e41d24a9'},
                                          {'name': 'REPLACEMENT_WEB_MAINTENANCE', 'type': 'service', 'service': web, 'entrypoint': 'ReplacementMaintenance'}]}
                 return {'bindings': [
                     {'name': 'REPLACEMENT_CONTAINER', 'type': 'durable_object_namespace', 'namespace_id': replacement['application_id']},
-                    {'name': 'REPLACEMENT_SQL', 'type': 'service', 'service': 'familyfunds-d1-replacement-sql-nov04b'},
-                    {'name': 'REPLACEMENT_WEBHOOK_QUEUE', 'type': 'queue', 'queue_name': 'familyfunds-replacement-webhook-nov04b'},
-                    {'name': 'REPLACEMENT_FILES_CREDENTIAL', 'type': 'secrets_store_secret', 'store_id': '5e78cc1e865144e4ab982aeae254ed96', 'secret_name': 'FF_STAGING_REPLACEMENT_R2_20261104T165309Z'},
+                    {'name': 'REPLACEMENT_SQL', 'type': 'service', 'service': 'familyfunds-d1-replacement-sql-nov04c'},
+                    {'name': 'REPLACEMENT_WEBHOOK_QUEUE', 'type': 'queue', 'queue_name': 'familyfunds-replacement-webhook-nov04c'},
+                    {'name': 'REPLACEMENT_FILES_CREDENTIAL', 'type': 'secrets_store_secret', 'store_id': '5e78cc1e865144e4ab982aeae254ed96', 'secret_name': 'FF_STAGING_REPLACEMENT_R2_20261104T184003Z'},
                     {'name': 'REPLACEMENT_APP_KEY', 'type': 'secrets_store_secret', 'store_id': '5e78cc1e865144e4ab982aeae254ed96', 'secret_name': 'FF_STAGING_REPLACEMENT_LARAVEL_KEY_20261103T1243Z'},
                     {'name': 'REPLACEMENT_SQL_TOKEN', 'type': 'secret_text'},
                     {'name': 'BASIC_AUTHORIZATION', 'type': 'secret_text'},

@@ -221,7 +221,7 @@ test('storage writes share the pause and require their own acknowledgement after
 
 test('replacement gateway cannot serve SQL with admission disabled', async () => {
     const f = fixture();
-    f.env.DATABASE_NAME = 'familyfunds-d1-staging-clone-20261104t165309z';
+    f.env.DATABASE_NAME = 'familyfunds-d1-staging-clone-20261104t184003z';
     f.env.STAGING_GATEWAY_ADMISSION = '0';
     assert.equal((await handler.fetch(f.query(), f.env)).status, 503);
     f.env.STAGING_GATEWAY_ADMISSION = '1';

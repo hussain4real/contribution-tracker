@@ -677,10 +677,10 @@ test("replacement maintenance validates its queue, coordinator and reserved bind
     const {env, gate} = admittedMaintenance();
     const task = {id: 'remind25:2026-11', kind: 'remind25', family_id: 50, at: '2026-11-01T08:00:00.000Z'};
     let completed = false, executions = 0, acknowledgements = 0, retries = 0;
-    const batch = {queue: 'familyfunds-replacement-maintenance-nov04b', messages: [{id: 'test-message', body: task,
+    const batch = {queue: 'familyfunds-replacement-maintenance-nov04c', messages: [{id: 'test-message', body: task,
         ack() { acknowledgements++; }, retry() { retries++; }}]};
     delete env.DB;
-    env.DATABASE_NAME = 'familyfunds-d1-staging-clone-20261104t165309z';
+    env.DATABASE_NAME = 'familyfunds-d1-staging-clone-20261104t184003z';
     env.REPLACEMENT_DB = {prepare: () => ({bind(id) { assert.equal(id, task.id); return this; },
         first: async () => ({kind:task.kind, family_id:50, due_at:task.at, completed_at:completed ? 1 : null}),
         run: async () => { assert.equal(gate.pending.size, 1); completed = true; }})};
