@@ -24,6 +24,8 @@ use FamilyFunds\D1Staging\D1StagingDeliveryJob;
 use FamilyFunds\D1Staging\D1StagingRuntime;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Bootstrap\LoadConfiguration;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
@@ -74,6 +76,16 @@ foreach ($environment as $key => $value) {
     $_SERVER[$key] = $value;
 }
 $app = require $root.'/bootstrap/app.php';
+if ($target === 'replacement') {
+    // The web process shares this config cache. Strip callback credentials only in this CLI process, before providers boot.
+    $app->afterBootstrapping(LoadConfiguration::class, static function (Application $app): void {
+        $app['config']->set([
+            'd1-staging.webhooks' => ['enabled' => false],
+            'services.paystack.webhook_secret' => null,
+            'services.whatsapp.app_secret' => null,
+        ]);
+    });
+}
 $app->make(Kernel::class)->bootstrap();
 if (! $app->environment('d1-staging') || config('d1-production.enabled') || ! config('d1-staging.enabled')
     || config('d1-staging.database') !== $database || config('d1-staging.url') !== $url) {
@@ -81,7 +93,7 @@ if (! $app->environment('d1-staging') || config('d1-production.enabled') || ! co
     exit(1);
 }
 if ($target === 'replacement' && (! $app->configurationIsCached() || config('d1-staging.r2.admission') !== '1'
-    || config('d1-staging.r2.bucket') !== $database.'-files' || config('d1-staging.delivery.enabled') || ($operation !== 'verify-maintenance-target' && config('d1-staging.webhooks.enabled'))
+    || config('d1-staging.r2.bucket') !== $database.'-files' || config('d1-staging.delivery.enabled') || config('d1-staging.webhooks.enabled')
     || config('mail.default') !== 'array' || config('app.key') !== $environment['APP_KEY']
     || config('d1-staging.token') !== $environment['D1_STAGING_TOKEN'])) {
     fwrite(STDERR, "Replacement maintenance requires the isolated cached application configuration.\n");
