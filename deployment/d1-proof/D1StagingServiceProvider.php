@@ -35,12 +35,20 @@ final class D1StagingServiceProvider extends ServiceProvider
         if (! in_array($admission, ['0', '1'], true)) {
             throw new LogicException('Invalid staging R2 admission setting.');
         }
+        $database = config()->string('d1-staging.database');
+        $replacement = D1StagingConnection::REPLACEMENT_DATABASE;
+        if ($database === $replacement || config('d1-staging.url') === D1StagingConnection::TARGETS[$replacement]
+            || config('d1-staging.r2.bucket') === $replacement.'-files') {
+            if ($database !== $replacement || $admission !== '1') {
+                throw new LogicException('Replacement staging requires R2 admission and its own database.');
+            }
+        }
         if ($admission === '1') {
-            if ($this->app->resolved('filesystem') || config('d1-staging.database') !== 'familyfunds-d1-web-staging') {
+            if ($this->app->resolved('filesystem') || ! in_array($database, ['familyfunds-d1-web-staging', D1StagingConnection::REPLACEMENT_DATABASE], true)) {
                 throw new LogicException('Staging R2 admission requires the isolated target before filesystem resolution.');
             }
             $gateway = new D1StagingStorageAdmission(
-                config()->string('d1-staging.url'), config()->string('d1-staging.token'),
+                $database, config()->string('d1-staging.url'), config()->string('d1-staging.token'),
             );
             $manager = $this->app->make('filesystem');
             $manager->extend('staging-admitted-s3', function (Application $app, array $config) use ($manager, $gateway): AwsS3V3Adapter {
@@ -125,7 +133,7 @@ final class D1StagingServiceProvider extends ServiceProvider
             $paystack = config('d1-staging.webhooks.paystack_test_key');
             $signingSecret = config('d1-staging.webhooks.paystack_signing_secret');
             $meta = config('d1-staging.webhooks.meta_app_secret');
-            if (config('d1-staging.database') !== 'familyfunds-d1-web-staging'
+            if (! D1StagingConnection::isWebhookTarget()
                 || ! is_string($paystack) || ($paystack !== '' && ! str_starts_with($paystack, 'sk_test_'))
                 || ($signingSecret !== null && (! is_string($signingSecret) || preg_match('/^whsec_[A-Za-z0-9_-]+$/D', $signingSecret) !== 1))
                 || ! is_string($meta) || ($meta !== '' && preg_match('/^[a-f0-9]{32}$/iD', $meta) !== 1)) {
@@ -142,7 +150,7 @@ final class D1StagingServiceProvider extends ServiceProvider
         if (config('d1-staging.paystack_test_checkout')) {
             $secret = config('services.paystack.secret_key');
             $public = config('services.paystack.public_key');
-            if (config('d1-staging.database') !== 'familyfunds-d1-web-staging'
+            if (! D1StagingConnection::isWebhookTarget()
                 || config('services.paystack.base_url') !== 'https://api.paystack.co'
                 || ! is_string($secret) || preg_match('/^sk_test_[A-Za-z0-9]+$/D', $secret) !== 1
                 || ! is_string($public) || preg_match('/^pk_test_[A-Za-z0-9]+$/D', $public) !== 1) {

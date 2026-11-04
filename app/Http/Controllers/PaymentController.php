@@ -11,6 +11,7 @@ use App\Models\Family;
 use App\Models\FamilyMembership;
 use App\Models\Payment;
 use App\Models\PaymentBatch;
+use App\Models\PaymentReceiptDelivery;
 use App\Models\User;
 use App\Services\PaymentAllocationPreview;
 use App\Services\PaymentAllocationService;
@@ -60,7 +61,7 @@ class PaymentController extends Controller
 
         $receipts = PaymentBatch::query()
             ->where('family_id', $family->id)
-            ->with(['recorder:id,name', 'reversal:id,reversible_type,reversible_id,reason'])
+            ->with(['recorder:id,name', 'reversal:id,reversible_type,reversible_id,reason', 'membership.user', 'receiptDeliveries.whatsappMessage'])
             ->withCount('allocations')
             ->orderByRaw('case when id = ? then 0 else 1 end', [$request->integer('receipt')])
             ->latest('paid_at')
@@ -81,6 +82,17 @@ class PaymentController extends Controller
                 'is_reversed' => $batch->isReversed(),
                 'reversal_reason' => $batch->reversal?->reason,
                 'can_reverse' => $currentUser->can('reverse', $batch) && ! $batch->isReversed(),
+                'deliveries' => $batch->receiptDeliveries->map(fn (PaymentReceiptDelivery $delivery): array => [
+                    'id' => $delivery->id,
+                    'channel' => $delivery->channel,
+                    'status' => $delivery->displayStatus(),
+                    'failure_reason' => $delivery->failureReason(),
+                    'can_retry' => ! $batch->isReversed()
+                        && $batch->membership?->user instanceof User
+                        && ! $batch->membership->isArchived()
+                        && in_array($delivery->channel, ['mail', 'whatsapp'], true)
+                        && in_array($delivery->displayStatus(), ['failed', 'unconfirmed'], true),
+                ])->values(),
             ]);
 
         return Inertia::render('Payments/Index', [

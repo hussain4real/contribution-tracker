@@ -64,7 +64,6 @@ return [
         'public_key' => env('PAYSTACK_PUBLIC_KEY'),
         'webhook_secret' => env('PAYSTACK_WEBHOOK_SECRET'),
         'base_url' => env('PAYSTACK_BASE_URL', 'https://api.paystack.co'),
-        'staging_diagnostics' => (bool) env('PAYSTACK_STAGING_DIAGNOSTICS', false),
         'fee_policy' => env('PAYSTACK_FEE_POLICY', 'payer_pays'),
         'local_fee_basis_points' => (int) env('PAYSTACK_LOCAL_FEE_BASIS_POINTS', 150),
         'local_fee_fixed_kobo' => (int) env('PAYSTACK_LOCAL_FEE_FIXED_KOBO', 10000),

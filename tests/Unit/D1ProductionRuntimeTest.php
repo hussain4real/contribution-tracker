@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 use App\Enums\TransactionStatus;
 use App\Enums\TransactionType;
+use App\Http\Controllers\ExpenseController;
+use App\Http\Controllers\FundAdjustmentController;
+use App\Http\Requests\StoreExpenseRequest;
+use App\Http\Requests\StoreFundAdjustmentRequest;
 use App\Jobs\ProcessWhatsAppWebhook;
 use App\Models\Contribution;
 use App\Models\Family;
@@ -16,6 +20,7 @@ use App\Services\PaymentAllocationPreview;
 use App\Services\PaymentAllocationService;
 use App\Services\PaystackContributionSettlementService;
 use App\Services\PaystackService;
+use FamilyFunds\D1Staging\D1ProductionMaintenance;
 use FamilyFunds\D1Staging\D1ProductionRequest;
 use FamilyFunds\D1Staging\D1ProductionServiceProvider;
 use FamilyFunds\D1Staging\D1RuntimeCacheStore;
@@ -106,11 +111,129 @@ beforeEach(function (): void {
 it('uses production drivers and private storage without enabling the staging profile or delivery', function (): void {
     expect(DB::getDefaultConnection())->toBe('d1')
         ->and(config('session.encrypt'))->toBeTrue()
+        ->and(config('session.lifetime'))->toBe(10080)
+        ->and(config('session.expire_on_close'))->toBeFalse()
         ->and(config('cache.default'))->toBe('d1')
         ->and(config('filesystems.disks.local.bucket'))->toBe(D1RuntimeProfile::PRODUCTION_BUCKET)
         ->and(config('filesystems.disks.public.visibility'))->toBe('private')
         ->and(config('mail.default'))->toBe('array')
         ->and(config('d1-staging.enabled'))->toBeFalse();
+});
+
+function connectProductionRuntimeFixture(PDO $pdo): void
+{
+    Http::swap(new Factory);
+    Http::fake(function (ClientRequest $request) use ($pdo): PromiseInterface {
+        if (! str_starts_with($request->url(), D1RuntimeProfile::PRODUCTION_URL.'/')) {
+            throw new RuntimeException('Unexpected fixture request.');
+        }
+        $body = $request->data();
+        $queries = $body['batch'] ?? [$body];
+        $results = [];
+        $pdo->beginTransaction();
+        try {
+            if (! is_array($queries)) {
+                throw new RuntimeException('Invalid fixture batch.');
+            }
+            foreach ($queries as $query) {
+                if (! is_array($query) || ! is_string($query['sql'] ?? null) || ! is_array($query['params'] ?? null)) {
+                    throw new RuntimeException('Invalid fixture query.');
+                }
+                $statement = $pdo->prepare($query['sql']);
+                $statement->execute($query['params']);
+                $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
+                $changes = $pdo->query('select changes()');
+                if ($changes === false) {
+                    throw new RuntimeException('Unable to inspect fixture changes.');
+                }
+                $results[] = ['results' => $rows, 'meta' => ['changes' => (int) $changes->fetchColumn()]];
+            }
+            $pdo->commit();
+
+            return Http::response(['database' => D1RuntimeProfile::PRODUCTION_DATABASE, 'result' => isset($body['batch']) ? $results : $results[0]]);
+        } catch (Throwable $exception) {
+            $pdo->rollBack();
+
+            return Http::response(['error' => $exception->getMessage()], 422);
+        }
+    });
+    DB::setDefaultConnection('d1');
+    D1StagingRuntime::install();
+}
+
+it('records and safely replays web expenses and adjustments through the production runtime', function (): void {
+    config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
+    DB::purge('sqlite');
+    $this->artisan('migrate', ['--database' => 'sqlite', '--force' => true, '--no-interaction' => true])->assertSuccessful();
+    $family = Family::factory()->create();
+    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    $pdo = DB::connection('sqlite')->getPdo();
+    connectProductionRuntimeFixture($pdo);
+    app('url')->defaults(['current_family' => $family->slug]);
+    $runtime = new D1StagingRuntime;
+    $expense = ['idempotency_key' => (string) Str::uuid(), 'amount' => 5000, 'description' => 'Transport', 'spent_at' => '2026-03-15'];
+    $adjustment = ['idempotency_key' => (string) Str::uuid(), 'amount' => 3000, 'description' => 'Donation', 'recorded_at' => '2026-03-15'];
+    $submitExpense = function (array $input) use ($runtime, $officer): void {
+        $request = StoreExpenseRequest::create('/', 'POST', $input);
+        $request->setUserResolver(fn (): User => $officer);
+        $runtime->run(fn () => app(ExpenseController::class)->store($request));
+    };
+    $submitAdjustment = function (array $input) use ($runtime, $officer): void {
+        $request = StoreFundAdjustmentRequest::create('/', 'POST', $input);
+        $request->setUserResolver(fn (): User => $officer);
+        $runtime->run(fn () => app(FundAdjustmentController::class)->store($request));
+    };
+    $submitExpense($expense);
+    $submitExpense($expense);
+    expect(fn () => $submitExpense([...$expense, 'amount' => 7000]))->toThrow(ValidationException::class);
+    $submitAdjustment($adjustment);
+    $submitAdjustment($adjustment);
+    expect(fn () => $submitAdjustment([...$adjustment, 'amount' => 7000]))->toThrow(ValidationException::class);
+
+    $expenseCount = $pdo->query('select count(*) from expenses');
+    $adjustmentCount = $pdo->query('select count(*) from fund_adjustments');
+    if ($expenseCount === false || $adjustmentCount === false) {
+        throw new RuntimeException('Unable to count fixture records.');
+    }
+    expect((int) $expenseCount->fetchColumn())->toBe(1)
+        ->and((int) $adjustmentCount->fetchColumn())->toBe(1);
+});
+
+it('records one reviewed payment and receipt job when retried through the production runtime', function (): void {
+    config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
+    DB::purge('sqlite');
+    $this->artisan('migrate', ['--database' => 'sqlite', '--force' => true, '--no-interaction' => true])->assertSuccessful();
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
+    $pdo = DB::connection('sqlite')->getPdo();
+    connectProductionRuntimeFixture($pdo);
+    $runtime = new D1StagingRuntime;
+    $review = $runtime->run(function () use ($member, $family): array {
+        $membership = $member->membershipForFamily($family);
+        if (! $membership instanceof FamilyMembership) {
+            throw new RuntimeException('The synthetic member has no family membership.');
+        }
+
+        return app(PaymentAllocationPreview::class)->preview($member, $family, $membership, 3000);
+    });
+    $key = (string) Str::uuid();
+    $paidAt = now()->toDateString();
+    $record = fn (int $amount, int $expiry) => $runtime->run(fn () => app(PaymentAllocationService::class)->createBatch(
+        member: $member, amount: $amount, paidAt: $paidAt, recordedBy: $officer, family: $family,
+        idempotencyKey: $key, expectedAllocations: $review['allocations'], reviewExpiresAt: $expiry,
+    ));
+
+    $first = $record(3000, now()->addMinute()->getTimestamp());
+    $replay = $record(3000, now()->subMinute()->getTimestamp());
+    expect($replay->id)->toBe($first->id);
+    expect(fn () => $record(3500, now()->addMinute()->getTimestamp()))->toThrow(ValidationException::class);
+    $counts = $pdo->query('select (select count(*) from payment_batches) as batches, (select count(*) from payments) as payments, (select sum(amount) from payments) as amount, (select count(*) from payment_receipt_deliveries) as deliveries, (select count(*) from jobs) as jobs');
+    if ($counts === false) {
+        throw new RuntimeException('Unable to count fixture records.');
+    }
+    expect($counts->fetch(PDO::FETCH_ASSOC))->toBe(['batches' => 1, 'payments' => 1, 'amount' => 3000, 'deliveries' => 2, 'jobs' => 1]);
 });
 
 it('allows only read-only bank listing with an independent test credential while candidate delivery stays disabled', function (): void {
@@ -368,46 +491,33 @@ it('preserves delivery ordering and queues early callbacks in the production D1 
     expect((int) $jobs->fetchColumn())->toBe(1);
 });
 
-function connectProductionRuntimeFixture(PDO $pdo): void
-{
-    Http::swap(new Factory);
-    Http::fake(function (ClientRequest $request) use ($pdo): PromiseInterface {
-        if (! str_starts_with($request->url(), D1RuntimeProfile::PRODUCTION_URL.'/')) {
-            throw new RuntimeException('Unexpected fixture request.');
-        }
-        $body = $request->data();
-        $queries = $body['batch'] ?? [$body];
-        $results = [];
-        $pdo->beginTransaction();
-        try {
-            if (! is_array($queries)) {
-                throw new RuntimeException('Invalid fixture batch.');
-            }
-            foreach ($queries as $query) {
-                if (! is_array($query) || ! is_string($query['sql'] ?? null) || ! is_array($query['params'] ?? null)) {
-                    throw new RuntimeException('Invalid fixture query.');
-                }
-                $statement = $pdo->prepare($query['sql']);
-                $statement->execute($query['params']);
-                $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
-                $changes = $pdo->query('select changes()');
-                if ($changes === false) {
-                    throw new RuntimeException('Unable to inspect fixture changes.');
-                }
-                $results[] = ['results' => $rows, 'meta' => ['changes' => (int) $changes->fetchColumn()]];
-            }
-            $pdo->commit();
+it('queues each scheduled reminder channel once when a leased D1 task is replayed', function (): void {
+    config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
+    DB::purge('sqlite');
+    $this->artisan('migrate', ['--database' => 'sqlite', '--force' => true, '--no-interaction' => true])->assertSuccessful();
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->forUser($member)->forMonth(2026, 1)->create();
+    $pdo = DB::connection('sqlite')->getPdo();
+    connectProductionRuntimeFixture($pdo);
 
-            return Http::response(['database' => D1RuntimeProfile::PRODUCTION_DATABASE, 'result' => isset($body['batch']) ? $results : $results[0]]);
-        } catch (Throwable $exception) {
-            $pdo->rollBack();
+    $maintenance = app(D1ProductionMaintenance::class);
+    $maintenance->install();
+    $task = ['id' => "remind25:2026-01:{$family->id}", 'kind' => 'remind25', 'family_id' => $family->id,
+        'at' => '2026-01-25T08:00:00.000Z', 'cursor' => 0, 'lease_token' => 'fixture'];
+    $pdo->prepare('insert into d1_runtime_schedule_outbox(id,kind,family_id,due_at,lease_token,lease_until) values(?,?,?,?,?,unixepoch()+240)')
+        ->execute([$task['id'], $task['kind'], $family->id, $task['at'], $task['lease_token']]);
 
-            return Http::response(['error' => $exception->getMessage()], 422);
-        }
-    });
-    DB::setDefaultConnection('d1');
-    D1StagingRuntime::install();
-}
+    $expected = ['exit_code' => 0, 'complete' => true, 'cursor' => $contribution->id];
+    expect($maintenance->execute($task))->toBe($expected);
+    $channels = productionPaymentSqlValue($pdo, 'select count(distinct channel) from contribution_reminder_deliveries');
+    expect($channels)->toBeInt()->toBeGreaterThan(0)
+        ->and(productionPaymentSqlValue($pdo, 'select count(*) from jobs'))->toBe($channels);
+    expect($maintenance->execute($task))->toBe($expected);
+    expect(productionPaymentSqlValue($pdo, 'select count(*) from contribution_reminder_deliveries'))->toBe($channels)
+        ->and(productionPaymentSqlValue($pdo, 'select count(*) from jobs'))->toBe($channels)
+        ->and(productionPaymentSqlValue($pdo, 'select reminder_sent_at from contributions'))->not->toBeNull();
+});
 
 it('rechecks queued reminder balances through the production D1 runtime', function (): void {
     config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
@@ -429,43 +539,6 @@ it('rechecks queued reminder balances through the production D1 runtime', functi
 
     $pdo->exec('update payments set amount = 4000 where contribution_id = '.$contribution->id);
     expect($runtime->run(fn (): bool => $notification->shouldSend($member, 'database')))->toBeFalse();
-});
-
-it('records one reviewed payment and receipt job when retried through the production runtime', function (): void {
-    config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
-    DB::purge('sqlite');
-    $this->artisan('migrate', ['--database' => 'sqlite', '--force' => true, '--no-interaction' => true])->assertSuccessful();
-    $family = Family::factory()->create();
-    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
-    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
-    Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
-    $pdo = DB::connection('sqlite')->getPdo();
-    connectProductionRuntimeFixture($pdo);
-    $runtime = new D1StagingRuntime;
-    $review = $runtime->run(function () use ($member, $family): array {
-        $membership = $member->membershipForFamily($family);
-        if (! $membership instanceof FamilyMembership) {
-            throw new RuntimeException('The synthetic member has no family membership.');
-        }
-
-        return app(PaymentAllocationPreview::class)->preview($member, $family, $membership, 3000);
-    });
-    $key = (string) Str::uuid();
-    $paidAt = now()->toDateString();
-    $record = fn (int $amount, int $expiry) => $runtime->run(fn () => app(PaymentAllocationService::class)->createBatch(
-        member: $member, amount: $amount, paidAt: $paidAt, recordedBy: $officer, family: $family,
-        idempotencyKey: $key, expectedAllocations: $review['allocations'], reviewExpiresAt: $expiry,
-    ));
-
-    $first = $record(3000, now()->addMinute()->getTimestamp());
-    $replay = $record(3000, now()->subMinute()->getTimestamp());
-    expect($replay->id)->toBe($first->id);
-    expect(fn () => $record(3500, now()->addMinute()->getTimestamp()))->toThrow(ValidationException::class);
-    $counts = $pdo->query('select (select count(*) from payment_batches) as batches, (select count(*) from payments) as payments, (select sum(amount) from payments) as amount, (select count(*) from jobs) as jobs');
-    if ($counts === false) {
-        throw new RuntimeException('Unable to count fixture records.');
-    }
-    expect($counts->fetch(PDO::FETCH_ASSOC))->toBe(['batches' => 1, 'payments' => 1, 'amount' => 3000, 'jobs' => 1]);
 });
 
 function productionPaymentSqlValue(PDO $pdo, string $sql): mixed

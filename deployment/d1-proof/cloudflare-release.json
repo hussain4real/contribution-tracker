@@ -26,32 +26,46 @@
         "worker": "familyfunds-hostname-redirects",
         "entry": "production-hostname-redirects.mjs"
       }
-    ]
+    ],
+    "accepted_migrations_sha256": "41030db19fc50e7d60c54dca72743f7b7277e62cc28872367d79d7f93c66c5b9"
   },
   "staging": {
     "branch": "cloudflare-staging",
-    "worker": "familyfunds-d1-web-v2",
-    "entry": "container-worker.mjs",
-    "class_name": "FamilyFundsWebStagingContainer",
-    "application_id": "a034af23-f6cf-4c1f-95ee-1099b787b9de",
-    "instance_name": "isolated-staging",
-    "image_repository": "familyfunds-d1-staging",
     "dockerfile": "Dockerfile.slim",
     "url": "https://d1-staging.familyfunds.app",
-    "companions": [
-      {
-        "worker": "familyfunds-d1-staging-sql",
-        "entry": "staging-worker.mjs",
-        "content_only": true,
-        "accepted_previous_sha256": "9157f394b0b7a10d6303e4f618352e276d41c06d57830975018e119aa274a3df"
-      },
-      {
-        "worker": "familyfunds-d1-maintenance-staging",
-        "entry": "maintenance-worker.mjs",
-        "content_only": true,
-        "accepted_previous_sha256": "9d10234fc4c30e0cea77e9714c4a0adf12920d95f67aec3f4fc47f3f226538ca"
-      }
-    ]
+    "accepted_migrations_sha256": "66079cf9ea98cd29209f5886719bbe45b3c56a9c6cc1c1e4b5f91ee15d6d0150",
+    "destination": "replacement",
+    "zone_id": "797d252aac4e91a2bae9dd15e5fa65b6",
+    "route_id": "25fb6d8b162e4965afa8be1f87fbcc70"
   },
-  "accepted_migrations_sha256": "41030db19fc50e7d60c54dca72743f7b7277e62cc28872367d79d7f93c66c5b9"
+  "staging_destinations": {
+    "original": {
+      "worker": "familyfunds-d1-web-v2",
+      "entry": "container-worker.mjs",
+      "class_name": "FamilyFundsWebStagingContainer",
+      "application_id": "a034af23-f6cf-4c1f-95ee-1099b787b9de",
+      "instance_name": "isolated-staging",
+      "image_repository": "familyfunds-d1-staging",
+      "companions": [
+        {
+          "worker": "familyfunds-d1-maintenance-staging",
+          "entry": "maintenance-worker.mjs"
+        }
+      ]
+    },
+    "replacement": {
+      "worker": "familyfunds-staging-replacement-web-nov04c",
+      "entry": "staging-replacement-web.mjs",
+      "class_name": "FamilyFundsReplacementStagingContainer",
+      "application_id": "030c9c8935eb44eda74dee7b149a6e1a",
+      "instance_name": "replacement-staging",
+      "image_repository": "familyfunds-staging-replacement",
+      "companions": [
+        {
+          "worker": "familyfunds-staging-replacement-maintenance-nov04c",
+          "entry": "maintenance-worker.mjs"
+        }
+      ]
+    }
+  }
 }

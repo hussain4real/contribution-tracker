@@ -6,24 +6,14 @@ function instanceUnavailable(error) {
     return error instanceof Error && error.message.includes("There is no container instance that can be provided");
 }
 
-function webhookConfig(env) {
-    if (!env.STAGING_WEBHOOK_SECRETS) return null;
-    const config = JSON.parse(env.STAGING_WEBHOOK_SECRETS);
-    if (config.enabled !== true) return null;
-    if (config.database !== "familyfunds-d1-web-staging" || config.family_id !== 43) throw new Error("Invalid isolated webhook target");
-    if (env.STAGING_WEBHOOK_SIGNING_ENV !== undefined) {
-        if (env.RUNTIME_PROFILE === "production") throw new Error("Invalid staging signing environment");
-        const signing = JSON.parse(env.STAGING_WEBHOOK_SIGNING_ENV);
-        if (!/^whsec_[A-Za-z0-9_-]+$/.test(signing.paystack_webhook_signing_secret ?? "")
-            || !/^[a-f0-9]{32}$/i.test(signing.meta_app_secret ?? "")
-            || typeof signing.meta_verify_token !== "string" || !signing.meta_verify_token) {
-            throw new Error("Invalid staging webhook credentials");
-        }
-        config.paystack_webhook_signing_secret = signing.paystack_webhook_signing_secret;
-        config.meta_app_secret = signing.meta_app_secret;
-        config.meta_verify_token = signing.meta_verify_token;
-    }
-    return config;
+const replacementDatabase = "familyfunds-d1-staging-clone-20261104t184003z";
+
+function replacementWebhooks(env) {
+    return ["replacement-webhook-rehearsal", "replacement-live"].includes(env.RUNTIME_PROFILE);
+}
+
+function webhookContainer(env) {
+    return replacementWebhooks(env) ? env.REPLACEMENT_CONTAINER.getByName("replacement-staging") : env.STAGING_CONTAINER.getByName("isolated-staging");
 }
 
 function webhookScope(provider, payload, config) {
@@ -51,6 +41,7 @@ function signatureHeader(provider, config) {
 async function verifyWebhook(record, config) {
     if (!record || !["paystack", "whatsapp"].includes(record.provider) || typeof record.raw !== "string"
         || new TextEncoder().encode(record.raw).length > 49_152 || typeof record.signature !== "string") return false;
+    if (config.database === replacementDatabase ? record.database !== replacementDatabase : record.database !== undefined) return false;
     const meta = record.provider === "whatsapp";
     let digests = [meta ? record.signature.replace(/^sha256=/, "") : record.signature];
     let signedPayload = record.raw;
@@ -85,7 +76,7 @@ async function verifyWebhook(record, config) {
 }
 
 async function receiveWebhook(request, env) {
-    const config = webhookConfig(env);
+    const config = FamilyFundsWebStagingContainer.webhookConfig(env);
     if (!config) return new Response("Forbidden", {status: 403});
     const provider = new URL(request.url).pathname === "/webhooks/paystack" ? "paystack" : "whatsapp";
     if (provider === "whatsapp" && request.method === "GET") {
@@ -118,120 +109,15 @@ async function receiveWebhook(request, env) {
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
     const record = {provider, raw: new TextDecoder("utf-8", {fatal: true}).decode(bytes),
         signature: request.headers.get(signatureHeader(provider, config)) ?? ""};
+    if (replacementWebhooks(env)) record.database = config.database;
     if (!await verifyWebhook(record, config)) return new Response("Forbidden", {status: 403});
     if (env.RUNTIME_PROFILE !== "production" && env.STAGING_ADMISSION_CONTROL === "1") {
-        const admitted = await env.STAGING_CONTAINER.getByName("isolated-staging").enqueueWebhook(record);
+        const admitted = await webhookContainer(env).enqueueWebhook(record);
         if (!admitted) return new Response("Staging maintenance in progress. No operation was submitted.", {status: 503, headers: {"Retry-After": "30", "Cache-Control": "no-store"}});
     } else {
         await env.STAGING_WEBHOOK_QUEUE.send(record, {contentType: "json"});
     }
     return Response.json({message: "Accepted"}, {status: 200, headers: {"Cache-Control": "no-store"}});
-}
-
-async function stagingGatewayHealth(env) {
-    let stage = "environment";
-    try {
-        if (env.RUNTIME_PROFILE === "production") return new Response("Not found", {status: 404});
-        const config = {
-            D1_STAGING_ENABLED: "true",
-            D1_STAGING_DATABASE: "familyfunds-d1-web-staging",
-            D1_STAGING_URL: "https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev",
-            ...containerEnvironment(env, {allowStagingPaystackTest: true}),
-        };
-        stage = "environment_flags";
-        if (config.D1_STAGING_ENABLED !== "true" || config.D1_PRODUCTION_ENABLED === "true") throw new Error("Invalid staging gateway configuration");
-        stage = "database_identity";
-        if (config.D1_STAGING_DATABASE !== "familyfunds-d1-web-staging") throw new Error("Invalid staging gateway configuration");
-        stage = "gateway_url";
-        if (config.D1_STAGING_URL !== "https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev") throw new Error("Invalid staging gateway configuration");
-        stage = "gateway_token";
-        if (typeof config.D1_STAGING_TOKEN !== "string" || config.D1_STAGING_TOKEN.length < 32) throw new Error("Invalid staging gateway configuration");
-        stage = "service_binding";
-        if (!env.STAGING_SQL_GATEWAY || typeof env.STAGING_SQL_GATEWAY.fetch !== "function") throw new Error("Missing staging gateway binding");
-        stage = "service_request";
-        const response = await env.STAGING_SQL_GATEWAY.fetch("https://staging-gateway.internal/query", {
-            method: "POST", redirect: "manual", signal: AbortSignal.timeout(8000),
-            headers: {"Authorization": "Bearer " + config.D1_STAGING_TOKEN, "Content-Type": "application/json"},
-            body: JSON.stringify({sql: "select 1 as ok", params: []}),
-        });
-        stage = response.status === 401 ? "gateway_authentication" : "gateway_http";
-        if (!response.ok || !response.body) throw new Error("Staging gateway unavailable");
-        stage = "gateway_response";
-        const reader = response.body.getReader();
-        const chunks = [];
-        let length = 0;
-        while (true) {
-            const {done, value} = await reader.read();
-            if (done) break;
-            length += value.byteLength;
-            if (length > 4096) {
-                await reader.cancel();
-                throw new Error("Invalid staging gateway response");
-            }
-            chunks.push(value);
-        }
-        const bytes = new Uint8Array(length);
-        let offset = 0;
-        for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-        const body = JSON.parse(new TextDecoder("utf-8", {fatal: true}).decode(bytes));
-        if (body?.database !== "familyfunds-d1-web-staging" || body?.result?.results?.length !== 1
-            || body.result.results[0]?.ok !== 1) throw new Error("Unexpected staging gateway response");
-        return Response.json({ok: true}, {headers: {"Cache-Control": "no-store"}});
-    } catch {
-        return Response.json({ok: false, stage}, {status: 503, headers: {"Cache-Control": "no-store"}});
-    }
-}
-
-async function stagingGatewayControl(request, env) {
-    if (env.RUNTIME_PROFILE === "production" || env.STAGING_GATEWAY_CONTROL !== "1") return new Response("Not found", {status: 404});
-    const expected = new TextEncoder().encode(env.STAGING_GATEWAY_ADMIN_TOKEN ?? "");
-    const actual = new TextEncoder().encode(request.headers.get("X-Staging-Gateway-Admin") ?? "");
-    if (expected.length < 32 || actual.length !== expected.length || !crypto.subtle.timingSafeEqual(actual, expected)) {
-        return new Response("Forbidden", {status: 403, headers: {"Cache-Control": "no-store"}});
-    }
-    const input = new URL(request.url);
-    const paused = input.searchParams.getAll("paused");
-    if ((request.method === "GET" && input.search !== "") ||
-        (request.method === "POST" && (paused.length !== 1 || [...input.searchParams.keys()].some(key => key !== "paused") || !["true", "false"].includes(paused[0]))) ||
-        !["GET", "POST"].includes(request.method)) return new Response("Not found", {status: 404});
-    try {
-        const config = {
-            D1_STAGING_ENABLED: "true", D1_STAGING_DATABASE: "familyfunds-d1-web-staging",
-            D1_STAGING_URL: "https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev",
-            ...containerEnvironment(env, {allowStagingPaystackTest: true}),
-        };
-        if (config.D1_STAGING_ENABLED !== "true" || config.D1_PRODUCTION_ENABLED === "true" ||
-            config.D1_STAGING_DATABASE !== "familyfunds-d1-web-staging" ||
-            config.D1_STAGING_URL !== "https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev" ||
-            typeof config.D1_STAGING_TOKEN !== "string" || config.D1_STAGING_TOKEN.length < 32 ||
-            !env.STAGING_SQL_GATEWAY || typeof env.STAGING_SQL_GATEWAY.fetch !== "function") throw new Error("Invalid staging gateway configuration");
-        const destination = "https://staging-gateway.internal/__staging_admin/admission" + (request.method === "POST" ? "?paused=" + paused[0] : "");
-        const response = await env.STAGING_SQL_GATEWAY.fetch(destination, {
-            method: request.method, redirect: "manual", signal: AbortSignal.timeout(8000),
-            headers: {"Authorization": "Bearer " + config.D1_STAGING_TOKEN, "X-Staging-Gateway-Admin": env.STAGING_GATEWAY_ADMIN_TOKEN},
-        });
-        if (!response.ok || !response.body) throw new Error("Gateway control unavailable");
-        const reader = response.body.getReader();
-        const chunks = [];
-        let length = 0;
-        while (true) {
-            const {done, value} = await reader.read();
-            if (done) break;
-            length += value.byteLength;
-            if (length > 4096) { await reader.cancel(); throw new Error("Invalid gateway control response"); }
-            chunks.push(value);
-        }
-        const bytes = new Uint8Array(length);
-        let offset = 0;
-        for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-        const result = JSON.parse(new TextDecoder("utf-8", {fatal: true}).decode(bytes));
-        if (!result || typeof result !== "object" || Array.isArray(result) || Object.keys(result).sort().join(",") !== "paused,unresolved" ||
-            typeof result.paused !== "boolean" || !Number.isSafeInteger(result.unresolved) || result.unresolved < 0 || result.unresolved > 1001 ||
-            (request.method === "POST" && result.paused !== (paused[0] === "true"))) throw new Error("Invalid gateway control response");
-        return Response.json({paused: result.paused, unresolved: result.unresolved}, {headers: {"Cache-Control": "no-store"}});
-    } catch {
-        return Response.json({error: "Gateway control unavailable"}, {status: 503, headers: {"Cache-Control": "no-store"}});
-    }
 }
 
 function bootstrapParts(env, prefix, content) {
@@ -246,6 +132,36 @@ function bootstrapParts(env, prefix, content) {
 }
 
 export class FamilyFundsWebStagingContainer extends DurableObject {
+    static webhookConfig(env) {
+        const replacement = replacementWebhooks(env);
+        if (!replacement && env.RUNTIME_PROFILE?.startsWith("replacement-")) return null;
+        const raw = replacement ? env.REPLACEMENT_WEBHOOK_SECRETS : env.STAGING_WEBHOOK_SECRETS;
+        if (!raw) return null;
+        const config = JSON.parse(raw);
+        if (config.enabled !== true) return null;
+        if (config.database !== (replacement ? replacementDatabase : "familyfunds-d1-web-staging") || config.family_id !== 43) {
+            throw new Error("Invalid isolated webhook target");
+        }
+        if (!replacement && env.STAGING_WEBHOOK_SIGNING_ENV !== undefined) {
+            if (env.RUNTIME_PROFILE === "production") throw new Error("Invalid staging signing environment");
+            const signing = JSON.parse(env.STAGING_WEBHOOK_SIGNING_ENV);
+            if (!/^whsec_[A-Za-z0-9_-]+$/.test(signing.paystack_webhook_signing_secret ?? "")
+                || !/^[a-f0-9]{32}$/i.test(signing.meta_app_secret ?? "")
+                || typeof signing.meta_verify_token !== "string" || !signing.meta_verify_token) throw new Error("Invalid staging webhook credentials");
+            config.paystack_webhook_signing_secret = signing.paystack_webhook_signing_secret;
+            config.meta_app_secret = signing.meta_app_secret;
+            config.meta_verify_token = signing.meta_verify_token;
+        }
+        if (replacement && (env.STAGING_ADMISSION_CONTROL !== "1" || !env.REPLACEMENT_WEBHOOK_QUEUE?.send
+            || !env.REPLACEMENT_CONTAINER?.getByName || !/^sk_test_[a-zA-Z0-9_-]+$/.test(config.paystack_test_key ?? "")
+            || !/^whsec_[A-Za-z0-9_-]+$/.test(config.paystack_webhook_signing_secret ?? "")
+            || !config.meta_verify_token || !/^[a-f0-9]{32}$/i.test(config.meta_app_secret ?? "") || !/^[a-f0-9]{64}$/.test(config.relay_token ?? "")
+            || config.relay_token === env.REPLACEMENT_SQL_TOKEN || !config.meta_phone || !config.meta_waba || !config.recipient)) {
+            throw new Error("Invalid replacement webhook configuration");
+        }
+        return config;
+    }
+
     constructor(ctx, env) {
         super(ctx, env);
         this.ready = false;
@@ -308,8 +224,8 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
                     if (!container.running) {
                         this.startupState.phase = "start";
                         const env = containerEnvironment(this.env, {allowStagingPaystackTest: true});
-                        if (this.env.STAGING_WEBHOOK_SIGNING_ENV !== undefined) {
-                            const webhook = webhookConfig(this.env);
+                        if (this.env.STAGING_WEBHOOK_SIGNING_ENV !== undefined && !this.env.RUNTIME_PROFILE?.startsWith("replacement-")) {
+                            const webhook = FamilyFundsWebStagingContainer.webhookConfig(this.env);
                             if (!webhook) throw new Error("Staging webhooks are disabled");
                             env.D1_STAGING_PAYSTACK_WEBHOOK_SIGNING_SECRET = webhook.paystack_webhook_signing_secret;
                             env.D1_STAGING_META_APP_SECRET = webhook.meta_app_secret;
@@ -318,7 +234,7 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
                             env.FF_STARTUP_PROFILE = "1";
                             env.FF_STAGING_START_REQUEST_MS = String(Date.now());
                         }
-                        const options = this.startupOptions(env);
+                        const options = await this.startupOptions(env);
                         if (this.env.OPTIMIZED_BOOTSTRAP === "v1") {
                             const files = STAGING_BOOTSTRAP_ASSETS.filter(asset => asset.path !== "/var/www/html/deployment/d1-proof/run-staging.php").map((asset, i) => {
                                 if (!/^\/var\/www\/html\/[A-Za-z0-9_./-]+$/.test(asset.path) || asset.path.includes("..") || !/^[a-f0-9]{64}$/.test(asset.sha256)) throw new Error("Invalid packaged bootstrap asset");
@@ -534,7 +450,7 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
     async enqueueWebhook(record) {
         await this.admissionReady;
         if (!this.admissionEnabled) throw new Error("Staging admission control is disabled");
-        const config = webhookConfig(this.env);
+        const config = FamilyFundsWebStagingContainer.webhookConfig(this.env);
         if (!config || !await verifyWebhook(record, config)) throw new Error("Invalid staging webhook");
         const id = await this.ctx.blockConcurrencyWhile(async () => {
             if (this.admissionPaused) return null;
@@ -545,7 +461,8 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
         if (id === null) return false;
         this.activeWebhookSends++;
         try {
-            await this.env.STAGING_WEBHOOK_QUEUE.send(record, {contentType: "json"});
+            const queue = replacementWebhooks(this.env) ? this.env.REPLACEMENT_WEBHOOK_QUEUE : this.env.STAGING_WEBHOOK_QUEUE;
+            await queue.send(record, {contentType: "json"});
             if (!await this.ctx.storage.delete(`staging-webhook-send:${id}`)) throw new Error("Unknown staging webhook operation");
             return true;
         } finally {
@@ -591,24 +508,48 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
         await this.admissionReady;
         if (this.admissionPaused) throw new Error("Staging admission is paused");
         const families = JSON.parse(this.env.STAGING_SCHEDULE_FAMILIES ?? "{}");
+        const replacement = ["replacement-rehearsal", "replacement-live"].includes(this.env.RUNTIME_PROFILE);
+        if (replacement && (!Number.isSafeInteger(families.family) || families.family < 1
+            || !Number.isSafeInteger(families.purge) || families.purge < 1 || families.family === families.purge)) {
+            throw new Error("Missing synthetic replacement maintenance families");
+        }
         const expected = kind === "purge" ? families.purge : kind === "reports" ? 43 : families.family;
         if (!["generate", "remind25", "remind28", "purge", "reports", "retry-notifications"].includes(kind)
             || !Number.isSafeInteger(familyId) || familyId !== expected || typeof at !== "string"
             || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(at) || !Number.isFinite(Date.parse(at)) || Date.parse(at) > Date.now()) {
             throw new Error("Invalid isolated maintenance operation");
         }
+        const database = replacement ? "familyfunds-d1-staging-clone-20261104t184003z" : "familyfunds-d1-web-staging";
+        const url = replacement ? "https://familyfunds-d1-replacement-sql-nov04c.familyfunds-lab.workers.dev" : "https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev";
+        let configured = replacement ? {} : containerEnvironment(this.env, {allowStagingPaystackTest: true});
+        if (!replacement && ((configured.D1_STAGING_DATABASE !== undefined && configured.D1_STAGING_DATABASE !== database)
+            || (configured.D1_STAGING_URL !== undefined && configured.D1_STAGING_URL !== url))) {
+            throw new Error("Maintenance CLI requires the original staging target");
+        }
+        const generation = this.admissionGeneration;
         let stage = "startup";
         this.activeMaintenance++;
         try {
+            if (replacement) {
+                stage = "replacement maintenance target validation";
+                configured = (await this.startupOptions()).env;
+                if (configured?.D1_STAGING_DATABASE !== database || configured.D1_STAGING_URL !== url
+                    || configured.D1_STAGING_R2_BUCKET !== database + "-files" || configured.D1_STAGING_R2_ADMISSION !== "1"
+                    || this.env.STAGING_ADMISSION_CONTROL !== "1" || this.env.OPTIMIZED_BOOTSTRAP !== undefined) {
+                    throw new Error("Invalid replacement maintenance target");
+                }
+                if (this.admissionPaused || generation !== this.admissionGeneration) throw new Error("Staging admission changed");
+                stage = "startup";
+            }
             if (!this.ctx.container.running) this.ready = false;
             if (!this.ready) {
                 this.starting ??= this.waitForReady().finally(() => { this.starting = null; });
                 await this.starting;
             }
-            if (this.admissionPaused) throw new Error("Staging admission is paused");
+            if (this.admissionPaused || generation !== this.admissionGeneration) throw new Error("Staging admission changed");
             if (!this.ready) throw new Error("Staging container is not ready");
-            const env = {...JSON.parse(this.env.CONTAINER_ENV), APP_ENV: "d1-staging", D1_STAGING_ENABLED: "true",
-                D1_STAGING_DATABASE: "familyfunds-d1-web-staging", D1_STAGING_URL: "https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev"};
+            const env = {...configured, APP_ENV: "d1-staging", D1_STAGING_ENABLED: "true",
+                D1_STAGING_DATABASE: database, D1_STAGING_URL: url};
             if (this.env.OPTIMIZED_BOOTSTRAP === "v1") {
                 stage = "CLI installation";
                 const asset = STAGING_BOOTSTRAP_ASSETS.find(asset => asset.path === "/var/www/html/deployment/d1-proof/run-staging.php");
@@ -620,7 +561,7 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
                 if (installer.exitCode !== 0) throw new Error("Staging CLI installation failed");
             }
             stage = "command execution";
-            const result = await this.containerOutput(["php", "/var/www/html/deployment/d1-proof/run-staging.php", "scheduled-maintenance-proof", "/nonexistent-staging-secret-file", "web", kind, String(familyId), at],
+            const result = await this.containerOutput(["php", "/var/www/html/deployment/d1-proof/run-staging.php", "scheduled-maintenance-proof", "/nonexistent-staging-secret-file", replacement ? "replacement" : "web", kind, String(familyId), at],
                 {cwd: "/var/www/html", env, stdout: "pipe", stderr: "pipe"}, 65_000);
             if (result.exitCode !== 0 || result.stdout.byteLength > 131072) throw new Error("Invalid maintenance output");
             stage = "result validation";
@@ -652,15 +593,18 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
 
 export default {
     async queue(batch, env) {
-        const config = webhookConfig(env);
+        const replacement = replacementWebhooks(env);
+        if (replacement && batch.queue !== "familyfunds-replacement-webhook-nov04c") throw new Error("Unexpected replacement webhook queue");
+        const config = FamilyFundsWebStagingContainer.webhookConfig(env);
         for (const message of batch.messages) {
             try {
                 if (!config || !await verifyWebhook(message.body, config)) throw new Error("Invalid staging relay event");
                 const record = message.body;
-                const headers = {"Content-Type": "application/json", "X-D1-Staging-Relay": env.ADMIN_TOKEN};
+                const headers = {"Content-Type": "application/json", "X-D1-Staging-Relay": replacement ? config.relay_token : env.ADMIN_TOKEN};
                 headers[signatureHeader(record.provider, config)] = record.signature;
-                const container = env.STAGING_CONTAINER.getByName("isolated-staging");
-                const response = await container.fetch(new Request(`https://d1-staging.familyfunds.app/webhooks/${record.provider}`, {method: "POST", headers, body: record.raw}));
+                const container = webhookContainer(env);
+                const origin = replacement ? "https://replacement-staging.internal" : "https://d1-staging.familyfunds.app";
+                const response = await container.fetch(new Request(`${origin}/webhooks/${record.provider}`, {method: "POST", headers, body: record.raw}));
                 await response.body?.cancel();
                 if (![200, 202].includes(response.status)) throw new Error(`Staging webhook relay returned ${response.status}`);
                 message.ack();
@@ -684,11 +628,6 @@ export default {
         if (actual.length !== expected.length || !crypto.subtle.timingSafeEqual(actual, expected)) {
             return new Response("Authentication required", {status: 401, headers: {"WWW-Authenticate": 'Basic realm="FamilyFunds isolated D1 staging"', "X-Robots-Tag": "noindex, nofollow, noarchive"}});
         }
-        if (new URL(request.url).pathname === "/__staging_health/gateway") {
-            if (request.method !== "GET") return new Response("Not found", {status: 404});
-            return stagingGatewayHealth(env);
-        }
-        if (new URL(request.url).pathname === "/__staging_admin/gateway-admission") return stagingGatewayControl(request, env);
         const candidate = request.headers.get("X-D1-Staging-Candidate");
         if (candidate && (candidate !== "lean" || request.headers.get("X-Staging-Admin") !== env.ADMIN_TOKEN)) {
             return new Response("Forbidden", {status: 403});

@@ -36,10 +36,10 @@ it('refuses another bucket before creating a storage client', function (): void 
         ->toThrow(LogicException::class, 'isolated staging bucket');
 });
 
-it('guards both staging disks before dispatch and keeps an uncertain SDK attempt separate from its retry', function (): void {
-    $url = D1StagingConnection::TARGETS['familyfunds-d1-web-staging'];
-    config(['d1-staging.enabled' => true, 'd1-staging.url' => $url, 'd1-staging.token' => 'synthetic',
-        'd1-staging.r2.bucket' => 'familyfunds-d1-staging-private', 'd1-staging.r2.key' => 'fixture',
+it('guards both staging disks before dispatch and keeps an uncertain SDK attempt separate from its retry', function (string $database, string $bucket): void {
+    $url = D1StagingConnection::TARGETS[$database];
+    config(['d1-staging.enabled' => true, 'd1-staging.database' => $database, 'd1-staging.url' => $url, 'd1-staging.token' => 'synthetic',
+        'd1-staging.r2.bucket' => $bucket, 'd1-staging.r2.key' => 'fixture',
         'd1-staging.r2.secret' => 'secret', 'd1-staging.r2.admission' => '1']);
     (new D1StagingServiceProvider($this->app))->register();
 
@@ -74,7 +74,10 @@ it('guards both staging disks before dispatch and keeps an uncertain SDK attempt
         expect($attempts)->toBe(2);
     }
     Http::assertSentCount(4);
-});
+})->with([
+    ['familyfunds-d1-web-staging', 'familyfunds-d1-staging-private'],
+    ['familyfunds-d1-staging-clone-20261104t184003z', 'familyfunds-d1-staging-clone-20261104t184003z-files'],
+]);
 
 it('refuses storage admission when the application could already hold a disk', function (): void {
     app('filesystem')->disk('local');
@@ -129,3 +132,17 @@ it('refuses delegated staging writes before issuing a URL or registering an atte
     }
     Http::assertNothingSent();
 });
+
+it('refuses a replacement runtime paired with legacy staging resources', function (string $setting, string $value, string $error): void {
+    $database = D1StagingConnection::REPLACEMENT_DATABASE;
+    config(['d1-staging.enabled' => true, 'd1-staging.database' => $database, 'd1-staging.url' => D1StagingConnection::TARGETS[$database],
+        'd1-staging.token' => 'synthetic', 'd1-staging.r2.bucket' => $database.'-files', 'd1-staging.r2.key' => 'fixture',
+        'd1-staging.r2.secret' => 'secret', 'd1-staging.r2.admission' => '1']);
+    config([$setting => $value]);
+    expect(fn () => (new D1StagingServiceProvider($this->app))->register())->toThrow($error);
+})->with([
+    ['d1-staging.database', 'familyfunds-d1-web-staging', 'its own database'],
+    ['d1-staging.url', 'https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev', 'explicitly isolated database and endpoint'],
+    ['d1-staging.r2.bucket', 'familyfunds-d1-staging-private', 'isolated staging bucket'],
+    ['d1-staging.r2.admission', '0', 'Replacement staging requires R2 admission'],
+]);

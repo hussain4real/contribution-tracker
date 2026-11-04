@@ -15,13 +15,8 @@ Schedule::command('contributions:generate')
     ->withoutOverlapping()
     ->onOneServer();
 
-Schedule::command('contributions:remind --day=25')
-    ->monthlyOn(25, '08:00')
-    ->withoutOverlapping()
-    ->onOneServer();
-
-Schedule::command('contributions:remind --day=28')
-    ->monthlyOn(28, '08:00')
+Schedule::command('contributions:dispatch-due-reminders')
+    ->everyFiveMinutes()
     ->withoutOverlapping()
     ->onOneServer();
 

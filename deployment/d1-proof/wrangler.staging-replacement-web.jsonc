@@ -1,0 +1,63 @@
+{
+  "name": "familyfunds-staging-replacement-web-nov04c",
+  "main": "staging-replacement-web.mjs",
+  "compatibility_date": "2026-10-27",
+  "account_id": "40344948b73fa9da3008958fdc3faf12",
+  "workers_dev": false,
+  "preview_urls": false,
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "REPLACEMENT_CONTAINER",
+        "class_name": "FamilyFundsReplacementStagingContainer"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "FamilyFundsReplacementStagingContainer"
+      ]
+    }
+  ],
+  "containers": [
+    {
+      "name": "familyfunds-staging-replacement-web-nov04c",
+      "class_name": "FamilyFundsReplacementStagingContainer",
+      "scheduling_policy": "durable_object",
+      "images": {
+        "base": {
+          "image": "registry.cloudflare.com/40344948b73fa9da3008958fdc3faf12/familyfunds-staging-replacement@sha256:01af69545b6ab83c75133bdc47e0f4effb482dd1878e4c82994521b6f1eea2f0"
+        }
+      }
+    }
+  ],
+  "queues": {
+    "producers": [{"binding": "REPLACEMENT_WEBHOOK_QUEUE", "queue": "familyfunds-replacement-webhook-nov04c"}]
+  },
+  "services": [
+    {
+      "binding": "REPLACEMENT_SQL",
+      "service": "familyfunds-d1-replacement-sql-nov04c"
+    }
+  ],
+  "secrets_store_secrets": [
+    {
+      "binding": "REPLACEMENT_APP_KEY",
+      "store_id": "5e78cc1e865144e4ab982aeae254ed96",
+      "secret_name": "FF_STAGING_REPLACEMENT_LARAVEL_KEY_20261103T1243Z"
+    },
+    {
+      "binding": "REPLACEMENT_FILES_CREDENTIAL",
+      "store_id": "5e78cc1e865144e4ab982aeae254ed96",
+      "secret_name": "FF_STAGING_REPLACEMENT_R2_20261104T184003Z"
+    }
+  ],
+  "vars": {
+    "CONTAINER_ENV": "{}",
+    "CONTAINER_IMAGE": "registry.cloudflare.com/40344948b73fa9da3008958fdc3faf12/familyfunds-staging-replacement@sha256:01af69545b6ab83c75133bdc47e0f4effb482dd1878e4c82994521b6f1eea2f0",
+    "RUNTIME_PROFILE": "replacement-preflight",
+    "STAGING_ADMISSION_CONTROL": "1"
+  }
+}

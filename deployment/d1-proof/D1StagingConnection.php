@@ -17,10 +17,24 @@ class D1StagingConnection extends SQLiteConnection
 {
     private readonly D1RuntimeClient $client;
 
+    public const REPLACEMENT_DATABASE = 'familyfunds-d1-staging-clone-20261104t184003z';
+
     public const TARGETS = [
+        self::REPLACEMENT_DATABASE => 'https://familyfunds-d1-replacement-sql-nov04c.familyfunds-lab.workers.dev',
         'familyfunds-d1-web-staging' => 'https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev',
         'familyfunds-d1-scale-lab' => 'https://familyfunds-d1-scale-sql.familyfunds-lab.workers.dev',
     ];
+
+    public static function isWebhookTarget(): bool
+    {
+        $database = config('d1-staging.database');
+
+        return $database === 'familyfunds-d1-web-staging'
+            || ($database === self::REPLACEMENT_DATABASE
+                && config('d1-staging.url') === self::TARGETS[$database]
+                && config('d1-staging.r2.admission') === '1'
+                && config('d1-staging.r2.bucket') === $database.'-files');
+    }
 
     public function __construct(private readonly string $url, private readonly string $token, private readonly string $databaseName)
     {

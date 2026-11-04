@@ -8,9 +8,39 @@ use App\Models\Payment;
 use App\Models\User;
 use App\Notifications\ContributionReminderNotification;
 use Illuminate\Contracts\Notifications\Dispatcher as NotificationDispatcher;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 
 describe('Send Contribution Reminders Command', function () {
+    it('rolls back queued reminder jobs if saving the sent marker fails', function () {
+        config(['queue.default' => 'database', 'queue.connections.database.connection' => null]);
+        $family = Family::factory()->create();
+        $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
+        $failure = new class
+        {
+            public bool $enabled = true;
+        };
+        Contribution::saving(function (Contribution $record) use ($failure, $contribution): void {
+            if ($failure->enabled && $record->id === $contribution->id && $record->reminder_sent_at !== null) {
+                throw new RuntimeException('Simulated marker failure');
+            }
+        });
+
+        try {
+            expect(fn () => $this->artisan('contributions:remind', ['--day' => 25])->run())
+                ->toThrow(RuntimeException::class, 'Simulated marker failure');
+            expect(DB::table('jobs')->count())->toBe(0)->and($contribution->fresh()?->reminder_sent_at)->toBeNull();
+            $failure->enabled = false;
+            $this->artisan('contributions:remind', ['--day' => 25])->assertSuccessful();
+            $count = DB::table('jobs')->count();
+            expect($count)->toBeGreaterThan(0);
+            $this->artisan('contributions:remind', ['--day' => 25])->assertSuccessful();
+            expect(DB::table('jobs')->count())->toBe($count);
+        } finally {
+            $failure->enabled = false;
+        }
+    });
     it('sends reminder notifications to members with unpaid contributions', function () {
         Notification::fake();
 
@@ -127,6 +157,32 @@ describe('Send Contribution Reminders Command', function () {
 
         expect($contribution->reminder_sent_at)->not->toBeNull();
     });
+
+    it('leaves the reminder eligible for a later run when its :dataset is archived after selection', function (string $target) {
+        config(['queue.default' => 'database', 'queue.connections.database.connection' => null]);
+        $family = Family::factory()->create();
+        $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+        $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
+        $record = $target === 'family' ? $family : $member->familyMemberships()->where('family_id', $family->id)->sole();
+        $simulateRace = true;
+        Contribution::retrieved(function (Contribution $retrieved) use (&$simulateRace, $contribution, $record): void {
+            if ($simulateRace && $retrieved->is($contribution)) {
+                $simulateRace = false;
+                $record->update(['archived_at' => now()]);
+            }
+        });
+
+        $this->artisan('contributions:remind', ['--day' => 25])
+            ->expectsOutput('Sent 0 reminder notifications.')->assertSuccessful();
+        expect($contribution->refresh()->reminder_sent_at)->toBeNull();
+        $this->assertDatabaseCount('jobs', 0);
+        $this->assertDatabaseCount('contribution_reminder_deliveries', 0);
+
+        $record->update(['archived_at' => null]);
+        $this->artisan('contributions:remind', ['--day' => 25])
+            ->expectsOutput('Sent 1 reminder notifications.')->assertSuccessful();
+        expect($contribution->refresh()->reminder_sent_at)->not->toBeNull();
+    })->with(['membership', 'family']);
 
     it('tracks follow-up reminders independently from early reminders', function () {
         Notification::fake();

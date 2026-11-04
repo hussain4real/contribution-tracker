@@ -36,7 +36,9 @@ def package_config(config):
             raise ValueError('Invalid image environment name')
         if re.search(r'(^APP_KEY$|API_KEY$|TOKEN$|SECRET|PASSWORD|PRIVATE_KEY|ACCESS_KEY_ID|FF_RCLONE_CONFIG)', name) and content:
             raise ValueError('Runtime credentials must not enter the image')
-        lines.append('ENV ' + name + '=' + json.dumps(content).replace('$', '\\$'))
+        # Docker's ENV parser preserves a JSON backslash-t literally. Preserve actual horizontal tabs in quoted values.
+        quoted = '\t'.join(json.dumps(part)[1:-1] for part in content.split('\t')).replace('$', '\\$')
+        lines.append(f'ENV {name}="{quoted}"')
     lines.append('WORKDIR ' + json.dumps(config.get('WorkingDir') or '/var/www/html'))
     for field in ['Entrypoint', 'Cmd']:
         if config.get(field):
@@ -78,7 +80,7 @@ def main():
         digest = hashlib.file_digest(source, 'sha256').hexdigest()
     result = {'target': args.target, 'revision': args.revision, 'rootfs_sha256': digest,
               'unstarted_export': True, 'runtime_credentials_packaged': False}
-    if args.target == 'staging':
+    if args.target == 'staging' and target['destination'] == 'original':
         archive = args.output / 'original-image.tar'
         run('docker', 'image', 'save', '--output', str(archive), image)
         with archive.open('rb') as source:

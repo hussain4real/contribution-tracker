@@ -14,6 +14,9 @@ concurrency:
   group: familyfunds-cloudflare-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  TARGET: ${{ (github.base_ref == 'cloudflare-staging' || github.ref_name == 'cloudflare-staging') && 'staging' || 'production' }}
+
 jobs:
   runtime:
     name: Cloudflare runtime
@@ -26,8 +29,6 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '22'
-      - name: Validate accepted D1 schema and runtime module graph
-        run: python3 deployment/d1-proof/cloudflare-release.py prepare
       - name: Worker behavior and isolation checks
         run: |
           tests=()
@@ -39,6 +40,8 @@ jobs:
           node --test "${tests[@]}"
       - name: Release and image safety checks
         run: python3 -m unittest discover -s deployment/d1-proof -p 'cloudflare_*_test.py' -v
+      - name: Validate accepted D1 schema and runtime module graph
+        run: python3 deployment/d1-proof/cloudflare-release.py prepare --target "$TARGET"
 
   application-tests:
     if: github.event_name != 'pull_request'
@@ -57,8 +60,6 @@ jobs:
       (needs.application-tests.result == 'success' && needs.application-quality.result == 'success'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    env:
-      TARGET: ${{ (github.base_ref == 'cloudflare-staging' || github.ref_name == 'cloudflare-staging') && 'staging' || 'production' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -78,7 +79,7 @@ jobs:
           composer install --no-interaction --prefer-dist --optimize-autoloader
           php artisan key:generate --no-interaction
           npm ci
-          python3 deployment/d1-proof/cloudflare-release.py prepare
+          python3 deployment/d1-proof/cloudflare-release.py prepare --target "$TARGET"
           php artisan wayfinder:generate --no-interaction
           npm run build
       - name: Review the compiled assets and runtime source
@@ -107,8 +108,6 @@ jobs:
     environment:
       name: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
       url: ${{ github.ref_name == 'main' && 'https://familyfunds.app' || 'https://d1-staging.familyfunds.app' }}
-    env:
-      TARGET: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
     steps:
       - name: Reject unconfigured branch
         run: |
