@@ -6,7 +6,7 @@ function instanceUnavailable(error) {
     return error instanceof Error && error.message.includes("There is no container instance that can be provided");
 }
 
-const replacementDatabase = "familyfunds-d1-staging-clone-20261104t044139z";
+const replacementDatabase = "familyfunds-d1-staging-clone-20261104t165309z";
 
 function replacementWebhooks(env) {
     return ["replacement-webhook-rehearsal", "replacement-live"].includes(env.RUNTIME_PROFILE);
@@ -519,8 +519,8 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
             || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(at) || !Number.isFinite(Date.parse(at)) || Date.parse(at) > Date.now()) {
             throw new Error("Invalid isolated maintenance operation");
         }
-        const database = replacement ? "familyfunds-d1-staging-clone-20261104t044139z" : "familyfunds-d1-web-staging";
-        const url = replacement ? "https://familyfunds-d1-replacement-sql-nov04.familyfunds-lab.workers.dev" : "https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev";
+        const database = replacement ? "familyfunds-d1-staging-clone-20261104t165309z" : "familyfunds-d1-web-staging";
+        const url = replacement ? "https://familyfunds-d1-replacement-sql-nov04b.familyfunds-lab.workers.dev" : "https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev";
         let configured = replacement ? {} : containerEnvironment(this.env, {allowStagingPaystackTest: true});
         if (!replacement && ((configured.D1_STAGING_DATABASE !== undefined && configured.D1_STAGING_DATABASE !== database)
             || (configured.D1_STAGING_URL !== undefined && configured.D1_STAGING_URL !== url))) {
@@ -594,7 +594,7 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
 export default {
     async queue(batch, env) {
         const replacement = replacementWebhooks(env);
-        if (replacement && batch.queue !== "familyfunds-replacement-webhook-nov04") throw new Error("Unexpected replacement webhook queue");
+        if (replacement && batch.queue !== "familyfunds-replacement-webhook-nov04b") throw new Error("Unexpected replacement webhook queue");
         const config = FamilyFundsWebStagingContainer.webhookConfig(env);
         for (const message of batch.messages) {
             try {

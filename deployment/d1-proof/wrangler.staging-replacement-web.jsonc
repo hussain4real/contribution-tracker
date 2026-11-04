@@ -1,5 +1,5 @@
 {
-  "name": "familyfunds-staging-replacement-web-nov04",
+  "name": "familyfunds-staging-replacement-web-nov04b",
   "main": "staging-replacement-web.mjs",
   "compatibility_date": "2026-10-27",
   "account_id": "40344948b73fa9da3008958fdc3faf12",
@@ -23,7 +23,7 @@
   ],
   "containers": [
     {
-      "name": "familyfunds-staging-replacement-web-nov04",
+      "name": "familyfunds-staging-replacement-web-nov04b",
       "class_name": "FamilyFundsReplacementStagingContainer",
       "scheduling_policy": "durable_object",
       "images": {
@@ -34,12 +34,12 @@
     }
   ],
   "queues": {
-    "producers": [{"binding": "REPLACEMENT_WEBHOOK_QUEUE", "queue": "familyfunds-replacement-webhook-nov04"}]
+    "producers": [{"binding": "REPLACEMENT_WEBHOOK_QUEUE", "queue": "familyfunds-replacement-webhook-nov04b"}]
   },
   "services": [
     {
       "binding": "REPLACEMENT_SQL",
-      "service": "familyfunds-d1-replacement-sql-nov04"
+      "service": "familyfunds-d1-replacement-sql-nov04b"
     }
   ],
   "secrets_store_secrets": [
@@ -51,7 +51,7 @@
     {
       "binding": "REPLACEMENT_FILES_CREDENTIAL",
       "store_id": "5e78cc1e865144e4ab982aeae254ed96",
-      "secret_name": "FF_STAGING_REPLACEMENT_R2_20261104T044139Z"
+      "secret_name": "FF_STAGING_REPLACEMENT_R2_20261104T165309Z"
     }
   ],
   "vars": {

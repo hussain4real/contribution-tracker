@@ -2,8 +2,8 @@ import {WorkerEntrypoint} from 'cloudflare:workers';
 import {containerEnvironment} from './container-env.mjs';
 import stagingHandler, {FamilyFundsWebStagingContainer} from './container-worker.mjs';
 
-const database = 'familyfunds-d1-staging-clone-20261104t044139z';
-const gateway = 'familyfunds-d1-replacement-sql-nov04.familyfunds-lab.workers.dev';
+const database = 'familyfunds-d1-staging-clone-20261104t165309z';
+const gateway = 'familyfunds-d1-replacement-sql-nov04b.familyfunds-lab.workers.dev';
 const stagingOrigin = 'https://d1-staging.familyfunds.app';
 const acceptanceCookie = 'familyfunds_replacement_acceptance_session';
 const imagePattern = /^registry\.cloudflare\.com\/40344948b73fa9da3008958fdc3faf12\/familyfunds-staging-replacement@sha256:[0-9a-f]{64}$/;

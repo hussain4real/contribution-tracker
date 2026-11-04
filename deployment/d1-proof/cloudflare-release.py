@@ -236,10 +236,10 @@ def checked_bindings(worker, settings):
     if worker == replacement['worker']:
         expected = {
             'REPLACEMENT_CONTAINER': ('namespace_id', replacement['application_id']),
-            'REPLACEMENT_SQL': ('service', 'familyfunds-d1-replacement-sql-nov04'),
-            'REPLACEMENT_WEBHOOK_QUEUE': ('queue_name', 'familyfunds-replacement-webhook-nov04'),
+            'REPLACEMENT_SQL': ('service', 'familyfunds-d1-replacement-sql-nov04b'),
+            'REPLACEMENT_WEBHOOK_QUEUE': ('queue_name', 'familyfunds-replacement-webhook-nov04b'),
             'REPLACEMENT_APP_KEY': ('secret_name', 'FF_STAGING_REPLACEMENT_LARAVEL_KEY_20261103T1243Z'),
-            'REPLACEMENT_FILES_CREDENTIAL': ('secret_name', 'FF_STAGING_REPLACEMENT_R2_20261104T044139Z'),
+            'REPLACEMENT_FILES_CREDENTIAL': ('secret_name', 'FF_STAGING_REPLACEMENT_R2_20261104T165309Z'),
             'CONTAINER_ENV': ('text', '{}'), 'STAGING_ADMISSION_CONTROL': ('text', '1'),
             'RUNTIME_PROFILE': ('text', 'replacement-live'),
         }
@@ -254,8 +254,8 @@ def checked_bindings(worker, settings):
         repository = 'registry.cloudflare.com/' + ACCOUNT + '/familyfunds-staging-replacement@sha256:'
         if not re.fullmatch(re.escape(repository) + '[0-9a-f]{64}', names.get('CONTAINER_IMAGE', {}).get('text', '')):
             raise RuntimeError('Replacement web image is not pinned to its own repository')
-    if worker == 'familyfunds-staging-replacement-maintenance-nov04':
-        if (names.get('REPLACEMENT_DB', {}).get('id') != '821325ae-6a5f-440a-af64-ebe2c336a314'
+    if worker == 'familyfunds-staging-replacement-maintenance-nov04b':
+        if (names.get('REPLACEMENT_DB', {}).get('id') != '507d231f-bc0f-4eff-b861-8d1083c4c0ec'
                 or names.get('STAGING_GATEWAY_ADMISSION_OBJECT', {}).get('namespace_id') != 'aa1360266e0c46fcad453105e41d24a9'
                 or names.get('REPLACEMENT_WEB_MAINTENANCE', {}).get('service') != replacement['worker']
                 or names.get('REPLACEMENT_WEB_MAINTENANCE', {}).get('entrypoint') != 'ReplacementMaintenance'):
