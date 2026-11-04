@@ -127,6 +127,12 @@ test('replacement renderer uses the reviewed batch only for its reserved databas
     try {
         const source = inventory(db);
         const replacement = {...source, databaseId: replacementDatabase.id, databaseName: replacementDatabase.name};
+        const recovery = JSON.parse(readFileSync(new URL('./wrangler.staging-replacement-recovery.jsonc', import.meta.url), 'utf8'));
+        const destination = recovery.d1_databases.find(binding => binding.binding === 'RECOVERY_DB');
+        assert.equal(replacement.databaseId, destination.database_id);
+        assert.equal(replacement.databaseName, destination.database_name);
+        assert.throws(() => buildReplacementPhase01Batch({...source, databaseId: '43e11f90-07d7-49fc-930f-2a33a474d930',
+            databaseName: 'familyfunds-d1-staging-clone-20261103t092540z'}), /replacement target/);
         assert.throws(() => buildReplacementPhase01Batch({...replacement, databaseId: stagingDatabaseId}), /replacement target/);
         assert.throws(() => buildReplacementPhase01Batch({...replacement, databaseName: 'familyfunds-production'}), /replacement target/);
         assert.throws(() => buildStagingPhase01Batch(replacement), /staging target/);
