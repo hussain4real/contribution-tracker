@@ -45,8 +45,7 @@ describe('Payment Recording Flow (Browser)', function () {
             ->assertSee($this->member->name)
             ->assertSee('1 Month');
 
-        fillBrowserFieldWithoutChange($page, '[name="amount"]', '4000');
-        fillBrowserFieldWithoutChange($page, '[name="paid_at"]', now()->format('Y-m-d'));
+        $page->fill('amount', '4000');
 
         expect($page->script('() => document.querySelector("form")?.getAttribute("action")'))
             ->toBe("/{$this->family->slug}/payments");
