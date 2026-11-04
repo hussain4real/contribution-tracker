@@ -57,7 +57,7 @@
       "worker": "familyfunds-staging-replacement-web-nov04c",
       "entry": "staging-replacement-web.mjs",
       "class_name": "FamilyFundsReplacementStagingContainer",
-      "application_id": "a779e2eb3b80462d9a4a3c87a50d47f0",
+      "application_id": "030c9c8935eb44eda74dee7b149a6e1a",
       "instance_name": "replacement-staging",
       "image_repository": "familyfunds-staging-replacement",
       "companions": [
