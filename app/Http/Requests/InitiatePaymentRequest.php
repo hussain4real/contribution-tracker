@@ -27,6 +27,8 @@ class InitiatePaymentRequest extends FormRequest
         return [
             'contribution_ids' => ['required', 'array', 'min:1'],
             'contribution_ids.*' => ['integer', 'exists:contributions,id'],
+            'expected_contribution_amount_kobo' => ['required', 'integer', 'min:1'],
+            'expected_gross_amount_kobo' => ['required', 'integer', 'min:1'],
         ];
     }
 }

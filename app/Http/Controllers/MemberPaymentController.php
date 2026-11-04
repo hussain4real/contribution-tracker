@@ -38,6 +38,7 @@ class MemberPaymentController extends Controller
     {
         $user = $this->authUser();
         $family = app(Family::class);
+        $maximumAdvanceDate = now()->startOfMonth()->addMonths(6);
 
         $pendingContributions = $user->contributions()
             ->where('family_id', $family->id)
@@ -53,10 +54,11 @@ class MemberPaymentController extends Controller
                 'balance' => $contribution->balance,
                 'status' => $contribution->status,
                 'period_label' => $contribution->period_label,
+                'can_pay_online' => ($contribution->year * 12) + $contribution->month <= ($maximumAdvanceDate->year * 12) + $maximumAdvanceDate->month,
             ]);
 
         $paystackPublicKey = $this->stringConfig('services.paystack.public_key');
-        $bankSetupStatus = $this->bankSetupStatus($family, $paystackPublicKey);
+        $bankSetupStatus = $this->bankSetupStatus($family);
 
         return Inertia::render('Pay/Index', [
             'pending_contributions' => $pendingContributions,
@@ -85,7 +87,11 @@ class MemberPaymentController extends Controller
             ], 422);
         }
 
-        $contributionIds = $this->integerList($validated['contribution_ids'] ?? []);
+        if (! $this->paystack->isConfigured()) {
+            return response()->json(['message' => 'Online payments are currently unavailable.'], 422);
+        }
+
+        $contributionIds = array_values(array_unique($this->integerList($validated['contribution_ids'] ?? [])));
 
         // Calculate total from selected contributions
         $contributions = $user->contributions()
@@ -100,7 +106,16 @@ class MemberPaymentController extends Controller
             ], 422);
         }
 
-        $totalAmount = (int) $contributions->sum(fn (Contribution $contribution): int => $contribution->balance);
+        if ($contributions->count() !== count($contributionIds)) {
+            return response()->json(['message' => 'Some selected contributions are no longer available. Refresh and try again.'], 422);
+        }
+
+        $balances = $contributions->map(fn (Contribution $contribution): int => $contribution->balance);
+        if ($balances->contains(fn (int $balance): bool => $balance <= 0) && $balances->contains(fn (int $balance): bool => $balance > 0)) {
+            return response()->json(['message' => 'Some selected contributions are no longer available. Refresh and try again.'], 422);
+        }
+
+        $totalAmount = $balances->reduce(fn (int $total, int $balance): int => $total + $balance, 0);
 
         if ($totalAmount <= 0) {
             return response()->json([
@@ -108,7 +123,18 @@ class MemberPaymentController extends Controller
             ], 422);
         }
 
+        $maximumAdvanceDate = now()->startOfMonth()->addMonths(6);
+        if ($contributions->contains(fn (Contribution $contribution): bool => ($contribution->year * 12) + $contribution->month > ($maximumAdvanceDate->year * 12) + $maximumAdvanceDate->month
+        )) {
+            return response()->json(['message' => 'Advance payments are limited to 6 months ahead.'], 422);
+        }
+
         $feeEstimate = $this->feeCalculator->estimateForContributionAmount($totalAmount);
+
+        if ($request->integer('expected_contribution_amount_kobo') !== $feeEstimate['contribution_amount_kobo']
+            || $request->integer('expected_gross_amount_kobo') !== $feeEstimate['gross_amount_kobo']) {
+            return response()->json(['message' => 'Your payment amount has changed. Refresh and review it before trying again.'], 422);
+        }
 
         $reference = 'TXN_'.Str::upper(Str::random(16));
 
@@ -184,24 +210,10 @@ class MemberPaymentController extends Controller
                 'estimated_fee_kobo' => $feeEstimate['estimated_fee_kobo'],
             ]);
         } catch (RuntimeException $e) {
-            $failureReason = 'Paystack initialization failed.';
-            $paystackSecret = config('services.paystack.secret_key');
-            if (config('services.paystack.staging_diagnostics')
-                && is_string($paystackSecret) && str_starts_with($paystackSecret, 'sk_test_')) {
-                $diagnostic = match (true) {
-                    $e->getCode() >= 400 && $e->getCode() <= 599 => 'HTTP '.$e->getCode(),
-                    $e->getMessage() === 'Paystack response did not include a data payload.' => 'invalid response data',
-                    $e->getMessage() === 'Paystack response did not include access_code.' => 'missing access code',
-                    $e->getMessage() === 'Paystack response did not include authorization_url.' => 'missing authorization URL',
-                    default => 'runtime error: '.class_basename($e),
-                };
-                $failureReason = 'Paystack initialization failed ('.$diagnostic.').';
-            }
-
             $transaction->update([
                 'status' => TransactionStatus::Failed,
                 'failed_at' => now(),
-                'failure_reason' => $failureReason,
+                'failure_reason' => 'Paystack initialization failed.',
             ]);
 
             return response()->json([
@@ -293,7 +305,7 @@ class MemberPaymentController extends Controller
         return is_string($value) ? $value : '';
     }
 
-    private function bankSetupStatus(Family $family, string $paystackPublicKey): string
+    private function bankSetupStatus(Family $family): string
     {
         if (! $family->hasBankDetails()) {
             return filled($family->bank_name) || filled($family->account_name) || filled($family->account_number)
@@ -301,7 +313,7 @@ class MemberPaymentController extends Controller
                 : 'missing_bank_details';
         }
 
-        if ($paystackPublicKey === '') {
+        if (! $this->paystack->isConfigured()) {
             return 'missing_paystack_key';
         }
 

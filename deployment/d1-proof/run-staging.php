@@ -19,6 +19,7 @@ use App\Models\WhatsAppMessage;
 use App\Notifications\ContributionReminderNotification;
 use App\Services\PaymentAllocationService;
 use App\Support\PlatformPlanCatalog;
+use FamilyFunds\D1Staging\D1StagingConnection;
 use FamilyFunds\D1Staging\D1StagingDeliveryJob;
 use FamilyFunds\D1Staging\D1StagingRuntime;
 use Illuminate\Contracts\Console\Kernel;
@@ -26,6 +27,7 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 
 if (PHP_SAPI !== 'cli') {
     throw new RuntimeException('Staging operations are CLI-only.');
@@ -33,11 +35,19 @@ if (PHP_SAPI !== 'cli') {
 $root = dirname(__DIR__, 2);
 $secretPath = $argv[2] ?? $root.'/storage/app/private/d1-staging/staging-secrets.json';
 $target = $argv[3] ?? 'web';
-if (! in_array($target, ['web', 'scale'], true)) {
-    throw new RuntimeException('Unknown isolated staging target.');
+$operation = $argv[1] ?? '';
+require_once $root.'/vendor/autoload.php';
+require_once __DIR__.'/autoload.php';
+$database = match ($target) {
+    'web' => 'familyfunds-d1-web-staging',
+    'scale' => 'familyfunds-d1-scale-lab',
+    'replacement' => D1StagingConnection::REPLACEMENT_DATABASE,
+    default => throw new RuntimeException('Unknown isolated staging target.'),
+};
+$url = D1StagingConnection::TARGETS[$database];
+if ($target === 'replacement' && (! in_array($operation, ['scheduled-maintenance-proof', 'verify-maintenance-target'], true) || is_file($secretPath))) {
+    throw new RuntimeException('Replacement maintenance requires container credentials and a scheduled operation.');
 }
-$database = $target === 'scale' ? 'familyfunds-d1-scale-lab' : 'familyfunds-d1-web-staging';
-$url = $target === 'scale' ? 'https://familyfunds-d1-scale-sql.familyfunds-lab.workers.dev' : 'https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev';
 if (is_file($secretPath)) {
     $secrets = json_decode(file_get_contents($secretPath), true, flags: JSON_THROW_ON_ERROR);
 } else {
@@ -63,12 +73,29 @@ foreach ($environment as $key => $value) {
     $_ENV[$key] = $value;
     $_SERVER[$key] = $value;
 }
-require $root.'/vendor/autoload.php';
 $app = require $root.'/bootstrap/app.php';
 $app->make(Kernel::class)->bootstrap();
+if (! $app->environment('d1-staging') || config('d1-production.enabled') || ! config('d1-staging.enabled')
+    || config('d1-staging.database') !== $database || config('d1-staging.url') !== $url) {
+    fwrite(STDERR, "Effective Laravel configuration differs from the requested staging target.\n");
+    exit(1);
+}
+if ($target === 'replacement' && (! $app->configurationIsCached() || config('d1-staging.r2.admission') !== '1'
+    || config('d1-staging.r2.bucket') !== $database.'-files' || config('d1-staging.delivery.enabled') || ($operation !== 'verify-maintenance-target' && config('d1-staging.webhooks.enabled'))
+    || config('mail.default') !== 'array' || config('app.key') !== $environment['APP_KEY']
+    || config('d1-staging.token') !== $environment['D1_STAGING_TOKEN'])) {
+    fwrite(STDERR, "Replacement maintenance requires the isolated cached application configuration.\n");
+    exit(1);
+}
 $runtime = $app->make(D1StagingRuntime::class);
-$operation = $argv[1] ?? '';
-if ($operation === 'install') {
+if ($operation === 'verify-maintenance-target' && $target === 'replacement') {
+    $connected = DB::connection('d1-staging')->selectOne('select 1 as connected');
+    $files = Storage::disk('local')->getClient()->listObjectsV2(['Bucket' => $database.'-files', 'MaxKeys' => 0]);
+    if ((int) ($connected->connected ?? 0) !== 1 || ($files['@metadata']['statusCode'] ?? null) !== 200) {
+        throw new RuntimeException('Replacement maintenance connection check failed.');
+    }
+    echo json_encode(['database' => $database, 'files' => true], JSON_THROW_ON_ERROR)."\n";
+} elseif ($operation === 'install') {
     D1StagingRuntime::install();
     echo json_encode(['installed' => true])."\n";
 } elseif ($operation === 'install-read-cache') {
@@ -194,7 +221,7 @@ if ($operation === 'install') {
     $kind = $argv[4] ?? '';
     $familyId = filter_var($argv[5] ?? null, FILTER_VALIDATE_INT);
     $at = $argv[6] ?? '';
-    if ($target !== 'web' || ! in_array($kind, ['generate', 'remind25', 'remind28', 'purge', 'reports', 'retry-notifications'], true)
+    if (! in_array($target, ['web', 'replacement'], true) || ! in_array($kind, ['generate', 'remind25', 'remind28', 'purge', 'reports', 'retry-notifications'], true)
         || ! is_int($familyId) || $familyId < 1 || ! preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/D', $at)
         || Carbon::parse($at)->isFuture()) {
         throw new RuntimeException('Invalid isolated maintenance operation.');
@@ -252,7 +279,7 @@ if ($operation === 'install') {
                     if ($kind === 'generate') {
                         $arguments += ['--family' => $familyId, '--year' => now()->year, '--month' => now()->month];
                     } elseif (str_starts_with($kind, 'remind')) {
-                        $arguments += ['--day' => $kind === 'remind25' ? 25 : 28];
+                        $arguments += ['--family' => $familyId, '--day' => $kind === 'remind25' ? 25 : 28];
                     }
 
                     return ['exit_code' => $kernel->call($command, $arguments), 'output' => trim($kernel->output())];

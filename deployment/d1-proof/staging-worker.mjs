@@ -2,6 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 
 const MAX_BODY_BYTES = 2_000_000;
 const MAX_BATCH = 1000;
+const replacementDatabase = "familyfunds-d1-staging-clone-20261104t044139z";
 
 export class StagingGatewayAdmission extends DurableObject {
     async begin() {
@@ -85,12 +86,13 @@ export default {
         const namespace = env.STAGING_GATEWAY_ADMISSION_OBJECT;
         // The original gateway has neither binding. An installed coordinator requires an explicit mode.
         const mode = env.STAGING_GATEWAY_ADMISSION === undefined && !namespace ? "0" : env.STAGING_GATEWAY_ADMISSION;
-        if (mode !== "0" && (mode !== "1" || !namespace)) {
+        const admissionTarget = env.DATABASE_NAME === "familyfunds-d1-web-staging" || env.DATABASE_NAME === replacementDatabase;
+        if ((mode !== "0" && (mode !== "1" || !namespace)) || (env.DATABASE_NAME === replacementDatabase && mode !== "1")) {
             return Response.json({error: "Invalid gateway admission configuration"}, {status: 503, headers: {"Cache-Control": "no-store"}});
         }
         if (path === "/storage-write/begin" || path === "/storage-write/complete") {
             const headers = {"Cache-Control": "no-store"};
-            if (request.method !== "POST" || mode !== "1" || env.DATABASE_NAME !== "familyfunds-d1-web-staging") {
+            if (request.method !== "POST" || mode !== "1" || !admissionTarget) {
                 return Response.json({error: "Storage admission unavailable"}, {status: 404, headers});
             }
             const gate = namespace.getByName("staging-gateway");
@@ -107,7 +109,7 @@ export default {
             return new Response(null, {status: 204, headers});
         }
         if (path === "/__staging_admin/admission") {
-            if (mode !== "1" || env.DATABASE_NAME !== "familyfunds-d1-web-staging") return Response.json({error: "Not found"}, {status: 404});
+            if (mode !== "1" || !admissionTarget) return Response.json({error: "Not found"}, {status: 404});
             const actual = new TextEncoder().encode(request.headers.get("X-Staging-Gateway-Admin") ?? "");
             const admin = new TextEncoder().encode(env.STAGING_GATEWAY_ADMIN_TOKEN ?? "");
             if (admin.length < 32 || actual.length !== admin.length || !crypto.subtle.timingSafeEqual(actual, admin)) return Response.json({error: "Forbidden"}, {status: 403});
@@ -149,7 +151,7 @@ export default {
         try {
             const body = JSON.parse(new TextDecoder().decode(bytes));
             const gateEnabled = mode === "1";
-            if (gateEnabled && env.DATABASE_NAME !== "familyfunds-d1-web-staging") throw new Error("Invalid staging admission target");
+            if (gateEnabled && !admissionTarget) throw new Error("Invalid staging admission target");
             const gate = gateEnabled ? namespace.getByName("staging-gateway") : null;
             if (path === "/manifest") {
                 const id = gate ? await gate.begin() : null;

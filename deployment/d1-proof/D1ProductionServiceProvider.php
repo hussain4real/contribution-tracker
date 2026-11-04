@@ -53,6 +53,7 @@ final class D1ProductionServiceProvider extends ServiceProvider
             'database.default' => 'd1',
             'session.driver' => 'd1', 'session.encrypt' => true, 'session.secure' => true,
             'session.cookie' => 'familyfunds_production_session',
+            'session.lifetime' => 10080, 'session.expire_on_close' => false,
             'queue.default' => 'd1',
             'queue.connections.d1' => ['driver' => 'd1', 'queue' => 'default', 'after_commit' => false],
             'cache.default' => 'd1', 'cache.stores.d1' => ['driver' => 'd1'],

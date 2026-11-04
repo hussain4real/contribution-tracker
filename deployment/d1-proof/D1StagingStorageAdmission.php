@@ -17,9 +17,9 @@ use Throwable;
 
 final class D1StagingStorageAdmission
 {
-    public function __construct(private readonly string $url, private readonly string $token)
+    public function __construct(string $database, private readonly string $url, private readonly string $token)
     {
-        D1RuntimeProfile::assertTarget('familyfunds-d1-web-staging', $url, $token);
+        D1RuntimeProfile::assertTarget($database, $url, $token);
     }
 
     /** @param callable(CommandInterface, RequestInterface): PromiseInterface $next */

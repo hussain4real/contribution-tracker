@@ -29,7 +29,6 @@ class PaymentBatchPolicy
     public function reverse(User $user, PaymentBatch $batch): bool
     {
         return ($user->current_family_id ?? $user->family_id) === $batch->family_id
-            && $user->membershipForFamilyId($batch->family_id)?->role === Role::Admin
-            && ! $batch->isReversed();
+            && $user->membershipForFamilyId($batch->family_id)?->role === Role::Admin;
     }
 }

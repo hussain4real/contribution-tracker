@@ -78,11 +78,11 @@ declare module 'virtual:pwa-register' {
 /// <reference types="vite-plugin-pwa/client" />
 
 declare module '@inertiajs/core' {
+    interface PageProps extends InertiaPageProps, AppPageProps {}
+
     interface PageFlashData {
         payment_result?: { kind: 'success' | 'error'; message: string };
     }
-
-    interface PageProps extends InertiaPageProps, AppPageProps {}
 }
 
 declare module 'vue' {

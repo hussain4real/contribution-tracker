@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Actions\CorrectPaymentBatch;
 use App\Actions\ReversePaymentBatch;
 use App\Enums\PaymentMethod;
+use App\Jobs\SendPaymentReceipt;
 use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\FamilyMembership;
@@ -13,8 +14,13 @@ use App\Models\PaymentBatch;
 use App\Models\User;
 use App\Services\PaymentAllocationPreview;
 use App\Services\PaymentAllocationService;
+use FamilyFunds\D1Staging\D1StagingSessionHandler;
+use GuzzleHttp\Promise\PromiseInterface;
+use Illuminate\Http\Client\Request as ClientRequest;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -183,7 +189,7 @@ it('reviews and posts the same allocations and safely replays the reviewed reque
     $receipt = PaymentBatch::sole();
     $response->assertRedirect(route('payments.index', ['current_family' => $family->slug, 'receipt' => $receipt->id]))->assertSessionHasNoErrors();
     $this->actingAs($officer)->get(route('payments.index', ['current_family' => $family->slug, 'receipt' => $receipt->id]))
-        ->assertInertia(fn (AssertableInertia $page) => $page->where('receipts.0.id', $receipt->id));
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('receipts.0.id', $receipt->id)->has('receipts.0.deliveries'));
     $this->actingAs($officer)->post(route('payments.store', ['current_family' => $family->slug]), $data)->assertRedirect()->assertSessionHasNoErrors();
     expect(PaymentBatch::count())->toBe(1)->and(Payment::count())->toBe(1);
     $different = [...$data, 'amount' => 1000];
@@ -309,6 +315,67 @@ it('returns the original receipt when an unchanged recorded payment is retried a
         ->assertRedirect(route('payments.index', ['current_family' => $family->slug, 'receipt' => $receipt->id]))
         ->assertSessionHas('success', 'Receipt #'.$receipt->receipt_number.' for ₦1,500.00 was recorded and later reversed.');
     expect(PaymentBatch::count())->toBe(1)->and(Payment::count())->toBe(1);
+});
+
+it('returns the original receipt when session saving fails after a payment is recorded', function () {
+    require_once __DIR__.'/../../../deployment/d1-proof/autoload.php';
+    $queue = Queue::fake();
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
+    $data = ['member_id' => $member->id, 'amount' => 1500, 'paid_at' => now()->toDateString(),
+        'method' => 'cash', 'idempotency_key' => (string) Str::uuid()];
+    $data['review_token'] = $this->actingAs($officer)->postJson(route('payments.review', ['current_family' => $family->slug]), $data)->assertOk()->json('token');
+
+    $remote = new PDO('sqlite::memory:');
+    $remote->exec('create table sessions(id text primary key,payload text,last_activity integer)');
+    $injectConflict = true;
+    Http::preventStrayRequests();
+    Http::fake(function (ClientRequest $request) use ($remote, &$injectConflict): PromiseInterface {
+        if ($request->url() !== 'https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev/query') {
+            throw new RuntimeException('Unexpected synthetic session endpoint.');
+        }
+        $sql = $request['sql'];
+        $params = $request['params'];
+        if (! is_string($sql) || ! is_array($params)) {
+            throw new RuntimeException('Invalid synthetic session request.');
+        }
+        if ($injectConflict && PaymentBatch::query()->exists() && str_starts_with($sql, 'update sessions set payload=')) {
+            $remote->exec("update sessions set payload='Y29uZmxpY3Q='");
+            $injectConflict = false;
+        }
+        $statement = $remote->prepare($sql);
+        $statement->execute($params);
+
+        return Http::response(['database' => 'familyfunds-d1-web-staging', 'result' => ['results' => $statement->fetchAll(PDO::FETCH_ASSOC)]]);
+    });
+    config(['d1-staging.enabled' => true, 'session.driver' => 'payment-conflict-session', 'session.encrypt' => true, 'session.lottery' => [0, 100]]);
+    app('session')->extend('payment-conflict-session', fn (): D1StagingSessionHandler => new D1StagingSessionHandler(
+        'https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev', 'synthetic-token', 'familyfunds-d1-web-staging', 120,
+    ));
+
+    $url = route('payments.store', ['current_family' => $family->slug]);
+    $failed = $this->actingAs($officer)->post($url, $data);
+    $failed->assertInternalServerError();
+    if (! $failed->baseResponse instanceof Response) {
+        throw new RuntimeException('Expected an HTTP error response.');
+    }
+    expect($failed->baseResponse->exception)->toBeInstanceOf(RuntimeException::class)
+        ->and($failed->baseResponse->exception?->getMessage())->toContain('session changed')
+        ->and($injectConflict)->toBeFalse()
+        ->and(PaymentBatch::count())->toBe(1)
+        ->and(Payment::count())->toBe(1);
+    $receipt = PaymentBatch::sole();
+    $deliveryCount = $receipt->receiptDeliveries()->count();
+    $queuedCount = $queue->pushed(SendPaymentReceipt::class)->count();
+    expect($deliveryCount)->toBe(2)->and($queuedCount)->toBeGreaterThan(0);
+    $this->actingAs($officer)->post($url, $data)
+        ->assertRedirect(route('payments.index', ['current_family' => $family->slug, 'receipt' => $receipt->id]))
+        ->assertSessionHasNoErrors();
+    expect(PaymentBatch::count())->toBe(1)->and(Payment::count())->toBe(1)
+        ->and($receipt->receiptDeliveries()->count())->toBe($deliveryCount)
+        ->and($queue->pushed(SendPaymentReceipt::class)->count())->toBe($queuedCount);
 });
 
 it('rejects changed payment details and stale allocations after review', function () {

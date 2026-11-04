@@ -32,6 +32,9 @@ class ReleaseSafetyTest(unittest.TestCase):
         result = image.package_config({'Env': ['APP_ENV=production'], 'Entrypoint': ['/entry.sh'], 'Cmd': ['serve']})
         self.assertIn('ENTRYPOINT ["/entry.sh"]', result)
         self.assertIn('CMD ["serve"]', result)
+        result = image.package_config({'Env': ['PHPIZE_DEPS=autoconf\tmake', r'EXAMPLE=literal\t']})
+        self.assertIn('ENV PHPIZE_DEPS="autoconf\tmake"', result)
+        self.assertIn(r'ENV EXAMPLE="literal\\t"', result)
 
     def test_root_filesystem_rejects_environment_cached_config_and_private_files(self):
         for name in ['var/www/html/.env', 'var/www/html/.env.production', 'var/www/html/bootstrap/cache/config.php', 'var/www/html/storage/app/private/key.bin']:
@@ -59,6 +62,19 @@ class ReleaseSafetyTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'accepted D1 schema'):
                 release.validate()
             api.assert_not_called()
+
+    def test_schema_acceptance_is_independent_for_each_deployment(self):
+        for accepted, pending in [('staging', 'production'), ('production', 'staging')]:
+            with (
+                self.subTest(accepted=accepted),
+                patch.dict(release.CONFIG[accepted], {'accepted_migrations_sha256': 'a' * 64}),
+                patch.object(release, 'migration_fingerprint', return_value='a' * 64),
+            ):
+                self.assertEqual(release.validate(accepted)['validated_targets'], [accepted])
+                with self.assertRaisesRegex(RuntimeError, 'accepted D1 schema for ' + pending):
+                    release.validate(pending)
+                with self.assertRaisesRegex(RuntimeError, 'accepted D1 schema for ' + pending):
+                    release.validate()
 
     def test_production_entry_pins_the_exact_image_revision_and_active_phase(self):
         sources = release.modules('cloudflare-production-entry.mjs', 'repo@' + DIGEST, 'github-test')
@@ -92,6 +108,7 @@ class ReleaseSafetyTest(unittest.TestCase):
                 release.prepared('repo@' + DIGEST)
             self.assertEqual(api.call_args.args[1], '/containers/image-preparations')
 
+    @patch.dict(release.CONFIG['staging'], {'destination': 'original'})
     def test_staging_deployment_and_rollback_both_preserve_container_enablement(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)
@@ -101,10 +118,14 @@ class ReleaseSafetyTest(unittest.TestCase):
                                                         'runtime_credentials_packaged': False, 'rootfs_sha256': hashlib.sha256(b'inspected image').hexdigest(),
                                                         'image_archive_sha256': hashlib.sha256(b'inspected original image').hexdigest(), 'source_image_id': DIGEST}))
             old_raw, old_mime = release.multipart('container-worker.mjs', {'container-worker.mjs': b'old reviewed code'}, [], None)
+            old_maintenance_raw, old_maintenance_mime = release.multipart('maintenance-worker.mjs', {'maintenance-worker.mjs': b'old maintenance code'}, [], None)
             writes = []
             commands = []
 
             def api(method, url, data=None, **kwargs):
+                if url.startswith('/zones/'):
+                    return {'id': release.CONFIG['staging']['route_id'], 'pattern': 'd1-staging.familyfunds.app/*',
+                            'script': 'familyfunds-d1-web-v2', 'request_limit_fail_open': False}
                 if 'credentials' in url:
                     return {'password': 'synthetic', 'username': 'synthetic', 'registry_host': 'registry.cloudflare.com'}
                 if url.endswith('/settings'):
@@ -112,12 +133,14 @@ class ReleaseSafetyTest(unittest.TestCase):
                 if method == 'GET' and '/containers/applications/' in url:
                     return {'configuration': {'image': 'old@' + DIGEST}}
                 if method == 'GET':
+                    if url.endswith('/familyfunds-d1-maintenance-staging'):
+                        return old_maintenance_raw, old_maintenance_mime
                     return old_raw, old_mime
                 if method == 'PUT':
                     message = release.email.parser.BytesParser(policy=release.email.policy.default).parsebytes(
                         ('Content-Type: ' + kwargs['content_type'] + '\r\n\r\n').encode() + data)
-                    writes.append(json.loads(next(message.iter_parts()).get_payload(decode=True)))
-                    if len(writes) == 1:
+                    writes.append((url, json.loads(next(message.iter_parts()).get_payload(decode=True))))
+                    if url.endswith('/familyfunds-d1-web-v2') and len([entry for entry in writes if entry[0] == url]) == 1:
                         raise RuntimeError('simulated unknown update outcome')
                     return {}
                 raise AssertionError('Unexpected or database API call: ' + url)
@@ -129,229 +152,123 @@ class ReleaseSafetyTest(unittest.TestCase):
                 return DIGEST if args[-1] == '{{.Id}}' else json.dumps([
                     'registry.cloudflare.com/' + release.ACCOUNT + '/familyfunds-d1-staging@' + DIGEST])
 
-            target = {**release.CONFIG['staging'], 'companions': []}
-            with patch.dict(release.CONFIG, {'staging': target}), patch.dict(os.environ, {'GITHUB_SHA': SHA, 'GITHUB_REF': 'refs/heads/cloudflare-staging', 'GITHUB_ACTIONS': 'true', 'DOCKER_CONFIG': directory}), patch.object(release, 'validate'), patch.object(release, 'public_checks'), patch.object(release, 'prepared') as prepared, patch.object(release, 'rollout_image'), patch.object(release, 'api', side_effect=api), patch.object(release.subprocess, 'run', side_effect=command), patch.object(release.subprocess, 'check_output', side_effect=output), contextlib.redirect_stdout(io.StringIO()):
-                with self.assertRaisesRegex(RuntimeError, 'code/image rollback was requested'):
+            with patch.dict(os.environ, {'GITHUB_SHA': SHA, 'GITHUB_REF': 'refs/heads/cloudflare-staging', 'GITHUB_ACTIONS': 'true', 'DOCKER_CONFIG': directory}), patch.object(release, 'validate'), patch.object(release, 'public_checks'), patch.object(release, 'prepared') as prepared, patch.object(release, 'rollout_image'), patch.object(release, 'api', side_effect=api), patch.object(release.subprocess, 'run', side_effect=command), patch.object(release.subprocess, 'check_output', side_effect=output), contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(RuntimeError, 'previous code/image restored'):
                     release.publish('staging', path)
                 prepared.assert_not_called()
-            self.assertEqual(len(writes), 2)
+            self.assertEqual([url.rsplit('/', 1)[-1] for url, _ in writes], [
+                'familyfunds-d1-maintenance-staging', 'familyfunds-d1-web-v2',
+                'familyfunds-d1-web-v2', 'familyfunds-d1-maintenance-staging',
+            ])
             self.assertTrue(any(args[:3] == ['docker', 'image', 'load'] for args in commands))
             self.assertTrue(any(args[:2] == ['docker', 'push'] for args in commands))
             self.assertFalse(any('buildx' in args for args in commands))
-            for metadata in writes:
-                self.assertEqual(metadata['containers'], [{'class_name': 'FamilyFundsWebStagingContainer'}])
+            for url, metadata in writes:
+                self.assertEqual(metadata.get('containers'), [{'class_name': 'FamilyFundsWebStagingContainer'}] if url.endswith('/familyfunds-d1-web-v2') else None)
 
-    def test_staging_gateway_requires_reviewed_previous_or_matching_candidate_source(self):
-        reviewed = hashlib.sha256(b'reviewed').hexdigest()
-        release.verify_staging_module_source(b'reviewed', b'new', reviewed)
-        release.verify_staging_module_source(b'new', b'new', reviewed)
-        with self.assertRaisesRegex(RuntimeError, 'differs from the reviewed'):
-            release.verify_staging_module_source(b'unexpected', b'new', reviewed)
-        with self.assertRaisesRegex(RuntimeError, 'fingerprint'):
-            release.verify_staging_module_source(b'reviewed', b'new', None)
+    def test_staging_route_must_match_the_selected_destination(self):
+        with patch.dict(release.CONFIG['staging'], {'destination': 'replacement'}):
+            target = release.target_config('staging')
+            route = {'id': target['route_id'], 'pattern': 'd1-staging.familyfunds.app/*',
+                     'script': target['worker'], 'request_limit_fail_open': False}
+            with patch.object(release, 'api', return_value=route):
+                release.check_staging_route(target)
+            for mismatch in [{'script': 'familyfunds-d1-web-v2'}, {'pattern': 'familyfunds.app/*'}, {'request_limit_fail_open': True}]:
+                with patch.object(release, 'api', return_value=route | mismatch), self.assertRaisesRegex(RuntimeError, 'live staging route'):
+                    release.check_staging_route(target)
 
-    def test_staging_gateway_requires_version_urls_disabled(self):
-        with patch.object(release, 'api', return_value={'enabled': True, 'previews_enabled': False}) as api:
-            release.require_disabled_gateway_version_urls('/workers/scripts/example')
-            api.assert_called_once_with('GET', '/workers/scripts/example/subdomain')
-        for state in [True, None]:
-            with self.subTest(previews_enabled=state), patch.object(release, 'api', return_value={'previews_enabled': state}):
-                with self.assertRaisesRegex(RuntimeError, 'version URLs must be disabled'):
-                    release.require_disabled_gateway_version_urls('/workers/scripts/example')
+    def test_replacement_publish_restores_both_previous_versions_after_uncertain_web_update(self):
+        version = 'aacc1716-7924-4014-9c09-dc07c17fdd37'
+        replacement = release.CONFIG['staging_destinations']['replacement']
+        web = replacement['worker']
+        maintenance = replacement['companions'][0]['worker']
+        image = 'registry.cloudflare.com/' + release.ACCOUNT + '/' + replacement['image_repository'] + '@' + DIGEST
+        previous_image = image.replace('2' * 64, '3' * 64)
+        previous_revision = 'github-0123456789ab'
+        mutations = []
 
-    def test_staging_public_checks_require_gateway_health(self):
-        class Response:
-            def __init__(self, body):
-                self.status = 200
-                self.headers = {}
-                self.body = body
-            def __enter__(self):
-                return self
-            def __exit__(self, *args):
-                return False
-            def read(self, limit):
-                return self.body
-
-        responses = [Response(b'ok'), Response(b'<html>password</html>')]
-        with patch.dict(os.environ, {'STAGING_BASIC_AUTHORIZATION': 'Basic fixture'}), patch.object(release.urllib.request, 'urlopen', side_effect=responses) as urlopen:
-            release.public_checks('staging')
-            self.assertEqual(urlopen.call_count, 2)
-
-        for health in [b'{"ok":false}', b'{"ok":1}', b'{"ok":true,"extra":1}', b'not json', b' ' * 4097]:
-            responses = [Response(b'ok'), Response(b'<html>password</html>'), Response(health)]
-            with self.subTest(health=health), patch.dict(os.environ, {'STAGING_BASIC_AUTHORIZATION': 'Basic fixture'}), patch.object(release.urllib.request, 'urlopen', side_effect=responses):
-                with self.assertRaisesRegex(RuntimeError, 'gateway health'):
-                    release.public_checks('staging', 'github-fixture')
-        failure = release.urllib.error.HTTPError('https://example.invalid', 503, 'failure', {}, io.BytesIO(b'{"ok":false,"stage":"gateway_token"}'))
-        responses = [Response(b'ok'), Response(b'<html>password</html>'), failure]
-        with patch.dict(os.environ, {'STAGING_BASIC_AUTHORIZATION': 'Basic fixture'}), patch.object(release.urllib.request, 'urlopen', side_effect=responses):
-            with self.assertRaises(release.StagingGatewayHealthError) as raised:
-                release.public_checks('staging', 'github-fixture')
-            self.assertEqual(raised.exception.stage, 'gateway_token')
-
-        responses = [Response(b'ok'), Response(b'<html>password</html>'), Response(b'{"ok":true}')]
-        with patch.dict(os.environ, {'STAGING_BASIC_AUTHORIZATION': 'Basic fixture'}), patch.object(release.urllib.request, 'urlopen', side_effect=responses) as urlopen:
-            release.public_checks('staging', 'github-fixture')
-            request = urlopen.call_args.args[0]
-            self.assertTrue(request.full_url.endswith('/__staging_health/gateway'))
-            self.assertEqual(request.get_header('Authorization'), 'Basic fixture')
-
-    def test_gateway_failure_stage_accepts_only_fixed_nonsecret_stages(self):
-        def error(status, body):
-            return release.urllib.error.HTTPError('https://example.invalid', status, 'failure', {}, io.BytesIO(body))
-
-        for stage in release.GATEWAY_FAILURE_STAGES:
-            body = json.dumps({'ok': False, 'stage': stage}).encode()
-            self.assertEqual(release.gateway_failure_stage(error(503, body)), stage)
-        for status, body in [
-            (401, b'{"ok":false,"stage":"gateway_authentication"}'),
-            (503, b'{"ok":false,"stage":"secret value"}'),
-            (503, b'{"ok":false,"stage":"gateway_http","extra":"secret"}'),
-            (503, b'{"ok":true,"stage":"gateway_http"}'),
-            (503, b'{"ok":false,"stage":[]}'),
-            (503, b' ' * 4097),
-            (503, b'invalid'),
-        ]:
-            with self.subTest(status=status, body=body):
-                self.assertIsNone(release.gateway_failure_stage(error(status, body)))
-
-    def test_staging_web_gateway_binding_must_target_the_expected_service(self):
-        expected = {'name': 'STAGING_SQL_GATEWAY', 'type': 'service', 'service': 'familyfunds-d1-staging-sql'}
-        self.assertEqual(release.checked_bindings(release.CONFIG['staging']['worker'], {'bindings': [expected]}), [expected])
-        for change in [{'service': 'other'}, {'type': 'plain_text'}, {'environment': 'preview'}, {'entrypoint': 'Other'}]:
-            with self.subTest(change=change), self.assertRaisesRegex(RuntimeError, 'Unexpected staging gateway service binding'):
-                release.checked_bindings(release.CONFIG['staging']['worker'], {'bindings': [{**expected, **change}]})
-
-    def test_staging_gateway_control_must_be_complete_and_disabled(self):
-        worker = release.CONFIG['staging']['worker']
-        flag = {'name': 'STAGING_GATEWAY_CONTROL', 'type': 'plain_text', 'text': '0'}
-        token = {'name': 'STAGING_GATEWAY_ADMIN_TOKEN', 'type': 'secret_text'}
-        self.assertEqual(release.checked_bindings(worker, {'bindings': [flag, token]}), [flag])
-        for bindings in [[flag], [token], [{**flag, 'text': '1'}, token], [flag, {**token, 'type': 'plain_text'}]]:
-            with self.subTest(bindings=bindings), self.assertRaisesRegex(RuntimeError, 'fully configured and disabled'):
-                release.checked_bindings(worker, {'bindings': bindings})
-
-    def test_gateway_target_checks_reject_unexpected_bindings(self):
-        expected = [
-            {'name': 'DB', 'type': 'd1', 'id': 'f96058f1-0aa3-42f3-9ee2-f796554d6ef4'},
-            {'name': 'DATABASE_NAME', 'type': 'plain_text', 'text': 'familyfunds-d1-web-staging'},
-            {'name': 'PROOF_TOKEN', 'type': 'secret_text'},
-        ]
-        self.assertEqual(release.checked_bindings('familyfunds-d1-staging-sql', {'bindings': expected}), expected[:2])
-        for broken in [expected[1:], [{**expected[0], 'id': 'different'}, *expected[1:]], expected + [{'name': 'STAGING_GATEWAY_ADMISSION', 'type': 'plain_text', 'text': '1'}]]:
-            with self.subTest(bindings=broken), self.assertRaises(RuntimeError):
-                release.checked_bindings('familyfunds-d1-staging-sql', {'bindings': broken})
-
-    def test_staging_gateway_allows_only_a_complete_disabled_coordinator(self):
-        base = [
-            {'name': 'DB', 'type': 'd1', 'id': 'f96058f1-0aa3-42f3-9ee2-f796554d6ef4'},
-            {'name': 'DATABASE_NAME', 'type': 'plain_text', 'text': 'familyfunds-d1-web-staging'},
-            {'name': 'PROOF_TOKEN', 'type': 'secret_text'},
-        ]
-        gate = {'name': 'STAGING_GATEWAY_ADMISSION', 'type': 'plain_text', 'text': '0'}
-        coordinator = {'name': 'STAGING_GATEWAY_ADMISSION_OBJECT', 'type': 'durable_object_namespace',
-                       'class_name': 'StagingGatewayAdmission', 'namespace_id': 'a' * 32}
-        admin = {'name': 'STAGING_GATEWAY_ADMIN_TOKEN', 'type': 'secret_text'}
-        self.assertEqual(release.checked_bindings('familyfunds-d1-staging-sql', {'bindings': base + [gate, coordinator, admin]}),
-                         [base[0], base[1], gate, coordinator])
-        invalid = [
-            [gate], [coordinator, admin],
-            [{**gate, 'text': '1'}, coordinator, admin],
-            [{**gate, 'text': 'unexpected'}, coordinator, admin],
-            [gate, {**coordinator, 'class_name': 'Other'}, admin],
-            [gate, {**coordinator, 'namespace_id': 'invalid'}, admin],
-            [gate, {**coordinator, 'script_name': 'other-worker'}, admin],
-            [gate, {**coordinator, 'environment': 'preview'}, admin],
-            [gate, coordinator, {**admin, 'type': 'plain_text'}],
-        ]
-        for bindings in invalid:
-            with self.subTest(bindings=bindings), self.assertRaisesRegex(RuntimeError, 'fully configured and disabled'):
-                release.checked_bindings('familyfunds-d1-staging-sql', {'bindings': base + bindings})
-
-    def test_staging_companion_updates_restore_both_old_modules_on_web_failure(self):
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory)
-            (path / 'rootfs.tar').write_bytes(b'inspected image')
-            (path / 'original-image.tar').write_bytes(b'inspected original image')
-            (path / 'release.json').write_text(json.dumps({'target': 'staging', 'revision': SHA, 'unstarted_export': True,
-                'runtime_credentials_packaged': False, 'rootfs_sha256': hashlib.sha256(b'inspected image').hexdigest(),
-                'image_archive_sha256': hashlib.sha256(b'inspected original image').hexdigest(), 'source_image_id': DIGEST}))
-            old_gateway = release.multipart('worker.mjs', {'worker.mjs': b'old gateway code'}, [], content_only=True)
-            old_web = release.multipart('container-worker.mjs', {'container-worker.mjs': b'old web code'}, [], None)
-            writes = []
-            gateway_bindings = [
-                {'name': 'DB', 'type': 'd1', 'id': 'f96058f1-0aa3-42f3-9ee2-f796554d6ef4'},
-                {'name': 'DATABASE_NAME', 'type': 'plain_text', 'text': 'familyfunds-d1-web-staging'},
-                {'name': 'PROOF_TOKEN', 'type': 'secret_text'},
-            ]
-
-            maintenance_bindings = [
-                *gateway_bindings[:2],
-                {'name': 'STAGING_FILES', 'type': 'r2_bucket', 'bucket_name': 'familyfunds-d1-staging-private'},
-                {'name': 'MAINTENANCE_QUEUE', 'type': 'queue', 'queue_name': 'familyfunds-d1-maintenance-staging'},
-                {'name': 'STAGING_CONTAINER', 'type': 'durable_object_namespace', 'script_name': 'familyfunds-d1-web-v2',
-                 'namespace_id': 'a374340e0cb74321b3fb3d46b52f9240'},
-                {'name': 'BACKUP_APP_KEY', 'type': 'secret_text'},
-            ]
-            maintenance = 'familyfunds-d1-maintenance-staging'
-            for binding in maintenance_bindings:
-                with self.subTest(binding=binding['name']), self.assertRaisesRegex(RuntimeError, 'staging maintenance binding'):
-                    release.checked_bindings(maintenance, {'bindings': [item for item in maintenance_bindings if item != binding]})
-            with self.assertRaisesRegex(RuntimeError, 'fully configured and disabled'):
-                release.checked_bindings(maintenance, {'bindings': maintenance_bindings + [
-                    {'name': 'STAGING_GATEWAY_ADMISSION', 'type': 'plain_text', 'text': '1'}]})
-            old_maintenance = release.multipart('maintenance-worker.mjs', {'maintenance-worker.mjs': b'old maintenance'}, [], content_only=True)
-
-            def api(method, url, data=None, **kwargs):
-                if 'credentials' in url:
-                    return {'password': 'synthetic', 'username': 'synthetic', 'registry_host': 'registry.cloudflare.com'}
-                if method == 'GET' and url.endswith('/subdomain'):
-                    return {'enabled': True, 'previews_enabled': False}
-                if method == 'GET' and url.endswith('/settings'):
-                    if maintenance in url:
-                        return {'bindings': maintenance_bindings}
-                    return {'bindings': gateway_bindings if 'staging-sql' in url else []}
-                if method == 'GET' and url.endswith('/content/v2'):
-                    return old_maintenance if maintenance in url else old_gateway
-                if method == 'GET' and '/containers/applications/' in url:
-                    return {'configuration': {'image': 'old@' + DIGEST}}
-                if method == 'GET':
-                    return old_web
-                if method == 'PUT':
+        def api(method, path, data=None, **kwargs):
+            if path.startswith('/zones/'):
+                return {'id': release.CONFIG['staging']['route_id'], 'pattern': 'd1-staging.familyfunds.app/*',
+                        'script': web, 'request_limit_fail_open': False}
+            if path.endswith('/credentials'):
+                return {'registry_host': 'registry.cloudflare.com', 'username': 'fixture', 'password': 'fixture'}
+            if path.endswith('/deployments') and method == 'GET':
+                return {'deployments': [{'created_on': '2026-11-03', 'versions': [{'version_id': version, 'percentage': 100}]}]}
+            if path.endswith('/settings'):
+                if maintenance in path:
+                    return {'bindings': [{'name': 'REPLACEMENT_DB', 'type': 'd1', 'id': '821325ae-6a5f-440a-af64-ebe2c336a314'},
+                                         {'name': 'STAGING_GATEWAY_ADMISSION_OBJECT', 'type': 'durable_object_namespace', 'namespace_id': 'aa1360266e0c46fcad453105e41d24a9'},
+                                         {'name': 'REPLACEMENT_WEB_MAINTENANCE', 'type': 'service', 'service': web, 'entrypoint': 'ReplacementMaintenance'}]}
+                return {'bindings': [
+                    {'name': 'REPLACEMENT_CONTAINER', 'type': 'durable_object_namespace', 'namespace_id': replacement['application_id']},
+                    {'name': 'REPLACEMENT_SQL', 'type': 'service', 'service': 'familyfunds-d1-replacement-sql-nov04'},
+                    {'name': 'REPLACEMENT_WEBHOOK_QUEUE', 'type': 'queue', 'queue_name': 'familyfunds-replacement-webhook-nov04'},
+                    {'name': 'REPLACEMENT_FILES_CREDENTIAL', 'type': 'secrets_store_secret', 'store_id': '5e78cc1e865144e4ab982aeae254ed96', 'secret_name': 'FF_STAGING_REPLACEMENT_R2_20261104T044139Z'},
+                    {'name': 'REPLACEMENT_APP_KEY', 'type': 'secrets_store_secret', 'store_id': '5e78cc1e865144e4ab982aeae254ed96', 'secret_name': 'FF_STAGING_REPLACEMENT_LARAVEL_KEY_20261103T1243Z'},
+                    {'name': 'REPLACEMENT_SQL_TOKEN', 'type': 'secret_text'},
+                    {'name': 'BASIC_AUTHORIZATION', 'type': 'secret_text'},
+                    *[{'name': name, 'type': 'secret_text'} for name in
+                      ['STAGING_PAYSTACK_TEST_ENV', 'REPLACEMENT_WEBHOOK_SECRETS', 'AI_ENV']],
+                    *[{'name': k, 'type': 'plain_text', 'text': v} for k, v in {
+                        'CONTAINER_ENV': '{}', 'STAGING_ADMISSION_CONTROL': '1', 'CONTAINER_IMAGE': previous_image,
+                        'RUNTIME_REVISION': previous_revision, 'RUNTIME_PROFILE': 'replacement-live'}.items()]]}
+            mutations.append((method, path))
+            if method == 'PUT':
+                if path.endswith(web):
                     message = release.email.parser.BytesParser(policy=release.email.policy.default).parsebytes(
                         ('Content-Type: ' + kwargs['content_type'] + '\r\n\r\n').encode() + data)
-                    metadata = json.loads(next(message.iter_parts()).get_payload(decode=True))
-                    writes.append((url, metadata, release.script_sources(data, kwargs['content_type'])))
-                    if len(writes) == 3:
-                        raise RuntimeError('simulated unknown web update outcome')
-                    return {}
-                raise AssertionError('Unexpected or database API call: ' + url)
+                    meta = json.loads(next(message.iter_parts()).get_payload(decode=True))
+                    self.assertEqual(meta['containers'][0]['images']['base'], image)
+                    self.assertEqual(meta['keep_bindings'], ['secret_text'])
+                    self.assertIn('RUNTIME_REVISION', {b['name'] for b in meta['bindings']})
+                    raise RuntimeError('unknown web outcome')
+                return {}
+            if method == 'POST' and path.endswith('/deployments'):
+                self.assertEqual(data['versions'], [{'version_id': version, 'percentage': 100}])
+                return {}
+            self.fail('Unexpected API call ' + path)
 
-            def output(args, **kwargs):
-                return DIGEST if args[-1] == '{{.Id}}' else json.dumps([
-                    'registry.cloudflare.com/' + release.ACCOUNT + '/familyfunds-d1-staging@' + DIGEST])
+        for mismatch in [{'type': 'secret_text'}, {'store_id': 'other-store'}, {'secret_name': 'old-key'}]:
+            with self.subTest(mismatch=mismatch):
+                settings = api('GET', '/workers/scripts/' + web + '/settings')
+                key = next(binding for binding in settings['bindings'] if binding['name'] == 'REPLACEMENT_APP_KEY')
+                key.update(mismatch)
+                with self.assertRaisesRegex(RuntimeError, 'Replacement (web|credential) bindings'):
+                    release.checked_bindings(web, settings)
 
-            companion = {**release.CONFIG['staging']['companions'][0], 'accepted_previous_sha256': hashlib.sha256(b'old gateway code').hexdigest()}
-            maintenance_companion = {**release.CONFIG['staging']['companions'][1], 'accepted_previous_sha256': hashlib.sha256(b'old maintenance').hexdigest()}
-            target = {**release.CONFIG['staging'], 'companions': [companion, maintenance_companion]}
-            with patch.dict(release.CONFIG, {'staging': target}), patch.dict(os.environ, {'GITHUB_SHA': SHA, 'GITHUB_REF': 'refs/heads/cloudflare-staging', 'GITHUB_ACTIONS': 'true', 'DOCKER_CONFIG': directory}), patch.object(release, 'validate'), patch.object(release, 'public_checks'), patch.object(release, 'rollout_image'), patch.object(release, 'api', side_effect=api), patch.object(release.subprocess, 'run'), patch.object(release.subprocess, 'check_output', side_effect=output), contextlib.redirect_stdout(io.StringIO()):
-                with self.assertRaisesRegex(RuntimeError, 'code/image rollback was requested'):
-                    release.publish('staging', path)
-            self.assertEqual(len(writes), 6)
-            self.assertTrue(writes[0][0].endswith('/familyfunds-d1-staging-sql/content'))
-            self.assertEqual(writes[0][1], {'main_module': 'staging-worker.mjs'})
-            self.assertTrue(writes[5][0].endswith('/familyfunds-d1-staging-sql/content'))
-            self.assertEqual(writes[5][1], {'main_module': 'worker.mjs'})
-            self.assertEqual(writes[5][2], {'worker.mjs': b'old gateway code'})
-            self.assertEqual(writes[2][1]['containers'], [{'class_name': 'FamilyFundsWebStagingContainer'}])
-            self.assertEqual(writes[3][1]['containers'], [{'class_name': 'FamilyFundsWebStagingContainer'}])
-            self.assertIn({'name': 'STAGING_SQL_GATEWAY', 'type': 'service', 'service': 'familyfunds-d1-staging-sql'}, writes[2][1]['bindings'])
-            self.assertFalse(any(binding['name'] == 'STAGING_SQL_GATEWAY' for binding in writes[3][1]['bindings']))
-            self.assertEqual(writes[1][0], writes[4][0])
-            self.assertTrue(writes[4][0].endswith('/familyfunds-d1-maintenance-staging/content'))
-            self.assertEqual(writes[1][1], {'main_module': 'maintenance-worker.mjs'})
-            self.assertEqual(writes[4][2], {'maintenance-worker.mjs': b'old maintenance'})
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            (path / 'rootfs.tar').write_bytes(b'inspected')
+            (path / 'release.json').write_text(json.dumps({'target': 'staging', 'revision': SHA, 'unstarted_export': True,
+                'runtime_credentials_packaged': False, 'rootfs_sha256': hashlib.sha256(b'inspected').hexdigest()}))
 
+            def docker(args, **kwargs):
+                if 'buildx' in args:
+                    self.assertIn('--provenance=false', args)
+                    (path / 'pushed-image.json').write_text(json.dumps({'containerimage.digest': DIGEST}))
+                self.assertNotIn('load', args)
+
+            for healthy in [True, False]:
+                with self.subTest(healthy=healthy):
+                    mutations.clear()
+                    error = 'previous code/image restored' if healthy else 'rollback needs operator attention'
+                    with (patch.dict(release.CONFIG['staging'], {'destination': 'replacement'}),
+                          patch.dict(os.environ, {'GITHUB_SHA': SHA, 'GITHUB_REF': 'refs/heads/cloudflare-staging', 'GITHUB_ACTIONS': 'true', 'DOCKER_CONFIG': directory}),
+                          patch.object(release, 'validate'), patch.object(release, 'public_checks') as public,
+                          patch.object(release, 'instance_image', return_value=healthy) as running,
+                          patch.object(release.time, 'monotonic', side_effect=[0, 601]),
+                          patch.object(release, 'prepared') as prepare, patch.object(release, 'api', side_effect=api),
+                          patch.object(release.subprocess, 'run', side_effect=docker), contextlib.redirect_stdout(io.StringIO()),
+                          self.assertRaisesRegex(RuntimeError, error)):
+                        release.publish('staging', path)
+                    prepare.assert_called_once_with(image)
+                    public.assert_called_with('staging', previous_revision)
+                    running.assert_called_once_with('staging', previous_image)
+                    self.assertEqual(mutations, [(m, '/workers/scripts/' + worker) for m, worker in [
+                        ('PUT', maintenance), ('PUT', web), ('POST', web + '/deployments'), ('POST', maintenance + '/deployments')]])
+
+    @patch.dict(release.CONFIG['staging'], {'destination': 'original'})
     def test_modified_original_staging_archive_is_refused_before_credentials_or_docker(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)
@@ -406,7 +323,7 @@ class ReleaseSafetyTest(unittest.TestCase):
                     (path / 'pushed-image.json').write_text(json.dumps({'containerimage.digest': DIGEST}))
 
             with patch.dict(release.CONFIG, {'production': target}), patch.dict(os.environ, {'GITHUB_SHA': SHA, 'GITHUB_REF': 'refs/heads/main', 'GITHUB_ACTIONS': 'true', 'DOCKER_CONFIG': directory}), patch.object(release, 'validate'), patch.object(release, 'checked_bindings', return_value=settings['bindings']), patch.object(release, 'public_checks'), patch.object(release, 'prepared'), patch.object(release, 'api', side_effect=api), patch.object(release.subprocess, 'run', side_effect=command), contextlib.redirect_stdout(io.StringIO()):
-                with self.assertRaisesRegex(RuntimeError, 'code/image rollback was requested'):
+                with self.assertRaisesRegex(RuntimeError, 'previous code/image restored'):
                     release.publish('production', path)
             self.assertEqual(len(writes), 2)
             self.assertIn(b'old reviewed code', writes[-1])

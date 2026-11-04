@@ -24,7 +24,7 @@ class WhatsAppService
      *
      * @return array{success: bool, wa_message_id: ?string, error: ?string}
      */
-    public function send(string $to, WhatsAppMessage $message): array
+    public function send(string $to, WhatsAppMessage $message, ?int $familyId = null, ?int $userId = null): array
     {
         $payload = $message->toPayload($to);
 
@@ -43,6 +43,8 @@ class WhatsAppService
             success: $response['success'],
             error: $response['error'] ?? null,
             errorCode: $response['error_code'] ?? null,
+            familyId: $familyId,
+            userId: $userId,
         );
 
         return [
@@ -58,13 +60,13 @@ class WhatsAppService
      * @param  array<int, string|int|float>  $bodyParameters
      * @return array{success: bool, wa_message_id: ?string, error: ?string}
      */
-    public function sendTemplate(string $to, string $templateName, array $bodyParameters = [], string $languageCode = 'en'): array
+    public function sendTemplate(string $to, string $templateName, array $bodyParameters = [], string $languageCode = 'en', ?int $familyId = null, ?int $userId = null): array
     {
         $message = (new WhatsAppMessage)
             ->template($templateName, $languageCode)
             ->body($bodyParameters);
 
-        return $this->send($to, $message);
+        return $this->send($to, $message, $familyId, $userId);
     }
 
     /**
@@ -229,6 +231,8 @@ class WhatsAppService
         bool $success,
         ?string $error,
         ?string $errorCode,
+        ?int $familyId,
+        ?int $userId,
     ): void {
         try {
             $phoneNumberId = config('services.whatsapp.phone_number_id');
@@ -245,6 +249,8 @@ class WhatsAppService
                 'status' => $success ? 'sent' : 'failed',
                 'error_code' => $errorCode,
                 'error_message' => $error,
+                'family_id' => $familyId,
+                'user_id' => $userId,
                 'wa_timestamp' => now(),
             ]);
         } catch (Throwable $e) {
