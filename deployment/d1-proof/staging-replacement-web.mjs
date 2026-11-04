@@ -65,7 +65,7 @@ export class FamilyFundsReplacementStagingContainer extends FamilyFundsWebStagin
             D1_STAGING_R2_ACCESS_KEY_ID: files.accessKeyId, D1_STAGING_R2_SECRET_ACCESS_KEY: files.secretAccessKey,
             QUEUE_WORKER_ENABLED: 'false', STAGING_QUEUE_WORKER_ENABLED: 'false', D1_STAGING_DELIVERY_ENABLED: 'false',
             D1_STAGING_WEBHOOKS_ENABLED: webhook ? 'true' : 'false',
-            ...(webhook && {D1_STAGING_PAYSTACK_TEST_KEY: webhook.paystack_test_key, D1_STAGING_META_APP_SECRET: webhook.meta_app_secret,
+            ...(webhook && {D1_STAGING_PAYSTACK_TEST_KEY: webhook.paystack_test_key, D1_STAGING_PAYSTACK_WEBHOOK_SIGNING_SECRET: webhook.paystack_webhook_signing_secret, D1_STAGING_META_APP_SECRET: webhook.meta_app_secret,
                 D1_STAGING_RELAY_TOKEN: webhook.relay_token}), NIGHTWATCH_ENABLED: 'false', MAIL_MAILER: 'array',
         }};
     }

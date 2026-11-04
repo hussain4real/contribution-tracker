@@ -33,18 +33,41 @@ function webhookScope(provider, payload, config) {
                 && (change.value.statuses ?? []).every(status => status.recipient_id === config.recipient)));
 }
 
+function signatureHeader(provider, config) {
+    if (provider === "whatsapp") return "X-Hub-Signature-256";
+    return config.paystack_webhook_signing_secret ? "Paystack-Signature" : "X-Paystack-Signature";
+}
+
 async function verifyWebhook(record, config) {
     if (!record || !["paystack", "whatsapp"].includes(record.provider) || typeof record.raw !== "string"
         || new TextEncoder().encode(record.raw).length > 49_152 || typeof record.signature !== "string") return false;
     if (config.database === replacementDatabase ? record.database !== replacementDatabase : record.database !== undefined) return false;
     const meta = record.provider === "whatsapp";
-    const hex = meta ? record.signature.replace(/^sha256=/, "") : record.signature;
-    if (!(meta ? /^[a-f0-9]{64}$/i : /^[a-f0-9]{128}$/i).test(hex) || (meta && !record.signature.startsWith("sha256="))) return false;
-    const secret = meta ? config.meta_app_secret : config.paystack_test_key;
+    let digests = [meta ? record.signature.replace(/^sha256=/, "") : record.signature];
+    let signedPayload = record.raw;
+    if (!meta && config.paystack_webhook_signing_secret) {
+        if (record.signature.length > 4096) return false;
+        const [timestamp, ...entries] = record.signature.split(",");
+        if (!/^t=\d{10}$/i.test(timestamp) || !entries.length) return false;
+        if (!entries.every(entry => /^v1=whk_[A-Za-z0-9]+:[a-f0-9]{128}$/i.test(entry))) return false;
+        digests = entries.map(entry => entry.slice(-128));
+        signedPayload = timestamp.slice(2) + "." + record.raw;
+    } else if (!(meta ? /^[a-f0-9]{64}$/i : /^[a-f0-9]{128}$/i).test(digests[0]) || (meta && !record.signature.startsWith("sha256="))) {
+        return false;
+    }
+    const secret = meta ? config.meta_app_secret : (config.paystack_webhook_signing_secret ?? config.paystack_test_key);
     if (typeof secret !== "string" || secret === "") return false;
     const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), {name: "HMAC", hash: meta ? "SHA-256" : "SHA-512"}, false, ["verify"]);
-    const bytes = Uint8Array.from(hex.match(/../g), pair => parseInt(pair, 16));
-    if (!await crypto.subtle.verify("HMAC", key, bytes, new TextEncoder().encode(record.raw))) return false;
+    const data = new TextEncoder().encode(signedPayload);
+    let verified = false;
+    for (const digest of digests) {
+        const bytes = Uint8Array.from(digest.match(/../g), pair => parseInt(pair, 16));
+        if (await crypto.subtle.verify("HMAC", key, bytes, data)) {
+            verified = true;
+            break;
+        }
+    }
+    if (!verified) return false;
     try {
         return webhookScope(record.provider, JSON.parse(record.raw), config);
     } catch {
@@ -85,7 +108,7 @@ async function receiveWebhook(request, env) {
     let offset = 0;
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
     const record = {provider, raw: new TextDecoder("utf-8", {fatal: true}).decode(bytes),
-        signature: request.headers.get(provider === "paystack" ? "X-Paystack-Signature" : "X-Hub-Signature-256") ?? ""};
+        signature: request.headers.get(signatureHeader(provider, config)) ?? ""};
     if (replacementWebhooks(env)) record.database = config.database;
     if (!await verifyWebhook(record, config)) return new Response("Forbidden", {status: 403});
     if (env.RUNTIME_PROFILE !== "production" && env.STAGING_ADMISSION_CONTROL === "1") {
@@ -94,7 +117,7 @@ async function receiveWebhook(request, env) {
     } else {
         await env.STAGING_WEBHOOK_QUEUE.send(record, {contentType: "json"});
     }
-    return Response.json({message: "Accepted"}, {status: provider === "paystack" ? 202 : 200, headers: {"Cache-Control": "no-store"}});
+    return Response.json({message: "Accepted"}, {status: 200, headers: {"Cache-Control": "no-store"}});
 }
 
 function bootstrapParts(env, prefix, content) {
@@ -119,9 +142,20 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
         if (config.database !== (replacement ? replacementDatabase : "familyfunds-d1-web-staging") || config.family_id !== 43) {
             throw new Error("Invalid isolated webhook target");
         }
+        if (!replacement && env.STAGING_WEBHOOK_SIGNING_ENV !== undefined) {
+            if (env.RUNTIME_PROFILE === "production") throw new Error("Invalid staging signing environment");
+            const signing = JSON.parse(env.STAGING_WEBHOOK_SIGNING_ENV);
+            if (!/^whsec_[A-Za-z0-9_-]+$/.test(signing.paystack_webhook_signing_secret ?? "")
+                || !/^[a-f0-9]{32}$/i.test(signing.meta_app_secret ?? "")
+                || typeof signing.meta_verify_token !== "string" || !signing.meta_verify_token) throw new Error("Invalid staging webhook credentials");
+            config.paystack_webhook_signing_secret = signing.paystack_webhook_signing_secret;
+            config.meta_app_secret = signing.meta_app_secret;
+            config.meta_verify_token = signing.meta_verify_token;
+        }
         if (replacement && (env.STAGING_ADMISSION_CONTROL !== "1" || !env.REPLACEMENT_WEBHOOK_QUEUE?.send
             || !env.REPLACEMENT_CONTAINER?.getByName || !/^sk_test_[a-zA-Z0-9_-]+$/.test(config.paystack_test_key ?? "")
-            || !/^[a-f0-9]{32}$/i.test(config.meta_app_secret ?? "") || !/^[a-f0-9]{64}$/.test(config.relay_token ?? "")
+            || !/^whsec_[A-Za-z0-9_-]+$/.test(config.paystack_webhook_signing_secret ?? "")
+            || !config.meta_verify_token || !/^[a-f0-9]{32}$/i.test(config.meta_app_secret ?? "") || !/^[a-f0-9]{64}$/.test(config.relay_token ?? "")
             || config.relay_token === env.REPLACEMENT_SQL_TOKEN || !config.meta_phone || !config.meta_waba || !config.recipient)) {
             throw new Error("Invalid replacement webhook configuration");
         }
@@ -190,6 +224,12 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
                     if (!container.running) {
                         this.startupState.phase = "start";
                         const env = containerEnvironment(this.env, {allowStagingPaystackTest: true});
+                        if (this.env.STAGING_WEBHOOK_SIGNING_ENV !== undefined && !this.env.RUNTIME_PROFILE?.startsWith("replacement-")) {
+                            const webhook = FamilyFundsWebStagingContainer.webhookConfig(this.env);
+                            if (!webhook) throw new Error("Staging webhooks are disabled");
+                            env.D1_STAGING_PAYSTACK_WEBHOOK_SIGNING_SECRET = webhook.paystack_webhook_signing_secret;
+                            env.D1_STAGING_META_APP_SECRET = webhook.meta_app_secret;
+                        }
                         if (this.env.STARTUP_PROFILE === "1") {
                             env.FF_STARTUP_PROFILE = "1";
                             env.FF_STAGING_START_REQUEST_MS = String(Date.now());
@@ -561,7 +601,7 @@ export default {
                 if (!config || !await verifyWebhook(message.body, config)) throw new Error("Invalid staging relay event");
                 const record = message.body;
                 const headers = {"Content-Type": "application/json", "X-D1-Staging-Relay": replacement ? config.relay_token : env.ADMIN_TOKEN};
-                headers[record.provider === "paystack" ? "X-Paystack-Signature" : "X-Hub-Signature-256"] = record.signature;
+                headers[signatureHeader(record.provider, config)] = record.signature;
                 const container = webhookContainer(env);
                 const origin = replacement ? "https://replacement-staging.internal" : "https://d1-staging.familyfunds.app";
                 const response = await container.fetch(new Request(`${origin}/webhooks/${record.provider}`, {method: "POST", headers, body: record.raw}));

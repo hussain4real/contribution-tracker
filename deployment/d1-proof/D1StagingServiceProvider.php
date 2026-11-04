@@ -131,13 +131,15 @@ final class D1StagingServiceProvider extends ServiceProvider
         $allowedRequests = [$url.'/*'];
         if (config('d1-staging.webhooks.enabled')) {
             $paystack = config('d1-staging.webhooks.paystack_test_key');
+            $signingSecret = config('d1-staging.webhooks.paystack_signing_secret');
             $meta = config('d1-staging.webhooks.meta_app_secret');
             if (! D1StagingConnection::isWebhookTarget()
                 || ! is_string($paystack) || ($paystack !== '' && ! str_starts_with($paystack, 'sk_test_'))
+                || ($signingSecret !== null && (! is_string($signingSecret) || preg_match('/^whsec_[A-Za-z0-9_-]+$/D', $signingSecret) !== 1))
                 || ! is_string($meta) || ($meta !== '' && preg_match('/^[a-f0-9]{32}$/iD', $meta) !== 1)) {
                 throw new LogicException('Webhook checks require isolated staging provider credentials.');
             }
-            config(['services.paystack.webhook_secret' => $paystack, 'services.paystack.base_url' => 'https://api.paystack.co', 'services.whatsapp.app_secret' => $meta]);
+            config(['services.paystack.webhook_secret' => $signingSecret ?? $paystack, 'services.paystack.base_url' => 'https://api.paystack.co', 'services.whatsapp.app_secret' => $meta]);
             if (! config('d1-staging.paystack_test_checkout')) {
                 config(['services.paystack.secret_key' => $paystack]);
             }

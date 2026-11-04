@@ -98,7 +98,7 @@ for (const profile of ['replacement-live', 'replacement-webhook-rehearsal']) {
     test('signed test callbacks enter only the replacement queue in ' + profile, async () => {
         const {Container, handler, env, ctx} = fixture();
         const queued = [], calls = [], stored = new Map();
-        const config = {enabled: true, database, family_id: 43, paystack_test_key: 'sk_test_fixture',
+        const config = {enabled: true, database, family_id: 43, paystack_test_key: 'sk_test_fixture', paystack_webhook_signing_secret: 'whsec_test', meta_verify_token:'fixture',
             meta_app_secret: 'b'.repeat(32), meta_waba: 'test-account', meta_phone: 'test-phone', recipient: 'test-recipient', relay_token: 'a'.repeat(64)};
         Object.assign(env, {RUNTIME_PROFILE: profile, RUNTIME_REVISION:'github-abcdef123456',
             STAGING_PAYSTACK_TEST_ENV: JSON.stringify({PAYSTACK_PUBLIC_KEY:'pk_test_checkout',PAYSTACK_SECRET_KEY:'sk_test_checkout'}),
@@ -112,11 +112,12 @@ for (const profile of ['replacement-live', 'replacement-webhook-rehearsal']) {
         env.REPLACEMENT_CONTAINER = {getByName(name) {
             assert.equal(name, 'replacement-staging');
             return {enqueueWebhook: record => receiver.enqueueWebhook(record), fetch: async req => {
-                calls.push([req.url, req.headers.get('X-D1-Staging-Relay'), await req.text()]);
+                calls.push([req.url, req.headers.get('X-D1-Staging-Relay'), req.headers.get(req.url.endsWith('paystack') ? 'Paystack-Signature' : 'X-Hub-Signature-256'), await req.text()]);
                 return new Response(null, {status});
             }};
         }};
         const options = await new Container(ctx, env).startupOptions();
+        assert.equal(options.env.D1_STAGING_PAYSTACK_WEBHOOK_SIGNING_SECRET, config.paystack_webhook_signing_secret);
         assert.equal(options.env.D1_STAGING_WEBHOOKS_ENABLED, 'true');
         assert.equal(options.env.D1_STAGING_RELAY_TOKEN, config.relay_token);
         assert.equal(options.env.D1_STAGING_DELIVERY_ENABLED, 'false');
@@ -124,16 +125,23 @@ for (const profile of ['replacement-live', 'replacement-webhook-rehearsal']) {
         assert.equal(options.env.OPENAI_API_KEY, profile === 'replacement-live' ? 'fixture' : undefined);
         for (const [provider, payload, secret, algorithm, header, prefix] of [
             ['paystack', {event:'charge.success', data:{domain:'test', reference:'D1-WEBHOOK-UAT-fixture', metadata:{family_id:43}}},
-                config.paystack_test_key, 'sha512', 'X-Paystack-Signature', ''],
+                config.paystack_webhook_signing_secret, 'sha512', 'Paystack-Signature', 't=1793730000,v1=whk_old:'+'0'.repeat(128)+',v1=whk_new:'],
             ['whatsapp', {object:'whatsapp_business_account', entry:[{id:config.meta_waba, changes:[{field:'messages', value:{
                 metadata:{phone_number_id:config.meta_phone}, statuses:[{id:'fixture', status:'delivered', recipient_id:config.recipient}]}}]}]},
                 config.meta_app_secret, 'sha256', 'X-Hub-Signature-256', 'sha256='],
         ]) {
             const body = JSON.stringify(payload);
-            const signature = prefix + createHmac(algorithm, secret).update(body).digest('hex');
+            const signature = prefix + createHmac(algorithm, secret).update(provider === 'paystack' ? '1793730000.' + body : body).digest('hex');
             const request = () => new Request('https://d1-staging.familyfunds.app/webhooks/' + provider, {method:'POST', headers:{[header]:signature}, body});
             assert.equal((await handler.fetch(request(), {...env, RUNTIME_PROFILE:'replacement-preflight'})).status, 404);
-            assert.equal((await handler.fetch(request(), env)).status, provider === 'paystack' ? 202 : 200);
+            if (provider === 'paystack') {
+                const legacy = new Request(request());
+                legacy.headers.delete(header);
+                legacy.headers.set('X-Paystack-Signature', createHmac('sha512', config.paystack_test_key).update(body).digest('hex'));
+                assert.equal((await handler.fetch(legacy, env)).status, 403);
+                assert.equal(queued.length, 0);
+            }
+            assert.equal((await handler.fetch(request(), env)).status, 200);
             const record = queued.shift();
             assert.equal(record.database, database);
             assert.equal(stored.size, 0);
@@ -149,7 +157,7 @@ for (const profile of ['replacement-live', 'replacement-webhook-rehearsal']) {
             assert.equal(calls.length, previousCalls);
             for (status of [503, 200]) await handler.queue(batch, env);
             assert.deepEqual([acks, retries], [1,3]);
-            assert.deepEqual(calls.at(-1), ['https://replacement-staging.internal/webhooks/' + provider, config.relay_token, body]);
+            assert.deepEqual(calls.at(-1), ['https://replacement-staging.internal/webhooks/' + provider, config.relay_token, signature, body]);
         }
     });
 }
@@ -172,6 +180,7 @@ test('private acceptance preserves Laravel sessions and review forms without ope
     const options = await new Container(ctx, env).startupOptions();
     assert.equal(options.env.SESSION_COOKIE, 'familyfunds_replacement_acceptance_session');
     assert.equal(options.env.D1_STAGING_DELIVERY_ENABLED, 'false');
+    assert.equal(options.env.D1_STAGING_PAYSTACK_WEBHOOK_SIGNING_SECRET, undefined);
     assert.equal(options.env.D1_STAGING_WEBHOOKS_ENABLED, 'false');
     assert.equal((await handler.fetch(page('/login'), env)).status, 404);
     assert.equal((await service.fetch(new Request('https://d1-staging.familyfunds.app/login'))).status, 404);
