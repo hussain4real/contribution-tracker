@@ -506,8 +506,11 @@ async function reviewPayment(): Promise<void> {
                         @change="validate('notes')"
                     />
 
-                    <p v-if="validating" class="text-xs text-muted-foreground">
-                        Validating...
+                    <p
+                        role="status"
+                        class="min-h-4 text-xs text-muted-foreground"
+                    >
+                        {{ validating ? 'Validating...' : '' }}
                     </p>
                     <InputError :message="errors.notes" />
                 </div>
