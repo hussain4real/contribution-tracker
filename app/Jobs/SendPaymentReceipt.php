@@ -106,9 +106,11 @@ class SendPaymentReceipt implements ShouldQueue
 
         if ($this->channel === 'mail') {
             $artifact = $artifacts->receipt($batch->family, $batch, $member);
-            Mail::to($member->email)->send(new PaymentReceiptMail($batch, $artifact, $receiptUrl));
+            $sent = Mail::to($member->email)->send(new PaymentReceiptMail($batch, $artifact, $receiptUrl));
 
-            $delivery->update(['status' => 'accepted', 'accepted_at' => now(), 'failed_at' => null]);
+            $delivery->update($sent === null
+                ? ['status' => 'failed', 'accepted_at' => null, 'failed_at' => now()]
+                : ['status' => 'accepted', 'accepted_at' => now(), 'failed_at' => null]);
 
             return;
         }

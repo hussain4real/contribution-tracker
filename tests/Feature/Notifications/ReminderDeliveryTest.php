@@ -13,6 +13,7 @@ use App\Models\WhatsAppMessage;
 use App\Notifications\ContributionReminderNotification;
 use App\Services\QueueContributionReminder;
 use Illuminate\Http\Client\Request;
+use Illuminate\Mail\Events\MessageSending;
 use Illuminate\Notifications\Events\NotificationSending;
 use Illuminate\Notifications\SendQueuedNotifications;
 use Illuminate\Support\Facades\DB;
@@ -43,6 +44,21 @@ it('tracks queued reminders through mail submission and a WhatsApp delivery call
         'field' => 'messages', 'value' => ['statuses' => [['id' => 'wamid.reminder', 'status' => 'delivered']]],
     ]]]]]))->handle();
     expect($whatsapp->fresh()?->displayStatus())->toBe('delivered');
+});
+
+it('does not report a reminder as accepted when its email is suppressed', function () {
+    config(['queue.default' => 'database', 'queue.connections.database.connection' => null, 'mail.default' => 'array']);
+    Event::listen(MessageSending::class, fn (): bool => false);
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create();
+    app(QueueContributionReminder::class)->queue($member, (new ContributionReminderNotification($contribution))->onlyChannels(['mail']));
+
+    $this->artisan('queue:work', ['connection' => 'database', '--once' => true, '--sleep' => 0])->assertSuccessful();
+    $delivery = ContributionReminderDelivery::sole();
+    expect($delivery->displayStatus())->toBe('unconfirmed')
+        ->and($delivery->accepted_at)->toBeNull()
+        ->and($delivery->failed_at)->not->toBeNull();
 });
 
 it('marks a queued reminder unavailable if the member pays before the worker sends it', function () {

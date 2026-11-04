@@ -16,13 +16,14 @@ use App\Services\ReportArtifactService;
 use App\Services\WhatsAppService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Client\Request;
-use Illuminate\Mail\Mailables\Attachment;
+use Illuminate\Mail\Events\MessageSending;
+use Illuminate\Mail\Events\MessageSent;
 use Illuminate\Pipeline\Pipeline;
 use Illuminate\Queue\Middleware\RateLimited;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -39,7 +40,8 @@ beforeEach(function () {
         'services.whatsapp.templates.payment_receipt.language' => 'en',
     ]);
     Storage::fake('local');
-    Mail::fake();
+    config(['mail.default' => 'array']);
+    Event::fake([MessageSent::class]);
     Http::preventStrayRequests();
     $this->family = Family::factory()->create(['name' => 'Receipt Test Family', 'currency' => 'NGN']);
     $this->recorder = User::factory()->financialSecretary()->create(['family_id' => $this->family->id]);
@@ -71,7 +73,7 @@ it('queues both receipt channels after a successful payment and only once on rep
         Queue::assertPushed(SendPaymentReceipt::class, fn (SendPaymentReceipt $job): bool => $job->paymentBatchId === $batch->id
             && $job->recipientId === $this->member->id && $job->channel === $channel);
     }
-    Mail::assertNothingSent();
+    Event::assertNotDispatched(MessageSent::class);
     Http::assertNothingSent();
 })->with([PaymentSource::Manual, PaymentSource::Paystack, PaymentSource::Correction]);
 
@@ -173,13 +175,30 @@ it('emails the actual private PDF receipt to the paying member', function () {
 
     $artifact = ReportArtifact::sole();
     expect(Storage::disk($artifact->disk)->get($artifact->path))->toStartWith('%PDF-');
-    Mail::assertSent(PaymentReceiptMail::class, function (PaymentReceiptMail $mail) use ($batch, $artifact) {
-        $mail->assertHasAttachment(Attachment::fromStorageDisk($artifact->disk, $artifact->path)
-            ->as($artifact->filename)->withMime('application/pdf'));
+    Event::assertDispatched(MessageSent::class, function (MessageSent $event) use ($batch, $artifact) {
+        $message = $event->message;
+        expect($message->getTo())->toHaveCount(1)
+            ->and($message->getTo()[0]->getAddress())->toBe($this->member->email)
+            ->and($message->getSubject())->toContain('#'.$batch->receipt_number)
+            ->and($message->getAttachments())->toHaveCount(1);
+        $attachment = $message->getAttachments()[0];
 
-        return $mail->hasTo($this->member->email) && ! $mail->hasTo($this->recorder->email)
-            && $mail->batch->id === $batch->id;
+        return $attachment->getFilename() === $artifact->filename
+            && $attachment->getMediaType().'/'.$attachment->getMediaSubtype() === 'application/pdf'
+            && $attachment->getBody() === Storage::disk($artifact->disk)->get($artifact->path);
     });
+});
+
+it('does not report a receipt as accepted when its email is suppressed', function () {
+    Event::listen(MessageSending::class, fn (): bool => false);
+    $batch = recordReceiptPayment($this);
+    app()->call([new SendPaymentReceipt($batch->id, $this->member->id, 'mail'), 'handle']);
+
+    $delivery = $batch->receiptDeliveries()->where('channel', 'mail')->sole();
+    expect($delivery->displayStatus())->toBe('unconfirmed')
+        ->and($delivery->accepted_at)->toBeNull()
+        ->and($delivery->failed_at)->not->toBeNull();
+    Event::assertNotDispatched(MessageSent::class);
 });
 
 it('does not resend an accepted receipt if a job is replayed', function () {
@@ -189,7 +208,7 @@ it('does not resend an accepted receipt if a job is replayed', function () {
     app()->call([$job, 'handle']);
     app()->call([$job, 'handle']);
 
-    Mail::assertSent(PaymentReceiptMail::class, 1);
+    Event::assertDispatchedTimes(MessageSent::class, 1);
 });
 
 it('does not send the same receipt concurrently', function () {
@@ -216,7 +235,7 @@ it('does not send the same receipt concurrently', function () {
     app(Pipeline::class)->send($second)->through($second->middleware())
         ->then(fn (SendPaymentReceipt $job) => $job->handle($artifacts, app(WhatsAppService::class)));
 
-    Mail::assertSent(PaymentReceiptMail::class, 1);
+    Event::assertDispatchedTimes(MessageSent::class, 1);
 });
 
 it('shows provider-confirmed WhatsApp delivery without claiming email delivery', function () {
@@ -405,7 +424,7 @@ it('sends the approved WhatsApp template with receipt details and the member dow
                 ]],
             ];
     });
-    Mail::assertNothingSent();
+    Event::assertNotDispatched(MessageSent::class);
 });
 
 it('retries WhatsApp failures without resending the email', function () {
@@ -416,7 +435,7 @@ it('retries WhatsApp failures without resending the email', function () {
 
     expect(fn () => app()->call([$job, 'handle']))->toThrow(RuntimeException::class, 'WhatsApp payment receipt delivery failed');
     expect(fn () => app()->call([$job, 'handle']))->toThrow(RuntimeException::class);
-    Mail::assertSentCount(1);
+    Event::assertDispatchedTimes(MessageSent::class, 1);
     Http::assertSentCount(2);
 });
 
@@ -426,7 +445,7 @@ it('does not disclose a receipt to a different member or a no longer verified Wh
     $this->member->forceFill(['whatsapp_verified_at' => null])->save();
     app()->call([new SendPaymentReceipt($batch->id, $this->member->id, 'whatsapp'), 'handle']);
 
-    Mail::assertNothingSent();
+    Event::assertNotDispatched(MessageSent::class);
     Http::assertNothingSent();
 });
 
@@ -440,7 +459,7 @@ it('skips receipts for missing or archived payment recipients', function (string
     $id = $case === 'missing' ? $batch->id + 1000 : $batch->id;
     app()->call([new SendPaymentReceipt($id, $this->member->id, 'mail'), 'handle']);
 
-    Mail::assertNothingSent();
+    Event::assertNotDispatched(MessageSent::class);
     Http::assertNothingSent();
 })->with(['missing', 'membership', 'family']);
 

@@ -187,6 +187,11 @@ class ContributionReminderNotification extends Notification implements ShouldQue
 
             return;
         }
+        if ($channel === 'mail' && $response === null) {
+            $this->updateDelivery($channel, ['status' => 'failed', 'accepted_at' => null, 'failed_at' => now()]);
+
+            return;
+        }
         $this->updateDelivery($channel, ['status' => $channel === WebPushChannel::class ? 'submitted' : 'accepted', 'accepted_at' => now()]);
     }
 
