@@ -158,11 +158,17 @@ class PaystackService
         }
 
         if (config('d1-staging.webhooks.paystack_signing_secret')) {
-            if (preg_match('/^t=(\d{10}),v1=whk_[A-Za-z0-9]+:([a-f0-9]{128})$/iD', $signature, $parts) !== 1) {
+            if (strlen($signature) > 4096 || preg_match('/^t=(\d{10})((?:,v1=whk_[A-Za-z0-9]+:[a-f0-9]{128})+)$/iD', $signature, $parts) !== 1) {
                 return false;
             }
-            $payload = $parts[1].'.'.$payload;
-            $signature = strtolower($parts[2]);
+            $computed = hash_hmac('sha512', $parts[1].'.'.$payload, $webhookSecret);
+            foreach (explode(',', substr($parts[2], 1)) as $entry) {
+                if (hash_equals($computed, strtolower(substr($entry, -128)))) {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         $computed = hash_hmac('sha512', $payload, $webhookSecret);

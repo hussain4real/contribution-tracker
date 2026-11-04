@@ -716,10 +716,17 @@ test("dedicated staging credentials authenticate the webhook without accepting t
     const legacy = signedRecord("paystack", payload, webhook);
     assert.equal((await handler.fetch(webhookRequest(legacy), env)).status, 403);
     const signature = createHmac("sha512", signing.paystack_webhook_signing_secret).update("1793730000." + legacy.raw).digest("hex");
-    const request = webhookRequest(legacy);
-    request.headers.set("Paystack-Signature", "t=1793730000,v1=whk_fixture:" + signature);
-    assert.equal((await handler.fetch(request, env)).status, 200);
-    assert.equal(queued.length, 1);
+    const valid = "v1=whk_fixture:" + signature;
+    const other = "v1=whk_old:" + "0".repeat(128);
+    for (const [entries, status] of [[valid, 200], [other + "," + valid, 200], [valid + "," + other, 200], [other + "," + other, 403], [valid + ",bogus", 403]]) {
+        const request = webhookRequest(legacy);
+        request.headers.set("Paystack-Signature", "t=1793730000," + entries);
+        assert.equal((await handler.fetch(request, env)).status, status);
+    }
+    const tampered = webhookRequest({...legacy, raw: legacy.raw + " "});
+    tampered.headers.set("Paystack-Signature", "t=1793730000," + other + "," + valid);
+    assert.equal((await handler.fetch(tampered, env)).status, 403);
+    assert.equal(queued.length, 3);
 });
 
 test("a signed test payment is durably queued without waking a cold container", async () => {

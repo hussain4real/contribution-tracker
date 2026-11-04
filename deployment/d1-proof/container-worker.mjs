@@ -52,20 +52,31 @@ async function verifyWebhook(record, config) {
     if (!record || !["paystack", "whatsapp"].includes(record.provider) || typeof record.raw !== "string"
         || new TextEncoder().encode(record.raw).length > 49_152 || typeof record.signature !== "string") return false;
     const meta = record.provider === "whatsapp";
-    let hex = meta ? record.signature.replace(/^sha256=/, "") : record.signature;
+    let digests = [meta ? record.signature.replace(/^sha256=/, "") : record.signature];
     let signedPayload = record.raw;
     if (!meta && config.paystack_webhook_signing_secret) {
-        const parts = /^t=(\d{10}),v1=whk_[A-Za-z0-9]+:([a-f0-9]{128})$/i.exec(record.signature);
-        if (!parts) return false;
-        hex = parts[2];
-        signedPayload = parts[1] + "." + record.raw;
+        if (record.signature.length > 4096) return false;
+        const [timestamp, ...entries] = record.signature.split(",");
+        if (!/^t=\d{10}$/i.test(timestamp) || !entries.length) return false;
+        if (!entries.every(entry => /^v1=whk_[A-Za-z0-9]+:[a-f0-9]{128}$/i.test(entry))) return false;
+        digests = entries.map(entry => entry.slice(-128));
+        signedPayload = timestamp.slice(2) + "." + record.raw;
+    } else if (!(meta ? /^[a-f0-9]{64}$/i : /^[a-f0-9]{128}$/i).test(digests[0]) || (meta && !record.signature.startsWith("sha256="))) {
+        return false;
     }
-    if (!(meta ? /^[a-f0-9]{64}$/i : /^[a-f0-9]{128}$/i).test(hex) || (meta && !record.signature.startsWith("sha256="))) return false;
     const secret = meta ? config.meta_app_secret : (config.paystack_webhook_signing_secret ?? config.paystack_test_key);
     if (typeof secret !== "string" || secret === "") return false;
     const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), {name: "HMAC", hash: meta ? "SHA-256" : "SHA-512"}, false, ["verify"]);
-    const bytes = Uint8Array.from(hex.match(/../g), pair => parseInt(pair, 16));
-    if (!await crypto.subtle.verify("HMAC", key, bytes, new TextEncoder().encode(signedPayload))) return false;
+    const data = new TextEncoder().encode(signedPayload);
+    let verified = false;
+    for (const digest of digests) {
+        const bytes = Uint8Array.from(digest.match(/../g), pair => parseInt(pair, 16));
+        if (await crypto.subtle.verify("HMAC", key, bytes, data)) {
+            verified = true;
+            break;
+        }
+    }
+    if (!verified) return false;
     try {
         return webhookScope(record.provider, JSON.parse(record.raw), config);
     } catch {
