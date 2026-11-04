@@ -198,7 +198,7 @@ class ReleaseSafetyTest(unittest.TestCase):
             if path.endswith('/settings'):
                 if maintenance in path:
                     return {'bindings': [{'name': 'REPLACEMENT_DB', 'type': 'd1', 'id': 'fbd9042a-367d-45af-895e-96589ee680ab'},
-                                         {'name': 'STAGING_GATEWAY_ADMISSION_OBJECT', 'type': 'durable_object_namespace', 'namespace_id': 'aa1360266e0c46fcad453105e41d24a9'},
+                                         {'name': 'STAGING_GATEWAY_ADMISSION_OBJECT', 'type': 'durable_object_namespace', 'namespace_id': '3587105238b7400ab34cf0c8ca20d9e1'},
                                          {'name': 'REPLACEMENT_WEB_MAINTENANCE', 'type': 'service', 'service': web, 'entrypoint': 'ReplacementMaintenance'}]}
                 return {'bindings': [
                     {'name': 'REPLACEMENT_CONTAINER', 'type': 'durable_object_namespace', 'namespace_id': replacement['application_id']},

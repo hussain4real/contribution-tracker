@@ -256,7 +256,7 @@ def checked_bindings(worker, settings):
             raise RuntimeError('Replacement web image is not pinned to its own repository')
     if worker == 'familyfunds-staging-replacement-maintenance-nov04c':
         if (names.get('REPLACEMENT_DB', {}).get('id') != 'fbd9042a-367d-45af-895e-96589ee680ab'
-                or names.get('STAGING_GATEWAY_ADMISSION_OBJECT', {}).get('namespace_id') != 'aa1360266e0c46fcad453105e41d24a9'
+                or names.get('STAGING_GATEWAY_ADMISSION_OBJECT', {}).get('namespace_id') != '3587105238b7400ab34cf0c8ca20d9e1'
                 or names.get('REPLACEMENT_WEB_MAINTENANCE', {}).get('service') != replacement['worker']
                 or names.get('REPLACEMENT_WEB_MAINTENANCE', {}).get('entrypoint') != 'ReplacementMaintenance'):
             raise RuntimeError('Replacement maintenance bindings differ from the release destination')
