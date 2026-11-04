@@ -42,11 +42,33 @@ export function buildStagingPhase01Batch(inventory) {
     return buildPhase01Batch(inventory);
 }
 
-export function buildReplacementPhase01Batch(inventory) {
-    if (inventory.databaseId !== replacementDatabase.id || inventory.databaseName !== replacementDatabase.name) {
-        throw new Error('Unexpected replacement target');
+// Private read-only preflight. The caller pins the capture evidence and supplies
+// the identity it observed on the deployed RECOVERY_DB binding.
+export async function buildReplacementPhase01Batch({databaseId, databaseName, checkpoint, expectedDigest, expectedBookmark, fingerprint}, env) {
+    if (databaseId !== replacementDatabase.id || databaseName !== replacementDatabase.name
+        || env.STAGING_RECOVERY_NAME !== databaseName || env.STAGING_CHECKPOINT_BUCKET_NAME !== databaseName + '-capture'
+        || env.DATABASE_NAME !== 'familyfunds-d1-web-staging') throw new Error('Unexpected replacement target');
+    const checkpointBase = databaseName.replace('familyfunds-d1-staging-clone-', 'clone01-');
+    if (typeof checkpoint !== 'string' || checkpoint.replace(/-r[1-9][0-9]{0,2}$/, '') !== checkpointBase
+        || typeof expectedDigest !== 'string' || !/^[0-9a-f]{64}$/.test(expectedDigest)
+        || typeof expectedBookmark !== 'string' || !expectedBookmark.trim()) throw new Error('Invalid capture identity');
+
+    const prefix = 'private/staging-backups/d1-web/';
+    const [status, archive] = await Promise.all([
+        env.STAGING_CHECKPOINT_FILES.get(prefix + 'orchestration/' + checkpoint + '.json'),
+        env.STAGING_CHECKPOINT_FILES.head(prefix + 'checkpoints/' + checkpoint + '.json.aes-gcm'),
+    ]);
+    const report = await status?.json();
+    if (report?.state !== 'passed' || report.checkpoint !== checkpoint || report.consistency !== 'point-in-time-clone'
+        || report.integrity !== 'ok' || report.source_bookmark !== expectedBookmark || report.plaintext_sha256 !== expectedDigest
+        || !Number.isSafeInteger(report.tables) || report.tables < 40 || !Number.isSafeInteger(report.files) || report.files < 0
+        || JSON.stringify(report.missing_file_ids) !== '[11,13]'
+        || archive?.customMetadata?.database !== env.DATABASE_NAME || archive.customMetadata.plaintext_sha256 !== expectedDigest) {
+        throw new Error('Replacement restore evidence does not match capture');
     }
-    return buildPhase01Batch(inventory);
+    const db = env.RECOVERY_DB.withSession('first-primary');
+    const [schema, migrations] = await db.batch([db.prepare(schemaQuery), db.prepare(migrationsQuery)]);
+    return buildPhase01Batch({fingerprint, schema: schema.results, migrationRows: migrations.results});
 }
 
 function buildPhase01Batch({fingerprint, schema, migrationRows}) {
