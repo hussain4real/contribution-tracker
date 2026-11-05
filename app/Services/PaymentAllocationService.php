@@ -194,6 +194,11 @@ class PaymentAllocationService
             }
 
             if ($source !== PaymentSource::Backfill) {
+                $batch->receiptDeliveries()->create(['channel' => 'mail', 'status' => 'queued']);
+                $batch->receiptDeliveries()->create([
+                    'channel' => 'whatsapp',
+                    'status' => $member->hasVerifiedWhatsApp() ? 'queued' : 'unavailable',
+                ]);
                 SendPaymentReceipt::dispatch($batch->id, $member->id, 'mail');
 
                 if ($member->hasVerifiedWhatsApp()) {

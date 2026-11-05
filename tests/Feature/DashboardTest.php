@@ -5,6 +5,8 @@ declare(strict_types=1);
 use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\User;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('guests are redirected away from dashboard', function () {
@@ -20,6 +22,31 @@ test('authenticated users can visit the dashboard', function () {
 
     $response = $this->get(route('dashboard'));
     $response->assertStatus(200);
+});
+
+test('loads the dashboard before requesting deferred GitHub release updates', function () {
+    config()->set('services.github.releases.owner', 'test-owner');
+    config()->set('services.github.releases.repo', 'test-repo');
+    config()->set('services.github.releases.token', null);
+    Cache::forget('github_releases');
+    Cache::forget('illuminate:cache:flexible:created:github_releases');
+    Http::preventStrayRequests();
+    Http::fake(['api.github.com/repos/test-owner/test-repo/releases*' => Http::response([[
+        'id' => 101, 'name' => 'Release', 'tag_name' => 'v1', 'body' => '',
+        'html_url' => 'https://github.com/test-owner/test-repo/releases/tag/v1',
+        'published_at' => '2026-01-01T00:00:00Z', 'prerelease' => false,
+    ]])]);
+    $family = Family::factory()->create();
+    $user = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+
+    $response = $this->actingAs($user)->get(route('dashboard', ['current_family' => $family->slug]));
+    $response->assertSuccessful()->assertInertia(fn (Assert $page) => $page
+        ->component('Dashboard/Index')->missing('changelogUpdate'));
+    Http::assertNothingSent();
+
+    $response->assertInertia(fn (Assert $page) => $page
+        ->loadDeferredProps('changelog', fn (Assert $reload) => $reload->where('changelogUpdate.latest.id', 101)));
+    Http::assertSentCount(1);
 });
 
 test('admin dashboard includes overdue_members with overdue contribution details', function () {

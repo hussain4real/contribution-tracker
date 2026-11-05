@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\UpdateReminderPreferencesRequest;
+use App\Models\Family;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
@@ -22,6 +24,10 @@ class NotificationController extends Controller
     {
         $filters = $this->filters($request);
         $user = $this->user($request);
+        $family = $user->currentFamily ?? $user->family;
+        abort_unless($family instanceof Family, 403);
+        $membership = $user->membershipForFamily($family);
+        abort_if($membership === null, 403);
 
         $notificationFeed = $user
             ->notifications()
@@ -37,7 +43,20 @@ class NotificationController extends Controller
             'notificationFeed' => $notificationFeed,
             'notificationSummary' => $this->summary($request),
             'notificationFilters' => $filters,
+            'reminderChannels' => $membership->reminder_channels ?? ['mail', 'whatsapp', 'webpush'],
         ]);
+    }
+
+    public function updateReminderPreferences(UpdateReminderPreferencesRequest $request): RedirectResponse
+    {
+        $user = $this->user($request);
+        $family = $user->currentFamily ?? $user->family;
+        abort_unless($family instanceof Family, 403);
+        $membership = $user->membershipForFamily($family);
+        abort_if($membership === null, 403);
+        $membership->update(['reminder_channels' => $request->validated('channels')]);
+
+        return back()->with('success', 'Reminder preferences updated.');
     }
 
     /**

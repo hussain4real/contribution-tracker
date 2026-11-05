@@ -163,7 +163,8 @@ describe('Mobile app shell', function () {
     });
 
     it('renders the dedicated notifications page on mobile', function () {
-        $this->admin->notifications()->create([
+        $member = createBrowserMember($this->family);
+        $member->notifications()->create([
             'id' => (string) Str::uuid(),
             'type' => 'App\\Notifications\\ContributionReminderNotification',
             'data' => [
@@ -178,11 +179,17 @@ describe('Mobile app shell', function () {
 
         $page = visit('/login')->on()->iPhone15Pro();
 
-        $page->fill('email', 'admin@test.com')
+        $page->fill('email', $member->email)
             ->fill('password', 'password')
             ->click('Log in')
-            ->navigate("/{$this->family->slug}/notifications")
+            ->assertSee('Dashboard')
+            ->click('More')
+            ->assertSee('Notifications')
+            ->click('[role="dialog"] a[href$="/notifications"]')
+            ->assertPathIs("/{$this->family->slug}/notifications")
             ->assertSee('Notification Center')
+            ->assertSee('Example email reminder')
+            ->assertSee('contribution for '.$this->family->name.' is due on [due date]')
             ->assertSee('Timeline')
             ->assertSee('May 2026')
             ->assertSee('Due today')
@@ -250,9 +257,7 @@ describe('Mobile app shell', function () {
             'email' => 'platform-link@test.com',
         ]);
 
-        $this->actingAs($superAdmin);
-
-        $page = visit("/{$this->family->slug}/dashboard");
+        $page = loginBrowserAs($superAdmin)->navigate("/{$this->family->slug}/dashboard");
 
         $page->assertSee('Platform Admin')
             ->assertScript(<<<'JS'

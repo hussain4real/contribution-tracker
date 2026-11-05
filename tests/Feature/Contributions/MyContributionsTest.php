@@ -39,6 +39,27 @@ describe('My Contributions', function () {
             );
     });
 
+    it('shows no next contribution when the member has nothing outstanding', function () {
+        $this->actingAs($this->member)->get(route('contributions.my'))
+            ->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('latest_payment', null)
+            ->where('next_contribution', null)
+            ->where('personal_stats.total_outstanding', 0));
+    });
+
+    it('marks the next contribution payable only within the six-month advance limit', function (int $year, int $month, bool $payable) {
+        $this->travelTo(now()->setDate(2026, 1, 31)->startOfDay());
+        Contribution::factory()->forUser($this->member)->forMonth($year, $month)->create();
+
+        $this->actingAs($this->member)->get(route('contributions.my'))
+            ->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('next_contribution.can_pay_online', $payable));
+    })->with([
+        'overdue' => [2025, 12, true],
+        'six months ahead' => [2026, 7, true],
+        'seven months ahead' => [2026, 8, false],
+    ]);
+
     it('shows member contributions with correct structure', function () {
         $contribution = Contribution::factory()
             ->forUser($this->member)
@@ -139,82 +160,6 @@ describe('My Contributions', function () {
             ->where('receipts.data.0.id', $receipt->id)
             ->where('receipts.data.0.amount', 1500)
             ->where('receipts.data.0.periods.0', 'October 2025')
-            );
-    });
-
-    it('shows the full latest payment across receipt pages and supports payments without a receipt', function () {
-        Queue::fake();
-        $family = $this->member->family;
-        assert($family instanceof Family);
-        $recorder = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
-        $first = Contribution::factory()->forUser($this->member)->forMonth(2025, 10)->create(['expected_amount' => 4000]);
-        Contribution::factory()->forUser($this->member)->forMonth(2025, 11)->create(['expected_amount' => 4000]);
-        $paidAt = now()->startOfDay();
-        app(PaymentAllocationService::class)->createBatch(
-            member: $this->member, amount: 5000, paidAt: $paidAt, recordedBy: $recorder, family: $family,
-        );
-        $other = Contribution::factory()->create();
-        Payment::factory()->forContribution($other)->create(['amount' => 999, 'paid_at' => $paidAt->copy()->addDay()]);
-        $url = route('contributions.my', ['current_family' => $family->slug, 'receipts_page' => 2]);
-
-        $this->actingAs($this->member)->get($url)->assertOk()->assertInertia(fn (Assert $page) => $page
-            ->has('receipts.data', 0)
-            ->where('latest_payment.amount', 5000)
-            ->where('latest_payment.paid_at', $paidAt->toDateString()));
-
-        Payment::factory()->forContribution($first)->create(['amount' => 350, 'paid_at' => $paidAt]);
-        Payment::factory()->forContribution($first)->create(['amount' => 125, 'paid_at' => $paidAt->copy()->subDay()]);
-        $this->get($url)->assertOk()->assertInertia(fn (Assert $page) => $page
-            ->where('latest_payment.amount', 350)
-            ->where('latest_payment.paid_at', $paidAt->toDateString()));
-    });
-
-    it('marks reversed receipts and restores the outstanding balance', function () {
-        Queue::fake();
-        $family = $this->member->family;
-        assert($family instanceof Family);
-        $recorder = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
-        Contribution::factory()->forUser($this->member)->forMonth(2025, 10)->create(['expected_amount' => 4000]);
-        $receipt = app(PaymentAllocationService::class)->createBatch(
-            member: $this->member, amount: 1500, paidAt: now(), recordedBy: $recorder, family: $family,
-        );
-        FinancialReversal::factory()->create([
-            'family_id' => $family->id,
-            'reversible_type' => PaymentBatch::MORPH_TYPE,
-            'reversible_id' => $receipt->id,
-            'reversed_by' => $recorder->id,
-        ]);
-
-        $this->actingAs($this->member)->get(route('contributions.my'))
-            ->assertOk()->assertInertia(fn (Assert $page) => $page
-            ->where('personal_stats.total_outstanding', 4000)
-            ->has('receipts.data', 1)
-            ->where('receipts.data.0.id', $receipt->id)
-            ->where('receipts.data.0.is_reversed', true)
-            ->where('latest_payment', null)
-            );
-    });
-
-    it('lets the member reach older receipts without exposing another member’s receipts', function () {
-        $family = $this->member->family;
-        assert($family instanceof Family);
-        $membership = $this->member->membershipForFamily($family);
-        assert($membership instanceof FamilyMembership);
-        for ($number = 1; $number <= 21; $number++) {
-            PaymentBatch::factory()->create([
-                'family_id' => $family->id,
-                'family_membership_id' => $membership->id,
-                'recorded_by' => $this->member->id,
-                'receipt_number' => $number,
-            ]);
-        }
-
-        $this->actingAs($this->member)->get(route('contributions.my', ['receipts_page' => 2]))
-            ->assertOk()->assertInertia(fn (Assert $page) => $page
-            ->where('receipts.current_page', 2)
-            ->where('receipts.last_page', 2)
-            ->has('receipts.data', 1)
-            ->where('receipts.data.0.receipt_number', 1)
             );
     });
 
@@ -340,27 +285,6 @@ describe('My Contributions', function () {
             );
     });
 
-    it('shows no next contribution when the member has nothing outstanding', function () {
-        $this->actingAs($this->member)->get(route('contributions.my'))
-            ->assertOk()->assertInertia(fn (Assert $page) => $page
-            ->where('latest_payment', null)
-            ->where('next_contribution', null)
-            ->where('personal_stats.total_outstanding', 0));
-    });
-
-    it('marks the next contribution payable only within the six-month advance limit', function (int $year, int $month, bool $payable) {
-        $this->travelTo(now()->setDate(2026, 1, 31)->startOfDay());
-        Contribution::factory()->forUser($this->member)->forMonth($year, $month)->create();
-
-        $this->actingAs($this->member)->get(route('contributions.my'))
-            ->assertOk()->assertInertia(fn (Assert $page) => $page
-            ->where('next_contribution.can_pay_online', $payable));
-    })->with([
-        'overdue' => [2025, 12, true],
-        'six months ahead' => [2026, 7, true],
-        'seven months ahead' => [2026, 8, false],
-    ]);
-
     it('shows the oldest outstanding period and only the member’s effective receipts', function () {
         Queue::fake();
         $family = $this->member->family;
@@ -389,6 +313,83 @@ describe('My Contributions', function () {
             ->where('receipts.data.0.id', $receipt->id)
             ->where('receipts.data.0.amount', 1500)
             ->where('receipts.data.0.periods.0', 'October 2025')
+            );
+    });
+
+    it('shows the full latest payment across receipt pages and supports payments without a receipt', function () {
+        Queue::fake();
+        $family = $this->member->family;
+        assert($family instanceof Family);
+        $recorder = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+        $first = Contribution::factory()->forUser($this->member)->forMonth(2025, 10)->create(['expected_amount' => 4000]);
+        Contribution::factory()->forUser($this->member)->forMonth(2025, 11)->create(['expected_amount' => 4000]);
+        $paidAt = now()->startOfDay();
+        app(PaymentAllocationService::class)->createBatch(
+            member: $this->member, amount: 5000, paidAt: $paidAt, recordedBy: $recorder, family: $family,
+        );
+        $other = Contribution::factory()->create();
+        Payment::factory()->forContribution($other)->create(['amount' => 999, 'paid_at' => $paidAt->copy()->addDay()]);
+        $url = route('contributions.my', ['current_family' => $family->slug, 'receipts_page' => 2]);
+
+        $this->actingAs($this->member)->get($url)->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->has('receipts.data', 0)
+            ->where('latest_payment.amount', 5000)
+            ->where('latest_payment.paid_at', $paidAt->toDateString()));
+
+        Payment::factory()->forContribution($first)->create(['amount' => 350, 'paid_at' => $paidAt]);
+        Payment::factory()->forContribution($first)->create(['amount' => 125, 'paid_at' => $paidAt->copy()->subDay()]);
+        $this->get($url)->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('latest_payment.amount', 350)
+            ->where('latest_payment.paid_at', $paidAt->toDateString()));
+    });
+
+    it('marks reversed receipts and restores the outstanding balance', function () {
+        Queue::fake();
+        $family = $this->member->family;
+        assert($family instanceof Family);
+        $recorder = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+        Contribution::factory()->forUser($this->member)->forMonth(2025, 10)->create(['expected_amount' => 4000]);
+        $receipt = app(PaymentAllocationService::class)->createBatch(
+            member: $this->member, amount: 1500, paidAt: now(), recordedBy: $recorder, family: $family,
+        );
+        FinancialReversal::factory()->create([
+            'family_id' => $family->id,
+            'reversible_type' => PaymentBatch::MORPH_TYPE,
+            'reversible_id' => $receipt->id,
+            'reversed_by' => $recorder->id,
+        ]);
+
+        $this->actingAs($this->member)->get(route('contributions.my'))
+            ->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('personal_stats.total_outstanding', 4000)
+            ->where('next_contribution.balance', 4000)
+            ->has('receipts.data', 1)
+            ->where('receipts.data.0.id', $receipt->id)
+            ->where('receipts.data.0.is_reversed', true)
+            ->where('latest_payment', null)
+            );
+    });
+
+    it('lets the member reach older receipts without exposing another member’s receipts', function () {
+        $family = $this->member->family;
+        assert($family instanceof Family);
+        $membership = $this->member->membershipForFamily($family);
+        assert($membership instanceof FamilyMembership);
+        for ($number = 1; $number <= 21; $number++) {
+            PaymentBatch::factory()->create([
+                'family_id' => $family->id,
+                'family_membership_id' => $membership->id,
+                'recorded_by' => $this->member->id,
+                'receipt_number' => $number,
+            ]);
+        }
+
+        $this->actingAs($this->member)->get(route('contributions.my', ['receipts_page' => 2]))
+            ->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('receipts.current_page', 2)
+            ->where('receipts.last_page', 2)
+            ->has('receipts.data', 1)
+            ->where('receipts.data.0.receipt_number', 1)
             );
     });
 

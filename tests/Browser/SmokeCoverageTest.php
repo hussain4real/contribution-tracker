@@ -461,9 +461,8 @@ it('smokes platform administration pages', function () {
         'sort_order' => 1,
     ]);
 
-    $this->actingAs($superAdmin);
-
-    $page = visit('/platform/plans');
+    $page = loginBrowserAs($superAdmin);
+    $page->navigate('/platform/plans');
 
     assertBrowserSmoke($page, 'Browser Premium');
     navigateAndAssertBrowserSmoke($page, '/platform/plans/create', 'Create');

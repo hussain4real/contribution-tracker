@@ -6,11 +6,13 @@ namespace App\Console\Commands;
 
 use App\Models\Contribution;
 use App\Notifications\ContributionReminderNotification;
+use App\Services\QueueContributionReminder;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 #[Signature('contributions:remind {--day= : Day of month (25 or 28)} {--year= : Contribution year} {--month= : Contribution month} {--family= : Specific family ID} {--after= : Contribution IDs above this cursor} {--through= : Last contribution ID in this batch}')]
 #[Description('Send contribution payment reminders to members with unpaid contributions')]
@@ -60,7 +62,7 @@ class SendContributionReminders extends Command
 
         $totalSent = 0;
 
-        $contributions = Contribution::query();
+        $contributions = $this->pendingReminders($sentAtColumn);
         if (isset($filters['family'])) {
             $contributions->where('family_id', $filters['family']);
         }
@@ -71,15 +73,7 @@ class SendContributionReminders extends Command
             $contributions->where('id', '<=', $filters['through']);
         }
         $contributions
-            ->whereNull($sentAtColumn)
-            ->whereHas('family', fn (Builder $query): Builder => $query->has('members'))
-            ->whereHas('user.familyMemberships', function ($query): void {
-                $query->whereColumn('family_members.family_id', 'contributions.family_id')
-                    ->whereNull('family_members.archived_at');
-            })
             ->forMonth($year, $month)
-            ->incomplete()
-            ->with(['user', 'family', 'payments'])
             ->chunkById(200, function ($contributions) use (&$totalSent, $sentAtColumn, $type): void {
                 foreach ($contributions as $contribution) {
                     $totalSent += (int) $this->sendReminderIfUnsent($contribution, $sentAtColumn, $type);
@@ -89,6 +83,20 @@ class SendContributionReminders extends Command
         $this->info("Sent {$totalSent} {$type} notifications.");
 
         return self::SUCCESS;
+    }
+
+    /** @return Builder<Contribution> */
+    private function pendingReminders(string $sentAtColumn): Builder
+    {
+        return Contribution::query()
+            ->whereNull($sentAtColumn)
+            ->whereHas('family', fn (Builder $query): Builder => $query->whereNull('archived_at')->has('members'))
+            ->whereHas('user.familyMemberships', function ($query): void {
+                $query->whereColumn('family_members.family_id', 'contributions.family_id')
+                    ->whereNull('family_members.archived_at');
+            })
+            ->incomplete()
+            ->with(['user', 'family', 'payments']);
     }
 
     /**
@@ -115,11 +123,10 @@ class SendContributionReminders extends Command
         return (bool) Cache::lock(
             $this->reminderLockKey($contribution, $sentAtColumn),
             self::REMINDER_DELIVERY_LOCK_SECONDS,
-        )->get(function () use ($contribution, $sentAtColumn, $type): bool {
-            $freshContribution = Contribution::query()
+        )->get(fn (): bool => DB::transaction(function () use ($contribution, $sentAtColumn, $type): bool {
+            $freshContribution = $this->pendingReminders($sentAtColumn)
                 ->whereKey($contribution->id)
-                ->whereNull($sentAtColumn)
-                ->with(['user', 'family', 'payments'])
+                ->lockForUpdate()
                 ->first();
 
             if (! $freshContribution || ! $freshContribution->user) {
@@ -128,11 +135,12 @@ class SendContributionReminders extends Command
 
             $sentAt = now();
 
-            $freshContribution->user->notify(new ContributionReminderNotification($freshContribution, $type));
+            $notification = new ContributionReminderNotification($freshContribution, $type);
+            app(QueueContributionReminder::class)->queue($freshContribution->user, $notification);
             $freshContribution->forceFill([$sentAtColumn => $sentAt])->save();
 
             return true;
-        });
+        }));
     }
 
     private function reminderLockKey(Contribution $contribution, string $sentAtColumn): string

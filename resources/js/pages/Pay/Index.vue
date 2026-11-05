@@ -24,6 +24,7 @@ interface PendingContribution {
     balance: number;
     status: 'paid' | 'partial' | 'unpaid' | 'overdue';
     period_label: string;
+    can_pay_online: boolean;
 }
 
 interface PaystackFeeConfig {
@@ -73,6 +74,11 @@ const selectedIds = ref<number[]>([]);
 const processing = ref(false);
 const paymentUnconfirmed = ref(false);
 const { formatCurrency: formatAmount } = useCurrencyFormatter();
+const payableContributions = computed(() =>
+    props.pending_contributions.filter(
+        (contribution) => contribution.can_pay_online,
+    ),
+);
 
 const totalSelected = computed(() => {
     return props.pending_contributions
@@ -158,17 +164,17 @@ const toggleContribution = (id: number, checked: boolean) => {
 };
 
 const selectAll = () => {
-    if (selectedIds.value.length === props.pending_contributions.length) {
+    if (allSelected.value) {
         selectedIds.value = [];
     } else {
-        selectedIds.value = props.pending_contributions.map((c) => c.id);
+        selectedIds.value = payableContributions.value.map((c) => c.id);
     }
 };
 
 const allSelected = computed(
     () =>
-        props.pending_contributions.length > 0 &&
-        selectedIds.value.length === props.pending_contributions.length,
+        payableContributions.value.length > 0 &&
+        selectedIds.value.length === payableContributions.value.length,
 );
 
 const setupMessage = computed(() => {
@@ -210,6 +216,9 @@ const payWithPaystack = async () => {
             credentials: 'same-origin',
             body: JSON.stringify({
                 contribution_ids: selectedIds.value,
+                expected_contribution_amount_kobo:
+                    selectedContributionKobo.value,
+                expected_gross_amount_kobo: grossAmountKobo.value,
             }),
         });
 
@@ -309,7 +318,8 @@ const payWithPaystack = async () => {
                 <div class="flex items-center justify-between">
                     <button
                         type="button"
-                        class="text-sm text-primary hover:underline"
+                        class="text-sm text-primary hover:underline disabled:opacity-50"
+                        :disabled="payableContributions.length === 0"
                         @click="selectAll"
                     >
                         {{ allSelected ? 'Deselect All' : 'Select All' }}
@@ -364,6 +374,7 @@ const payWithPaystack = async () => {
                     >
                         <Checkbox
                             :model-value="selectedIds.includes(contribution.id)"
+                            :disabled="!contribution.can_pay_online"
                             @update:model-value="
                                 (v: boolean | 'indeterminate') =>
                                     toggleContribution(
@@ -403,6 +414,12 @@ const payWithPaystack = async () => {
                                 Paid so far:
                                 {{ formatAmount(contribution.total_paid) }}
                             </div>
+                            <p
+                                v-if="!contribution.can_pay_online"
+                                class="mt-1 text-xs text-muted-foreground"
+                            >
+                                Available when this period is within six months.
+                            </p>
                         </div>
                     </label>
                 </div>

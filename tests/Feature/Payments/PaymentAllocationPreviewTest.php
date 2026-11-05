@@ -183,7 +183,7 @@ it('reviews and posts the same allocations and safely replays the reviewed reque
     $receipt = PaymentBatch::sole();
     $response->assertRedirect(route('payments.index', ['current_family' => $family->slug, 'receipt' => $receipt->id]))->assertSessionHasNoErrors();
     $this->actingAs($officer)->get(route('payments.index', ['current_family' => $family->slug, 'receipt' => $receipt->id]))
-        ->assertInertia(fn (AssertableInertia $page) => $page->where('receipts.0.id', $receipt->id));
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('receipts.0.id', $receipt->id)->has('receipts.0.deliveries'));
     $this->actingAs($officer)->post(route('payments.store', ['current_family' => $family->slug]), $data)->assertRedirect()->assertSessionHasNoErrors();
     expect(PaymentBatch::count())->toBe(1)->and(Payment::count())->toBe(1);
     $different = [...$data, 'amount' => 1000];
