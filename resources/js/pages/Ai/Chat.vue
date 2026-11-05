@@ -7,6 +7,7 @@ import {
     rename,
 } from '@/actions/App/Http/Controllers/AiChatController';
 import ConversationList from '@/components/ai/ConversationList.vue';
+import ToolResultLinks from '@/components/ai/ToolResultLinks.vue';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -564,13 +565,19 @@ const hasStreamingActivity = computed(
         streamedReasoningSummary.value.trim() !== '',
 );
 
-// Detect if the last assistant message is asking for confirmation
+// Invitations can be confirmed in chat; financial drafts require a form.
 const pendingConfirmation = computed(() => {
     if (isProcessing.value) return false;
     if (chatMessages.value.length === 0) return false;
 
     const lastMessage = chatMessages.value[chatMessages.value.length - 1];
     if (lastMessage.role !== 'assistant') return false;
+    if (
+        !lastMessage.tool_calls?.some(
+            (tool) => tool.name === 'invitation_management',
+        )
+    )
+        return false;
 
     const content = lastMessage.content.toLowerCase();
     const patterns = [
@@ -1287,8 +1294,10 @@ function confirmDelete(): void {
                             Family AI Assistant
                         </h3>
                         <p class="max-w-md text-center text-sm">
-                            Ask me about contributions, expenses, member
-                            payments, or request financial reports and analysis.
+                            Try “What do I owe across all years?” or ask for an
+                            expense summary. Answers link to source records.
+                            Financial changes open a draft for you to review and
+                            submit in FamilyFund.
                         </p>
                     </div>
 
@@ -1443,6 +1452,11 @@ function confirmDelete(): void {
                                                             )
                                                         }}
                                                     </p>
+                                                    <ToolResultLinks
+                                                        :result="
+                                                            activity.result
+                                                        "
+                                                    />
                                                 </div>
 
                                                 <span
@@ -1629,6 +1643,11 @@ function confirmDelete(): void {
                                                             )
                                                         }}
                                                     </p>
+                                                    <ToolResultLinks
+                                                        :result="
+                                                            activity.result
+                                                        "
+                                                    />
                                                 </div>
 
                                                 <span

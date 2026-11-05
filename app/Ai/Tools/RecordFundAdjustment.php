@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace App\Ai\Tools;
 
+use App\Enums\AiActionKind;
 use App\Models\Family;
-use App\Models\FundAdjustment;
 use App\Models\User;
-use App\Support\CurrencyFormatter;
+use App\Services\AiActionDrafts;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Illuminate\Support\Facades\DB;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 
@@ -22,7 +21,7 @@ class RecordFundAdjustment implements Tool
      */
     public function description(): string
     {
-        return 'Records a fund adjustment for the family (e.g., interest earned, donations received, corrections). Requires amount (whole number), description, and date. Always call without confirmed=true first to preview.';
+        return 'Prepares a adjustment draft for human review in FamilyFund. Return the review_url to the user. This tool never posts financial records, even if asked to confirm in chat.';
     }
 
     /**
@@ -37,7 +36,6 @@ class RecordFundAdjustment implements Tool
         $amount = $this->nullableIntegerFromRequest($request['amount'] ?? null);
         $description = $this->nullableStringFromRequest($request['description'] ?? null);
         $recordedAt = $this->stringFromRequest($request['recorded_at'] ?? null, now()->toDateString());
-        $confirmed = ($request['confirmed'] ?? false) === true;
 
         if ($amount === null || $amount === 0) {
             return json_encode(['error' => 'Amount is required and must be a non-zero whole number.'], JSON_THROW_ON_ERROR);
@@ -53,34 +51,13 @@ class RecordFundAdjustment implements Tool
             return json_encode(['error' => 'User is not associated with a family.'], JSON_THROW_ON_ERROR);
         }
 
-        $currency = $family->currency;
-        $formattedAmount = CurrencyFormatter::format($amount, $currency);
-
-        if (! $confirmed) {
-            return json_encode([
-                'status' => 'confirmation_required',
-                'message' => "I'll record a fund adjustment of {$formattedAmount} for \"{$description}\" on {$recordedAt}. Please confirm to proceed.",
-                'details' => [
-                    'amount' => $amount,
-                    'description' => $description,
-                    'recorded_at' => $recordedAt,
-                ],
-            ], JSON_THROW_ON_ERROR);
+        if (! app(AiActionDrafts::class)->allowed($this->user, $family, AiActionKind::Adjustment)) {
+            return json_encode(['error' => 'You do not have permission to prepare this action.'], JSON_THROW_ON_ERROR);
         }
 
-        $adjustment = DB::transaction(fn (): FundAdjustment => FundAdjustment::create([
-            'family_id' => $family->id,
-            'amount' => $amount,
-            'description' => $description,
-            'recorded_at' => $recordedAt,
-            'recorded_by' => $this->user->id,
-        ]), attempts: 3);
-
-        return json_encode([
-            'status' => 'success',
-            'message' => "Fund adjustment of {$formattedAmount} for \"{$description}\" has been recorded successfully.",
-            'adjustment_id' => $adjustment->id,
-        ], JSON_THROW_ON_ERROR);
+        return json_encode(app(AiActionDrafts::class)->create($this->user, $family, AiActionKind::Adjustment, [
+            'amount' => $amount, 'description' => $description, 'recorded_at' => $recordedAt,
+        ]), JSON_THROW_ON_ERROR);
     }
 
     /**
@@ -95,7 +72,6 @@ class RecordFundAdjustment implements Tool
             ])->required(),
             'description' => $schema->string()->required(),
             'recorded_at' => $schema->string(),
-            'confirmed' => $schema->boolean(),
         ];
     }
 

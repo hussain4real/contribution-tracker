@@ -108,9 +108,11 @@ class HandleInertiaRequests extends Middleware
                 'whatsapp_phone' => $user->whatsapp_phone,
                 'whatsapp_verified_at' => $user->whatsapp_verified_at,
             ];
+            $canViewTransactions = $currentFamily instanceof Family && app(FamilyFinancialVisibility::class)->transactions($user, $currentFamily);
             $permissions = [
-                'view_financial_transactions' => $currentFamily instanceof Family
-                    && app(FamilyFinancialVisibility::class)->transactions($user, $currentFamily),
+                'view_financial_transactions' => $canViewTransactions,
+                'view_family_totals' => $canViewTransactions || ($currentFamily instanceof Family
+                    && app(FamilyFinancialVisibility::class)->totals($user, $currentFamily)),
                 'add_members' => $activeRole?->canAddMembers() ?? false,
                 'manage_members' => $activeRole?->canManageMembers() ?? false,
                 'record_payments' => $activeRole?->canRecordPayments() ?? false,

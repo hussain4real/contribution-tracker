@@ -24,9 +24,10 @@ test('admin can preview contribution generation', function () {
 
     expect($result['status'])->toBe('confirmation_required')
         ->and($result['message'])->toContain('May 2026');
+    $this->assertDatabaseCount('contributions', 0);
 });
 
-test('admin can execute contribution generation', function () {
+test('chat confirmation only prepares generation without creating contributions', function () {
     // Create a paying member so contributions can be generated
     User::factory()->member()->employed()->create(['family_id' => $this->family->id]);
 
@@ -38,8 +39,9 @@ test('admin can execute contribution generation', function () {
         'confirmed' => true,
     ])));
 
-    expect($result['status'])->toBe('success')
+    expect($result['status'])->toBe('confirmation_required')
         ->and($result['message'])->toContain('May 2026');
+    $this->assertDatabaseCount('contributions', 0);
 });
 
 test('financial secretary cannot generate contributions', function () {

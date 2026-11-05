@@ -47,7 +47,7 @@ Make it easier for members to understand and pay their contributions, and for fa
 
 ## Phase 2 — Dashboard clarity and trust
 
-Phase 2 implementation is in review. It includes monthly money movement, an activity history, configurable member visibility, expense requests with independent approvals, and private supporting documents. Release requires verification of the additive database migrations before deployment.
+Phase 2 was released to staging and production on November 5, 2026 through PRs #316 and #317, after the five additive migrations and native D1 recovery checks passed. It includes monthly money movement, activity history, configurable member visibility, expense requests with independent approvals, and private supporting documents.
 
 Member visibility defaults to family totals. Admins can select personal records only or opt members into transaction history. Private supporting documents are restricted to family officers. Organization owners can enable an approval threshold and distinct approver count. Requests retain their required approvals, and payment checks the stronger of the captured and current rules.
 
@@ -75,6 +75,14 @@ Member visibility defaults to family totals. Admins can select personal records 
 **Acceptance:** Approval rules are enforced across all entry points, pending requests do not affect balances, documents are accessible only to authorized family members, and retries cannot double-post expenses.
 
 ## Phase 3 — Engagement and growth
+
+Implementation is under local verification on `codex/phase3-engagement`; staging and production acceptance remain separate release gates. One additive migration introduces visual goals. Existing accepted deployment fingerprints remain unchanged until the new migration is verified for each target.
+
+The initial accounting model is a **visual target within the shared fund**. It does not reserve or transfer money. Each goal starts at zero on its start date. Contributions received counts effective payment amounts; net savings counts effective payments plus fund adjustments minus expenses. Entry dates must fall between the start date and deadline, through today. Reversals remove the original entries from progress. Progress can be negative or exceed the target; only the progress bar is clamped to 0–100%. Overlapping goals can use the same entries and must not be added together as separate balances. Supporting links open the matching ledger range. Personal-only visibility hides family goals; summary visibility allows goal totals; transaction visibility allows source entries. Admins manage goals and edits/archive changes retain audit events.
+
+Setup progress is derived from current family records so it can be resumed without separate checklist state. Workspace creation, contribution categories, another active member or pending invitation, and the first effective payment are required steps. Bank details and a custom reminder schedule are optional. The sample member preview is read-only and inserts no financial data.
+
+AI personal arrears defaults to all years, excludes other members and families, and calculates outstanding per contribution so an overpayment cannot cancel another period's dues. Financial read tools recheck active membership and current visibility, include an as-of time, currency, reporting period and authorized source links, and disclose truncated entry lists. Financial tools prepare encrypted, ten-minute drafts bound to the actor, family and action. The user reviews and submits an existing FamilyFund form; chat confirmation cannot post a payment, expense, adjustment or generated contribution. Existing allocation review, approvals and idempotency checks remain authoritative. Invitations retain their existing confirm-first flow.
 
 ### 8. Family goals or dedicated funds
 

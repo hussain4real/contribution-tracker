@@ -18,6 +18,8 @@ use App\Http\Controllers\ExpenseRequestController;
 use App\Http\Controllers\ExpenseReversalController;
 use App\Http\Controllers\FamilyActivityController;
 use App\Http\Controllers\FamilyArchiveController;
+use App\Http\Controllers\FamilyGoalController;
+use App\Http\Controllers\FamilyOnboardingController;
 use App\Http\Controllers\FamilySettingsController;
 use App\Http\Controllers\FinancialGovernanceSettingsController;
 use App\Http\Controllers\FundAdjustmentController;
@@ -138,6 +140,11 @@ Route::prefix('{current_family}')
     ->middleware(['auth', 'verified', 'family.member', 'family.active'])
     ->group(function () {
         Route::get('activity', [FamilyActivityController::class, 'index'])->name('family.activity');
+        Route::get('get-started', [FamilyOnboardingController::class, 'index'])->name('family.onboarding');
+        Route::get('goals', [FamilyGoalController::class, 'index'])->name('family.goals.index');
+        Route::post('goals', [FamilyGoalController::class, 'store'])->name('family.goals.store');
+        Route::put('goals/{family_goal}', [FamilyGoalController::class, 'update'])->name('family.goals.update');
+        Route::patch('goals/{family_goal}/archive', [FamilyGoalController::class, 'archive'])->name('family.goals.archive');
 
         // Dashboard
         Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');

@@ -1,6 +1,8 @@
 import { index as aiIndex } from '@/actions/App/Http/Controllers/AiChatController';
 import { my as myContributions } from '@/actions/App/Http/Controllers/ContributionController';
 import { index as expensesIndex } from '@/actions/App/Http/Controllers/ExpenseController';
+import { index as goalsIndex } from '@/actions/App/Http/Controllers/FamilyGoalController';
+import { index as onboardingIndex } from '@/actions/App/Http/Controllers/FamilyOnboardingController';
 import { edit as familySettings } from '@/actions/App/Http/Controllers/FamilySettingsController';
 import { index as fundAdjustmentsIndex } from '@/actions/App/Http/Controllers/FundAdjustmentController';
 import { index as invitationsIndex } from '@/actions/App/Http/Controllers/InvitationController';
@@ -34,6 +36,7 @@ import {
     Settings,
     Shield,
     Sparkles,
+    Target,
     User,
     Users,
     Wallet,
@@ -121,6 +124,17 @@ export function useAppNavigation() {
                 section: 'main',
             },
             paymentItem.value,
+            ...(page.props.auth?.can?.view_family_totals
+                ? [
+                      {
+                          title: 'Goals',
+                          href: goalsIndex(),
+                          icon: Target,
+                          component: 'Family/Goals',
+                          section: 'main' as const,
+                      },
+                  ]
+                : []),
             {
                 title: 'Notifications',
                 href: notificationsIndex(),
@@ -220,6 +234,13 @@ export function useAppNavigation() {
         const items: NavItem[] = [];
 
         if (isAdmin) {
+            items.push({
+                title: 'Get started',
+                href: onboardingIndex(),
+                icon: Rocket,
+                component: 'Family/Onboarding',
+                section: 'Family Admin',
+            });
             items.push({
                 title: 'Family Settings',
                 href: familySettings(),

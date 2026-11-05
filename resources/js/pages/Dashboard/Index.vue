@@ -5,6 +5,7 @@ import {
 } from '@/actions/App/Http/Controllers/ContributionController';
 import { index as expenseRequests } from '@/actions/App/Http/Controllers/ExpenseRequestController';
 import { index as activity } from '@/actions/App/Http/Controllers/FamilyActivityController';
+import { index as onboardingIndex } from '@/actions/App/Http/Controllers/FamilyOnboardingController';
 import { create as createPayment } from '@/actions/App/Http/Controllers/PaymentController';
 import AccountDetails from '@/components/AccountDetails.vue';
 import AggregateStats from '@/components/contributions/AggregateStats.vue';
@@ -103,6 +104,7 @@ type Props = Partial<AdminProps & MemberProps> & {
     expense_requests_pending?: number;
     can_generate_contributions?: boolean;
     has_pending_contributions?: boolean;
+    onboarding?: { completed: number; total: number };
     overdue_members?: OverdueMember[];
 };
 
@@ -182,6 +184,23 @@ function formatCategory(category: string | null): string {
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
+            <Link
+                v-if="onboarding && onboarding.completed < onboarding.total"
+                :href="onboardingIndex()"
+                class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-600/30 bg-emerald-50/50 p-5 dark:bg-emerald-950/20"
+            >
+                <div>
+                    <h2 class="font-semibold">Get your family ready</h2>
+                    <p class="mt-1 text-sm text-muted-foreground">
+                        {{ onboarding.completed }} of
+                        {{ onboarding.total }} essentials ready. Continue setup
+                        at your own pace.
+                    </p>
+                </div>
+                <span class="text-sm font-semibold underline underline-offset-4"
+                    >Continue setup</span
+                >
+            </Link>
             <!-- Family totals follow the family visibility setting. -->
             <div
                 v-if="fund_balance !== undefined"

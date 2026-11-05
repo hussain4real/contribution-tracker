@@ -49,6 +49,11 @@ interface Props {
     can_create?: boolean;
     idempotencyKey: string;
     idempotencyScope: string;
+    aiDraft: {
+        amount: number;
+        description: string;
+        recorded_at: string;
+    } | null;
 }
 
 const props = defineProps<Props>();
@@ -75,10 +80,12 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-const showForm = ref(false);
-const amount = ref<string>('');
-const description = ref<string>('');
-const recordedAt = ref<string>(new Date().toISOString().split('T')[0]);
+const showForm = ref(props.aiDraft !== null);
+const amount = ref<string>(props.aiDraft?.amount.toString() ?? '');
+const description = ref<string>(props.aiDraft?.description ?? '');
+const recordedAt = ref<string>(
+    props.aiDraft?.recorded_at ?? new Date().toISOString().split('T')[0],
+);
 const { currency, formatCurrency } = useCurrencyFormatter();
 
 function formatDate(date: string): string {
@@ -182,6 +189,15 @@ function resetForm(): void {
                 v-if="showForm && can_create"
                 class="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border dark:bg-neutral-900"
             >
+                <p
+                    v-if="aiDraft"
+                    role="status"
+                    class="rounded-lg border bg-muted p-3 text-sm"
+                >
+                    AI draft — review these details before recording. Nothing
+                    has been recorded yet. To record another entry afterward,
+                    start from the list.
+                </p>
                 <HeadingSmall
                     title="Record Fund Adjustment"
                     description="Add a lump sum to the family fund balance."

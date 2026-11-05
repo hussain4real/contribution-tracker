@@ -4,13 +4,12 @@ declare(strict_types=1);
 
 namespace App\Ai\Tools;
 
-use App\Models\Expense;
+use App\Enums\AiActionKind;
 use App\Models\Family;
 use App\Models\User;
+use App\Services\AiActionDrafts;
 use App\Services\ExpenseGovernance;
-use App\Support\CurrencyFormatter;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Illuminate\Support\Facades\DB;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 
@@ -23,7 +22,7 @@ class RecordExpense implements Tool
      */
     public function description(): string
     {
-        return 'Records a new expense for the family. Requires amount (whole number), description, and date. Always call without confirmed=true first to preview the action.';
+        return 'Prepares a expense draft for human review in FamilyFund. Return the review_url to the user. This tool never posts financial records, even if asked to confirm in chat.';
     }
 
     /**
@@ -38,7 +37,6 @@ class RecordExpense implements Tool
         $amount = $this->nullableIntegerFromRequest($request['amount'] ?? null);
         $description = $this->nullableStringFromRequest($request['description'] ?? null);
         $spentAt = $this->stringFromRequest($request['spent_at'] ?? null, now()->toDateString());
-        $confirmed = ($request['confirmed'] ?? false) === true;
 
         if (! $amount || $amount < 1) {
             return json_encode(['error' => 'Amount is required and must be at least 1.'], JSON_THROW_ON_ERROR);
@@ -54,6 +52,10 @@ class RecordExpense implements Tool
             return json_encode(['error' => 'User is not associated with a family.'], JSON_THROW_ON_ERROR);
         }
 
+        if (! app(AiActionDrafts::class)->allowed($this->user, $family, AiActionKind::Expense)) {
+            return json_encode(['error' => 'You do not have permission to prepare this action.'], JSON_THROW_ON_ERROR);
+        }
+
         if (app(ExpenseGovernance::class)->requiredApprovals($family, $amount) > 0) {
             return json_encode([
                 'status' => 'approval_required',
@@ -62,34 +64,9 @@ class RecordExpense implements Tool
             ], JSON_THROW_ON_ERROR);
         }
 
-        $currency = $family->currency;
-        $formattedAmount = CurrencyFormatter::format($amount, $currency);
-
-        if (! $confirmed) {
-            return json_encode([
-                'status' => 'confirmation_required',
-                'message' => "I'll record an expense of {$formattedAmount} for \"{$description}\" on {$spentAt}. Please confirm to proceed.",
-                'details' => [
-                    'amount' => $amount,
-                    'description' => $description,
-                    'spent_at' => $spentAt,
-                ],
-            ], JSON_THROW_ON_ERROR);
-        }
-
-        $expense = DB::transaction(fn (): Expense => Expense::create([
-            'family_id' => $family->id,
-            'amount' => $amount,
-            'description' => $description,
-            'spent_at' => $spentAt,
-            'recorded_by' => $this->user->id,
-        ]), attempts: 3);
-
-        return json_encode([
-            'status' => 'success',
-            'message' => "Expense of {$formattedAmount} for \"{$description}\" has been recorded successfully.",
-            'expense_id' => $expense->id,
-        ], JSON_THROW_ON_ERROR);
+        return json_encode(app(AiActionDrafts::class)->create($this->user, $family, AiActionKind::Expense, [
+            'amount' => $amount, 'description' => $description, 'spent_at' => $spentAt,
+        ]), JSON_THROW_ON_ERROR);
     }
 
     /**
@@ -101,7 +78,6 @@ class RecordExpense implements Tool
             'amount' => $schema->integer()->min(1)->required(),
             'description' => $schema->string()->required(),
             'spent_at' => $schema->string(),
-            'confirmed' => $schema->boolean(),
         ];
     }
 

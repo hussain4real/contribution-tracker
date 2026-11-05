@@ -30,7 +30,7 @@ test('admin can preview fund adjustment recording', function () {
     $this->assertDatabaseCount('fund_adjustments', 0);
 });
 
-test('admin can execute fund adjustment recording', function () {
+test('admin can prepare a draft despite chat confirmation for fund adjustment recording', function () {
     $tool = new RecordFundAdjustment($this->admin);
 
     $result = decodeToolResult($tool->handle(new Request([
@@ -40,10 +40,10 @@ test('admin can execute fund adjustment recording', function () {
         'confirmed' => true,
     ])));
 
-    expect($result['status'])->toBe('success')
-        ->and($result['adjustment_id'])->toBeInt();
+    expect($result['status'])->toBe('confirmation_required')
+        ->and($result['review_url'])->toBeString();
 
-    $this->assertDatabaseHas('fund_adjustments', [
+    $this->assertDatabaseMissing('fund_adjustments', [
         'family_id' => $this->family->id,
         'amount' => 50000,
         'description' => 'Donation from community',
@@ -51,7 +51,7 @@ test('admin can execute fund adjustment recording', function () {
     ]);
 });
 
-test('financial secretary can record fund adjustments', function () {
+test('financial secretary can draft fund adjustments', function () {
     $tool = new RecordFundAdjustment($this->financialSecretary);
 
     $result = decodeToolResult($tool->handle(new Request([
@@ -61,14 +61,14 @@ test('financial secretary can record fund adjustments', function () {
         'confirmed' => true,
     ])));
 
-    expect($result['status'])->toBe('success');
+    expect($result['status'])->toBe('confirmation_required');
 
-    $this->assertDatabaseHas('fund_adjustments', [
+    $this->assertDatabaseMissing('fund_adjustments', [
         'recorded_by' => $this->financialSecretary->id,
     ]);
 });
 
-test('admin can record a negative fund adjustment', function () {
+test('admin can draft a negative fund adjustment', function () {
     $tool = new RecordFundAdjustment($this->admin);
 
     $preview = decodeToolResult($tool->handle(new Request([
@@ -93,9 +93,9 @@ test('admin can record a negative fund adjustment', function () {
 
     expect($preview['status'])->toBe('confirmation_required')
         ->and($details['amount'])->toBe(-750)
-        ->and($result['status'])->toBe('success');
+        ->and($result['status'])->toBe('confirmation_required');
 
-    $this->assertDatabaseHas('fund_adjustments', [
+    $this->assertDatabaseMissing('fund_adjustments', [
         'family_id' => $this->family->id,
         'amount' => -750,
         'description' => 'Bank charge correction',

@@ -282,6 +282,12 @@ class Family extends Model
         return $this->hasMany(FamilyCategory::class);
     }
 
+    /** @return HasMany<FamilyGoal, $this> */
+    public function goals(): HasMany
+    {
+        return $this->hasMany(FamilyGoal::class);
+    }
+
     /**
      * Contributions belonging to this family.
      *
