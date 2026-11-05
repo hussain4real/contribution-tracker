@@ -230,13 +230,13 @@ it('reports an earlier reversal when an expense request is replayed', function (
     expect(Expense::count())->toBe(1);
 });
 
-it('does not duplicate an expense after a session-save conflict', function (): void {
+it('does not duplicate an expense after a session write fails', function (): void {
     require_once __DIR__.'/../../../deployment/d1-proof/autoload.php';
     $remote = new PDO('sqlite::memory:');
     $remote->exec('create table sessions(id text primary key,payload text,last_activity integer)');
-    $injectConflict = true;
+    $failNextSessionWrite = true;
     Http::preventStrayRequests();
-    Http::fake(function (ClientRequest $request) use ($remote, &$injectConflict): PromiseInterface {
+    Http::fake(function (ClientRequest $request) use ($remote, &$failNextSessionWrite): PromiseInterface {
         if ($request->url() !== 'https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev/query') {
             throw new RuntimeException('Unexpected synthetic session endpoint.');
         }
@@ -245,9 +245,10 @@ it('does not duplicate an expense after a session-save conflict', function (): v
         if (! is_string($sql) || ! is_array($params)) {
             throw new RuntimeException('Invalid synthetic session request.');
         }
-        if ($injectConflict && Expense::query()->exists() && str_starts_with($sql, 'update sessions set payload=')) {
-            $remote->exec("update sessions set payload='Y29uZmxpY3Q='");
-            $injectConflict = false;
+        if ($failNextSessionWrite && Expense::query()->exists() && str_starts_with($sql, 'insert into sessions(')) {
+            $failNextSessionWrite = false;
+
+            return Http::response(['error' => 'Synthetic session write failure'], 503);
         }
         $statement = $remote->prepare($sql);
         $statement->execute($params);
@@ -260,7 +261,7 @@ it('does not duplicate an expense after a session-save conflict', function (): v
     ));
     $data = ['idempotency_key' => (string) Str::uuid(), 'amount' => 5000, 'description' => 'Transport', 'spent_at' => '2026-03-15'];
     $this->actingAs($this->admin)->post(route('expenses.store'), $data)->assertInternalServerError();
-    expect($injectConflict)->toBeFalse()->and(Expense::count())->toBe(1);
+    expect($failNextSessionWrite)->toBeFalse()->and(Expense::count())->toBe(1);
     $this->actingAs($this->admin)->post(route('expenses.store'), $data)->assertRedirect();
     expect(Expense::count())->toBe(1);
 });
@@ -280,7 +281,7 @@ it('allows super admin to reverse an expense without deleting it', function () {
         ->and($expense->reversal()->exists())->toBeTrue();
 });
 
-it('does not duplicate a financial reversal after a session-save conflict', function (string $kind): void {
+it('does not duplicate a financial reversal after a session write fails', function (string $kind): void {
     require_once __DIR__.'/../../../deployment/d1-proof/autoload.php';
     [$record, $routeName, $routeParameter] = match ($kind) {
         'expense' => [Expense::factory()->recordedBy($this->admin)->create(), 'expenses.reverse', 'expense'],
@@ -294,9 +295,9 @@ it('does not duplicate a financial reversal after a session-save conflict', func
     }
     $remote = new PDO('sqlite::memory:');
     $remote->exec('create table sessions(id text primary key,payload text,last_activity integer)');
-    $injectConflict = true;
+    $failNextSessionWrite = true;
     Http::preventStrayRequests();
-    Http::fake(function (ClientRequest $request) use ($remote, &$injectConflict): PromiseInterface {
+    Http::fake(function (ClientRequest $request) use ($remote, &$failNextSessionWrite): PromiseInterface {
         if ($request->url() !== 'https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev/query') {
             throw new RuntimeException('Unexpected synthetic session endpoint.');
         }
@@ -305,9 +306,10 @@ it('does not duplicate a financial reversal after a session-save conflict', func
         if (! is_string($sql) || ! is_array($params)) {
             throw new RuntimeException('Invalid synthetic session request.');
         }
-        if ($injectConflict && FinancialReversal::query()->exists() && str_starts_with($sql, 'update sessions set payload=')) {
-            $remote->exec("update sessions set payload='Y29uZmxpY3Q='");
-            $injectConflict = false;
+        if ($failNextSessionWrite && FinancialReversal::query()->exists() && str_starts_with($sql, 'insert into sessions(')) {
+            $failNextSessionWrite = false;
+
+            return Http::response(['error' => 'Synthetic session write failure'], 503);
         }
         $statement = $remote->prepare($sql);
         $statement->execute($params);
@@ -321,7 +323,7 @@ it('does not duplicate a financial reversal after a session-save conflict', func
     $url = route($routeName, ['current_family' => $family->slug, $routeParameter => $record]);
     $data = ['reason' => 'Synthetic duplicate'];
     $this->actingAs($this->admin)->post($url, $data)->assertInternalServerError();
-    expect($injectConflict)->toBeFalse()->and(FinancialReversal::count())->toBe(1);
+    expect($failNextSessionWrite)->toBeFalse()->and(FinancialReversal::count())->toBe(1);
     $this->actingAs($this->admin)->post($url, $data)->assertRedirect();
     expect(FinancialReversal::count())->toBe(1)->and($record->fresh()?->isReversed())->toBeTrue();
     if ($kind === 'payment') {

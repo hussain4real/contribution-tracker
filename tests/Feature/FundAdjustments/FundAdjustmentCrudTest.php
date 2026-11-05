@@ -184,13 +184,13 @@ it('reports a reversal on an adjustment request replay', function (): void {
     expect(FundAdjustment::count())->toBe(1);
 });
 
-it('does not duplicate an adjustment after a session-save conflict', function (): void {
+it('does not duplicate an adjustment after a session write fails', function (): void {
     require_once __DIR__.'/../../../deployment/d1-proof/autoload.php';
     $remote = new PDO('sqlite::memory:');
     $remote->exec('create table sessions(id text primary key,payload text,last_activity integer)');
-    $injectConflict = true;
+    $failNextSessionWrite = true;
     Http::preventStrayRequests();
-    Http::fake(function (ClientRequest $request) use ($remote, &$injectConflict): PromiseInterface {
+    Http::fake(function (ClientRequest $request) use ($remote, &$failNextSessionWrite): PromiseInterface {
         if ($request->url() !== 'https://familyfunds-d1-staging-sql.familyfunds-lab.workers.dev/query') {
             throw new RuntimeException('Unexpected synthetic session endpoint.');
         }
@@ -199,9 +199,10 @@ it('does not duplicate an adjustment after a session-save conflict', function ()
         if (! is_string($sql) || ! is_array($params)) {
             throw new RuntimeException('Invalid synthetic session request.');
         }
-        if ($injectConflict && FundAdjustment::query()->exists() && str_starts_with($sql, 'update sessions set payload=')) {
-            $remote->exec("update sessions set payload='Y29uZmxpY3Q='");
-            $injectConflict = false;
+        if ($failNextSessionWrite && FundAdjustment::query()->exists() && str_starts_with($sql, 'insert into sessions(')) {
+            $failNextSessionWrite = false;
+
+            return Http::response(['error' => 'Synthetic session write failure'], 503);
         }
         $statement = $remote->prepare($sql);
         $statement->execute($params);
@@ -214,7 +215,7 @@ it('does not duplicate an adjustment after a session-save conflict', function ()
     ));
     $data = ['idempotency_key' => (string) Str::uuid(), 'amount' => 5000, 'description' => 'Correction', 'recorded_at' => '2026-03-15'];
     $this->actingAs($this->admin)->post(route('fund-adjustments.store'), $data)->assertInternalServerError();
-    expect($injectConflict)->toBeFalse()->and(FundAdjustment::count())->toBe(1);
+    expect($failNextSessionWrite)->toBeFalse()->and(FundAdjustment::count())->toBe(1);
     $this->actingAs($this->admin)->post(route('fund-adjustments.store'), $data)->assertRedirect();
     expect(FundAdjustment::count())->toBe(1);
 });
