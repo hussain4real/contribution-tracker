@@ -39,7 +39,20 @@
     "image_repository": "familyfunds-d1-staging",
     "dockerfile": "Dockerfile.slim",
     "url": "https://d1-staging.familyfunds.app",
-    "companions": [],
+    "companions": [
+      {
+        "worker": "familyfunds-d1-staging-sql",
+        "entry": "staging-worker.mjs",
+        "content_only": true,
+        "accepted_previous_sha256": "9157f394b0b7a10d6303e4f618352e276d41c06d57830975018e119aa274a3df"
+      },
+      {
+        "worker": "familyfunds-d1-maintenance-staging",
+        "entry": "maintenance-worker.mjs",
+        "content_only": true,
+        "accepted_previous_sha256": "9d10234fc4c30e0cea77e9714c4a0adf12920d95f67aec3f4fc47f3f226538ca"
+      }
+    ],
     "accepted_migrations_sha256": "2ab0b54282630429075370331f97be7a6ecfea04e796b7e68c12ef2d33a15b8f"
   }
 }
