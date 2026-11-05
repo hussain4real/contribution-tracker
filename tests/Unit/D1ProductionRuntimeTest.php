@@ -270,7 +270,7 @@ it('records approval settings requests decisions payments and private documents 
     $input = StoreExpenseRequest::create('/', 'POST', ['idempotency_key' => (string) Str::uuid(), 'amount' => 5000, 'description' => 'Synthetic approved repairs', 'spent_at' => '2026-11-05']);
     app(ExpenseRequestController::class)->store($input, app(ExpenseGovernance::class));
     $expenseRequest = ExpenseRequest::sole();
-    expect((int) productionPaymentSqlValue($pdo, 'select count(*) from expenses'))->toBe(0);
+    expect(productionPaymentSqlValue($pdo, 'select count(*) from expenses'))->toBe(0);
     $this->actingAs($owner);
     $decision = StoreExpenseApprovalRequest::create('/', 'POST', ['decision' => 'approved']);
     app(ExpenseRequestController::class)->decide($decision, $expenseRequest, app(ExpenseGovernance::class));
@@ -284,9 +284,9 @@ it('records approval settings requests decisions payments and private documents 
     app(ExpenseDocumentController::class)->store($upload);
     app(ExpenseDocumentController::class)->store($upload);
     $document = ExpenseDocument::sole();
-    expect((int) productionPaymentSqlValue($pdo, 'select count(*) from expenses'))->toBe(1)
-        ->and((int) productionPaymentSqlValue($pdo, 'select count(*) from expense_approvals'))->toBe(1)
-        ->and((int) productionPaymentSqlValue($pdo, "select count(*) from audit_events where action='expense_document.added'"))->toBe(1)
+    expect(productionPaymentSqlValue($pdo, 'select count(*) from expenses'))->toBe(1)
+        ->and(productionPaymentSqlValue($pdo, 'select count(*) from expense_approvals'))->toBe(1)
+        ->and(productionPaymentSqlValue($pdo, "select count(*) from audit_events where action='expense_document.added'"))->toBe(1)
         ->and($document->ready)->toBeTrue()
         ->and(Family::query()->findOrFail($family->id)->member_financial_visibility)->toBe('personal')
         ->and(app(ExpenseDocumentController::class)->download($document)->getStatusCode())->toBe(200);
