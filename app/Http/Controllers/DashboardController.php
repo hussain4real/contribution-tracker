@@ -9,6 +9,7 @@ use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
+use App\Services\FamilyFinancialOverview;
 use App\Support\EffectiveLedger;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -22,7 +23,10 @@ use stdClass;
  */
 class DashboardController extends Controller
 {
-    public function __construct(private readonly EffectiveLedger $ledger) {}
+    public function __construct(
+        private readonly EffectiveLedger $ledger,
+        private readonly FamilyFinancialOverview $financialOverview,
+    ) {}
 
     /**
      * Display the contribution dashboard with role-based props.
@@ -68,6 +72,7 @@ class DashboardController extends Controller
 
         if ($canSeeAllMembers) {
             // Admin/Financial Secretary view
+            $props['financial_overview'] = $this->financialOverview->forMonth($family->id, now()->startOfMonth());
             $props['summary'] = $this->calculateSummary($family, $currentMonthContributions, $allContributions);
             $props['member_statuses'] = $this->getMemberStatuses($currentMonthContributions, $allContributions);
             $props['recent_payments'] = $this->getRecentPayments($family, $allContributions);

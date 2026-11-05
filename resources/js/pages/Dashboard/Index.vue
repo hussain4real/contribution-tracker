@@ -7,6 +7,9 @@ import { create as createPayment } from '@/actions/App/Http/Controllers/PaymentC
 import AccountDetails from '@/components/AccountDetails.vue';
 import AggregateStats from '@/components/contributions/AggregateStats.vue';
 import StatusBadge from '@/components/contributions/StatusBadge.vue';
+import FinancialOverviewCard, {
+    type FinancialOverview,
+} from '@/components/dashboard/FinancialOverview.vue';
 import MemberContributionStatus from '@/components/dashboard/MemberContributionStatus.vue';
 import type {
     OverdueContent,
@@ -93,6 +96,7 @@ interface MemberProps {
 
 type Props = Partial<AdminProps & MemberProps> & {
     fund_balance?: number;
+    financial_overview?: FinancialOverview;
     can_generate_contributions?: boolean;
     has_pending_contributions?: boolean;
     overdue_members?: OverdueMember[];
@@ -192,6 +196,11 @@ function formatCategory(category: string | null): string {
                     {{ formatCurrency(fund_balance ?? 0) }}
                 </p>
             </div>
+
+            <FinancialOverviewCard
+                v-if="financial_overview"
+                :overview="financial_overview"
+            />
 
             <!-- Admin/Financial Secretary View -->
             <template v-if="isAdminView">

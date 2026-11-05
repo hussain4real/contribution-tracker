@@ -14,6 +14,7 @@ use App\Http\Controllers\ContributionWhatsAppReminderController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\ExpenseReversalController;
+use App\Http\Controllers\FamilyActivityController;
 use App\Http\Controllers\FamilyArchiveController;
 use App\Http\Controllers\FamilySettingsController;
 use App\Http\Controllers\FundAdjustmentController;
@@ -133,6 +134,8 @@ Route::prefix('{current_family}')
     ])
     ->middleware(['auth', 'verified', 'family.member', 'family.active'])
     ->group(function () {
+        Route::get('activity', [FamilyActivityController::class, 'index'])->name('family.activity');
+
         // Dashboard
         Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
 

@@ -47,6 +47,8 @@ Make it easier for members to understand and pay their contributions, and for fa
 
 ## Phase 2 — Dashboard clarity and trust
 
+Phase 2 is in progress. The first implementation adds monthly money movement with links to its transactions and an officer activity history. Family-controlled member visibility, expense requests, approval rules and private supporting documents remain pending.
+
 ### 5. Actionable family dashboard
 
 - Prioritize available balance, contributions received, outstanding contributions and recent expenses, each linked to its underlying records.
