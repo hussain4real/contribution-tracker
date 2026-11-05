@@ -32,6 +32,10 @@ class GetContributionSummary implements Tool
     {
         $family = $this->user->currentFamily ?? $this->user->family;
 
+        if ($family instanceof Family) {
+            $family = Family::query()->find($family->id);
+        }
+
         if (! $family instanceof Family) {
             return json_encode(['error' => 'User is not associated with a family.'], JSON_THROW_ON_ERROR);
         }

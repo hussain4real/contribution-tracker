@@ -2,8 +2,11 @@
 
 declare(strict_types=1);
 
+use App\Ai\Tools\GetContributionSummary;
 use App\Ai\Tools\GetExpenseSummary;
 use App\Ai\Tools\GetFundBalance;
+use App\Ai\Tools\GetMemberOverview;
+use App\Models\Contribution;
 use App\Models\Expense;
 use App\Models\Family;
 use App\Models\User;
@@ -36,7 +39,7 @@ it('shows totals without exposing transactions by default', function () {
     $this->get(route('fund-adjustments.index'))->assertForbidden();
     $this->get(route('family.activity'))->assertForbidden();
     $summary = json_decode((new GetFundBalance($this->member))->handle(new ToolRequest(['include_breakdown' => true])), true);
-    expect($summary)->toHaveKey('fund_balance')->not->toHaveKey('recent_adjustments');
+    expect($summary)->toHaveKey('fund_balance')->not->toHaveKey('recent_adjustments')->not->toHaveKey('breakdown');
 });
 
 it('lets members see transaction history only after the family opts in and honors later revocation', function () {
@@ -56,3 +59,17 @@ it('preserves officer access to totals and activity under every member visibilit
     $this->get(route('expenses.index'))->assertOk();
     $this->get(route('family.activity'))->assertOk();
 })->with(['personal', 'summary', 'transactions']);
+
+it('limits AI contribution and member breakdowns to the member and honors newly restricted totals', function () {
+    Contribution::factory()->forUser($this->member)->currentMonth()->create(['expected_amount' => 3000]);
+    Contribution::factory()->forUser($this->admin)->currentMonth()->create(['expected_amount' => 9000]);
+    $this->member->load('family');
+    $this->family->update(['member_financial_visibility' => 'personal']);
+    $result = decodeToolResult((new GetContributionSummary($this->member))->handle(new ToolRequest([])));
+    expect($result)->toHaveKey('total_expected', 3000);
+    expect(resultArray($result, 'members'))->toHaveCount(1);
+    $members = decodeToolResult((new GetMemberOverview($this->member))->handle(new ToolRequest([])));
+    expect($members)->toHaveKey('total_members', 1);
+    expect(decodeToolResult((new GetFundBalance($this->member))->handle(new ToolRequest([]))))->toHaveKey('error');
+    expect(decodeToolResult((new GetExpenseSummary($this->member))->handle(new ToolRequest([]))))->toHaveKey('error');
+});
