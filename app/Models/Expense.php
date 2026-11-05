@@ -39,6 +39,29 @@ class Expense extends Model
 
     public const MORPH_TYPE = 'expense';
 
+    private ?int $providerFeeTransactionId = null;
+
+    public static function postPaystackFee(PaystackTransaction $transaction, int $amount, string $spentAt): self
+    {
+        $expense = new self([
+            'family_id' => $transaction->family_id,
+            'amount' => $amount,
+            'description' => "Paystack processing fee shortfall for transaction {$transaction->reference}",
+            'spent_at' => $spentAt,
+            'recorded_by' => $transaction->user_id,
+            'idempotency_key' => 'paystack-fee:'.$transaction->id,
+        ]);
+        $expense->providerFeeTransactionId = $transaction->id;
+        $expense->save();
+
+        return $expense;
+    }
+
+    public function providerFeeTransactionId(): ?int
+    {
+        return $this->providerFeeTransactionId;
+    }
+
     /**
      * The attributes that are mass assignable.
      *

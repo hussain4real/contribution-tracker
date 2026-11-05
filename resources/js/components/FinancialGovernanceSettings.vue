@@ -83,10 +83,11 @@ function save() {
                     />
                 </label>
                 <p class="text-sm text-muted-foreground">
-                    At or above the threshold, submit a request before posting
-                    an expense. The requester cannot approve it. Lowering a rule
-                    does not remove approvals already required by pending
-                    requests.
+                    At or above the threshold, submit a request before posting a
+                    manual expense. Verified provider processing fees are
+                    recorded automatically after settlement. The requester
+                    cannot approve their own request. Lowering a rule does not
+                    remove approvals already required by pending requests.
                 </p>
             </fieldset>
             <p

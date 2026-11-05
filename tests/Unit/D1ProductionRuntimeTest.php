@@ -292,6 +292,32 @@ it('records approval settings requests decisions payments and private documents 
         ->and(app(ExpenseDocumentController::class)->download($document)->getStatusCode())->toBe(200);
 });
 
+it('settles charged contributions and provider fees once through the production runtime with approvals enabled', function (): void {
+    config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
+    DB::purge('sqlite');
+    $this->artisan('migrate', ['--database' => 'sqlite', '--force' => true, '--no-interaction' => true])->assertSuccessful();
+    $family = Family::factory()->create(['expense_approval_settings' => ['enabled' => true, 'threshold' => 1, 'approvers' => 2]]);
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
+    $transaction = PaystackTransaction::query()->create([
+        'family_id' => $family->id, 'user_id' => $member->id, 'type' => TransactionType::Contribution,
+        'amount' => 4000, 'gross_amount_kobo' => 400000, 'reference' => 'synthetic-approved-fee', 'status' => TransactionStatus::Initiated,
+    ]);
+    $pdo = DB::connection('sqlite')->getPdo();
+    connectProductionRuntimeFixture($pdo);
+    $runtime = new D1StagingRuntime;
+    $settle = fn () => $runtime->run(fn () => app(PaystackContributionSettlementService::class)->settle($transaction->reference, [
+        'status' => 'success', 'amount' => 400000, 'fees' => 6000, 'paid_at' => now()->toIso8601String(),
+    ]));
+    $first = $settle();
+    $replayed = $settle();
+    expect($first->status)->toBe(TransactionStatus::Allocated)
+        ->and($replayed->fee_expense_id)->toBe($first->fee_expense_id)
+        ->and(productionPaymentSqlValue($pdo, 'select count(*) from expenses'))->toBe(1)
+        ->and(productionPaymentSqlValue($pdo, 'select sum(amount) from expenses'))->toBe(60)
+        ->and(productionPaymentSqlValue($pdo, 'select sum(total_amount) from payment_batches'))->toBe(4000);
+});
+
 it('allows only read-only bank listing with an independent test credential while candidate delivery stays disabled', function (): void {
     Http::swap(new Factory);
     config(['d1-production.bank_lookup_test_key' => 'sk_test_independent_bank_lookup']);
