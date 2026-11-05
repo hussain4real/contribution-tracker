@@ -135,3 +135,17 @@ it('includes per-member breakdown with payment details', function () {
         ->toHaveKey('paid', 2500)
         ->toHaveKey('outstanding', 1500);
 });
+
+it('links an officer summary to the matching contribution register reporting dates', function () {
+    $officer = User::factory()->admin()->create(['family_id' => $this->family->id]);
+    $tool = new GetContributionSummary($officer);
+    foreach ([['year' => 2026, 'month' => 2], ['year' => 2026]] as $filter) {
+        $result = decodeToolResult($tool->handle(new Request($filter)));
+        if (! is_string($result['source_url'])) {
+            throw new RuntimeException('Expected an authorized source link.');
+        }
+        $this->actingAs($officer)->get($result['source_url'])->assertOk();
+        expect($result['source_url'])->toContain(isset($filter['month']) ? '2026-02-01' : '2026-01-01')
+            ->toContain(isset($filter['month']) ? '2026-02-28' : '2026-12-31');
+    }
+});

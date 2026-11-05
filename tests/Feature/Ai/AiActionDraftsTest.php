@@ -2,6 +2,10 @@
 
 declare(strict_types=1);
 
+use App\Ai\Tools\GenerateContributions;
+use App\Ai\Tools\RecordExpense;
+use App\Ai\Tools\RecordFundAdjustment;
+use App\Ai\Tools\RecordPayment;
 use App\Enums\AiActionKind;
 use App\Enums\Role;
 use App\Models\Family;
@@ -10,6 +14,7 @@ use App\Models\User;
 use App\Services\AiActionDrafts;
 use Illuminate\Support\Facades\Cache;
 use Inertia\Testing\AssertableInertia as Assert;
+use Laravel\Ai\Tools\Request;
 
 beforeEach(function () {
     $this->family = Family::factory()->create();
@@ -81,4 +86,21 @@ it('rejects a corrupt cached draft rather than prefilling untrusted details', fu
     Cache::put('ai-action-draft:'.$query['ai_draft'], 'tampered sealed draft', 60);
     $this->actingAs($this->admin)->get($draft['review_url'])->assertNotFound();
     $this->assertDatabaseCount('expenses', 0);
+});
+
+it('blocks each financial tool after privilege revocation despite cached chat roles', function () {
+    $this->admin->load('familyMemberships');
+    FamilyMembership::where('family_id', $this->family->id)->where('user_id', $this->admin->id)->update(['role' => Role::Member->value]);
+    foreach ([
+        new RecordPayment($this->admin),
+        new RecordExpense($this->admin),
+        new RecordFundAdjustment($this->admin),
+        new GenerateContributions($this->admin),
+    ] as $tool) {
+        $result = decodeToolResult($tool->handle(new Request(['amount' => 100, 'description' => 'Revoked authority'])));
+        expect($result['error'])->toBe('You do not have permission to prepare this action.');
+    }
+    foreach (['payments', 'expenses', 'fund_adjustments', 'contributions'] as $table) {
+        $this->assertDatabaseCount($table, 0);
+    }
 });

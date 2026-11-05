@@ -14,7 +14,7 @@ import { index as reconciliationIndex } from '@/actions/App/Http/Controllers/Rec
 import { index as reportsIndex } from '@/actions/App/Http/Controllers/ReportController';
 import { index as subscriptionIndex } from '@/actions/App/Http/Controllers/SubscriptionController';
 import { index as whatsappInboxIndex } from '@/actions/App/Http/Controllers/WhatsAppInboxController';
-import { urlIsActive } from '@/lib/utils';
+import { toUrl, urlIsActive } from '@/lib/utils';
 import { changelog, dashboard } from '@/routes';
 import { edit as editProfile } from '@/routes/profile';
 import type { NavItem } from '@/types';
@@ -310,31 +310,36 @@ export function useAppNavigation() {
         paymentItem.value,
     ]);
 
-    const moreGroups = computed<NavigationGroup[]>(() => [
-        {
-            items: [
-                primaryItems.value.find(
-                    (item) => item.title === 'Notifications',
-                ),
-                ...primaryItems.value.slice(5),
-                {
-                    title: 'Profile',
-                    href: editProfile(),
-                    icon: User,
-                    component: 'settings/Profile',
-                    section: 'Account',
-                },
-            ].filter(Boolean) as NavItem[],
-        },
-        {
-            label: 'Family Admin',
-            items: adminItems.value,
-        },
-        {
-            label: 'Super Admin',
-            items: platformItems.value,
-        },
-    ]);
+    const moreGroups = computed<NavigationGroup[]>(() => {
+        const tabUrls = new Set(
+            mobileTabs.value.map((item) => toUrl(item.href)),
+        );
+        const overflow = primaryItems.value.filter(
+            (item) => !tabUrls.has(toUrl(item.href)),
+        );
+
+        return [
+            {
+                items: [
+                    ...overflow.filter(
+                        (item) => item.badge === 'notifications',
+                    ),
+                    ...overflow.filter(
+                        (item) => item.badge !== 'notifications',
+                    ),
+                    {
+                        title: 'Profile',
+                        href: editProfile(),
+                        icon: User,
+                        component: 'settings/Profile',
+                        section: 'Account',
+                    },
+                ],
+            },
+            { label: 'Family Admin', items: adminItems.value },
+            { label: 'Super Admin', items: platformItems.value },
+        ];
+    });
 
     return {
         primaryItems,

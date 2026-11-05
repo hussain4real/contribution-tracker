@@ -58,14 +58,19 @@ class FamilyActivityController extends Controller
                     && is_string($event->after['reason'] ?? null) ? $event->after['reason'] : null,
             ]);
 
-        return Inertia::render('Family/Activity', [
-            'overview' => $range ? null : $overview->forMonth($family->id, $start),
-            'rangeSummary' => $range ? [
+        $rangeSummary = null;
+        if ($range) {
+            $rangeSummary = [
                 'start_date' => $start->toDateString(), 'end_date' => $request->string('end_date')->toString(),
                 'received' => (int) (clone $payments)->sum('amount'),
                 'expenses' => (int) (clone $expenses)->sum('amount'),
                 'adjustments' => (int) (clone $adjustments)->sum('amount'),
-            ] : null,
+            ];
+        }
+
+        return Inertia::render('Family/Activity', [
+            'overview' => $range ? null : $overview->forMonth($family->id, $start),
+            'rangeSummary' => $rangeSummary,
             'entries' => $records,
             'events' => $events,
             'filters' => $range

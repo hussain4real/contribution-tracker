@@ -63,6 +63,8 @@ describe('Mobile app shell', function () {
             ->assertSee('Log out')
             ->assertSee('Notifications')
             ->assertSee('Family Admin')
+            ->assertSee('Get started')
+            ->assertSee('Goals')
             ->assertSee('Family Settings')
             ->assertSee('Legal')
             ->assertSee('Privacy Policy')
@@ -185,6 +187,15 @@ describe('Mobile app shell', function () {
             ->assertSee('Dashboard')
             ->click('More')
             ->assertSee('Notifications')
+            ->assertScript(<<<'JS'
+                () => {
+                    const links = Array.from(document.querySelectorAll('[role="dialog"] a'));
+                    const urls = links.map((link) => link.getAttribute('href'));
+                    return new Set(urls).size === urls.length
+                        && urls.filter((url) => url?.endsWith('/goals')).length === 1
+                        && urls.filter((url) => url?.endsWith('/notifications')).length === 1;
+                }
+            JS)
             ->click('[role="dialog"] a[href$="/notifications"]')
             ->assertPathIs("/{$this->family->slug}/notifications")
             ->assertSee('Notification Center')
