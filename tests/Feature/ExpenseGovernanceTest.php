@@ -14,8 +14,12 @@ use App\Models\Family;
 use App\Models\PlatformPlan;
 use App\Models\User;
 use App\Support\EffectiveLedger;
+use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\QueryException;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Database\SQLiteConnection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -214,4 +218,45 @@ it('keeps recorded approval decisions immutable', function () {
     expect(fn () => $approval->update(['reason' => 'Changed later']))->toThrow(LogicException::class);
     expect(fn () => $approval->delete())->toThrow(LogicException::class);
     expect($approval->refresh()->reason)->toBeNull()->and(ExpenseApproval::count())->toBe(1);
+});
+
+it('reverses the additive governance schema without removing existing expense rows', function () {
+    $connection = new SQLiteConnection(new PDO('sqlite::memory:'));
+    $connection->getPdo()->exec('pragma foreign_keys=on');
+    $schema = $connection->getSchemaBuilder();
+    foreach (['users', 'families', 'expenses'] as $name) {
+        $schema->create($name, function (Blueprint $table): void {
+            $table->id();
+        });
+    }
+    $connection->table('expenses')->insert(['id' => 1]);
+    $original = Schema::getFacadeRoot();
+    Schema::swap($schema);
+    try {
+        $migrations = [];
+        foreach ([
+            '2026_11_05_081631_add_financial_governance_to_families.php',
+            '2026_11_05_081632_create_expense_requests_table.php',
+            '2026_11_05_081633_create_expense_approvals_table.php',
+            '2026_11_05_081634_add_expense_request_id_to_expenses.php',
+            '2026_11_05_081635_create_expense_documents_table.php',
+        ] as $file) {
+            $migration = require database_path('migrations/'.$file);
+            if (! $migration instanceof Migration) {
+                throw new RuntimeException('Expected the governance migration.');
+            }
+            (new ReflectionMethod($migration, 'up'))->invoke($migration);
+            $migrations[] = $migration;
+        }
+        expect($schema->hasTable('expense_requests'))->toBeTrue()->and($schema->hasColumn('expenses', 'expense_request_id'))->toBeTrue();
+        foreach (array_reverse($migrations) as $migration) {
+            (new ReflectionMethod($migration, 'down'))->invoke($migration);
+        }
+        expect($schema->hasTable('expense_requests'))->toBeFalse()
+            ->and($schema->hasColumn('expenses', 'expense_request_id'))->toBeFalse()
+            ->and($schema->hasColumn('families', 'member_financial_visibility'))->toBeFalse()
+            ->and($connection->table('expenses')->count())->toBe(1);
+    } finally {
+        Schema::swap($original);
+    }
 });
