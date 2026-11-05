@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Observers;
 
 use App\Models\Expense;
+use App\Services\ExpenseGovernance;
 use App\Services\ReconciliationPeriodGuard;
 use App\Support\AuditEventRecorder;
 
@@ -17,6 +18,7 @@ class ExpenseObserver
 
     public function creating(Expense $expense): void
     {
+        app(ExpenseGovernance::class)->ensurePostingAllowed($expense);
         $this->periodGuard->ensureDateIsWritable($expense->family_id, $expense->spent_at);
     }
 

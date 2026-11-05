@@ -9,6 +9,7 @@ use App\Http\Requests\UpdateFamilyReminderSettingsRequest;
 use App\Jobs\SyncPaystackSubaccount;
 use App\Models\Family;
 use App\Models\FamilyCategory;
+use App\Services\ExpenseGovernance;
 use App\Services\PaystackService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -51,6 +52,12 @@ class FamilySettingsController extends Controller
                 'account_number' => $family->account_number,
                 'bank_code' => $family->bank_code,
                 'has_paystack_subaccount' => $family->hasPaystackSubaccount(),
+            ],
+            'financialGovernance' => [
+                'member_financial_visibility' => $family->member_financial_visibility,
+                'settings' => $family->expense_approval_settings ?? ['enabled' => false, 'threshold' => 1, 'approvers' => 1],
+                'can_configure_approvals' => $family->created_by === $this->authUser()->id,
+                'organization' => app(ExpenseGovernance::class)->supportsApprovals($family),
             ],
             'categories' => $categories,
             'reminderSettings' => $family->reminder_settings ?? Family::DEFAULT_REMINDER_SETTINGS,

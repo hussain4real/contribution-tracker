@@ -3,7 +3,9 @@ import {
     create as createExpense,
     index,
 } from '@/actions/App/Http/Controllers/ExpenseController';
+import { index as requests } from '@/actions/App/Http/Controllers/ExpenseRequestController';
 import ExpenseReversalController from '@/actions/App/Http/Controllers/ExpenseReversalController';
+import ExpenseDocuments from '@/components/ExpenseDocuments.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,6 +25,8 @@ import { Plus, Receipt, RotateCcw } from '@lucide/vue';
 import { ref } from 'vue';
 
 interface ExpenseItem {
+    documents: { id: number; filename: string }[];
+    can_upload: boolean;
     id: number;
     amount: number;
     description: string;
@@ -123,6 +127,31 @@ function reverseExpense(): void {
                     </Button>
                 </Link>
             </div>
+
+            <Link
+                v-if="can_create"
+                :href="requests().url"
+                class="inline-flex min-h-11 items-center underline"
+                >Expense requests and approvals</Link
+            >
+
+            <details
+                v-for="expense in expenses?.data.filter(
+                    (item) => item.can_upload,
+                )"
+                :key="'documents-' + expense.id"
+                class="rounded-md border p-3"
+            >
+                <summary class="cursor-pointer py-2">
+                    Documents for {{ expense.description }} ·
+                    {{ formatDate(expense.spent_at) }}
+                </summary>
+                <ExpenseDocuments
+                    :expense-id="expense.id"
+                    :documents="expense.documents"
+                    :can-upload="expense.can_upload"
+                />
+            </details>
 
             <!-- Expenses Table -->
             <div

@@ -14,6 +14,7 @@ use App\Models\PaystackTransaction;
 use App\Models\User;
 use App\Services\PaystackContributionSettlementService;
 use App\Support\EffectiveLedger;
+use Illuminate\Validation\ValidationException;
 
 function initiatedPaystackContribution(int $grossAmountKobo = 400000): PaystackTransaction
 {
@@ -71,20 +72,55 @@ it('verifies and allocates Paystack money before marking it posted and is replay
         ->and(AuditEvent::query()->where('action', 'paystack.state_changed')->count())->toBe(2);
 });
 
-it('posts a fee shortfall as an expense so the effective ledger matches provider settlement', function () {
+it('posts a fee shortfall as an expense so the effective ledger matches provider settlement', function (bool $approvalRequired) {
     $transaction = initiatedPaystackContribution();
 
-    $settled = app(PaystackContributionSettlementService::class)->settle($transaction->reference, [
+    if ($approvalRequired) {
+        Family::query()->whereKey($transaction->family_id)->update(['expense_approval_settings' => ['enabled' => true, 'threshold' => 1, 'approvers' => 2]]);
+    }
+
+    $providerData = [
         'status' => 'success',
         'reference' => $transaction->reference,
         'amount' => 400000,
         'fees' => 6000,
         'paid_at' => now()->toIso8601String(),
-    ]);
+    ];
+    $service = app(PaystackContributionSettlementService::class);
+    $settled = $service->settle($transaction->reference, $providerData);
+    $replayed = $service->settle($transaction->reference, $providerData);
 
     expect($settled->feeExpense?->amount)->toBe(60)
         ->and($settled->settled_amount_kobo)->toBe(394000)
-        ->and(app(EffectiveLedger::class)->balance($transaction->family_id))->toBe(3940);
+        ->and(app(EffectiveLedger::class)->balance($transaction->family_id))->toBe(3940)
+        ->and($settled->status)->toBe(TransactionStatus::Allocated)
+        ->and($replayed->fee_expense_id)->toBe($settled->fee_expense_id)
+        ->and(Expense::query()->where('family_id', $transaction->family_id)->count())->toBe(1)
+        ->and(PaymentBatch::query()->where('family_id', $transaction->family_id)->count())->toBe(1);
+})->with([false, true]);
+
+it('limits automatic provider fee posting to verified matching settlements without exempting manual expenses', function () {
+    $transaction = initiatedPaystackContribution();
+    Family::query()->whereKey($transaction->family_id)->update(['expense_approval_settings' => ['enabled' => true, 'threshold' => 1, 'approvers' => 2]]);
+    expect(fn () => Expense::postPaystackFee($transaction, 60, now()->toDateString()))
+        ->toThrow(ValidationException::class, 'verified contribution settlement');
+    $transaction->forceFill([
+        'status' => TransactionStatus::Verified, 'verified_at' => now(),
+        'settled_amount_kobo' => 394000, 'paystack_response' => ['status' => 'success'],
+    ])->save();
+    expect(fn () => Expense::postPaystackFee($transaction, 61, now()->toDateString()))
+        ->toThrow(ValidationException::class, 'verified settlement shortfall');
+    $otherFamily = clone $transaction;
+    $otherFamily->family_id = Family::factory()->create()->id;
+    expect(fn () => Expense::postPaystackFee($otherFamily, 60, now()->toDateString()))
+        ->toThrow(ValidationException::class, 'verified contribution settlement');
+    expect(fn () => Expense::query()->create([
+        'family_id' => $transaction->family_id, 'amount' => 60,
+        'description' => "Paystack processing fee shortfall for transaction {$transaction->reference}",
+        'spent_at' => now()->toDateString(), 'recorded_by' => $transaction->user_id,
+        'idempotency_key' => 'paystack-fee:'.$transaction->id,
+    ]))->toThrow(ValidationException::class, 'required independent approvals');
+    expect(Expense::query()->count())->toBe(0);
 });
 
 it('fails closed on a provider amount mismatch without posting money', function () {

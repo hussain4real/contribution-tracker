@@ -15,6 +15,9 @@ use Illuminate\Support\Carbon;
 use LogicException;
 
 /**
+ * @property string $member_financial_visibility
+ * @property array<string, mixed>|null $expense_approval_settings
+ * @property int|null $created_by
  * @property int $id
  * @property string $name
  * @property string $slug
@@ -68,6 +71,8 @@ class Family extends Model
         'currency',
         'due_day',
         'reminder_settings',
+        'member_financial_visibility',
+        'expense_approval_settings',
         'bank_name',
         'account_name',
         'account_number',
@@ -92,6 +97,9 @@ class Family extends Model
         'platform_plan_id',
     ];
 
+    /** @var array<string, mixed> */
+    protected $attributes = ['member_financial_visibility' => 'summary'];
+
     /**
      * Get the attributes that should be cast.
      *
@@ -102,6 +110,7 @@ class Family extends Model
         return [
             'due_day' => 'integer',
             'reminder_settings' => 'array',
+            'expense_approval_settings' => 'array',
             'trial_ends_at' => 'datetime',
             'max_members' => 'integer',
             'suspended_at' => 'datetime',
@@ -287,6 +296,12 @@ class Family extends Model
     public function paymentBatches(): HasMany
     {
         return $this->hasMany(PaymentBatch::class);
+    }
+
+    /** @return HasMany<ExpenseRequest, $this> */
+    public function expenseRequests(): HasMany
+    {
+        return $this->hasMany(ExpenseRequest::class);
     }
 
     /**

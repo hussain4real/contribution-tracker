@@ -7,6 +7,7 @@ namespace App\Ai\Tools;
 use App\Models\Expense;
 use App\Models\Family;
 use App\Models\User;
+use App\Services\ExpenseGovernance;
 use App\Support\CurrencyFormatter;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\DB;
@@ -51,6 +52,14 @@ class RecordExpense implements Tool
 
         if (! $family instanceof Family) {
             return json_encode(['error' => 'User is not associated with a family.'], JSON_THROW_ON_ERROR);
+        }
+
+        if (app(ExpenseGovernance::class)->requiredApprovals($family, $amount) > 0) {
+            return json_encode([
+                'status' => 'approval_required',
+                'message' => 'Submit an expense request and obtain independent approvals before recording this expense.',
+                'url' => route('expense-requests.index', ['current_family' => $family->slug]),
+            ], JSON_THROW_ON_ERROR);
         }
 
         $currency = $family->currency;

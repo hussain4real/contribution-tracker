@@ -6,9 +6,12 @@ namespace App\Http\Controllers;
 
 use App\Enums\PaymentStatus;
 use App\Models\Contribution;
+use App\Models\ExpenseRequest;
 use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
+use App\Services\FamilyFinancialOverview;
+use App\Services\FamilyFinancialVisibility;
 use App\Support\EffectiveLedger;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -22,7 +25,10 @@ use stdClass;
  */
 class DashboardController extends Controller
 {
-    public function __construct(private readonly EffectiveLedger $ledger) {}
+    public function __construct(
+        private readonly EffectiveLedger $ledger,
+        private readonly FamilyFinancialOverview $financialOverview,
+    ) {}
 
     /**
      * Display the contribution dashboard with role-based props.
@@ -66,15 +72,26 @@ class DashboardController extends Controller
             'fund_balance' => $this->calculateFundBalance($family->id),
         ];
 
+        $visibility = app(FamilyFinancialVisibility::class);
+        if (! $visibility->totals($user, $family)) {
+            unset($props['fund_balance']);
+        }
+        $props['can_view_financial_activity'] = $visibility->transactions($user, $family);
+
         if ($canSeeAllMembers) {
             // Admin/Financial Secretary view
+            $props['financial_overview'] = $this->financialOverview->forMonth($family->id, now()->startOfMonth());
+            $props['expense_requests_pending'] = ExpenseRequest::query()->where('family_id', $family->id)
+                ->whereIn('status', ['submitted', 'approved'])->whereDoesntHave('expense')->count();
             $props['summary'] = $this->calculateSummary($family, $currentMonthContributions, $allContributions);
             $props['member_statuses'] = $this->getMemberStatuses($currentMonthContributions, $allContributions);
             $props['recent_payments'] = $this->getRecentPayments($family, $allContributions);
             $props['overdue_members'] = Inertia::optional(fn (): array => $this->getOverdueMembers($allContributions));
         } else {
             // Member view (FR-015, FR-016)
-            $props['family_aggregate'] = $this->calculateFamilyAggregate($currentMonthContributions);
+            if ($visibility->totals($user, $family)) {
+                $props['family_aggregate'] = $this->calculateFamilyAggregate($currentMonthContributions);
+            }
             $props['personal'] = $this->getPersonalStatus($user, $family, $currentYear, $currentMonth);
         }
 
@@ -152,7 +169,9 @@ class DashboardController extends Controller
         $totalMembers = $family->memberships()->active()->count();
         $totalExpected = (int) $currentMonthContributions->sum(fn (array $contribution): int => $contribution['expected_amount']);
         $currentMonthCollected = (int) $currentMonthContributions->sum(fn (array $contribution): int => $contribution['total_paid']);
-        $totalOutstanding = $totalExpected - $currentMonthCollected;
+        $totalOutstanding = (int) $currentMonthContributions->sum(
+            fn (array $contribution): int => max(0, $contribution['expected_amount'] - $contribution['total_paid']),
+        );
 
         // All-time collected across all months
         $allTimeCollected = (int) $allContributions->sum(fn (array $contribution): int => $contribution['total_paid']);
@@ -265,7 +284,9 @@ class DashboardController extends Controller
     {
         $totalExpected = (int) $contributions->sum(fn (array $contribution): int => $contribution['expected_amount']);
         $totalCollected = (int) $contributions->sum(fn (array $contribution): int => $contribution['total_paid']);
-        $totalOutstanding = $totalExpected - $totalCollected;
+        $totalOutstanding = (int) $contributions->sum(
+            fn (array $contribution): int => max(0, $contribution['expected_amount'] - $contribution['total_paid']),
+        );
 
         return [
             'total_expected' => $totalExpected,

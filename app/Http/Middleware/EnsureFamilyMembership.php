@@ -29,6 +29,8 @@ class EnsureFamilyMembership
             $user->switchFamily($family, $membership);
         }
 
+        $user->setRelation('currentFamily', $family);
+        $user->setRelation('family', $family);
         app()->instance('current-family', $family);
         app()->instance(Family::class, $family);
 
@@ -43,14 +45,6 @@ class EnsureFamilyMembership
 
         if ($family instanceof Family) {
             return $family;
-        }
-
-        if (app()->bound('current-family')) {
-            $currentFamily = app('current-family');
-
-            if ($currentFamily instanceof Family && $currentFamily->slug === $family) {
-                return $currentFamily;
-            }
         }
 
         if (is_string($family)) {

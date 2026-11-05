@@ -126,8 +126,9 @@ export async function createProductionBackup(env, at, checkpoint = null) {
         }
         captured.files.push({path: file.key, bytes: bytes.length, sha256, backup_key: blobKey});
     }
-    for (const table of ["report_artifacts", "reconciliation_imports"]) {
+    for (const table of ["report_artifacts", "reconciliation_imports", "expense_documents"]) {
         for (const row of captured.tables[table] ?? []) {
+            if (table === "expense_documents" && ![true, 1].includes(row.ready)) continue;
             if (!["local", "public"].includes(row.disk) || typeof row.path !== "string" || /(^\/|\.\.|\\)/.test(row.path)) throw new Error("Unknown application file mapping");
             const path = (row.disk === "public" ? "public/" : "private/") + row.path;
             if (!captured.files.some(file => file.path === path)) throw new Error("A database-referenced file is missing from the backup");
