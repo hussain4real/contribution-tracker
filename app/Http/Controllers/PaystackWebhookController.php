@@ -17,8 +17,7 @@ class PaystackWebhookController extends Controller
     public function handle(Request $request): JsonResponse
     {
         $payload = $request->getContent();
-        $header = config('d1-staging.webhooks.paystack_signing_secret') ? 'Paystack-Signature' : 'X-Paystack-Signature';
-        $signature = $request->header($header, '');
+        $signature = $request->header('X-Paystack-Signature', '');
 
         if (! $this->paystack->verifyWebhookSignature($payload, $signature)) {
             Log::warning('Paystack webhook rejected an invalid signature.');
