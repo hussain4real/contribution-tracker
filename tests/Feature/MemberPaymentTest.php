@@ -377,7 +377,11 @@ it('applies an online payment to the oldest unpaid period even when a newer peri
         ->and(Payment::where('contribution_id', $selected->id)->sum('amount'))->toBe(0);
 });
 
-it('marks the transaction failed when paystack initialization fails', function () {
+it('marks the transaction failed when paystack initialization fails', function (bool $diagnostics, string $secret, string $reason) {
+    config([
+        'services.paystack.staging_diagnostics' => $diagnostics,
+        'services.paystack.secret_key' => $secret,
+    ]);
     Http::fake([
         'api.paystack.co/transaction/initialize' => Http::response(['message' => 'Gateway down'], 500),
     ]);
@@ -402,10 +406,17 @@ it('marks the transaction failed when paystack initialization fails', function (
         ->assertServerError()
         ->assertJson(['message' => 'Failed to initialize payment. Please try again.']);
 
-    expect(PaystackTransaction::query()->firstOrFail()->status)->toBe(TransactionStatus::Failed);
-});
+    $transaction = PaystackTransaction::query()->firstOrFail();
+    expect($transaction->status)->toBe(TransactionStatus::Failed)
+        ->and($transaction->failure_reason)->toBe($reason);
+})->with([
+    'normal operation' => [false, 'sk_test_secret', 'Paystack initialization failed.'],
+    'staging sandbox diagnostics' => [true, 'sk_test_secret', 'Paystack initialization failed (HTTP 500).'],
+    'live key stays generic' => [true, 'sk_live_secret', 'Paystack initialization failed.'],
+]);
 
 it('marks the transaction failed when paystack initialization returns malformed data', function () {
+    config(['services.paystack.staging_diagnostics' => true]);
     Http::fake([
         'api.paystack.co/transaction/initialize' => Http::response([
             'status' => true,
@@ -433,17 +444,26 @@ it('marks the transaction failed when paystack initialization returns malformed 
         ->assertServerError()
         ->assertJson(['message' => 'Failed to initialize payment. Please try again.']);
 
-    expect(PaystackTransaction::query()->firstOrFail()->status)->toBe(TransactionStatus::Failed);
+    $transaction = PaystackTransaction::query()->firstOrFail();
+    expect($transaction->status)->toBe(TransactionStatus::Failed)
+        ->and($transaction->failure_reason)->toBe('Paystack initialization failed (invalid response data).');
 });
 
-it('marks the transaction failed when paystack initialization omits required checkout fields', function () {
+it('marks the transaction failed when paystack initialization omits required checkout fields', function (string $scenario, string $expectedReason) {
+    config(['services.paystack.staging_diagnostics' => true]);
     Http::fake([
-        'api.paystack.co/transaction/initialize' => Http::response([
-            'status' => true,
-            'data' => [
-                'authorization_url' => 'https://checkout.paystack.com/missing-access-code',
-            ],
-        ]),
+        'api.paystack.co/transaction/initialize' => function () use ($scenario) {
+            if ($scenario === 'runtime error') {
+                throw new RuntimeException('Sensitive provider detail must not be recorded');
+            }
+
+            return Http::response([
+                'status' => true,
+                'data' => $scenario === 'missing access code'
+                    ? ['authorization_url' => 'https://checkout.paystack.com/test']
+                    : ['access_code' => 'test-access-code'],
+            ]);
+        },
     ]);
 
     $family = Family::factory()->create([
@@ -466,8 +486,14 @@ it('marks the transaction failed when paystack initialization omits required che
         ->assertServerError()
         ->assertJson(['message' => 'Failed to initialize payment. Please try again.']);
 
-    expect(PaystackTransaction::query()->firstOrFail()->status)->toBe(TransactionStatus::Failed);
-});
+    $transaction = PaystackTransaction::query()->firstOrFail();
+    expect($transaction->status)->toBe(TransactionStatus::Failed)
+        ->and($transaction->failure_reason)->toBe($expectedReason);
+})->with([
+    'missing access code' => ['missing access code', 'Paystack initialization failed (missing access code).'],
+    'missing authorization URL' => ['missing authorization URL', 'Paystack initialization failed (missing authorization URL).'],
+    'runtime error' => ['runtime error', 'Paystack initialization failed (runtime error: RuntimeException).'],
+]);
 
 it('fails to initiate without bank details', function () {
     $family = Family::factory()->create([
