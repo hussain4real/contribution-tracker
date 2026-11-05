@@ -3,9 +3,11 @@
 declare(strict_types=1);
 
 use App\Enums\AiActionKind;
+use App\Models\Contribution;
 use App\Models\Expense;
 use App\Models\FamilyGoal;
 use App\Models\Payment;
+use App\Models\PaymentBatch;
 use App\Services\AiActionDrafts;
 
 it('resumes family setup and previews a member summary without creating ledger entries', function () {
@@ -57,4 +59,22 @@ it('prefills an AI expense draft and records it only after a human submits the f
     expect(Expense::count())->toBe(1);
     $page->navigate($draft['review_url'])->click('button[type="submit"]')->assertSee('Human reviewed AI draft');
     expect(Expense::count())->toBe(1);
+});
+
+it('opens an AI payment draft at allocation review without posting a receipt', function () {
+    $family = createBrowserFamily();
+    $admin = createBrowserAdmin($family);
+    $member = createBrowserMember($family, ['name' => 'Draft member']);
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
+    $page = loginBrowserAs($admin);
+    $draft = app(AiActionDrafts::class)->create($admin, $family, AiActionKind::Payment, [
+        'member_id' => $member->id, 'member' => $member->name, 'amount' => 1250,
+        'paid_at' => today()->toDateString(), 'notes' => 'Prepared for human review',
+        'target_year' => now()->year, 'target_month' => now()->month,
+    ]);
+    $page->navigate($draft['review_url'])->assertSee('AI draft')
+        ->assertValue('#amount', '1250')->assertValue('#notes', 'Prepared for human review')
+        ->click('Review payment')->assertSee($contribution->period_label.':')->assertNoJavaScriptErrors();
+    expect($page->script('() => document.activeElement?.id'))->toBe('review-heading');
+    expect(Payment::count())->toBe(0)->and(PaymentBatch::count())->toBe(0);
 });
