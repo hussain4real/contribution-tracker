@@ -52,7 +52,7 @@ function search() {
     <AppLayout
         :breadcrumbs="[{ title: 'Financial activity', href: index().url }]"
     >
-        <main class="mx-auto w-full max-w-6xl space-y-6 p-4 md:p-6">
+        <div class="mx-auto w-full max-w-6xl space-y-6 p-4 md:p-6">
             <h1 class="text-2xl font-semibold">Family financial activity</h1>
             <form
                 class="flex flex-wrap items-end gap-3"
@@ -198,6 +198,6 @@ function search() {
                     >
                 </nav>
             </section>
-        </main>
+        </div>
     </AppLayout>
 </template>

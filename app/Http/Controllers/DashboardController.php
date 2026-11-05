@@ -157,7 +157,9 @@ class DashboardController extends Controller
         $totalMembers = $family->memberships()->active()->count();
         $totalExpected = (int) $currentMonthContributions->sum(fn (array $contribution): int => $contribution['expected_amount']);
         $currentMonthCollected = (int) $currentMonthContributions->sum(fn (array $contribution): int => $contribution['total_paid']);
-        $totalOutstanding = $totalExpected - $currentMonthCollected;
+        $totalOutstanding = (int) $currentMonthContributions->sum(
+            fn (array $contribution): int => max(0, $contribution['expected_amount'] - $contribution['total_paid']),
+        );
 
         // All-time collected across all months
         $allTimeCollected = (int) $allContributions->sum(fn (array $contribution): int => $contribution['total_paid']);
@@ -270,7 +272,9 @@ class DashboardController extends Controller
     {
         $totalExpected = (int) $contributions->sum(fn (array $contribution): int => $contribution['expected_amount']);
         $totalCollected = (int) $contributions->sum(fn (array $contribution): int => $contribution['total_paid']);
-        $totalOutstanding = $totalExpected - $totalCollected;
+        $totalOutstanding = (int) $contributions->sum(
+            fn (array $contribution): int => max(0, $contribution['expected_amount'] - $contribution['total_paid']),
+        );
 
         return [
             'total_expected' => $totalExpected,

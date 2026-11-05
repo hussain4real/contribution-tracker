@@ -69,8 +69,10 @@ it('keeps historical members in the ledger and prevents overpayments offsetting 
     Payment::factory()->create(['contribution_id' => $paid->id, 'paid_at' => '2026-11-02', 'amount' => 2000]);
     $unpaid = User::factory()->member()->create(['family_id' => $this->family->id]);
     Contribution::factory()->forUser($unpaid)->create(['year' => 2026, 'month' => 11, 'expected_amount' => 3000]);
+    $this->actingAs($this->admin)->get(route('dashboard'))
+        ->assertOk()->assertInertia(fn (Assert $page) => $page->where('summary.total_outstanding', 3000));
     $this->member->membershipForFamilyId($this->family->id)->update(['archived_at' => now()]);
-    $this->actingAs($this->admin)->get(route('family.activity', ['type' => 'payment']))
+    $this->get(route('family.activity', ['type' => 'payment']))
         ->assertOk()->assertInertia(fn (Assert $page) => $page
         ->where('overview.received', 2000)->where('overview.outstanding', 3000)
         ->has('entries.data', 1)->where('entries.data.0.kind', 'payment'));

@@ -195,6 +195,10 @@ function formatCategory(category: string | null): string {
                 >
                     {{ formatCurrency(fund_balance ?? 0) }}
                 </p>
+                <p class="mt-2 text-sm text-muted-foreground">
+                    All recorded payments plus fund adjustments minus expenses,
+                    excluding reversed entries. Includes all transaction dates.
+                </p>
             </div>
 
             <FinancialOverviewCard
