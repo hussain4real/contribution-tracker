@@ -7,20 +7,26 @@ namespace App\Models;
 use App\Support\CurrencyFormatter;
 use Database\Factories\ExpenseFactory;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Illuminate\Support\Carbon;
 use LogicException;
 
 /**
+ * @property int|null $expense_request_id
+ * @property-read Collection<int, ExpenseDocument> $documents
  * @property int $id
  * @property int $family_id
  * @property int $amount
  * @property Carbon|null $created_at
  * @property string $description
+ * @property string|null $idempotency_key
+ * @property int|null $recorded_by
  * @property Carbon $spent_at
  * @property User|null $recorder
  * @property-read FinancialReversal|null $reversal
@@ -33,6 +39,29 @@ class Expense extends Model
 
     public const MORPH_TYPE = 'expense';
 
+    private ?int $providerFeeTransactionId = null;
+
+    public static function postPaystackFee(PaystackTransaction $transaction, int $amount, string $spentAt): self
+    {
+        $expense = new self([
+            'family_id' => $transaction->family_id,
+            'amount' => $amount,
+            'description' => "Paystack processing fee shortfall for transaction {$transaction->reference}",
+            'spent_at' => $spentAt,
+            'recorded_by' => $transaction->user_id,
+            'idempotency_key' => 'paystack-fee:'.$transaction->id,
+        ]);
+        $expense->providerFeeTransactionId = $transaction->id;
+        $expense->save();
+
+        return $expense;
+    }
+
+    public function providerFeeTransactionId(): ?int
+    {
+        return $this->providerFeeTransactionId;
+    }
+
     /**
      * The attributes that are mass assignable.
      *
@@ -44,6 +73,8 @@ class Expense extends Model
         'description',
         'spent_at',
         'recorded_by',
+        'idempotency_key',
+        'expense_request_id',
     ];
 
     /**
@@ -93,6 +124,12 @@ class Expense extends Model
     public function reconciliationLinks(): MorphMany
     {
         return $this->morphMany(ReconciliationLink::class, 'reconcilable');
+    }
+
+    /** @return HasMany<ExpenseDocument, $this> */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(ExpenseDocument::class);
     }
 
     // =========================================================================

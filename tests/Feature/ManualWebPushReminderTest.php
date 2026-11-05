@@ -71,7 +71,8 @@ describe('Manual web push contribution reminder', function () {
 
         $this->actingAs($admin)
             ->post("/contributions/{$contribution->id}/web-push-reminder")
-            ->assertRedirect();
+            ->assertRedirect()
+            ->assertSessionHas('success', "Browser reminder queued for {$member->name}.");
 
         Notification::assertSentTo(
             $member,

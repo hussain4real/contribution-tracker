@@ -7,6 +7,7 @@ namespace App\Ai\Tools;
 use App\Models\Family;
 use App\Models\FundAdjustment;
 use App\Models\User;
+use App\Services\FamilyFinancialVisibility;
 use App\Support\EffectiveLedger;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
@@ -31,12 +32,22 @@ class GetFundBalance implements Tool
     {
         $family = $this->user->currentFamily ?? $this->user->family;
 
+        if ($family instanceof Family) {
+            $family = Family::query()->find($family->id);
+        }
+
         if (! $family instanceof Family) {
             return json_encode(['error' => 'User is not associated with a family.'], JSON_THROW_ON_ERROR);
         }
 
+        $visibility = app(FamilyFinancialVisibility::class);
+        if (! $visibility->totals($this->user, $family)) {
+            return json_encode(['error' => 'The family has restricted access to its totals.'], JSON_THROW_ON_ERROR);
+        }
+
         $familyId = $family->id;
-        $includeBreakdown = ($request['include_breakdown'] ?? false) === true;
+        $includeBreakdown = ($request['include_breakdown'] ?? false) === true
+            && $visibility->transactions($this->user, $family);
 
         $ledger = app(EffectiveLedger::class);
         $totalPayments = $ledger->paymentsTotal($familyId);

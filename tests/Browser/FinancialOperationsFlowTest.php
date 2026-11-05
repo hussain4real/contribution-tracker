@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Mail;
 use Pest\Browser\Api\PendingAwaitablePage;
 
-function simulateContributionCheckout(PendingAwaitablePage $page, string $checkoutEvent, bool $dropVerification = false): void
+function simulateFinancialContributionCheckout(PendingAwaitablePage $page, string $checkoutEvent, bool $dropVerification = false): void
 {
     $manifestJson = file_get_contents(public_path('build/manifest.json'));
     if ($manifestJson === false) {
@@ -88,6 +88,8 @@ describe('Financial and family administration flows (Browser)', function () {
         $page->navigate(route('expenses.create'))
             ->assertSee('Record Expense');
 
+        $key = $page->script('() => document.querySelector("[name=idempotency_key]")?.value');
+        expect($key)->toBeString()->not->toBeEmpty();
         fillBrowserFieldWithoutChange($page, '[name="amount"]', '1250');
         fillBrowserFieldWithoutChange($page, 'input[name="description"]', 'Browser workflow transport');
         fillBrowserFieldWithoutChange($page, '[name="spent_at"]', now()->format('Y-m-d'));
@@ -101,7 +103,95 @@ describe('Financial and family administration flows (Browser)', function () {
             ->where('recorded_by', $this->financialSecretary->id)
             ->where('description', 'Browser workflow transport')
             ->exists())->toBeTrue();
+        $page->back()->assertSee('Record Expense');
+        expect($page->script('() => document.querySelector("[name=idempotency_key]")?.value'))
+            ->toBeString()->not->toBeEmpty()->not->toBe($key);
+
+        fillBrowserFieldWithoutChange($page, '[name="amount"]', '1250');
+        fillBrowserFieldWithoutChange($page, 'input[name="description"]', 'Browser workflow transport');
+        fillBrowserFieldWithoutChange($page, '[name="spent_at"]', now()->format('Y-m-d'));
+        $page->click('button[type="submit"]')
+            ->assertSee('Browser workflow transport')
+            ->assertNoJavaScriptErrors();
+
+        expect(Expense::query()->where('family_id', $this->family->id)
+            ->where('description', 'Browser workflow transport')->count())->toBe(2);
     });
+
+    it('keeps an uncertain financial request key and warning after reload', function (string $kind, bool $committed): void {
+        $isExpense = $kind === 'expense';
+        $page = loginBrowserAs($isExpense ? $this->financialSecretary : $this->admin);
+        $url = $isExpense ? route('expenses.create') : route('fund-adjustments.index');
+        $postPath = json_encode($isExpense ? route('expenses.store', [], false) : route('fund-adjustments.store', [], false), JSON_THROW_ON_ERROR);
+        $page->navigate($url);
+        if (! $isExpense) {
+            $page->click('Record Adjustment');
+        }
+        $key = $page->script('() => document.querySelector("[name=idempotency_key]")?.value');
+        expect($key)->toBeString()->not->toBeEmpty();
+        fillBrowserFieldWithoutChange($page, '[name="amount"]', '1250');
+        fillBrowserFieldWithoutChange($page, 'input[name="description"]', 'Synthetic retry check');
+        fillBrowserFieldWithoutChange($page, $isExpense ? '[name="spent_at"]' : '[name="recorded_at"]', now()->format('Y-m-d'));
+        if ($committed) {
+            $this->withoutMiddleware(ResetBrowserSessionAttributes::class);
+            $data = ['idempotency_key' => $key, 'amount' => 1250, 'description' => 'Synthetic retry check',
+                $isExpense ? 'spent_at' : 'recorded_at' => now()->format('Y-m-d')];
+            $this->actingAs($isExpense ? $this->financialSecretary : $this->admin)
+                ->post(route($isExpense ? 'expenses.store' : 'fund-adjustments.store'), $data)->assertSessionHasNoErrors();
+            $this->withMiddleware(ResetBrowserSessionAttributes::class);
+        }
+        $page->script(<<<JS
+            () => {
+                const originalOpen = XMLHttpRequest.prototype.open;
+                const originalSend = XMLHttpRequest.prototype.send;
+                const interrupted = new WeakSet();
+                XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+                    if (method === 'POST' && new URL(url, window.location.origin).pathname === {$postPath}) interrupted.add(this);
+                    return originalOpen.call(this, method, url, ...rest);
+                };
+                XMLHttpRequest.prototype.send = function (...args) {
+                    if (interrupted.has(this)) {
+                        queueMicrotask(() => this.dispatchEvent(new ProgressEvent('error')));
+                        return;
+                    }
+                    return originalSend.apply(this, args);
+                };
+            }
+        JS);
+        $page->click('form button[type="submit"]')->assertSee('We could not confirm whether');
+        $page->navigate($url);
+        if (! $isExpense) {
+            $page->click('Record Adjustment');
+        }
+        $page->assertSee('We could not confirm whether');
+        expect($page->script('() => document.querySelector("[name=idempotency_key]")?.value'))->toBe($key);
+        $page->script('() => { window.confirm = () => false; }');
+        $page->click($isExpense ? 'Start a new expense' : 'Start a new adjustment');
+        expect($page->script('() => document.querySelector("[name=idempotency_key]")?.value'))->toBe($key);
+
+        fillBrowserFieldWithoutChange($page, '[name="amount"]', '1250');
+        fillBrowserFieldWithoutChange($page, 'input[name="description"]', 'Synthetic retry check');
+        fillBrowserFieldWithoutChange($page, $isExpense ? '[name="spent_at"]' : '[name="recorded_at"]', now()->format('Y-m-d'));
+        $page->click('form button[type="submit"]')->assertSee('Synthetic retry check')->assertNoJavaScriptErrors();
+        $count = $isExpense ? Expense::query()->where('description', 'Synthetic retry check')->count() : FundAdjustment::query()->where('description', 'Synthetic retry check')->count();
+        expect($count)->toBe(1);
+    })->with([['expense', false], ['expense', true], ['adjustment', false], ['adjustment', true]]);
+
+    it('does not record a financial request when its retry key cannot be saved', function (string $kind): void {
+        $isExpense = $kind === 'expense';
+        $page = loginBrowserAs($isExpense ? $this->financialSecretary : $this->admin);
+        $page->navigate($isExpense ? route('expenses.create') : route('fund-adjustments.index'));
+        if (! $isExpense) {
+            $page->click('Record Adjustment');
+        }
+        fillBrowserFieldWithoutChange($page, '[name="amount"]', '1250');
+        fillBrowserFieldWithoutChange($page, 'input[name="description"]', 'Synthetic blocked request');
+        fillBrowserFieldWithoutChange($page, $isExpense ? '[name="spent_at"]' : '[name="recorded_at"]', now()->format('Y-m-d'));
+        $page->script('() => { Storage.prototype.setItem = () => { throw new Error("Synthetic storage failure"); }; }');
+        $page->click('form button[type="submit"]')->assertSee('requires session storage to protect against duplicate entries');
+        expect(Expense::query()->where('description', 'Synthetic blocked request')->count())->toBe(0)
+            ->and(FundAdjustment::query()->where('description', 'Synthetic blocked request')->count())->toBe(0);
+    })->with(['expense', 'adjustment']);
 
     it('shows members when online payments need Paystack setup', function () {
         config(['services.paystack.public_key' => 'pk_test_browser']);
@@ -126,12 +216,12 @@ describe('Financial and family administration flows (Browser)', function () {
     });
 
     it('sends the current XSRF cookie when starting contribution checkout', function () {
-        config(['services.paystack.public_key' => 'pk_test_synthetic']);
+        config(['services.paystack.public_key' => 'pk_test_synthetic', 'services.paystack.secret_key' => 'sk_test_synthetic']);
         $plan = PlatformPlan::create([
             'name' => 'Browser payments', 'slug' => 'browser-payments', 'price' => 0,
             'max_members' => null, 'features' => ['online_payments'], 'is_active' => true, 'sort_order' => 0,
         ]);
-        $this->family->update(['platform_plan_id' => $plan->id, 'bank_code' => '058']);
+        $this->family->update(['platform_plan_id' => $plan->id, 'bank_code' => '058', 'account_number' => '1234567890']);
         $member = createBrowserMember($this->family);
         Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
         $page = loginBrowserAs($member);
@@ -157,17 +247,17 @@ describe('Financial and family administration flows (Browser)', function () {
     });
 
     it('checks an initialized payment after checkout cancellation or load failure', function (string $checkoutEvent, bool $dropVerification) {
-        config(['services.paystack.public_key' => 'pk_test_synthetic']);
+        config(['services.paystack.public_key' => 'pk_test_synthetic', 'services.paystack.secret_key' => 'sk_test_synthetic']);
         $plan = PlatformPlan::create([
             'name' => 'Browser payments', 'slug' => 'browser-payments', 'price' => 0,
             'max_members' => null, 'features' => ['online_payments'], 'is_active' => true, 'sort_order' => 0,
         ]);
-        $this->family->update(['platform_plan_id' => $plan->id, 'bank_code' => '058']);
+        $this->family->update(['platform_plan_id' => $plan->id, 'bank_code' => '058', 'account_number' => '1234567890']);
         $member = createBrowserMember($this->family);
         Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
         $page = loginBrowserAs($member);
         $page->navigate(route('pay.index', ['current_family' => $this->family->slug]))->assertSee('Pay Contributions');
-        simulateContributionCheckout($page, $checkoutEvent, $dropVerification);
+        simulateFinancialContributionCheckout($page, $checkoutEvent, $dropVerification);
 
         $page->click('Select All')->click('button:has-text("with Paystack")');
         if ($dropVerification) {
@@ -201,6 +291,11 @@ describe('Financial and family administration flows (Browser)', function () {
             ->click('Record Adjustment')
             ->assertSee('Record Fund Adjustment');
 
+        $key = $page->script('() => document.querySelector("[name=idempotency_key]")?.value');
+        expect($key)->toBeString()->not->toBeEmpty();
+        $page->navigate(route('fund-adjustments.index'))->click('Record Adjustment')->assertSee('Record Fund Adjustment');
+        expect($page->script('() => document.querySelector("[name=idempotency_key]")?.value'))->toBe($key);
+
         fillBrowserFieldWithoutChange($page, '[name="amount"]', '25000');
         fillBrowserFieldWithoutChange($page, '[name="recorded_at"]', now()->format('Y-m-d'));
         fillBrowserFieldWithoutChange($page, 'input[name="description"]', 'Browser workflow opening balance');
@@ -213,6 +308,8 @@ describe('Financial and family administration flows (Browser)', function () {
             ->where('recorded_by', $this->admin->id)
             ->where('description', 'Browser workflow opening balance')
             ->exists())->toBeTrue();
+        $page->click('Record Adjustment')->assertSee('Record Fund Adjustment');
+        expect($page->script('() => document.querySelector("[name=idempotency_key]")?.value'))->not->toBe($key);
     });
 
     it('schedules a member statement with a browser-local first run', function () {

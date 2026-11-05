@@ -5,11 +5,32 @@ import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useFinancialRequestKey } from '@/composables/useFinancialRequestKey';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useCurrencyFormatter } from '@/lib/currency';
 import type { BreadcrumbItem } from '@/types';
 import { Form, Head } from '@inertiajs/vue3';
 import { ref } from 'vue';
+
+const props = defineProps<{
+    idempotencyKey: string;
+    idempotencyScope: string;
+}>();
+const {
+    requestKey,
+    unconfirmed,
+    storageReady,
+    storageError,
+    options: expenseOptions,
+    begin,
+    rejected,
+    renew,
+    startNew,
+} = useFinancialRequestKey(
+    props.idempotencyKey,
+    props.idempotencyScope,
+    'expense',
+);
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -40,9 +61,40 @@ const { currency } = useCurrencyFormatter();
 
             <Form
                 :action="store()"
+                :options="expenseOptions"
+                :on-before="begin"
+                @error="rejected"
+                @success="renew"
                 class="space-y-6"
-                #default="{ errors, validate, processing, recentlySuccessful }"
+                #default="{
+                    errors,
+                    validate,
+                    processing,
+                    recentlySuccessful,
+                    clearErrors,
+                }"
             >
+                <input
+                    type="hidden"
+                    name="idempotency_key"
+                    :value="requestKey"
+                />
+                <p v-if="storageError" role="alert">{{ storageError }}</p>
+                <p v-if="unconfirmed" role="alert">
+                    We could not confirm whether the expense was recorded. Retry
+                    with the same details, or check the expense list before
+                    starting a new expense.
+                </p>
+                <div v-if="unconfirmed || errors.idempotency_key" role="alert">
+                    <InputError :message="errors.idempotency_key" />
+                    <Button
+                        type="button"
+                        variant="outline"
+                        :disabled="processing"
+                        @click="if (startNew()) clearErrors('idempotency_key');"
+                        >Start a new expense</Button
+                    >
+                </div>
                 <!-- Amount Field -->
                 <div class="grid gap-2">
                     <Label for="amount">Amount ({{ currency }})</Label>
@@ -91,7 +143,10 @@ const { currency } = useCurrencyFormatter();
 
                 <!-- Submit Button -->
                 <div class="flex items-center gap-4">
-                    <Button type="submit" :disabled="processing">
+                    <Button
+                        type="submit"
+                        :disabled="processing || !storageReady"
+                    >
                         {{ processing ? 'Recording...' : 'Record Expense' }}
                     </Button>
 

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Actions\ReversePaymentBatch;
 use App\Enums\TransactionStatus;
 use App\Enums\TransactionType;
 use App\Models\Contribution;
@@ -137,6 +138,30 @@ it('explains when paystack is not configured for the app', function () {
         );
 });
 
+it('does not offer or initialize online payment when a required key is missing', function (string $missingKey) {
+    config([$missingKey => null]);
+    Http::preventStrayRequests();
+    Http::fake(['api.paystack.co/transaction/initialize' => Http::response()]);
+    $family = Family::factory()->create(['bank_code' => '058', 'account_number' => '0045502216']);
+    $member = User::factory()->member()->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
+
+    $this->actingAs($member)->get(route('pay.index'))
+        ->assertOk()->assertDontSee('sk_test_secret')->assertInertia(fn (Assert $page) => $page
+        ->where('has_paystack', false)
+        ->where('bank_setup_status', 'missing_paystack_key')
+        ->missing('paystack_secret_key'));
+
+    $this->postJson(route('pay.initiate'), [
+        'contribution_ids' => [$contribution->id],
+        'expected_contribution_amount_kobo' => 400_000,
+        'expected_gross_amount_kobo' => 416_244,
+    ])->assertUnprocessable()->assertJsonPath('message', 'Online payments are currently unavailable.');
+
+    expect(PaystackTransaction::count())->toBe(0);
+    Http::assertNothingSent();
+})->with(['secret key' => 'services.paystack.secret_key', 'public key' => 'services.paystack.public_key']);
+
 it('marks online payments as ready when bank details and paystack key are configured', function () {
     $family = Family::factory()->create([
         'bank_name' => 'Guaranty Trust Bank',
@@ -195,7 +220,52 @@ it('redirects guests from pay page', function () {
         ->assertRedirect();
 });
 
+it('does not initiate checkout when any selected contribution exceeds the advance limit', function () {
+    $this->travelTo(now()->setDate(2026, 10, 31));
+    Http::fake();
+    $family = Family::factory()->create([
+        'paystack_subaccount_code' => 'ACCT_test',
+        'bank_name' => 'Kuda Bank',
+        'bank_code' => '090267',
+        'account_number' => '1234567890',
+    ]);
+    $member = User::factory()->create(['family_id' => $family->id]);
+    $allowed = Contribution::factory()->create([
+        'family_id' => $family->id, 'user_id' => $member->id,
+        'year' => 2027, 'month' => 4, 'expected_amount' => 4000,
+    ]);
+    $tooFar = Contribution::factory()->create([
+        'family_id' => $family->id, 'user_id' => $member->id,
+        'year' => 2027, 'month' => 5, 'expected_amount' => 4000,
+    ]);
+
+    $this->actingAs($member)
+        ->postJson(route('pay.initiate'), ['expected_contribution_amount_kobo' => 400_000, 'expected_gross_amount_kobo' => 416_244, 'contribution_ids' => [$allowed->id, $tooFar->id]])
+        ->assertUnprocessable()
+        ->assertJson(['message' => 'Advance payments are limited to 6 months ahead.']);
+
+    expect(PaystackTransaction::count())->toBe(0);
+    Http::assertNothingSent();
+});
+
+it('marks periods beyond the six-month limit as unavailable for online payment at month end', function () {
+    $this->travelTo(now()->setDate(2026, 10, 31));
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $allowed = Contribution::factory()->forUser($member)->forMonth(2027, 4)->create(['expected_amount' => 4000]);
+    $tooFar = Contribution::factory()->forUser($member)->forMonth(2027, 5)->create(['expected_amount' => 4000]);
+
+    $this->actingAs($member)->get(route('pay.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('pending_contributions.0.id', $allowed->id)
+            ->where('pending_contributions.0.can_pay_online', true)
+            ->where('pending_contributions.1.id', $tooFar->id)
+            ->where('pending_contributions.1.can_pay_online', false));
+});
+
 it('initiates a payment for selected contributions', function () {
+    $this->travelTo(now()->setDate(2026, 10, 31));
     Http::fake([
         'api.paystack.co/transaction/initialize' => Http::response([
             'status' => true,
@@ -219,12 +289,15 @@ it('initiates a payment for selected contributions', function () {
     $contribution = Contribution::factory()->create([
         'family_id' => $family->id,
         'user_id' => $member->id,
+        'year' => 2027,
+        'month' => 4,
         'expected_amount' => 4000,
     ]);
 
     $this->actingAs($member);
 
     $response = $this->postJson(route('pay.initiate'), [
+        'expected_contribution_amount_kobo' => 400_000, 'expected_gross_amount_kobo' => 416_244,
         'contribution_ids' => [$contribution->id],
     ]);
 
@@ -271,6 +344,39 @@ it('initiates a payment for selected contributions', function () {
         ->and($transaction->fee_policy)->toBe('payer_pays');
 });
 
+it('applies an online payment to the oldest unpaid period even when a newer period sets the amount', function () {
+    $this->travelTo(now()->setDate(2026, 10, 15));
+    Http::fake(function (Request $request) {
+        if (str_ends_with($request->url(), '/transaction/initialize')) {
+            return Http::response(['status' => true, 'data' => ['authorization_url' => 'https://checkout.paystack.com/test', 'access_code' => 'access_test']]);
+        }
+
+        return Http::response(['status' => true, 'data' => [
+            'status' => 'success', 'amount' => 416_244, 'fees' => 16_244,
+            'reference' => basename($request->url()), 'paid_at' => now()->toIso8601String(),
+        ]]);
+    });
+    $family = Family::factory()->create([
+        'bank_name' => 'Kuda Bank', 'bank_code' => '090267', 'account_number' => '1234567890',
+    ]);
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $oldest = Contribution::factory()->forUser($member)->forMonth(2026, 9)->create(['expected_amount' => 4000]);
+    $selected = Contribution::factory()->forUser($member)->forMonth(2026, 10)->create(['expected_amount' => 4000]);
+
+    $this->actingAs($member)->postJson(route('pay.initiate'), [
+        'contribution_ids' => [$selected->id],
+        'expected_contribution_amount_kobo' => 400_000,
+        'expected_gross_amount_kobo' => 416_244,
+    ])->assertSuccessful();
+    $reference = PaystackTransaction::query()->sole()->reference;
+    $this->actingAs($member)->get(route('pay.callback', ['reference' => $reference]))
+        ->assertRedirect(route('contributions.my'))
+        ->assertInertiaFlash('payment_result', ['kind' => 'success', 'message' => 'Payment successful! Your contributions have been updated.']);
+
+    expect(Payment::where('contribution_id', $oldest->id)->sum('amount'))->toBe(4000)
+        ->and(Payment::where('contribution_id', $selected->id)->sum('amount'))->toBe(0);
+});
+
 it('marks the transaction failed when paystack initialization fails', function (bool $diagnostics, string $secret, string $reason) {
     config([
         'services.paystack.staging_diagnostics' => $diagnostics,
@@ -294,6 +400,7 @@ it('marks the transaction failed when paystack initialization fails', function (
 
     $this->actingAs($member)
         ->postJson(route('pay.initiate'), [
+            'expected_contribution_amount_kobo' => 400_000, 'expected_gross_amount_kobo' => 416_244,
             'contribution_ids' => [$contribution->id],
         ])
         ->assertServerError()
@@ -331,6 +438,7 @@ it('marks the transaction failed when paystack initialization returns malformed 
 
     $this->actingAs($member)
         ->postJson(route('pay.initiate'), [
+            'expected_contribution_amount_kobo' => 400_000, 'expected_gross_amount_kobo' => 416_244,
             'contribution_ids' => [$contribution->id],
         ])
         ->assertServerError()
@@ -372,6 +480,7 @@ it('marks the transaction failed when paystack initialization omits required che
 
     $this->actingAs($member)
         ->postJson(route('pay.initiate'), [
+            'expected_contribution_amount_kobo' => 400_000, 'expected_gross_amount_kobo' => 416_244,
             'contribution_ids' => [$contribution->id],
         ])
         ->assertServerError()
@@ -402,6 +511,7 @@ it('fails to initiate without bank details', function () {
 
     $this->actingAs($member)
         ->postJson(route('pay.initiate'), [
+            'expected_contribution_amount_kobo' => 400_000, 'expected_gross_amount_kobo' => 416_244,
             'contribution_ids' => [$contribution->id],
         ])
         ->assertUnprocessable()
@@ -418,10 +528,43 @@ it('validates contribution_ids are required', function () {
 
     $this->actingAs($member)
         ->postJson(route('pay.initiate'), [
+            'expected_contribution_amount_kobo' => 400_000, 'expected_gross_amount_kobo' => 416_244,
             'contribution_ids' => [],
         ])
         ->assertUnprocessable();
 });
+
+it('requires the amounts shown before checkout', function () {
+    $member = User::factory()->member()->employed()->create();
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
+
+    $this->actingAs($member)->postJson(route('pay.initiate'), ['contribution_ids' => [$contribution->id]])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['expected_contribution_amount_kobo', 'expected_gross_amount_kobo']);
+});
+
+it('does not open checkout when the displayed balance or fee is stale', function (string $case) {
+    Http::fake();
+    $family = Family::factory()->create([
+        'bank_name' => 'Kuda Bank', 'bank_code' => '090267', 'account_number' => '1234567890',
+    ]);
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $contribution = Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
+    if ($case === 'balance') {
+        Payment::factory()->forContribution($contribution)->recordedBy($member)->create(['amount' => 1000]);
+    } else {
+        config(['services.paystack.local_fee_basis_points' => 200]);
+    }
+
+    $this->actingAs($member)->postJson(route('pay.initiate'), [
+        'contribution_ids' => [$contribution->id],
+        'expected_contribution_amount_kobo' => 400_000,
+        'expected_gross_amount_kobo' => 416_244,
+    ])->assertUnprocessable()->assertJson(['message' => 'Your payment amount has changed. Refresh and review it before trying again.']);
+
+    expect(PaystackTransaction::count())->toBe(0);
+    Http::assertNothingSent();
+})->with(['balance', 'fee']);
 
 it('rejects initiation when no unpaid contributions are selected', function () {
     $family = Family::factory()->create([
@@ -439,11 +582,38 @@ it('rejects initiation when no unpaid contributions are selected', function () {
 
     $this->actingAs($member)
         ->postJson(route('pay.initiate'), [
+            'expected_contribution_amount_kobo' => 400_000, 'expected_gross_amount_kobo' => 416_244,
             'contribution_ids' => [$otherContribution->id],
         ])
         ->assertUnprocessable()
         ->assertJson(['message' => 'No unpaid contributions selected.']);
 });
+
+it('does not initiate checkout for a mixed selection containing an unavailable contribution', function (string $case) {
+    Http::fake();
+    $family = Family::factory()->create([
+        'bank_name' => 'Kuda Bank', 'bank_code' => '090267', 'account_number' => '1234567890',
+    ]);
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $valid = Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
+    $otherFamily = $case === 'family' ? Family::factory()->create() : $family;
+    $owner = $case === 'member'
+        ? User::factory()->member()->employed()->create(['family_id' => $family->id])
+        : $member;
+    $unavailable = Contribution::factory()->create([
+        'family_id' => $otherFamily->id, 'user_id' => $owner->id,
+        'year' => now()->copy()->startOfMonth()->addMonth()->year,
+        'month' => now()->copy()->startOfMonth()->addMonth()->month,
+        'expected_amount' => $case === 'paid' ? 0 : 4000,
+    ]);
+
+    $this->actingAs($member)->postJson(route('pay.initiate'), ['expected_contribution_amount_kobo' => 400_000, 'expected_gross_amount_kobo' => 416_244, 'contribution_ids' => [$valid->id, $unavailable->id]])
+        ->assertUnprocessable()
+        ->assertJson(['message' => 'Some selected contributions are no longer available. Refresh and try again.']);
+
+    expect(PaystackTransaction::count())->toBe(0);
+    Http::assertNothingSent();
+})->with(['member', 'family', 'paid']);
 
 it('rejects initiation with contribution ids from another family', function () {
     Http::fake([
@@ -473,6 +643,7 @@ it('rejects initiation with contribution ids from another family', function () {
 
     $this->actingAs($member)
         ->postJson(route('pay.initiate', ['current_family' => $currentFamily->slug]), [
+            'expected_contribution_amount_kobo' => 400_000, 'expected_gross_amount_kobo' => 416_244,
             'contribution_ids' => [$legacyContribution->id],
         ])
         ->assertUnprocessable()
@@ -496,6 +667,7 @@ it('rejects initiation when selected contributions have no balance', function ()
 
     $this->actingAs($member)
         ->postJson(route('pay.initiate'), [
+            'expected_contribution_amount_kobo' => 400_000, 'expected_gross_amount_kobo' => 416_244,
             'contribution_ids' => [$contribution->id],
         ])
         ->assertUnprocessable()
@@ -528,10 +700,36 @@ it('rejects initiation when selected contributions become paid during calculatio
 
     $this->actingAs($member)
         ->postJson(route('pay.initiate'), [
+            'expected_contribution_amount_kobo' => 400_000, 'expected_gross_amount_kobo' => 416_244,
             'contribution_ids' => [$contribution->id],
         ])
         ->assertUnprocessable()
         ->assertJson(['message' => 'Selected contributions are already paid.']);
+});
+
+it('does not initiate a reduced checkout when one of several selections becomes paid during calculation', function () {
+    Http::fake();
+    $family = Family::factory()->create([
+        'bank_name' => 'Kuda Bank', 'bank_code' => '090267', 'account_number' => '1234567890',
+    ]);
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $first = Contribution::factory()->forUser($member)->currentMonth()->create(['expected_amount' => 4000]);
+    $nextMonth = now()->startOfMonth()->addMonth();
+    $second = Contribution::factory()->forUser($member)->forMonth($nextMonth->year, $nextMonth->month)->create(['expected_amount' => 4000]);
+    $simulateRace = true;
+    Contribution::retrieved(function (Contribution $retrieved) use (&$simulateRace, $second, $member): void {
+        if ($simulateRace && $retrieved->id === $second->id) {
+            $simulateRace = false;
+            Payment::factory()->forContribution($retrieved)->recordedBy($member)->create(['amount' => 4000]);
+        }
+    });
+
+    $this->actingAs($member)->postJson(route('pay.initiate'), ['expected_contribution_amount_kobo' => 400_000, 'expected_gross_amount_kobo' => 416_244, 'contribution_ids' => [$first->id, $second->id]])
+        ->assertUnprocessable()
+        ->assertJson(['message' => 'Some selected contributions are no longer available. Refresh and try again.']);
+
+    expect(PaystackTransaction::count())->toBe(0);
+    Http::assertNothingSent();
 });
 
 it('redirects callbacks without a reference', function () {
@@ -541,22 +739,6 @@ it('redirects callbacks without a reference', function () {
         ->get(route('pay.callback'))
         ->assertRedirect(route('contributions.my'))
         ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'Invalid payment reference.']);
-});
-
-it('warns when a payment callback references a reversed transaction', function () {
-    Http::fake();
-    $family = Family::factory()->create();
-    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
-    $transaction = PaystackTransaction::create([
-        'reference' => 'TXN_REVERSED', 'user_id' => $member->id, 'family_id' => $family->id,
-        'type' => TransactionType::Contribution, 'amount' => 4000, 'status' => TransactionStatus::Reversed,
-    ]);
-
-    $this->actingAs($member)->get(route('pay.callback', ['current_family' => $family->slug, 'reference' => $transaction->reference]))
-        ->assertRedirect(route('contributions.my', ['current_family' => $family->slug]))
-        ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'This payment was reversed and no longer counts toward your contributions. Contact your family admin if you need help.']);
-    Http::assertNothingSent();
-    expect($transaction->refresh()->status)->toBe(TransactionStatus::Reversed);
 });
 
 it('redirects callbacks for unknown transactions', function () {
@@ -639,22 +821,6 @@ it('settles an existing payment when checkout is no longer available to the fami
     'subscription past due' => [['online_payments'], 'past_due'],
 ]);
 
-it('treats a nonterminal or missing provider status as unconfirmed', function (?string $status) {
-    $data = $status === null ? [] : ['status' => $status];
-    Http::fake(['api.paystack.co/transaction/verify/TXN_UNCONFIRMED' => Http::response(['status' => true, 'data' => $data])]);
-    $member = User::factory()->member()->employed()->create();
-    $transaction = PaystackTransaction::create([
-        'reference' => 'TXN_UNCONFIRMED', 'user_id' => $member->id, 'family_id' => $member->family_id,
-        'type' => TransactionType::Contribution, 'amount' => 4000, 'status' => TransactionStatus::Pending,
-    ]);
-
-    $this->actingAs($member)->get(route('pay.callback', ['reference' => $transaction->reference]))
-        ->assertRedirect(route('contributions.my'))
-        ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'Could not confirm your payment. Check your payment history or contact your family admin before trying again.']);
-    expect($transaction->refresh()->status)->toBe(TransactionStatus::Pending)
-        ->and($transaction->payment_batch_id)->toBeNull();
-})->with(['pending', 'ongoing', 'processing', 'queued', 'abandoned', 'reversed', 'unknown', null]);
-
 it('allocates a successful callback payment', function () {
     Http::fake([
         'api.paystack.co/transaction/verify/TXN_SUCCESS' => Http::response([
@@ -709,6 +875,21 @@ it('allocates a successful callback payment', function () {
         ->and($transaction->settled_amount_kobo)->toBe(400_000)
         ->and(Expense::query()->where('family_id', $family->id)->exists())->toBeFalse()
         ->and(Payment::where('contribution_id', $contribution->id)->sum('amount'))->toBe(4000);
+
+    $this->actingAs($member)
+        ->get(route('pay.callback', ['reference' => 'TXN_SUCCESS']))
+        ->assertRedirect(route('contributions.my'))
+        ->assertInertiaFlash('payment_result', ['kind' => 'success', 'message' => 'Payment already confirmed.']);
+    expect(Payment::where('contribution_id', $contribution->id)->count())->toBe(1);
+
+    app(ReversePaymentBatch::class)->handle($transaction->paymentBatch()->firstOrFail(), $member, 'Correction');
+    $this->actingAs($member)
+        ->get(route('pay.callback', ['reference' => 'TXN_SUCCESS']))
+        ->assertRedirect(route('contributions.my'))
+        ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'This payment was reversed and no longer counts toward your contributions. Contact your family admin if you need help.']);
+    expect($transaction->refresh()->status)->toBe(TransactionStatus::Reversed)
+        ->and(Payment::where('contribution_id', $contribution->id)->count())->toBe(1);
+    Http::assertSentCount(1);
 });
 
 it('reports when a verified callback cannot yet be posted to the ledger', function () {
@@ -744,6 +925,27 @@ it('reports when a verified callback cannot yet be posted to the ledger', functi
         ->get(route('pay.callback', ['reference' => 'TXN_UNPOSTED']))
         ->assertRedirect(route('contributions.my'))
         ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'Payment was verified but not recorded. Contact your family admin before trying again.']);
+});
+
+it('does not claim an unallocated successful settlement updated contributions', function () {
+    Http::fake(['api.paystack.co/transaction/verify/TXN_UNALLOCATED' => Http::response([
+        'status' => true, 'data' => ['status' => 'success', 'amount' => 400000, 'reference' => 'TXN_UNALLOCATED'],
+    ])]);
+    $member = User::factory()->member()->employed()->create();
+    $transaction = PaystackTransaction::create([
+        'reference' => 'TXN_UNALLOCATED', 'user_id' => $member->id, 'family_id' => $member->family_id,
+        'type' => TransactionType::Contribution, 'amount' => 4000, 'status' => TransactionStatus::Pending,
+    ]);
+    $unallocated = clone $transaction;
+    $unallocated->status = TransactionStatus::Success;
+    $settlement = Mockery::mock(PaystackContributionSettlementService::class);
+    $settlement->shouldReceive('settle')->once()->andReturn($unallocated);
+    app()->instance(PaystackContributionSettlementService::class, $settlement);
+
+    $this->actingAs($member)->get(route('pay.callback', ['reference' => 'TXN_UNALLOCATED']))
+        ->assertRedirect(route('contributions.my'))
+        ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'Payment was verified but not recorded. Contact your family admin before trying again.']);
+    expect($transaction->refresh()->payment_batch_id)->toBeNull();
 });
 
 it('records only the settlement shortfall as a Paystack fee expense', function () {
@@ -850,7 +1052,7 @@ it('rejects successful callbacks when the verified gross amount does not match',
         ->and(Payment::where('contribution_id', $contribution->id)->exists())->toBeFalse();
 });
 
-it('handles successful callbacks that were already processed', function () {
+it('does not claim a legacy successful transaction was recorded without an allocation', function () {
     Http::fake([
         'api.paystack.co/transaction/verify/TXN_ALREADY_SUCCESS' => Http::response([
             'status' => true,
@@ -882,7 +1084,7 @@ it('handles successful callbacks that were already processed', function () {
         ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'Payment may have been successful, but we could not confirm it was recorded. Check your payment history or contact your family admin before trying again.']);
 });
 
-it('returns already confirmed when a non-success callback arrives for a successful transaction', function () {
+it('does not overwrite an unallocated legacy success when a non-success callback arrives', function () {
     Http::fake([
         'api.paystack.co/transaction/verify/TXN_CONFIRMED' => Http::response([
             'status' => true,
@@ -899,7 +1101,7 @@ it('returns already confirmed when a non-success callback arrives for a successf
     ]);
 
     $member = User::factory()->member()->employed()->create();
-    PaystackTransaction::create([
+    $transaction = PaystackTransaction::create([
         'reference' => 'TXN_CONFIRMED',
         'user_id' => $member->id,
         'family_id' => $member->family_id,
@@ -912,7 +1114,27 @@ it('returns already confirmed when a non-success callback arrives for a successf
         ->get(route('pay.callback', ['reference' => 'TXN_CONFIRMED']))
         ->assertRedirect(route('contributions.my'))
         ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'Payment may have been successful, but we could not confirm it was recorded. Check your payment history or contact your family admin before trying again.']);
+
+    expect($transaction->refresh()->status)->toBe(TransactionStatus::Success)
+        ->and($transaction->payment_batch_id)->toBeNull();
+    Http::assertNothingSent();
 });
+
+it('treats a nonterminal or missing provider status as unconfirmed', function (?string $status) {
+    $data = $status === null ? [] : ['status' => $status];
+    Http::fake(['api.paystack.co/transaction/verify/TXN_UNCONFIRMED' => Http::response(['status' => true, 'data' => $data])]);
+    $member = User::factory()->member()->employed()->create();
+    $transaction = PaystackTransaction::create([
+        'reference' => 'TXN_UNCONFIRMED', 'user_id' => $member->id, 'family_id' => $member->family_id,
+        'type' => TransactionType::Contribution, 'amount' => 4000, 'status' => TransactionStatus::Pending,
+    ]);
+
+    $this->actingAs($member)->get(route('pay.callback', ['reference' => $transaction->reference]))
+        ->assertRedirect(route('contributions.my'))
+        ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'Could not confirm your payment. Check your payment history or contact your family admin before trying again.']);
+    expect($transaction->refresh()->status)->toBe(TransactionStatus::Pending)
+        ->and($transaction->payment_batch_id)->toBeNull();
+})->with(['pending', 'ongoing', 'processing', 'queued', 'abandoned', 'reversed', 'unknown', null]);
 
 it('shows an error for failed callback verification statuses', function () {
     Http::fake([
@@ -1041,6 +1263,91 @@ it('reports a reversal that completes while a failed response is in flight', fun
     Http::assertSentCount(1);
 });
 
+it('explains an uncertain outcome when callback verification throws', function () {
+    Http::fake([
+        'api.paystack.co/transaction/verify/TXN_ERROR' => Http::response(['message' => 'Gateway down'], 500),
+    ]);
+
+    $member = User::factory()->member()->employed()->create();
+    PaystackTransaction::create([
+        'reference' => 'TXN_ERROR',
+        'user_id' => $member->id,
+        'family_id' => $member->family_id,
+        'type' => TransactionType::Contribution,
+        'amount' => 4000,
+        'status' => TransactionStatus::Pending,
+    ]);
+
+    $this->actingAs($member)
+        ->get(route('pay.callback', ['reference' => 'TXN_ERROR']))
+        ->assertRedirect(route('contributions.my'))
+        ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'Could not confirm your payment. Check your payment history or contact your family admin before trying again.']);
+});
+
+it('handles successful callbacks that were already processed', function () {
+    Http::fake([
+        'api.paystack.co/transaction/verify/TXN_ALREADY_SUCCESS' => Http::response([
+            'status' => true,
+            'message' => 'Verification successful',
+            'data' => [
+                'status' => 'success',
+                'amount' => 400000,
+                'reference' => 'TXN_ALREADY_SUCCESS',
+                'channel' => 'card',
+                'currency' => 'NGN',
+                'metadata' => [],
+            ],
+        ]),
+    ]);
+
+    $member = User::factory()->member()->employed()->create();
+    PaystackTransaction::create([
+        'reference' => 'TXN_ALREADY_SUCCESS',
+        'user_id' => $member->id,
+        'family_id' => $member->family_id,
+        'type' => TransactionType::Contribution,
+        'amount' => 4000,
+        'status' => TransactionStatus::Success,
+    ]);
+
+    $this->actingAs($member)
+        ->get(route('pay.callback', ['reference' => 'TXN_ALREADY_SUCCESS']))
+        ->assertRedirect(route('contributions.my'))
+        ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'Payment may have been successful, but we could not confirm it was recorded. Check your payment history or contact your family admin before trying again.']);
+});
+
+it('returns already confirmed when a non-success callback arrives for a successful transaction', function () {
+    Http::fake([
+        'api.paystack.co/transaction/verify/TXN_CONFIRMED' => Http::response([
+            'status' => true,
+            'message' => 'Verification successful',
+            'data' => [
+                'status' => 'failed',
+                'amount' => 400000,
+                'reference' => 'TXN_CONFIRMED',
+                'channel' => 'card',
+                'currency' => 'NGN',
+                'metadata' => [],
+            ],
+        ]),
+    ]);
+
+    $member = User::factory()->member()->employed()->create();
+    PaystackTransaction::create([
+        'reference' => 'TXN_CONFIRMED',
+        'user_id' => $member->id,
+        'family_id' => $member->family_id,
+        'type' => TransactionType::Contribution,
+        'amount' => 4000,
+        'status' => TransactionStatus::Success,
+    ]);
+
+    $this->actingAs($member)
+        ->get(route('pay.callback', ['reference' => 'TXN_CONFIRMED']))
+        ->assertRedirect(route('contributions.my'))
+        ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'Payment may have been successful, but we could not confirm it was recorded. Check your payment history or contact your family admin before trying again.']);
+});
+
 it('shows pending confirmation when callback verification throws', function () {
     Http::fake([
         'api.paystack.co/transaction/verify/TXN_ERROR' => Http::response(['message' => 'Gateway down'], 500),
@@ -1060,4 +1367,20 @@ it('shows pending confirmation when callback verification throws', function () {
         ->get(route('pay.callback', ['reference' => 'TXN_ERROR']))
         ->assertRedirect(route('contributions.my'))
         ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'Could not confirm your payment. Check your payment history or contact your family admin before trying again.']);
+});
+
+it('warns when a payment callback references a reversed transaction', function () {
+    Http::fake();
+    $family = Family::factory()->create();
+    $member = User::factory()->member()->employed()->create(['family_id' => $family->id]);
+    $transaction = PaystackTransaction::create([
+        'reference' => 'TXN_REVERSED', 'user_id' => $member->id, 'family_id' => $family->id,
+        'type' => TransactionType::Contribution, 'amount' => 4000, 'status' => TransactionStatus::Reversed,
+    ]);
+
+    $this->actingAs($member)->get(route('pay.callback', ['current_family' => $family->slug, 'reference' => $transaction->reference]))
+        ->assertRedirect(route('contributions.my', ['current_family' => $family->slug]))
+        ->assertInertiaFlash('payment_result', ['kind' => 'error', 'message' => 'This payment was reversed and no longer counts toward your contributions. Contact your family admin if you need help.']);
+    Http::assertNothingSent();
+    expect($transaction->refresh()->status)->toBe(TransactionStatus::Reversed);
 });

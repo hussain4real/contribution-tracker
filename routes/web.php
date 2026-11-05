@@ -8,13 +8,18 @@ use App\Http\Controllers\ChangelogController;
 use App\Http\Controllers\ChangelogSeenController;
 use App\Http\Controllers\ContributionController;
 use App\Http\Controllers\ContributionEmailReminderController;
+use App\Http\Controllers\ContributionReminderDeliveryRetryController;
 use App\Http\Controllers\ContributionWebPushReminderController;
 use App\Http\Controllers\ContributionWhatsAppReminderController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExpenseController;
+use App\Http\Controllers\ExpenseDocumentController;
+use App\Http\Controllers\ExpenseRequestController;
 use App\Http\Controllers\ExpenseReversalController;
+use App\Http\Controllers\FamilyActivityController;
 use App\Http\Controllers\FamilyArchiveController;
 use App\Http\Controllers\FamilySettingsController;
+use App\Http\Controllers\FinancialGovernanceSettingsController;
 use App\Http\Controllers\FundAdjustmentController;
 use App\Http\Controllers\FundAdjustmentReversalController;
 use App\Http\Controllers\InvitationController;
@@ -24,6 +29,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentBatchReversalController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PaymentReceiptController;
+use App\Http\Controllers\PaymentReceiptDeliveryRetryController;
 use App\Http\Controllers\PaystackWebhookController;
 use App\Http\Controllers\PlatformAdminController;
 use App\Http\Controllers\PricingController;
@@ -131,11 +137,14 @@ Route::prefix('{current_family}')
     ])
     ->middleware(['auth', 'verified', 'family.member', 'family.active'])
     ->group(function () {
+        Route::get('activity', [FamilyActivityController::class, 'index'])->name('family.activity');
+
         // Dashboard
         Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
         // Notifications
         Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
+        Route::put('notifications/reminder-preferences', [NotificationController::class, 'updateReminderPreferences'])->name('notifications.reminder-preferences');
         Route::patch('notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
         Route::post('notifications/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('notifications.mark-all-read');
 
@@ -186,6 +195,8 @@ Route::prefix('{current_family}')
         Route::post('contributions/{contribution}/web-push-reminder', [ContributionWebPushReminderController::class, 'send'])
             ->middleware(['subscription:'.PlatformPlanCatalog::WebPushReminders, 'throttle:10,1'])
             ->name('contributions.web-push-reminder');
+        Route::post('reminder-deliveries/{delivery}/retry', ContributionReminderDeliveryRetryController::class)
+            ->middleware('throttle:10,1')->name('reminder-deliveries.retry');
 
         // Payments
         Route::get('payments', [PaymentController::class, 'index'])->name('payments.index');
@@ -197,6 +208,8 @@ Route::prefix('{current_family}')
             ->name('payment-batches.reverse');
         Route::get('payment-batches/{payment_batch}/receipt', PaymentReceiptController::class)
             ->name('payment-batches.receipt');
+        Route::post('payment-receipt-deliveries/{delivery}/retry', PaymentReceiptDeliveryRetryController::class)
+            ->middleware('throttle:10,1')->name('payment-receipt-deliveries.retry');
 
         // Member Self-Pay (Paystack)
         Route::middleware('subscription:'.PlatformPlanCatalog::OnlinePayments)->group(function () {
@@ -212,6 +225,14 @@ Route::prefix('{current_family}')
         Route::post('subscription/cancel', [SubscriptionController::class, 'cancel'])->name('subscription.cancel');
 
         // Expenses
+        Route::post('expense-documents', [ExpenseDocumentController::class, 'store'])->name('expense-documents.store');
+        Route::get('expense-documents/{expense_document}/download', [ExpenseDocumentController::class, 'download'])->name('expense-documents.download');
+        Route::get('expense-requests', [ExpenseRequestController::class, 'index'])->name('expense-requests.index');
+        Route::post('expense-requests', [ExpenseRequestController::class, 'store'])->name('expense-requests.store');
+        Route::post('expense-requests/{expense_request}/decision', [ExpenseRequestController::class, 'decide'])->name('expense-requests.decide');
+        Route::post('expense-requests/{expense_request}/pay', [ExpenseRequestController::class, 'pay'])->name('expense-requests.pay');
+        Route::put('financial-governance', [FinancialGovernanceSettingsController::class, 'update'])->name('financial-governance.update');
+
         Route::get('expenses', [ExpenseController::class, 'index'])->name('expenses.index');
         Route::get('expenses/create', [ExpenseController::class, 'create'])->name('expenses.create');
         Route::post('expenses', [ExpenseController::class, 'store'])->name('expenses.store')
@@ -263,6 +284,7 @@ Route::prefix('{current_family}')
         Route::prefix('family')->name('family.')->group(function () {
             Route::get('settings', [FamilySettingsController::class, 'edit'])->name('settings');
             Route::put('settings', [FamilySettingsController::class, 'update'])->name('settings.update');
+            Route::put('reminder-settings', [FamilySettingsController::class, 'updateReminderSettings'])->name('reminder-settings.update');
             Route::post('categories', [FamilySettingsController::class, 'storeCategory'])->name('categories.store');
             Route::put('categories/{category}', [FamilySettingsController::class, 'updateCategory'])->name('categories.update');
             Route::delete('categories/{category}', [FamilySettingsController::class, 'destroyCategory'])->name('categories.destroy');

@@ -150,7 +150,7 @@ final class D1StagingRuntime
         $directory = config(D1RuntimeProfile::key('read_snapshot_path'));
         $database = config(D1RuntimeProfile::key('database'));
         if (! is_string($directory) || ! is_string($database)
-            || (! is_dir($directory) && ! mkdir($directory, 0700, true) && ! is_dir($directory))) {
+            || (! is_dir($directory) && ! @mkdir($directory, 0700, true) && ! is_dir($directory))) {
             throw new RuntimeException('Could not prepare the private staging read cache.');
         }
         $path = $directory.'/'.hash('sha256', $database.':'.$familyId).'.sqlite';
@@ -485,6 +485,8 @@ final class D1StagingRuntime
         return match ($table) {
             'migrations', 'platform_plans', 'features' => '',
             'payments' => ' where contribution_id in (select id from contributions where family_id='.$familyId.')',
+            'payment_receipt_deliveries' => ' where payment_batch_id in (select id from payment_batches where family_id='.$familyId.')',
+            'contribution_reminder_deliveries' => ' where contribution_id in (select id from contributions where family_id='.$familyId.')',
             'family_membership_category_assignments' => ' where family_membership_id in (select id from family_members where family_id='.$familyId.')',
             'report_deliveries' => ' where report_schedule_id in (select id from report_schedules where family_id='.$familyId.')',
             'provider_settlement_items' => ' where provider_settlement_group_id in (select id from provider_settlement_groups where family_id='.$familyId.')',

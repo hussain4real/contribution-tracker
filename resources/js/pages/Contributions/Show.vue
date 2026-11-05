@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ContributionReminderDeliveryRetryController from '@/actions/App/Http/Controllers/ContributionReminderDeliveryRetryController';
 import { create as createPayment } from '@/actions/App/Http/Controllers/PaymentController';
 import StatusBadge from '@/components/contributions/StatusBadge.vue';
 import HeadingSmall from '@/components/HeadingSmall.vue';
@@ -22,7 +23,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { useCurrencyFormatter } from '@/lib/currency';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 
 interface Payment {
     id: number;
@@ -58,6 +59,15 @@ interface Contribution {
 interface Props {
     contribution: Contribution;
     can_record_payment: boolean;
+    reminder_deliveries: {
+        id: number;
+        type: string;
+        channel: string;
+        status: string;
+        created_at: string | null;
+        failure_reason: string | null;
+        can_retry: boolean;
+    }[];
 }
 
 const props = defineProps<Props>();
@@ -78,6 +88,37 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const { formatCurrency: formatAmount } = useCurrencyFormatter();
+
+function reminderStatus(channel: string, status: string): string {
+    if (status === 'queued') return 'Queued';
+    if (status === 'accepted')
+        return channel === 'mail'
+            ? 'Submitted to mailer'
+            : channel === 'database'
+              ? 'Stored in app'
+              : 'Accepted by WhatsApp';
+    if (status === 'submitted')
+        return 'Submitted to browser notification service';
+    if (status === 'delivered') return 'Delivered';
+    if (status === 'failed') return 'Delivery failed';
+    if (status === 'unconfirmed') return 'Delivery could not be confirmed';
+    if (status === 'unavailable')
+        return 'Not sent: payment, preferences or contact details changed';
+    return 'Unknown';
+}
+
+function retryReminder(id: number, status: string): void {
+    const message =
+        status === 'unconfirmed'
+            ? 'The earlier reminder may have arrived. Retry and possibly send another?'
+            : 'Retry this reminder?';
+    if (confirm(message))
+        router.post(
+            ContributionReminderDeliveryRetryController({ delivery: id }).url,
+            {},
+            { preserveScroll: true },
+        );
+}
 
 // Helper to format date
 const formatDate = (dateStr: string): string => {
@@ -211,6 +252,83 @@ const progressPercentage = (): number => {
                             <Button class="w-full"> Record Payment </Button>
                         </Link>
                     </div>
+                </CardContent>
+            </Card>
+
+            <Card v-if="can_record_payment">
+                <CardHeader
+                    ><CardTitle>Reminder delivery</CardTitle
+                    ><CardDescription
+                        >Recent delivery attempts for this
+                        contribution.</CardDescription
+                    ></CardHeader
+                >
+                <CardContent>
+                    <p
+                        v-if="!reminder_deliveries.length"
+                        class="text-sm text-muted-foreground"
+                    >
+                        No delivery history is available.
+                    </p>
+                    <ul v-else class="divide-y">
+                        <li
+                            v-for="delivery in reminder_deliveries"
+                            :key="delivery.id"
+                            class="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"
+                        >
+                            <div>
+                                <p class="font-medium">
+                                    {{
+                                        delivery.type === 'follow_up'
+                                            ? 'Follow-up'
+                                            : 'Reminder'
+                                    }}
+                                    ·
+                                    {{
+                                        delivery.channel === 'mail'
+                                            ? 'Email'
+                                            : delivery.channel === 'whatsapp'
+                                              ? 'WhatsApp'
+                                              : delivery.channel === 'webpush'
+                                                ? 'Browser'
+                                                : delivery.channel ===
+                                                    'database'
+                                                  ? 'In-app'
+                                                  : 'Unknown channel'
+                                    }}
+                                </p>
+                                <p>
+                                    {{
+                                        reminderStatus(
+                                            delivery.channel,
+                                            delivery.status,
+                                        )
+                                    }}
+                                </p>
+                                <p
+                                    v-if="delivery.failure_reason"
+                                    class="text-muted-foreground"
+                                >
+                                    {{ delivery.failure_reason }}
+                                </p>
+                                <time
+                                    v-if="delivery.created_at"
+                                    :datetime="delivery.created_at"
+                                    class="text-muted-foreground"
+                                    >{{ formatDate(delivery.created_at) }}</time
+                                >
+                            </div>
+                            <Button
+                                v-if="delivery.can_retry"
+                                size="sm"
+                                variant="outline"
+                                @click="
+                                    retryReminder(delivery.id, delivery.status)
+                                "
+                                >Retry</Button
+                            >
+                        </li>
+                    </ul>
                 </CardContent>
             </Card>
 

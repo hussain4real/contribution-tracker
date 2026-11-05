@@ -227,8 +227,8 @@ describe('Annual Report', function () {
         DB::disableQueryLog();
 
         // The annual report should use a fixed number of queries (auth + current family
-        // membership resolution + contribution query with eager-loaded payments/users + Pennant and subscription feature resolution),
+        // membership resolution + fresh family policy lookup + contribution query with eager-loaded payments/users + Pennant and subscription feature resolution),
         // not scale with the number of months or categories.
-        expect($queryCount)->toBeLessThanOrEqual(18);
+        expect($queryCount)->toBeLessThanOrEqual(19);
     });
 });

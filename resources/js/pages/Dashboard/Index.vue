@@ -3,10 +3,15 @@ import {
     generate,
     show as showContribution,
 } from '@/actions/App/Http/Controllers/ContributionController';
+import { index as expenseRequests } from '@/actions/App/Http/Controllers/ExpenseRequestController';
+import { index as activity } from '@/actions/App/Http/Controllers/FamilyActivityController';
 import { create as createPayment } from '@/actions/App/Http/Controllers/PaymentController';
 import AccountDetails from '@/components/AccountDetails.vue';
 import AggregateStats from '@/components/contributions/AggregateStats.vue';
 import StatusBadge from '@/components/contributions/StatusBadge.vue';
+import FinancialOverviewCard, {
+    type FinancialOverview,
+} from '@/components/dashboard/FinancialOverview.vue';
 import MemberContributionStatus from '@/components/dashboard/MemberContributionStatus.vue';
 import type {
     OverdueContent,
@@ -93,6 +98,9 @@ interface MemberProps {
 
 type Props = Partial<AdminProps & MemberProps> & {
     fund_balance?: number;
+    financial_overview?: FinancialOverview;
+    can_view_financial_activity?: boolean;
+    expense_requests_pending?: number;
     can_generate_contributions?: boolean;
     has_pending_contributions?: boolean;
     overdue_members?: OverdueMember[];
@@ -174,8 +182,9 @@ function formatCategory(category: string | null): string {
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
-            <!-- Fund Balance (visible to all users) -->
+            <!-- Family totals follow the family visibility setting. -->
             <div
+                v-if="fund_balance !== undefined"
                 class="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border dark:bg-neutral-900"
             >
                 <p class="text-sm text-neutral-600 dark:text-neutral-400">
@@ -191,8 +200,31 @@ function formatCategory(category: string | null): string {
                 >
                     {{ formatCurrency(fund_balance ?? 0) }}
                 </p>
+                <p class="mt-2 text-sm text-muted-foreground">
+                    All recorded payments plus fund adjustments minus expenses,
+                    excluding reversed entries. Includes all transaction dates.
+                </p>
             </div>
 
+            <FinancialOverviewCard
+                v-if="financial_overview"
+                :overview="financial_overview"
+            />
+
+            <Link
+                v-if="can_view_financial_activity && !financial_overview"
+                :href="activity().url"
+                class="inline-flex min-h-11 items-center underline"
+                >View family transactions and activity</Link
+            >
+            <Link
+                v-if="expense_requests_pending"
+                :href="expenseRequests().url"
+                class="block rounded-md border p-4 underline"
+            >
+                {{ expense_requests_pending }} expense requests awaiting review
+                or payment
+            </Link>
             <!-- Admin/Financial Secretary View -->
             <template v-if="isAdminView">
                 <!-- Generate Contributions Banner -->

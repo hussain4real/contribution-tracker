@@ -83,6 +83,10 @@ declare module '@inertiajs/core' {
     }
 
     interface PageProps extends InertiaPageProps, AppPageProps {}
+
+    interface PageFlashData {
+        payment_result?: { kind: 'success' | 'error'; message: string };
+    }
 }
 
 declare module 'vue' {

@@ -10,6 +10,7 @@ export interface Permissions {
     add_members: boolean;
     manage_members: boolean;
     record_payments: boolean;
+    view_financial_transactions: boolean;
     generate_reports: boolean;
 }
 

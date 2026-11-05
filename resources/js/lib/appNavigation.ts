@@ -129,20 +129,28 @@ export function useAppNavigation() {
                 badge: 'notifications',
                 section: 'main',
             },
-            {
-                title: 'Expenses',
-                href: expensesIndex(),
-                icon: Receipt,
-                component: 'Expenses/Index',
-                section: 'main',
-            },
-            {
-                title: 'Fund Adjustments',
-                href: fundAdjustmentsIndex(),
-                icon: Landmark,
-                component: 'FundAdjustments/Index',
-                section: 'main',
-            },
+            ...(page.props.auth?.can?.view_financial_transactions
+                ? [
+                      {
+                          title: 'Expenses',
+                          href: expensesIndex(),
+                          icon: Receipt,
+                          component: 'Expenses/Index',
+                          section: 'main' as const,
+                      },
+                  ]
+                : []),
+            ...(page.props.auth?.can?.view_financial_transactions
+                ? [
+                      {
+                          title: 'Fund Adjustments',
+                          href: fundAdjustmentsIndex(),
+                          icon: Landmark,
+                          component: 'FundAdjustments/Index',
+                          section: 'main',
+                      },
+                  ]
+                : []),
         ];
 
         if (canRecordPayments.value) {

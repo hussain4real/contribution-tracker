@@ -11,7 +11,7 @@ use Laravel\Ai\Tools\Request;
 
 beforeEach(function () {
     $this->family = Family::factory()->create();
-    $this->user = User::factory()->create(['family_id' => $this->family->id]);
+    $this->user = User::factory()->admin()->employed()->create(['family_id' => $this->family->id]);
 });
 
 it('returns overview of active family members', function () {

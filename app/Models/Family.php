@@ -15,11 +15,15 @@ use Illuminate\Support\Carbon;
 use LogicException;
 
 /**
+ * @property string $member_financial_visibility
+ * @property array<string, mixed>|null $expense_approval_settings
+ * @property int|null $created_by
  * @property int $id
  * @property string $name
  * @property string $slug
  * @property string $currency
  * @property int $due_day
+ * @property array<string, mixed>|null $reminder_settings
  * @property Carbon|null $trial_ends_at
  * @property int|null $max_members
  * @property Carbon|null $created_at
@@ -51,6 +55,8 @@ use LogicException;
  */
 class Family extends Model
 {
+    public const DEFAULT_REMINDER_SETTINGS = ['reminder_day' => 25, 'follow_up_day' => 28, 'time' => '08:00', 'channels' => ['mail', 'whatsapp', 'webpush']];
+
     /** @use HasFactory<FamilyFactory> */
     use HasFactory;
 
@@ -64,6 +70,9 @@ class Family extends Model
         'slug',
         'currency',
         'due_day',
+        'reminder_settings',
+        'member_financial_visibility',
+        'expense_approval_settings',
         'bank_name',
         'account_name',
         'account_number',
@@ -88,6 +97,9 @@ class Family extends Model
         'platform_plan_id',
     ];
 
+    /** @var array<string, mixed> */
+    protected $attributes = ['member_financial_visibility' => 'summary'];
+
     /**
      * Get the attributes that should be cast.
      *
@@ -97,6 +109,8 @@ class Family extends Model
     {
         return [
             'due_day' => 'integer',
+            'reminder_settings' => 'array',
+            'expense_approval_settings' => 'array',
             'trial_ends_at' => 'datetime',
             'max_members' => 'integer',
             'suspended_at' => 'datetime',
@@ -110,6 +124,50 @@ class Family extends Model
     public function getRouteKeyName(): string
     {
         return 'slug';
+    }
+
+    /** @return array{reminder_day: int, follow_up_day: int, time: string, channels: list<string>} */
+    public function reminderSettingsForMonth(string $month): array
+    {
+        $defaults = self::DEFAULT_REMINDER_SETTINGS;
+        $settings = $this->reminder_settings;
+        if (! is_array($settings)) {
+            return $defaults;
+        }
+        $revisions = is_array($settings['history'] ?? null) ? $settings['history'] : [];
+        $revisions[] = $settings;
+        $selected = null;
+        foreach ($revisions as $revision) {
+            if (! is_array($revision) || ! is_string($revision['effective_from'] ?? null)) {
+                continue;
+            }
+            if ($revision['effective_from'] <= $month && ($selected === null || $revision['effective_from'] > $selected['effective_from'])) {
+                $selected = $revision;
+            }
+        }
+        if ($selected === null) {
+            return $defaults;
+        }
+        $settings = $selected;
+        $first = $settings['reminder_day'] ?? null;
+        $second = $settings['follow_up_day'] ?? null;
+        $time = $settings['time'] ?? null;
+        $channels = $settings['channels'] ?? null;
+        if (! is_int($first) || $first < 1 || $first > 28 || ! is_int($second) || $second <= $first || $second > 28
+            || ! is_string($time) || preg_match('/^([01][0-9]|2[0-3]):[0-5][0-9]$/D', $time) !== 1
+            || ! is_array($channels) || ! array_is_list($channels)) {
+            throw new \UnexpectedValueException('Invalid family contribution reminder settings.');
+        }
+
+        $validChannels = [];
+        foreach ($channels as $channel) {
+            if (! is_string($channel) || ! in_array($channel, ['mail', 'whatsapp', 'webpush'], true)) {
+                throw new \UnexpectedValueException('Invalid family contribution reminder settings.');
+            }
+            $validChannels[] = $channel;
+        }
+
+        return ['reminder_day' => $first, 'follow_up_day' => $second, 'time' => $time, 'channels' => $validChannels];
     }
 
     // =========================================================================
@@ -238,6 +296,12 @@ class Family extends Model
     public function paymentBatches(): HasMany
     {
         return $this->hasMany(PaymentBatch::class);
+    }
+
+    /** @return HasMany<ExpenseRequest, $this> */
+    public function expenseRequests(): HasMany
+    {
+        return $this->hasMany(ExpenseRequest::class);
     }
 
     /**

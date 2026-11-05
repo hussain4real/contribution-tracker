@@ -1,10 +1,10 @@
 <x-mail::message>
-# {{ $type === 'follow_up' ? 'Payment Due Today' : 'Payment Reminder' }}
+# {{ $type === 'follow_up' ? 'Payment Follow-up' : 'Payment Reminder' }}
 
 Hi {{ $userName }},
 
 @if($type === 'follow_up')
-This is a follow-up reminder that your **{{ $contribution->period_label }}** contribution for **{{ $familyName }}** is due today and has not been fully paid.
+This is a follow-up reminder that your **{{ $contribution->period_label }}** contribution for **{{ $familyName }}** is due on **{{ $contribution->due_date->toFormattedDateString() }}** and has not been fully paid.
 @else
 This is a friendly reminder that your **{{ $contribution->period_label }}** contribution for **{{ $familyName }}** is due on **{{ $contribution->due_date->toFormattedDateString() }}**.
 @endif

@@ -57,8 +57,18 @@ class ReleaseSafetyTest(unittest.TestCase):
     def test_schema_change_is_refused_without_touching_cloudflare(self):
         with patch.object(release, 'migration_fingerprint', return_value='unverified'), patch.object(release, 'api') as api:
             with self.assertRaisesRegex(RuntimeError, 'accepted D1 schema'):
-                release.validate()
+                release.validate('production')
             api.assert_not_called()
+
+    def test_schema_approval_is_specific_to_the_deployment_target(self):
+        config = {target: {**release.CONFIG[target], 'accepted_migrations_sha256': target + '-schema'}
+                  for target in ('production', 'staging')}
+        with patch.object(release, 'CONFIG', config):
+            for target, other in [('production', 'staging'), ('staging', 'production')]:
+                with self.subTest(target=target), patch.object(release, 'migration_fingerprint', return_value=target + '-schema'):
+                    self.assertTrue(release.validate(target)['accepted_schema'])
+                    with self.assertRaisesRegex(RuntimeError, 'accepted D1 schema'):
+                        release.validate(other)
 
     def test_production_entry_pins_the_exact_image_revision_and_active_phase(self):
         sources = release.modules('cloudflare-production-entry.mjs', 'repo@' + DIGEST, 'github-test')
