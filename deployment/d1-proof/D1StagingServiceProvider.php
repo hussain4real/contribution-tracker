@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace FamilyFunds\D1Staging;
 
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Http\Kernel as HttpKernel;
+use Illuminate\Filesystem\AwsS3V3Adapter;
 use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +29,40 @@ final class D1StagingServiceProvider extends ServiceProvider
         foreach (['database', 'url', 'token'] as $key) {
             if (! is_string(config('d1-staging.'.$key)) || config('d1-staging.'.$key) === '') {
                 throw new LogicException('Missing isolated D1 staging configuration.');
+            }
+        }
+        $admission = config('d1-staging.r2.admission', '0');
+        if (! in_array($admission, ['0', '1'], true)) {
+            throw new LogicException('Invalid staging R2 admission setting.');
+        }
+        if ($admission === '1') {
+            if ($this->app->resolved('filesystem') || config('d1-staging.database') !== 'familyfunds-d1-web-staging') {
+                throw new LogicException('Staging R2 admission requires the isolated target before filesystem resolution.');
+            }
+            $gateway = new D1StagingStorageAdmission(
+                config()->string('d1-staging.url'), config()->string('d1-staging.token'),
+            );
+            $manager = $this->app->make('filesystem');
+            $manager->extend('staging-admitted-s3', function (Application $app, array $config) use ($manager, $gateway): AwsS3V3Adapter {
+                $disk = $manager->createS3Driver($config);
+                if (! $disk instanceof AwsS3V3Adapter) {
+                    throw new LogicException('Staging R2 admission requires the S3 adapter.');
+                }
+                $disk->getClient()->getHandlerList()->appendAttempt($gateway->wrapAttempt(...), 'staging-r2-admission');
+
+                return new class($disk->getDriver(), $disk->getAdapter(), $disk->getConfig(), $disk->getClient()) extends AwsS3V3Adapter
+                {
+                    public function providesTemporaryUploadUrls(): bool
+                    {
+                        return false;
+                    }
+                };
+            });
+            foreach (['local' => 'private', 'public' => 'public'] as $disk => $prefix) {
+                $config = D1StagingStorage::configuration(config()->string('d1-staging.r2.bucket'),
+                    config()->string('d1-staging.r2.key'), config()->string('d1-staging.r2.secret'), $prefix);
+                $config['driver'] = 'staging-admitted-s3';
+                config(['filesystems.disks.'.$disk => $config]);
             }
         }
         DB::extend('d1-staging', function (): D1StagingConnection {
@@ -60,7 +96,7 @@ final class D1StagingServiceProvider extends ServiceProvider
             throw new LogicException('Invalid isolated D1 staging endpoint.');
         }
         $bucket = config('d1-staging.r2.bucket');
-        if (is_string($bucket) && $bucket !== '') {
+        if (config('d1-staging.r2.admission', '0') === '0' && is_string($bucket) && $bucket !== '') {
             $key = config('d1-staging.r2.key');
             $secret = config('d1-staging.r2.secret');
             if (! is_string($key) || ! is_string($secret)) {
@@ -87,16 +123,37 @@ final class D1StagingServiceProvider extends ServiceProvider
         $allowedRequests = [$url.'/*'];
         if (config('d1-staging.webhooks.enabled')) {
             $paystack = config('d1-staging.webhooks.paystack_test_key');
+            $signingSecret = config('d1-staging.webhooks.paystack_signing_secret');
             $meta = config('d1-staging.webhooks.meta_app_secret');
             if (config('d1-staging.database') !== 'familyfunds-d1-web-staging'
                 || ! is_string($paystack) || ($paystack !== '' && ! str_starts_with($paystack, 'sk_test_'))
+                || ($signingSecret !== null && (! is_string($signingSecret) || preg_match('/^whsec_[A-Za-z0-9_-]+$/D', $signingSecret) !== 1))
                 || ! is_string($meta) || ($meta !== '' && preg_match('/^[a-f0-9]{32}$/iD', $meta) !== 1)) {
                 throw new LogicException('Webhook checks require isolated staging provider credentials.');
             }
-            config(['services.paystack.secret_key' => $paystack, 'services.paystack.webhook_secret' => $paystack, 'services.paystack.base_url' => 'https://api.paystack.co', 'services.whatsapp.app_secret' => $meta]);
+            config(['services.paystack.webhook_secret' => $signingSecret ?? $paystack, 'services.paystack.base_url' => 'https://api.paystack.co', 'services.whatsapp.app_secret' => $meta]);
+            if (! config('d1-staging.paystack_test_checkout')) {
+                config(['services.paystack.secret_key' => $paystack]);
+            }
             if ($paystack !== '') {
                 $allowedRequests[] = 'https://api.paystack.co/transaction/verify/*';
             }
+        }
+        if (config('d1-staging.paystack_test_checkout')) {
+            $secret = config('services.paystack.secret_key');
+            $public = config('services.paystack.public_key');
+            if (config('d1-staging.database') !== 'familyfunds-d1-web-staging'
+                || config('services.paystack.base_url') !== 'https://api.paystack.co'
+                || ! is_string($secret) || preg_match('/^sk_test_[A-Za-z0-9]+$/D', $secret) !== 1
+                || ! is_string($public) || preg_match('/^pk_test_[A-Za-z0-9]+$/D', $public) !== 1) {
+                throw new LogicException('Test checkout requires isolated staging and Paystack test credentials.');
+            }
+            array_push($allowedRequests,
+                'https://api.paystack.co/transaction/initialize',
+                'https://api.paystack.co/transaction/verify/*',
+                'https://api.paystack.co/bank',
+                'https://api.paystack.co/bank?*',
+            );
         }
         Http::allowStrayRequests($allowedRequests);
         $kernel = $this->app->make(HttpKernel::class);

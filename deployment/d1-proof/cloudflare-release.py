@@ -3,6 +3,7 @@
 import argparse
 import email.parser
 import email.policy
+import http.client
 import hashlib
 import json
 import os
@@ -85,11 +86,15 @@ def modules(entry, image=None, revision=None):
     return result
 
 
-def multipart(entry, sources, bindings, container=None):
+def multipart(entry, sources, bindings, container=None, content_only=False):
     metadata = {'main_module': entry, 'compatibility_date': CONFIG['compatibility_date'],
                 'compatibility_flags': ['nodejs_compat'], 'bindings': bindings,
                 'keep_bindings': ['secret_text'], 'observability': {'enabled': True, 'head_sampling_rate': 1}}
-    if container:
+    if content_only:
+        if container is not None:
+            raise ValueError('Code-only updates cannot change container configuration')
+        metadata = {'main_module': entry}
+    elif container:
         metadata['containers'] = [container]
     boundary = 'familyfunds-' + uuid.uuid4().hex
     chunks = []
@@ -121,17 +126,55 @@ def prepared(image):
     raise RuntimeError('Container runtime image preparation timed out before any Worker update')
 
 
+GATEWAY_FAILURE_STAGES = frozenset({
+    'environment', 'environment_flags', 'database_identity', 'gateway_url', 'gateway_token',
+    'service_binding', 'service_request', 'gateway_authentication', 'gateway_http', 'gateway_response',
+})
+
+
+class StagingGatewayHealthError(RuntimeError):
+    def __init__(self, stage):
+        self.stage = stage
+        super().__init__('Staging gateway health check failed')
+
+
+def gateway_failure_stage(error):
+    if error.code != 503:
+        return None
+    try:
+        data = error.read(4097)
+        if len(data) > 4096:
+            return None
+        body = json.loads(data)
+    except (ValueError, UnicodeDecodeError, OSError):
+        return None
+    if not isinstance(body, dict) or set(body) != {'ok', 'stage'} or body['ok'] is not False:
+        return None
+    stage = body['stage']
+    return stage if isinstance(stage, str) and stage in GATEWAY_FAILURE_STAGES else None
+
+
 def public_checks(target, revision=None):
     authorization = os.environ.get('STAGING_BASIC_AUTHORIZATION')
     if target == 'staging' and not authorization:
         raise RuntimeError('Authenticated staging smoke check requires STAGING_BASIC_AUTHORIZATION')
-    for path in ['/up', '/login']:
+    paths = ['/up', '/login']
+    if target == 'staging' and revision is not None:
+        paths.append('/__staging_health/gateway')
+    for path in paths:
         headers = {'User-Agent': 'FamilyFunds-GitHub-release', 'Cache-Control': 'no-cache'}
         if target == 'staging':
             headers['Authorization'] = authorization
         request = urllib.request.Request(CONFIG[target]['url'] + path, headers=headers)
-        with urllib.request.urlopen(request, timeout=90) as response:
-            body = response.read(1024 * 1024)
+        try:
+            response = urllib.request.urlopen(request, timeout=90)
+        except urllib.error.HTTPError as error:
+            stage = gateway_failure_stage(error) if target == 'staging' and path == '/__staging_health/gateway' else None
+            if stage is not None:
+                raise StagingGatewayHealthError(stage) from None
+            raise
+        with response:
+            body = response.read(4097 if path == '/__staging_health/gateway' else 1024 * 1024)
             if response.status != 200:
                 raise RuntimeError('Release health check failed')
             if target == 'production' and revision and response.headers.get('X-FamilyFunds-Runtime-Revision') != revision:
@@ -140,6 +183,15 @@ def public_checks(target, revision=None):
                 raise RuntimeError('Production activation is not the accepted live phase')
             if path == '/login' and (b'<html' not in body.lower() or b'password' not in body.lower()):
                 raise RuntimeError('Laravel login did not render successfully')
+            if path == '/__staging_health/gateway':
+                if len(body) > 4096:
+                    raise RuntimeError('Staging gateway health response is invalid')
+                try:
+                    status = json.loads(body)
+                except (ValueError, UnicodeDecodeError):
+                    raise RuntimeError('Staging gateway health response is invalid') from None
+                if not isinstance(status, dict) or set(status) != {'ok'} or status['ok'] is not True:
+                    raise RuntimeError('Staging gateway health check failed')
 
 
 def instance_image(target, image):
@@ -182,9 +234,73 @@ def checked_bindings(worker, settings):
             raise RuntimeError('Production D1 binding mismatch')
         if names.get('PRODUCTION_CONTAINER', {}).get('namespace_id') != CONFIG['production']['application_id']:
             raise RuntimeError('Production container namespace mismatch')
+    if worker == CONFIG['staging']['worker'] and 'STAGING_SQL_GATEWAY' in names:
+        gateway = names['STAGING_SQL_GATEWAY']
+        if gateway.get('type') != 'service' or gateway.get('service') != 'familyfunds-d1-staging-sql' or gateway.get('environment', 'production') != 'production' or gateway.get('entrypoint') is not None:
+            raise RuntimeError('Unexpected staging gateway service binding')
+    if worker == CONFIG['staging']['worker']:
+        control_names = {'STAGING_GATEWAY_CONTROL', 'STAGING_GATEWAY_ADMIN_TOKEN'}
+        present = control_names.intersection(names)
+        if present and (present != control_names or names['STAGING_GATEWAY_CONTROL'].get('type') != 'plain_text'
+                        or names['STAGING_GATEWAY_CONTROL'].get('text') != '0'
+                        or names['STAGING_GATEWAY_ADMIN_TOKEN'].get('type') != 'secret_text'):
+            raise RuntimeError('Staging gateway control must be fully configured and disabled during release')
+    if worker == 'familyfunds-d1-staging-sql':
+        if names.get('DB', {}).get('id', names.get('DB', {}).get('database_id')) != 'f96058f1-0aa3-42f3-9ee2-f796554d6ef4':
+            raise RuntimeError('Staging gateway D1 binding mismatch')
+        if names.get('DATABASE_NAME', {}).get('text') != 'familyfunds-d1-web-staging' or names.get('PROOF_TOKEN', {}).get('type') != 'secret_text':
+            raise RuntimeError('Staging gateway configuration mismatch')
+        coordinator_names = {'STAGING_GATEWAY_ADMISSION', 'STAGING_GATEWAY_ADMISSION_OBJECT', 'STAGING_GATEWAY_ADMIN_TOKEN'}
+        present = coordinator_names.intersection(names)
+        if present:
+            gate = names.get('STAGING_GATEWAY_ADMISSION', {})
+            coordinator = names.get('STAGING_GATEWAY_ADMISSION_OBJECT', {})
+            admin = names.get('STAGING_GATEWAY_ADMIN_TOKEN', {})
+            namespace = coordinator.get('namespace_id')
+            if (present != coordinator_names or gate.get('type') != 'plain_text' or gate.get('text') != '0'
+                    or admin.get('type') != 'secret_text' or coordinator.get('type') != 'durable_object_namespace'
+                    or coordinator.get('class_name') != 'StagingGatewayAdmission'
+                    or coordinator.get('script_name') is not None
+                    or coordinator.get('environment', 'production') != 'production'
+                    or not isinstance(namespace, str) or not re.fullmatch(r'[a-f0-9]{32}', namespace)):
+                raise RuntimeError('Staging gateway coordinator must be fully configured and disabled during release')
+    if worker == 'familyfunds-d1-maintenance-staging':
+        expected = {
+            'DB': {'type': 'd1', 'id': 'f96058f1-0aa3-42f3-9ee2-f796554d6ef4'},
+            'DATABASE_NAME': {'type': 'plain_text', 'text': 'familyfunds-d1-web-staging'},
+            'STAGING_FILES': {'type': 'r2_bucket', 'bucket_name': 'familyfunds-d1-staging-private'},
+            'MAINTENANCE_QUEUE': {'type': 'queue', 'queue_name': worker},
+            'STAGING_CONTAINER': {'type': 'durable_object_namespace', 'script_name': CONFIG['staging']['worker'],
+                                  'namespace_id': 'a374340e0cb74321b3fb3d46b52f9240'},
+            'BACKUP_APP_KEY': {'type': 'secret_text'},
+        }
+        if any(any(names.get(name, {}).get(k) != v for k, v in fields.items()) for name, fields in expected.items()):
+            raise RuntimeError('Unexpected staging maintenance binding')
+        if 'STAGING_GATEWAY_ADMISSION' in names or 'STAGING_GATEWAY_ADMISSION_OBJECT' in names:
+            flag = names.get('STAGING_GATEWAY_ADMISSION', {})
+            gate = names.get('STAGING_GATEWAY_ADMISSION_OBJECT', {})
+            if (flag.get('type') != 'plain_text' or flag.get('text') != '0'
+                    or gate.get('type') != 'durable_object_namespace' or gate.get('script_name') != 'familyfunds-d1-staging-sql'
+                    or gate.get('class_name') != 'StagingGatewayAdmission' or gate.get('environment', 'production') != 'production'
+                    or not re.fullmatch(r'[a-f0-9]{32}', gate.get('namespace_id') or '')):
+                raise RuntimeError('Staging maintenance coordinator must be fully configured and disabled during release')
     if worker == 'familyfunds-production-offsite' and any(key in names for key in ['DB', 'CONTAINER_ENV', 'CONTAINER_ENV_0', 'APP_KEY', 'BACKUP_KEY']):
         raise RuntimeError('Offsite credential isolation no longer matches the reviewed configuration')
     return [binding for binding in bindings if binding['type'] != 'secret_text']
+
+
+def verify_staging_module_source(previous, candidate, accepted_hash):
+    if not isinstance(accepted_hash, str) or not re.fullmatch(r'[a-f0-9]{64}', accepted_hash):
+        raise RuntimeError('Invalid accepted staging module source fingerprint')
+    previous_hash = hashlib.sha256(previous).hexdigest()
+    if previous_hash not in {accepted_hash, hashlib.sha256(candidate).hexdigest()}:
+        raise RuntimeError('Staging module source differs from the reviewed revision')
+
+
+def require_disabled_gateway_version_urls(path):
+    subdomain = api('GET', path + '/subdomain')
+    if subdomain.get('previews_enabled') is not False:
+        raise RuntimeError('Staging gateway version URLs must be disabled')
 
 
 def publish(target, directory):
@@ -250,9 +366,16 @@ def publish(target, directory):
         settings = api('GET', path + '/settings')
         bindings = checked_bindings(worker['worker'], settings)
         previous_image = next((binding['text'] for binding in bindings if binding['name'] == 'CONTAINER_IMAGE'), worker.get('image'))
-        raw, mime = api('GET', path, raw=True)
+        content_only = worker.get('content_only') is True
+        if content_only:
+            if target != 'staging' or worker['worker'] not in {'familyfunds-d1-staging-sql', 'familyfunds-d1-maintenance-staging'}:
+                raise RuntimeError('Unexpected code-only release target')
+            require_disabled_gateway_version_urls(path)
+        raw, mime = api('GET', path + '/content/v2' if content_only else path, raw=True)
         previous_sources = script_sources(raw, mime)
         previous_entry = next((entry for entry in previous_sources if entry == worker['entry']), None)
+        if content_only and previous_entry is None and set(previous_sources) == {'worker.mjs'}:
+            previous_entry = 'worker.mjs'
         if previous_entry is None and worker['worker'] == 'familyfunds-production-managed':
             previous_entry = 'production-managed-worker.mjs'
         if previous_entry not in previous_sources:
@@ -263,14 +386,20 @@ def publish(target, directory):
         if worker.get('image'):
             prepared(worker['image'])
         rollback_container = {**container, 'images': {'base': previous_image}} if container and target == 'production' else container
-        old_body, old_mime = multipart(previous_entry, previous_sources, bindings, rollback_container)
+        sources = modules(worker['entry'], image if target == 'production' else None, name)
+        if content_only:
+            if set(previous_sources) != {previous_entry} or set(sources) != {worker['entry']}:
+                raise RuntimeError('Unexpected code-only staging module inventory')
+            verify_staging_module_source(previous_sources[previous_entry], sources[worker['entry']], worker.get('accepted_previous_sha256'))
+        old_body, old_mime = multipart(previous_entry, previous_sources, bindings, rollback_container, content_only=content_only)
         updated = [dict(binding) for binding in bindings]
+        if target == 'staging' and worker['worker'] == CONFIG['staging']['worker'] and not any(binding['name'] == 'STAGING_SQL_GATEWAY' for binding in updated):
+            updated.append({'name': 'STAGING_SQL_GATEWAY', 'type': 'service', 'service': 'familyfunds-d1-staging-sql'})
         for binding in updated:
             if worker['worker'] == CONFIG[target]['worker'] and binding['name'] in ['RUNTIME_REVISION', 'CONTAINER_IMAGE']:
                 binding['text'] = name if binding['name'] == 'RUNTIME_REVISION' else image
-        sources = modules(worker['entry'], image if target == 'production' else None, name)
-        body, mime = multipart(worker['entry'], sources, updated, container)
-        plans.append({'path': path, 'body': body, 'mime': mime, 'old_body': old_body, 'old_mime': old_mime})
+        body, mime = multipart(worker['entry'], sources, updated, container, content_only=content_only)
+        plans.append({'path': path + '/content' if content_only else path, 'body': body, 'mime': mime, 'old_body': old_body, 'old_mime': old_mime})
     previous_staging = None
     applied = []
     try:
@@ -282,17 +411,23 @@ def publish(target, directory):
             applied.append(plan)
             api('PUT', plan['path'], plan['body'], raw=True, content_type=plan['mime'])
         deadline = time.monotonic() + 600
+        last_gateway_stage = None
         while True:
             try:
                 public_checks(target, name)
                 if instance_image(target, image):
                     break
-            except (RuntimeError, urllib.error.URLError):
+            except StagingGatewayHealthError as error:
+                if error.stage != last_gateway_stage:
+                    print('Staging gateway health failure stage: ' + error.stage, flush=True)
+                    last_gateway_stage = error.stage
+            except (RuntimeError, OSError, http.client.HTTPException):
                 pass
             if time.monotonic() >= deadline:
                 raise RuntimeError('Release verification failed: edge, Laravel readiness or native running image mismatch')
             time.sleep(10)
-    except Exception:
+    except Exception as error:
+        print(f"Staging or production release failed during publication or verification ({type(error).__name__})", flush=True)
         failures = []
         for plan in reversed(applied):
             try:
@@ -306,7 +441,7 @@ def publish(target, directory):
                 failures.append('staging container image')
         if failures:
             raise RuntimeError('Deployment failed and code/image rollback needs operator attention: ' + ', '.join(failures)) from None
-        raise RuntimeError('Deployment failed; previous code/image restored. No database rollback or request replay was attempted.') from None
+        raise RuntimeError('Deployment failed; code/image rollback was requested. Verify the active code and image before proceeding. No database rollback or request replay was attempted.') from None
     result = {'target': target, 'revision': revision, 'runtime_revision': name, 'image': image,
               'prepared': True, 'native_image_verified': True, 'laravel_login_verified': True,
               'managed_image_preparation': target == 'production',

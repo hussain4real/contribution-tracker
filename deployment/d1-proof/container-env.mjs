@@ -1,6 +1,6 @@
 const encoder = new TextEncoder();
 
-export function containerEnvironment(bindings) {
+export function containerEnvironment(bindings, {allowStagingPaystackTest = false} = {}) {
     let json;
     if (bindings.CONTAINER_ENV_PARTS === undefined) {
         json = bindings.CONTAINER_ENV;
@@ -52,6 +52,19 @@ export function containerEnvironment(bindings) {
             'GITHUB_RELEASES_CACHE_FRESH_TTL', 'GITHUB_RELEASES_CACHE_STALE_TTL', 'GITHUB_RELEASES_MAX', 'GITHUB_RELEASES_INCLUDE_PRERELEASES', 'GITHUB_RELEASES_INCLUDE_BODY']);
         if (!extra || typeof extra !== 'object' || Array.isArray(extra) || Object.keys(extra).some(key => !allowed.has(key) || Object.hasOwn(result, key))) throw new Error('Unexpected or duplicate production integration field');
         Object.assign(result, extra);
+    }
+    if (bindings.STAGING_PAYSTACK_TEST_ENV !== undefined) {
+        if (!allowStagingPaystackTest || bindings.RUNTIME_PROFILE === 'production' || result.D1_PRODUCTION_ENABLED === 'true'
+            || typeof bindings.STAGING_PAYSTACK_TEST_ENV !== 'string'
+            || encoder.encode(bindings.STAGING_PAYSTACK_TEST_ENV).length > 4096) throw new Error('Invalid staging Paystack test environment');
+        const testKeys = JSON.parse(bindings.STAGING_PAYSTACK_TEST_ENV);
+        if (!testKeys || typeof testKeys !== 'object' || Array.isArray(testKeys)
+            || Object.keys(testKeys).length !== 2
+            || typeof testKeys.PAYSTACK_PUBLIC_KEY !== 'string' || !/^pk_test_[A-Za-z0-9]+$/.test(testKeys.PAYSTACK_PUBLIC_KEY)
+            || typeof testKeys.PAYSTACK_SECRET_KEY !== 'string' || !/^sk_test_[A-Za-z0-9]+$/.test(testKeys.PAYSTACK_SECRET_KEY)) {
+            throw new Error('Invalid staging Paystack test keys');
+        }
+        Object.assign(result, testKeys, {PAYSTACK_STAGING_DIAGNOSTICS: 'true', D1_STAGING_PAYSTACK_TEST_CHECKOUT_ENABLED: 'true'});
     }
     if (bindings.AI_ENV !== undefined) {
         if (typeof bindings.AI_ENV !== 'string' || encoder.encode(bindings.AI_ENV).length > 4096) throw new Error('Invalid AI environment');
