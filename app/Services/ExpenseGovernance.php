@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Enums\TransactionStatus;
+use App\Enums\TransactionType;
 use App\Models\Expense;
 use App\Models\ExpenseApproval;
 use App\Models\ExpenseRequest;
 use App\Models\Family;
+use App\Models\PaystackTransaction;
 use App\Models\User;
 use App\Support\AuditEventRecorder;
 use App\Support\PlatformPlanCatalog;
@@ -52,6 +55,23 @@ class ExpenseGovernance
     public function ensurePostingAllowed(Expense $expense): void
     {
         $family = Family::query()->lockForUpdate()->findOrFail($expense->family_id);
+        if ($expense->providerFeeTransactionId() !== null) {
+            $transaction = PaystackTransaction::query()->where('family_id', $family->id)
+                ->lockForUpdate()->find($expense->providerFeeTransactionId());
+            if (! $transaction instanceof PaystackTransaction || $transaction->type !== TransactionType::Contribution
+                || $transaction->status !== TransactionStatus::Verified || $transaction->verified_at === null
+                || $transaction->fee_expense_id !== null || $transaction->settled_amount_kobo === null
+                || ($transaction->paystack_response['status'] ?? null) !== 'success') {
+                throw ValidationException::withMessages(['amount' => 'Provider fee posting requires a verified contribution settlement.']);
+            }
+            $shortfall = $transaction->contributionAmountKobo() - $transaction->settled_amount_kobo;
+            if ($shortfall <= 0 || $expense->amount !== intdiv($shortfall + 99, 100)
+                || $expense->recorded_by !== $transaction->user_id || $expense->expense_request_id !== null) {
+                throw ValidationException::withMessages(['amount' => 'The provider fee must match the verified settlement shortfall.']);
+            }
+
+            return;
+        }
         $required = $this->requiredApprovals($family, $expense->amount);
         if ($expense->expense_request_id === null && $required === 0) {
             if ($expense->idempotency_key !== null && ExpenseRequest::query()->where('family_id', $family->id)

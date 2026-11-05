@@ -112,7 +112,7 @@ class PaystackContributionSettlementService
                     idempotencyKey: "paystack:{$transaction->reference}",
                 );
 
-                $feeExpense = $this->recordFeeShortfall($transaction, $member, $providerData);
+                $feeExpense = $this->recordFeeShortfall($transaction, $providerData);
 
                 $transaction->forceFill([
                     'status' => TransactionStatus::Allocated,
@@ -145,7 +145,6 @@ class PaystackContributionSettlementService
     /** @param array<string, mixed> $providerData */
     private function recordFeeShortfall(
         PaystackTransaction $transaction,
-        User $member,
         array $providerData,
     ): ?Expense {
         if ($transaction->fee_expense_id !== null) {
@@ -161,13 +160,7 @@ class PaystackContributionSettlementService
 
         $paidAt = $providerData['paid_at'] ?? now()->toDateString();
 
-        return Expense::query()->create([
-            'family_id' => $transaction->family_id,
-            'amount' => intdiv($shortfallKobo + 99, 100),
-            'description' => "Paystack processing fee shortfall for transaction {$transaction->reference}",
-            'spent_at' => is_scalar($paidAt) ? (string) $paidAt : now()->toDateString(),
-            'recorded_by' => $member->id,
-        ]);
+        return Expense::postPaystackFee($transaction, intdiv($shortfallKobo + 99, 100), is_scalar($paidAt) ? (string) $paidAt : now()->toDateString());
     }
 
     private function integer(mixed $value): int
