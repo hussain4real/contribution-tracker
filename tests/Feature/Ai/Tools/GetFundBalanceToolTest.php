@@ -12,7 +12,7 @@ use App\Models\User;
 use Laravel\Ai\Tools\Request;
 
 beforeEach(function () {
-    $this->family = Family::factory()->create(['currency' => '₦']);
+    $this->family = Family::factory()->create(['currency' => '₦', 'member_financial_visibility' => 'transactions']);
     $this->user = User::factory()->create(['family_id' => $this->family->id]);
 });
 

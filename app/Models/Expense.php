@@ -7,15 +7,19 @@ namespace App\Models;
 use App\Support\CurrencyFormatter;
 use Database\Factories\ExpenseFactory;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Illuminate\Support\Carbon;
 use LogicException;
 
 /**
+ * @property int|null $expense_request_id
+ * @property-read Collection<int, ExpenseDocument> $documents
  * @property int $id
  * @property int $family_id
  * @property int $amount
@@ -47,6 +51,7 @@ class Expense extends Model
         'spent_at',
         'recorded_by',
         'idempotency_key',
+        'expense_request_id',
     ];
 
     /**
@@ -96,6 +101,12 @@ class Expense extends Model
     public function reconciliationLinks(): MorphMany
     {
         return $this->morphMany(ReconciliationLink::class, 'reconcilable');
+    }
+
+    /** @return HasMany<ExpenseDocument, $this> */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(ExpenseDocument::class);
     }
 
     // =========================================================================

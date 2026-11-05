@@ -20,13 +20,14 @@ beforeEach(function () {
     $this->admin = User::factory()->admin()->create();
     $this->financialSecretary = User::factory()->financialSecretary()->create();
     $this->member = User::factory()->member()->employed()->create();
+    Family::query()->findOrFail($this->member->family_id)->update(['member_financial_visibility' => 'transactions']);
 });
 
 // =========================================================================
 // Index
 // =========================================================================
 
-it('allows any authenticated user to view the expenses list', function () {
+it('allows members with transaction visibility to view the expenses list', function () {
     $this->actingAs($this->member)
         ->get(route('expenses.index'))
         ->assertSuccessful()

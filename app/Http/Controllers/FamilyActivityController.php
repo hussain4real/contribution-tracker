@@ -19,7 +19,6 @@ class FamilyActivityController extends Controller
     public function index(FamilyActivityRequest $request, EffectiveLedger $ledger, FamilyFinancialOverview $overview): Response
     {
         $user = $this->user($request);
-        abort_unless($user->canViewAllMembers(), 403);
         $family = $user->currentFamily ?? $user->family;
         abort_unless($family instanceof Family, 403);
         $period = $request->string('period')->toString() ?: now()->format('Y-m');

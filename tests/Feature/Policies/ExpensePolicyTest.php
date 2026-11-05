@@ -9,8 +9,8 @@ use App\Models\User;
 use App\Policies\ExpensePolicy;
 
 beforeEach(function () {
-    $this->family = Family::factory()->create();
-    $this->otherFamily = Family::factory()->create();
+    $this->family = Family::factory()->create(['member_financial_visibility' => 'transactions']);
+    $this->otherFamily = Family::factory()->create(['member_financial_visibility' => 'transactions']);
     $this->admin = User::factory()->admin()->create(['family_id' => $this->family->id]);
     $this->financialSecretary = User::factory()->financialSecretary()->create(['family_id' => $this->family->id]);
     $this->member = User::factory()->member()->employed()->create(['family_id' => $this->family->id]);
@@ -19,7 +19,7 @@ beforeEach(function () {
     $this->expense = Expense::factory()->recordedBy($this->admin)->create();
 });
 
-it('allows any authenticated user to view the expenses list', function () {
+it('allows members with transaction visibility to view the expenses list', function () {
     expect($this->policy->viewAny($this->member))->toBeTrue();
 });
 

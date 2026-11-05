@@ -10,6 +10,7 @@ import {
     updateReminderSettings,
 } from '@/actions/App/Http/Controllers/FamilySettingsController';
 import ContributionReminderPreview from '@/components/ContributionReminderPreview.vue';
+import FinancialGovernanceSettings from '@/components/FinancialGovernanceSettings.vue';
 import Heading from '@/components/Heading.vue';
 import HeadingSmall from '@/components/HeadingSmall.vue';
 import InputError from '@/components/InputError.vue';
@@ -47,6 +48,12 @@ interface Category {
 }
 
 interface Props {
+    financialGovernance?: {
+        member_financial_visibility: string;
+        settings: { enabled: boolean; threshold: number; approvers: number };
+        can_configure_approvals: boolean;
+        organization: boolean;
+    };
     reminderSettings?: {
         reminder_day: number;
         follow_up_day: number;
@@ -174,6 +181,10 @@ function cancelEdit(): void {
         <Head title="Family Settings" />
 
         <div class="mx-auto w-full max-w-3xl space-y-8 p-6">
+            <FinancialGovernanceSettings
+                v-if="financialGovernance"
+                :governance="financialGovernance"
+            />
             <Heading
                 title="Family Settings"
                 description="Manage your family group settings, categories, and contribution amounts."

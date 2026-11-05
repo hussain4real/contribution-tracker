@@ -17,13 +17,14 @@ beforeEach(function () {
     $this->admin = User::factory()->admin()->create();
     $this->financialSecretary = User::factory()->financialSecretary()->create();
     $this->member = User::factory()->member()->employed()->create();
+    Family::query()->findOrFail($this->member->family_id)->update(['member_financial_visibility' => 'transactions']);
 });
 
 // =========================================================================
 // Index
 // =========================================================================
 
-it('allows any authenticated user to view fund adjustments', function () {
+it('allows members with transaction visibility to view fund adjustments', function () {
     $this->actingAs($this->member)
         ->get(route('fund-adjustments.index'))
         ->assertSuccessful()

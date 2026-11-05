@@ -10,6 +10,7 @@ use App\Models\FamilyCategory;
 use App\Models\FamilyMembership;
 use App\Models\PlatformPlan;
 use App\Models\User;
+use App\Services\FamilyFinancialVisibility;
 use App\Services\GitHubReleaseService;
 use App\Support\PlatformPlanCatalog;
 use Illuminate\Foundation\Inspiring;
@@ -46,8 +47,8 @@ class HandleInertiaRequests extends Middleware
 
         if ($user instanceof User) {
             $user->loadMissing([
-                'currentFamily:id,name,slug,currency,due_day,bank_name,bank_code,account_name,account_number,platform_plan_id,subscription_status,current_period_end',
-                'family:id,name,slug,currency,due_day,bank_name,bank_code,account_name,account_number,platform_plan_id,subscription_status,current_period_end',
+                'currentFamily:id,name,slug,currency,due_day,bank_name,bank_code,account_name,account_number,platform_plan_id,subscription_status,current_period_end,member_financial_visibility,expense_approval_settings,created_by',
+                'family:id,name,slug,currency,due_day,bank_name,bank_code,account_name,account_number,platform_plan_id,subscription_status,current_period_end,member_financial_visibility,expense_approval_settings,created_by',
                 'familyCategory:id,name,monthly_amount',
             ]);
         }
@@ -108,6 +109,8 @@ class HandleInertiaRequests extends Middleware
                 'whatsapp_verified_at' => $user->whatsapp_verified_at,
             ];
             $permissions = [
+                'view_financial_transactions' => $currentFamily instanceof Family
+                    && app(FamilyFinancialVisibility::class)->transactions($user, $currentFamily),
                 'add_members' => $activeRole?->canAddMembers() ?? false,
                 'manage_members' => $activeRole?->canManageMembers() ?? false,
                 'record_payments' => $activeRole?->canRecordPayments() ?? false,

@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreExpenseRequest;
 use App\Models\Expense;
+use App\Models\ExpenseDocument;
 use App\Models\Family;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
@@ -30,12 +31,15 @@ class ExpenseController extends Controller
 
         $expenses = Expense::query()
             ->where('family_id', $family->id)
-            ->with(['recorder', 'reversal'])
+            ->with(['recorder', 'reversal', 'documents'])
             ->latestFirst()
             ->latest('id')
             ->paginate(20)
             ->through(fn (Expense $expense) => [
                 'id' => $expense->id,
+                'documents' => $user->canRecordPayments() ? $expense->documents->where('ready', true)
+                    ->map(fn (ExpenseDocument $document): array => ['id' => $document->id, 'filename' => $document->filename])->values()->all() : [],
+                'can_upload' => $user->canRecordPayments(),
                 'amount' => $expense->amount,
                 'description' => $expense->description,
                 'spent_at' => $expense->spent_at->toDateString(),

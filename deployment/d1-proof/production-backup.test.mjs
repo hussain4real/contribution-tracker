@@ -36,11 +36,12 @@ test("retention keeps daily history then eight weeks then six additional months 
     assert.deepEqual(productionRetention(oversized, at).keep, [objects[0].key]);
 });
 
-function fixture() {
+function fixture(documentReady = null) {
     const objects = new Map();
     let reads = 0, integrity = true;
     const schema = [...Array.from({length: 40}, (_, i) => ({type: "table", name: "table_" + i, sql: "create table table_" + i + "(id integer)"})),
         {type: "table", name: "report_artifacts", sql: "create table report_artifacts(id integer,disk text,path text)"}];
+    if (documentReady !== null) schema.push({type: "table", name: "expense_documents", sql: "create table expense_documents(id integer,disk text,path text,ready integer)"});
     const bytes = Buffer.from("private application PDF fixture");
     objects.set("private/reports/fixture.pdf", {bytes, etag: "source-etag", uploaded: at});
     const describe = (key, object) => ({key, size: object.bytes.length, etag: object.etag, uploaded: object.uploaded});
@@ -51,6 +52,7 @@ function fixture() {
         DB: {
             prepare: sql => ({sql, all: async () => { reads++; return {results: schema}; }}),
             batch: async statements => statements.map(({sql}) => {
+                if (sql.startsWith('select * from "expense_documents"')) return {results: [{id: 1, disk: "local", path: "expense-documents/fixture.pdf", ready: documentReady}]};
                 if (sql.startsWith('select * from "report_artifacts"')) return {results: [{id: 1, disk: "local", path: "reports/fixture.pdf"}]};
                 if (sql.startsWith("select *")) return {results: [{id: 1}]};
                 if (sql.includes("sqlite_sequence")) return {results: [{name: "report_artifacts", seq: 1}]};
@@ -142,4 +144,27 @@ test("backup creation refuses the staging database or disabled preparation", asy
     await assert.rejects(() => createProductionBackup(f.env, at));
     f.env.BACKUPS_ENABLED = "true"; f.env.DATABASE_NAME = "familyfunds-d1-web-staging";
     await assert.rejects(() => createProductionBackup(f.env, at));
+});
+
+test("ready private expense documents must be present in a successful backup", async () => {
+    const f = fixture(1);
+    await assert.rejects(() => createProductionBackup(f.env, at), /missing/);
+    assert.ok(![...f.objects.keys()].some(key => key.startsWith(BACKUP_PREFIX + "d1/")));
+});
+
+test("pending private expense documents do not require an unfinished upload", async () => {
+    const f = fixture(0);
+    const result = await createProductionBackup(f.env, at);
+    assert.equal(result.status, "created");
+});
+
+test("ready private expense document bytes are captured with their database record", async () => {
+    const f = fixture(1);
+    f.appObjects.set("private/expense-documents/fixture.pdf", {bytes: Buffer.from("private expense evidence"), etag: "expense-etag", uploaded: at});
+    const result = await createProductionBackup(f.env, at);
+    assert.equal(result.files, 2);
+    const snapshot = await openProductionBackup(JSON.parse(f.objects.get(result.key).bytes.toString()), secret);
+    const captured = JSON.parse(Buffer.from(snapshot).toString());
+    assert.equal(captured.tables.expense_documents[0].ready, 1);
+    assert.ok(captured.files.some(file => file.path === "private/expense-documents/fixture.pdf"));
 });

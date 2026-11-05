@@ -8,6 +8,7 @@ use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
+use App\Services\FamilyFinancialVisibility;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
@@ -47,6 +48,10 @@ class GetContributionSummary implements Tool
                     ->whereNull('family_members.archived_at');
             });
 
+        if (! app(FamilyFinancialVisibility::class)->totals($this->user, $family)) {
+            $query->where('user_id', $this->user->id);
+        }
+
         if ($month !== null) {
             $query->where('month', $month);
         }
@@ -59,7 +64,8 @@ class GetContributionSummary implements Tool
         );
         $outstanding = $totalExpected - $totalPaid;
 
-        $memberBreakdown = $contributions->groupBy('user_id')->map(function ($userContributions): array {
+        $visibleContributions = $this->user->canViewAllMembers() ? $contributions : $contributions->where('user_id', $this->user->id);
+        $memberBreakdown = $visibleContributions->groupBy('user_id')->map(function ($userContributions): array {
             $firstContribution = $userContributions->first();
             $user = $firstContribution instanceof Contribution ? $firstContribution->user : null;
             $expected = (int) $userContributions->sum(fn (Contribution $contribution): int => $contribution->expected_amount);

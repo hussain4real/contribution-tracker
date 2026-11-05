@@ -13,10 +13,13 @@ use App\Http\Controllers\ContributionWebPushReminderController;
 use App\Http\Controllers\ContributionWhatsAppReminderController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExpenseController;
+use App\Http\Controllers\ExpenseDocumentController;
+use App\Http\Controllers\ExpenseRequestController;
 use App\Http\Controllers\ExpenseReversalController;
 use App\Http\Controllers\FamilyActivityController;
 use App\Http\Controllers\FamilyArchiveController;
 use App\Http\Controllers\FamilySettingsController;
+use App\Http\Controllers\FinancialGovernanceSettingsController;
 use App\Http\Controllers\FundAdjustmentController;
 use App\Http\Controllers\FundAdjustmentReversalController;
 use App\Http\Controllers\InvitationController;
@@ -222,6 +225,14 @@ Route::prefix('{current_family}')
         Route::post('subscription/cancel', [SubscriptionController::class, 'cancel'])->name('subscription.cancel');
 
         // Expenses
+        Route::post('expense-documents', [ExpenseDocumentController::class, 'store'])->name('expense-documents.store');
+        Route::get('expense-documents/{expense_document}/download', [ExpenseDocumentController::class, 'download'])->name('expense-documents.download');
+        Route::get('expense-requests', [ExpenseRequestController::class, 'index'])->name('expense-requests.index');
+        Route::post('expense-requests', [ExpenseRequestController::class, 'store'])->name('expense-requests.store');
+        Route::post('expense-requests/{expense_request}/decision', [ExpenseRequestController::class, 'decide'])->name('expense-requests.decide');
+        Route::post('expense-requests/{expense_request}/pay', [ExpenseRequestController::class, 'pay'])->name('expense-requests.pay');
+        Route::put('financial-governance', [FinancialGovernanceSettingsController::class, 'update'])->name('financial-governance.update');
+
         Route::get('expenses', [ExpenseController::class, 'index'])->name('expenses.index');
         Route::get('expenses/create', [ExpenseController::class, 'create'])->name('expenses.create');
         Route::post('expenses', [ExpenseController::class, 'store'])->name('expenses.store')

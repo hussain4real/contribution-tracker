@@ -7,6 +7,7 @@ namespace App\Ai\Tools;
 use App\Models\Expense;
 use App\Models\Family;
 use App\Models\User;
+use App\Services\FamilyFinancialVisibility;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Carbon;
 use Laravel\Ai\Contracts\Tool;
@@ -33,6 +34,10 @@ class GetExpenseSummary implements Tool
 
         if (! $family instanceof Family) {
             return json_encode(['error' => 'User is not associated with a family.'], JSON_THROW_ON_ERROR);
+        }
+
+        if (! app(FamilyFinancialVisibility::class)->transactions($this->user, $family)) {
+            return json_encode(['error' => 'The family has restricted access to expense details.'], JSON_THROW_ON_ERROR);
         }
 
         $startDate = $this->stringFromRequest($request['start_date'] ?? null, now()->startOfMonth()->toDateString());

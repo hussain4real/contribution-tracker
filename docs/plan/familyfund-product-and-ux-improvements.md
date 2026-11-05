@@ -47,7 +47,9 @@ Make it easier for members to understand and pay their contributions, and for fa
 
 ## Phase 2 — Dashboard clarity and trust
 
-Phase 2 is in progress. The first implementation adds monthly money movement with links to its transactions and an officer activity history. Family-controlled member visibility, expense requests, approval rules and private supporting documents remain pending.
+Phase 2 implementation is in review. It includes monthly money movement, an activity history, configurable member visibility, expense requests with independent approvals, and private supporting documents. Release requires verification of the additive database migrations before deployment.
+
+Member visibility defaults to family totals. Admins can select personal records only or opt members into transaction history. Private supporting documents are restricted to family officers. Organization owners can enable an approval threshold and distinct approver count. Requests retain their required approvals, and payment checks the stronger of the captured and current rules.
 
 ### 5. Actionable family dashboard
 

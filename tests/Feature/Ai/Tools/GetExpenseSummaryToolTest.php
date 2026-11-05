@@ -9,7 +9,7 @@ use App\Models\User;
 use Laravel\Ai\Tools\Request;
 
 beforeEach(function () {
-    $this->family = Family::factory()->create();
+    $this->family = Family::factory()->create(['member_financial_visibility' => 'transactions']);
     $this->user = User::factory()->create(['family_id' => $this->family->id]);
 });
 

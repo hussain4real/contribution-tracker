@@ -6,10 +6,12 @@ namespace App\Http\Controllers;
 
 use App\Enums\PaymentStatus;
 use App\Models\Contribution;
+use App\Models\ExpenseRequest;
 use App\Models\Family;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\FamilyFinancialOverview;
+use App\Services\FamilyFinancialVisibility;
 use App\Support\EffectiveLedger;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -70,16 +72,26 @@ class DashboardController extends Controller
             'fund_balance' => $this->calculateFundBalance($family->id),
         ];
 
+        $visibility = app(FamilyFinancialVisibility::class);
+        if (! $visibility->totals($user, $family)) {
+            unset($props['fund_balance']);
+        }
+        $props['can_view_financial_activity'] = $visibility->transactions($user, $family);
+
         if ($canSeeAllMembers) {
             // Admin/Financial Secretary view
             $props['financial_overview'] = $this->financialOverview->forMonth($family->id, now()->startOfMonth());
+            $props['expense_requests_pending'] = ExpenseRequest::query()->where('family_id', $family->id)
+                ->whereIn('status', ['submitted', 'approved'])->whereDoesntHave('expense')->count();
             $props['summary'] = $this->calculateSummary($family, $currentMonthContributions, $allContributions);
             $props['member_statuses'] = $this->getMemberStatuses($currentMonthContributions, $allContributions);
             $props['recent_payments'] = $this->getRecentPayments($family, $allContributions);
             $props['overdue_members'] = Inertia::optional(fn (): array => $this->getOverdueMembers($allContributions));
         } else {
             // Member view (FR-015, FR-016)
-            $props['family_aggregate'] = $this->calculateFamilyAggregate($currentMonthContributions);
+            if ($visibility->totals($user, $family)) {
+                $props['family_aggregate'] = $this->calculateFamilyAggregate($currentMonthContributions);
+            }
             $props['personal'] = $this->getPersonalStatus($user, $family, $currentYear, $currentMonth);
         }
 

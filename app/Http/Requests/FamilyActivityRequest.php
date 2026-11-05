@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Models\Family;
 use App\Models\User;
+use App\Services\FamilyFinancialVisibility;
 use Illuminate\Foundation\Http\FormRequest;
 
 class FamilyActivityRequest extends FormRequest
@@ -13,7 +15,10 @@ class FamilyActivityRequest extends FormRequest
     {
         $user = $this->user();
 
-        return $user instanceof User && $user->canViewAllMembers();
+        $family = $user instanceof User ? ($user->currentFamily ?? $user->family) : null;
+
+        return $user instanceof User && $family instanceof Family
+            && app(FamilyFinancialVisibility::class)->transactions($user, $family);
     }
 
     /** @return array<string, list<string>> */

@@ -42,6 +42,7 @@ class GetMemberOverview implements Tool
             ->join('users', 'users.id', '=', 'family_members.user_id')
             ->orderBy('users.name')
             ->select('family_members.*')
+            ->when(! $this->user->canViewAllMembers(), fn ($query) => $query->where('family_members.user_id', $this->user->id))
             ->get();
 
         $currentContributions = Contribution::query()
