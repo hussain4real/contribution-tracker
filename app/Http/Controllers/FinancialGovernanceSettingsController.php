@@ -38,7 +38,7 @@ class FinancialGovernanceSettingsController extends Controller
             }
             $locked->update(['member_financial_visibility' => $request->string('member_financial_visibility')->toString(), 'expense_approval_settings' => $changed ? $settings : $locked->expense_approval_settings]);
             app(AuditEventRecorder::class)->record($locked, 'family.financial_settings_updated', $family->id, $user->id, before: $before, after: ['member_financial_visibility' => $locked->member_financial_visibility, 'expense_approval_settings' => $locked->expense_approval_settings]);
-        }, 3);
+        });
 
         return back()->with('success', 'Financial visibility and approval settings saved.');
     }

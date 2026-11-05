@@ -97,7 +97,7 @@ class ExpenseRequestController extends Controller
                 'idempotency_key' => $key,
             ]);
             app(AuditEventRecorder::class)->record($new, 'expense_request.submitted', $family->id);
-        }, 3);
+        });
 
         return back()->with('success', 'Expense request submitted. The family balance changes only when payment is recorded.');
     }

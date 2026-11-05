@@ -65,7 +65,7 @@ class ExpenseDocumentController extends Controller
                 'filename' => Str::limit($filename, 200, ''),
                 'mime_type' => $mime, 'size' => $file->getSize(), 'sha256' => $hash, 'ready' => false,
             ]);
-        }, 3);
+        });
         if (! $document->ready) {
             if (! Storage::disk($document->disk)->put($document->path, $bytes, ['visibility' => 'private'])) {
                 throw ValidationException::withMessages(['document' => 'The document could not be stored. Retry this upload.']);
@@ -82,7 +82,7 @@ class ExpenseDocumentController extends Controller
                     $locked->update(['ready' => true]);
                     app(AuditEventRecorder::class)->record($locked, 'expense_document.added', $locked->family_id, $user->id);
                 }
-            }, 3);
+            });
         }
 
         return back()->with('success', 'Private supporting document uploaded.');

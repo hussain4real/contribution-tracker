@@ -102,7 +102,7 @@ class ExpenseGovernance
             $locked->update(['status' => $decision === 'rejected' ? 'rejected'
                 : ($this->approvedCount($locked) >= $this->requiredForRequest($family, $locked) ? 'approved' : 'submitted')]);
             app(AuditEventRecorder::class)->record($approval, 'expense_request.'.$decision, $family->id, $actor->id);
-        }, 3);
+        });
     }
 
     public function pay(ExpenseRequest $request, User $actor): Expense
@@ -126,6 +126,6 @@ class ExpenseGovernance
             app(AuditEventRecorder::class)->record($locked, 'expense_request.paid', $locked->family_id, $actor->id);
 
             return $expense;
-        }, 3);
+        });
     }
 }
