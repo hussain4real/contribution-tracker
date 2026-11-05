@@ -90,9 +90,6 @@ describe('Financial and family administration flows (Browser)', function () {
 
         $key = $page->script('() => document.querySelector("[name=idempotency_key]")?.value');
         expect($key)->toBeString()->not->toBeEmpty();
-        $page->navigate(route('expenses.create'))->assertSee('Record Expense');
-        expect($page->script('() => document.querySelector("[name=idempotency_key]")?.value'))->toBe($key);
-
         fillBrowserFieldWithoutChange($page, '[name="amount"]', '1250');
         fillBrowserFieldWithoutChange($page, 'input[name="description"]', 'Browser workflow transport');
         fillBrowserFieldWithoutChange($page, '[name="spent_at"]', now()->format('Y-m-d'));
@@ -106,7 +103,19 @@ describe('Financial and family administration flows (Browser)', function () {
             ->where('recorded_by', $this->financialSecretary->id)
             ->where('description', 'Browser workflow transport')
             ->exists())->toBeTrue();
-        expect($page->script('() => Object.keys(sessionStorage).filter((key) => key.startsWith("familyfund:expense-")).length'))->toBe(0);
+        $page->back()->assertSee('Record Expense');
+        expect($page->script('() => document.querySelector("[name=idempotency_key]")?.value'))
+            ->toBeString()->not->toBeEmpty()->not->toBe($key);
+
+        fillBrowserFieldWithoutChange($page, '[name="amount"]', '1250');
+        fillBrowserFieldWithoutChange($page, 'input[name="description"]', 'Browser workflow transport');
+        fillBrowserFieldWithoutChange($page, '[name="spent_at"]', now()->format('Y-m-d'));
+        $page->click('button[type="submit"]')
+            ->assertSee('Browser workflow transport')
+            ->assertNoJavaScriptErrors();
+
+        expect(Expense::query()->where('family_id', $this->family->id)
+            ->where('description', 'Browser workflow transport')->count())->toBe(2);
     });
 
     it('keeps an uncertain financial request key and warning after reload', function (string $kind, bool $committed): void {

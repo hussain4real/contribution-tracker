@@ -64,15 +64,6 @@ export function useFinancialRequestKey(
         storageReady.value = saveRequestKey(unconfirmed.value);
     }
 
-    function complete(): void {
-        unconfirmed.value = false;
-        try {
-            sessionStorage.removeItem(storageKey);
-        } catch {
-            storageReady.value = false;
-        }
-    }
-
     function renew(): void {
         requestKey.value = crypto.randomUUID();
         unconfirmed.value = false;
@@ -105,7 +96,6 @@ export function useFinancialRequestKey(
         options,
         begin,
         rejected,
-        complete,
         renew,
         startNew,
     };

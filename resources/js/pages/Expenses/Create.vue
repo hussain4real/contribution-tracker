@@ -24,7 +24,7 @@ const {
     options: expenseOptions,
     begin,
     rejected,
-    complete,
+    renew,
     startNew,
 } = useFinancialRequestKey(
     props.idempotencyKey,
@@ -64,7 +64,7 @@ const { currency } = useCurrencyFormatter();
                 :options="expenseOptions"
                 :on-before="begin"
                 @error="rejected"
-                @success="complete"
+                @success="renew"
                 class="space-y-6"
                 #default="{
                     errors,
