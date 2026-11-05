@@ -276,6 +276,7 @@ function date(value: string) {
                             v-if="can_manage"
                             variant="outline"
                             size="sm"
+                            :aria-label="`Edit goal ${goal.name}`"
                             @click="start(goal)"
                             >Edit<span class="sr-only">
                                 {{ goal.name }}</span
@@ -285,6 +286,7 @@ function date(value: string) {
                             variant="ghost"
                             size="sm"
                             :disabled="archiving === goal.id"
+                            :aria-label="`${goal.status === 'archived' ? 'Restore' : 'Archive'} goal ${goal.name}`"
                             @click="setArchived(goal)"
                             >{{
                                 goal.status === 'archived'

@@ -36,11 +36,11 @@ it('creates edits traces and archives a visual goal on a narrow screen', functio
         ->assertSee('Education reserve target')->assertNoJavaScriptErrors();
     expect(FamilyGoal::sole()->target_amount)->toBe(5000);
     $page->click('View supporting entries')->assertSee('Goal source expense')->assertSee('Family financial activity');
-    $page->navigate(route('family.goals.index'))->click('Edit Education reserve target')
+    $page->navigate(route('family.goals.index'))->click('[aria-label="Edit goal Education reserve target"]')
         ->fill('#goal-name', 'School target')->click('Save changes')->assertSee('School target');
-    $page->click('Archive School target')->assertDontSee('School target')
+    $page->click('[aria-label="Archive goal School target"]')->assertDontSee('School target')
         ->click('Include archived goals')->assertSee('School target')
-        ->click('Restore School target')->assertSee('School target')->assertNoJavaScriptErrors();
+        ->click('[aria-label="Restore goal School target"]')->assertSee('School target')->assertNoJavaScriptErrors();
     expect(FamilyGoal::sole()->archived_at)->toBeNull()->and(Payment::count())->toBe(0)->and(Expense::count())->toBe(1);
 });
 
@@ -53,8 +53,8 @@ it('prefills an AI expense draft and records it only after a human submits the f
         ->assertValue('#amount', '750')->assertValue('#description', 'Human reviewed AI draft')
         ->assertNoJavaScriptErrors();
     expect(Expense::count())->toBe(0);
-    $page->click('Record Expense')->assertSee('Human reviewed AI draft')->assertNoJavaScriptErrors();
+    $page->click('button[type="submit"]')->assertSee('Human reviewed AI draft')->assertNoJavaScriptErrors();
     expect(Expense::count())->toBe(1);
-    $page->navigate($draft['review_url'])->click('Record Expense')->assertSee('Human reviewed AI draft');
+    $page->navigate($draft['review_url'])->click('button[type="submit"]')->assertSee('Human reviewed AI draft');
     expect(Expense::count())->toBe(1);
 });

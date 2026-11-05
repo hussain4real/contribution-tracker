@@ -10,6 +10,7 @@ use App\Models\FamilyMembership;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\PaymentAllocationService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Laravel\Ai\Tools\Request;
 
@@ -63,3 +64,21 @@ it('rejects invalid and ambiguous reporting periods', function () {
     $member = User::factory()->member()->create();
     (new GetMyOutstanding($member))->handle(new Request(['month' => 2]));
 })->throws(ValidationException::class);
+
+it('loads a long personal history without querying payments for each contribution', function () {
+    $member = User::factory()->member()->create();
+    foreach (range(2021, 2025) as $year) {
+        foreach (range(1, 12) as $month) {
+            Contribution::factory()->forUser($member)->create(['year' => $year, 'month' => $month, 'expected_amount' => 4000]);
+        }
+    }
+    $member->load('family');
+    DB::enableQueryLog();
+    DB::flushQueryLog();
+    $result = decodeToolResult((new GetMyOutstanding($member))->handle(new Request));
+    $queries = DB::getQueryLog();
+    DB::disableQueryLog();
+    expect($result['outstanding'])->toBe(240000)->and($result['unpaid_count'])->toBe(60)
+        ->and($result['entries_truncated'])->toBeTrue()->and($result['contributions'])->toHaveCount(50)
+        ->and(count($queries))->toBeLessThanOrEqual(3);
+});

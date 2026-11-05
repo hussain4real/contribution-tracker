@@ -76,7 +76,7 @@ Member visibility defaults to family totals. Admins can select personal records 
 
 ## Phase 3 — Engagement and growth
 
-Implementation is under local verification on `codex/phase3-engagement`; staging and production acceptance remain separate release gates. One additive migration introduces visual goals. Existing accepted deployment fingerprints remain unchanged until the new migration is verified for each target.
+Implementation is in draft [PR #318](https://github.com/hussain4real/contribution-tracker/pull/318) on `codex/phase3-engagement`. Local goal/setup/AI browser journeys, focused regressions, and synthetic production D1 adapter checks pass; hosted checks are being completed. Staging and production acceptance remain separate release gates. One additive migration introduces visual goals. Existing accepted deployment fingerprints remain unchanged until the new migration is verified for each target.
 
 The initial accounting model is a **visual target within the shared fund**. It does not reserve or transfer money. Each goal starts at zero on its start date. Contributions received counts effective payment amounts; net savings counts effective payments plus fund adjustments minus expenses. Entry dates must fall between the start date and deadline, through today. Reversals remove the original entries from progress. Progress can be negative or exceed the target; only the progress bar is clamped to 0–100%. Overlapping goals can use the same entries and must not be added together as separate balances. Supporting links open the matching ledger range. Personal-only visibility hides family goals; summary visibility allows goal totals; transaction visibility allows source entries. Admins manage goals and edits/archive changes retain audit events.
 

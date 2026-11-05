@@ -35,9 +35,9 @@ class GetMyOutstanding implements Tool
             ->when($year !== null, fn ($query) => $query->where('year', $year))
             ->when($month !== null, fn ($query) => $query->where('month', $month))
             ->withSum('payments as paid_amount', 'amount')->orderBy('due_date')->orderBy('id')->get();
-        $unpaid = $contributions->filter(fn (Contribution $contribution): bool => $contribution->balance > 0);
-        $outstanding = (int) $unpaid->sum(fn (Contribution $contribution): int => $contribution->balance);
-        $overdue = (int) $unpaid->filter(fn (Contribution $contribution): bool => $contribution->due_date->lt(today()))->sum(fn (Contribution $contribution): int => $contribution->balance);
+        $unpaid = $contributions->filter(fn (Contribution $contribution): bool => $this->outstanding($contribution) > 0);
+        $outstanding = (int) $unpaid->sum(fn (Contribution $contribution): int => $this->outstanding($contribution));
+        $overdue = (int) $unpaid->filter(fn (Contribution $contribution): bool => $contribution->due_date->lt(today()))->sum(fn (Contribution $contribution): int => $this->outstanding($contribution));
 
         return json_encode([
             'as_of' => now()->toIso8601String(), 'currency' => $family->currency, 'scope' => 'personal',
@@ -47,10 +47,15 @@ class GetMyOutstanding implements Tool
             'source_url' => route('contributions.my', ['current_family' => $family->slug]),
             'contributions' => $unpaid->take(50)->map(fn (Contribution $contribution): array => [
                 'period' => $contribution->period_label, 'due_date' => $contribution->due_date->toDateString(),
-                'expected' => $contribution->expected_amount, 'paid' => $contribution->total_paid, 'outstanding' => $contribution->balance,
+                'expected' => $contribution->expected_amount, 'paid' => (int) ($contribution->paid_amount ?? 0), 'outstanding' => $this->outstanding($contribution),
                 'source_url' => route('contributions.show', ['current_family' => $family->slug, 'contribution' => $contribution->id]),
             ])->values()->all(),
         ], JSON_THROW_ON_ERROR);
+    }
+
+    private function outstanding(Contribution $contribution): int
+    {
+        return max(0, $contribution->expected_amount - (int) ($contribution->paid_amount ?? 0));
     }
 
     public function schema(JsonSchema $schema): array
