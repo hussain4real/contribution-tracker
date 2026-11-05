@@ -160,11 +160,11 @@ def rollout_image(path, image):
     })
 
 
-def validate():
-    if migration_fingerprint() != CONFIG['accepted_migrations_sha256']:
+def validate(target):
+    if migration_fingerprint() != CONFIG[target]['accepted_migrations_sha256']:
         raise RuntimeError('Database migrations differ from the accepted D1 schema. Review and verify the D1 migration before updating its accepted fingerprint; CI never migrates or restores production data.')
-    for target in ['production', 'staging']:
-        for worker in [CONFIG[target]] + CONFIG[target]['companions']:
+    for environment in ['production', 'staging']:
+        for worker in [CONFIG[environment]] + CONFIG[environment]['companions']:
             modules(worker['entry'])
     return {'accepted_schema': True, 'runtime_modules_readable': True}
 
@@ -189,7 +189,7 @@ def checked_bindings(worker, settings):
 
 def publish(target, directory):
     refresh_bootstrap_assets()
-    validate()
+    validate(target)
     release = json.loads((directory / 'release.json').read_text())
     revision = os.environ.get('GITHUB_SHA', '')
     if not re.fullmatch(r'[a-f0-9]{40}', revision) or release['revision'] != revision or release['target'] != target:
@@ -322,13 +322,13 @@ def publish(target, directory):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('operation', choices=['validate', 'prepare', 'publish'])
-    parser.add_argument('--target', choices=['production', 'staging'])
+    parser.add_argument('--target', required=True, choices=['production', 'staging'])
     parser.add_argument('--artifact', type=Path)
     args = parser.parse_args()
     if args.operation in ['validate', 'prepare']:
         if args.operation == 'prepare':
             refresh_bootstrap_assets()
-        print(json.dumps(validate()))
+        print(json.dumps(validate(args.target)))
     elif args.target and args.artifact:
         publish(args.target, args.artifact)
     else:

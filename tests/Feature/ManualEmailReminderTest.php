@@ -58,7 +58,8 @@ describe('Manual email contribution reminder', function () {
 
         $this->actingAs($admin)
             ->post("/contributions/{$contribution->id}/email-reminder")
-            ->assertRedirect();
+            ->assertRedirect()
+            ->assertSessionHas('success', "Email reminder queued for {$member->name}.");
 
         Notification::assertSentTo(
             $member,

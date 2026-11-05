@@ -31,6 +31,7 @@ class StoreFundAdjustmentRequest extends FormRequest
             'amount' => ['required', 'integer', 'not_in:0'],
             'description' => ['required', 'string', 'max:1000'],
             'recorded_at' => ['required', 'date'],
+            'idempotency_key' => ['required', 'uuid'],
         ];
     }
 

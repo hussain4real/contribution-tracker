@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useFinancialRequestKey } from '@/composables/useFinancialRequestKey';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useCurrencyFormatter } from '@/lib/currency';
 import { type BreadcrumbItem } from '@/types';
@@ -46,9 +47,26 @@ interface PaginatedAdjustments {
 interface Props {
     adjustments?: PaginatedAdjustments;
     can_create?: boolean;
+    idempotencyKey: string;
+    idempotencyScope: string;
 }
 
-defineProps<Props>();
+const props = defineProps<Props>();
+const {
+    requestKey,
+    unconfirmed,
+    storageReady,
+    storageError,
+    options: adjustmentOptions,
+    begin,
+    rejected,
+    renew,
+    startNew,
+} = useFinancialRequestKey(
+    props.idempotencyKey,
+    props.idempotencyScope,
+    'adjustment',
+);
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -113,6 +131,7 @@ function reverseAdjustment(): void {
 }
 
 function resetForm(): void {
+    renew();
     amount.value = '';
     description.value = '';
     recordedAt.value = new Date().toISOString().split('T')[0];
@@ -170,10 +189,39 @@ function resetForm(): void {
 
                 <Form
                     :action="store()"
+                    :options="adjustmentOptions"
+                    :on-before="begin"
+                    @error="rejected"
                     class="mt-4 space-y-4"
-                    #default="{ errors, validate, processing }"
+                    #default="{ errors, validate, processing, clearErrors }"
                     @success="resetForm"
                 >
+                    <input
+                        type="hidden"
+                        name="idempotency_key"
+                        :value="requestKey"
+                    />
+                    <p v-if="storageError" role="alert">{{ storageError }}</p>
+                    <p v-if="unconfirmed" role="alert">
+                        We could not confirm whether the adjustment was
+                        recorded. Retry with the same details, or check the
+                        adjustment list before starting a new adjustment.
+                    </p>
+                    <div
+                        v-if="unconfirmed || errors.idempotency_key"
+                        role="alert"
+                    >
+                        <InputError :message="errors.idempotency_key" />
+                        <Button
+                            type="button"
+                            variant="outline"
+                            :disabled="processing"
+                            @click="
+                                if (startNew()) clearErrors('idempotency_key');
+                            "
+                            >Start a new adjustment</Button
+                        >
+                    </div>
                     <div class="grid gap-4 sm:grid-cols-2">
                         <div class="grid gap-2">
                             <Label for="amount">Amount ({{ currency }})</Label>
@@ -218,7 +266,10 @@ function resetForm(): void {
                     </div>
 
                     <div class="flex items-center gap-4">
-                        <Button type="submit" :disabled="processing">
+                        <Button
+                            type="submit"
+                            :disabled="processing || !storageReady"
+                        >
                             {{
                                 processing
                                     ? 'Recording...'
