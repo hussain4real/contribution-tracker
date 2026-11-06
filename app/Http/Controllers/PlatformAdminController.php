@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\User;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\Response;
 
 class PlatformAdminController extends Controller
 {
-    public function stopImpersonating(Request $request): RedirectResponse
+    public function stopImpersonating(Request $request): Response
     {
         $originalUserId = $request->session()->pull('impersonating_from');
 
@@ -24,6 +25,6 @@ class PlatformAdminController extends Controller
 
         auth()->login($originalUser);
 
-        return redirect('/platform')->with('success', 'Stopped impersonating.');
+        return Inertia::location(redirect()->route('filament.platform.pages.dashboard')->with('success', 'Stopped impersonating.'));
     }
 }
