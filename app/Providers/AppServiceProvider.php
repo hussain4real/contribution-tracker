@@ -11,6 +11,7 @@ use App\Http\Responses\RegisterResponse;
 use App\Http\Responses\TwoFactorLoginResponse;
 use App\Http\Responses\VerifyEmailResponse;
 use App\Models\Expense;
+use App\Models\FamilyGoal;
 use App\Models\FamilyMembership;
 use App\Models\FamilyMembershipCategoryAssignment;
 use App\Models\FinancialReversal;
@@ -72,6 +73,7 @@ class AppServiceProvider extends ServiceProvider
         Relation::morphMap([
             'expense' => Expense::class,
             'family_membership' => FamilyMembership::class,
+            'family_goal' => FamilyGoal::class,
             'family_category_assignment' => FamilyMembershipCategoryAssignment::class,
             'financial_reversal' => FinancialReversal::class,
             'fund_adjustment' => FundAdjustment::class,
@@ -112,7 +114,7 @@ class AppServiceProvider extends ServiceProvider
                 return null;
             }
 
-            if (in_array($response->statusCode(), [403, 404, 500, 503])) {
+            if (in_array($response->statusCode(), [403, 404, 410, 500, 503])) {
                 return $response->render('ErrorPage', [
                     'status' => $response->statusCode(),
                 ])->withSharedData();

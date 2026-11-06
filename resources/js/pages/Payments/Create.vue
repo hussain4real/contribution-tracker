@@ -62,6 +62,13 @@ interface Props {
     categories: Category[];
     paymentMethods: PaymentMethod[];
     idempotencyKey: string;
+    aiDraft: {
+        amount: number;
+        paid_at: string;
+        notes: string | null;
+        target_year: number | null;
+        target_month: number | null;
+    } | null;
 }
 
 const props = defineProps<Props>();
@@ -78,10 +85,16 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 // Form values
-const amount = ref<string>('');
-const selectedMonth = ref<string>('');
-const paidAt = ref<string>(new Date().toISOString().split('T')[0]);
-const notes = ref<string>('');
+const amount = ref<string>(props.aiDraft?.amount.toString() ?? '');
+const selectedMonth = ref<string>(
+    props.aiDraft?.target_year && props.aiDraft.target_month
+        ? `${props.aiDraft.target_year}-${String(props.aiDraft.target_month).padStart(2, '0')}`
+        : '',
+);
+const paidAt = ref<string>(
+    props.aiDraft?.paid_at ?? new Date().toISOString().split('T')[0],
+);
+const notes = ref<string>(props.aiDraft?.notes ?? '');
 const method = ref<string>(props.paymentMethods[0]?.value ?? 'cash');
 const reference = ref<string>('');
 const { currency, formatCurrency: formatAmount } = useCurrencyFormatter();
@@ -132,7 +145,7 @@ const paymentResponsePending = ref(false);
 let unconfirmedBeforeSubmit = false;
 const storageKey =
     page.props.family?.id && page.props.auth.user?.id
-        ? `familyfund:payment:${page.props.family.id}:${page.props.auth.user.id}:${props.member.id}`
+        ? `familyfund:payment:${page.props.family.id}:${page.props.auth.user.id}:${props.member.id}${props.aiDraft ? `:${props.idempotencyKey}` : ''}`
         : null;
 
 function saveRequestKey(unconfirmed: boolean): boolean {
@@ -208,6 +221,10 @@ function paymentRejected(): void {
 }
 
 function startNewPayment(): void {
+    if (props.aiDraft) {
+        window.location.assign(paymentsIndex().url);
+        return;
+    }
     if (
         !window.confirm(
             'Have you checked Payments for the earlier receipt? Starting a new payment can create another receipt.',
@@ -295,6 +312,14 @@ async function reviewPayment(): Promise<void> {
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="mx-auto max-w-2xl space-y-6 p-4">
+            <p
+                v-if="aiDraft"
+                role="status"
+                class="rounded-lg border bg-muted p-3 text-sm"
+            >
+                AI draft — check the member, date and amount, then review the
+                allocation before recording. Nothing has been recorded yet.
+            </p>
             <HeadingSmall
                 :title="`Record Payment for ${member.name}`"
                 :description="`${member.category_label ?? member.category ?? 'Contribution'} - ${formatted_amount}/month`"

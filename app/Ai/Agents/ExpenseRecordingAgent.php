@@ -16,7 +16,7 @@ class ExpenseRecordingAgent extends FamilySubAgent
 
     public function description(): string
     {
-        return 'Preview and record family expenses using the required confirm-first workflow.';
+        return 'Preview and record family expenses for human review in FamilyFund.';
     }
 
     /**
@@ -24,7 +24,7 @@ class ExpenseRecordingAgent extends FamilySubAgent
      */
     public function instructions(): string
     {
-        return $this->familyContext()."\n\n".$this->confirmFirstInstructions().<<<'INSTRUCTIONS'
+        return $this->familyContext()."\n\n".$this->financialDraftInstructions().<<<'INSTRUCTIONS'
 
         You are the expense recording specialist for this family fund.
         Use the expense recording tool for requests to save family spending.

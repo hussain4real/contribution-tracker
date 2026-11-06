@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\FamilyFinancialVisibility;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Validator;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 
@@ -30,11 +31,7 @@ class GetExpenseSummary implements Tool
      */
     public function handle(Request $request): string
     {
-        $family = $this->user->currentFamily ?? $this->user->family;
-
-        if ($family instanceof Family) {
-            $family = Family::query()->find($family->id);
-        }
+        $family = app(FamilyFinancialVisibility::class)->activeFamily($this->user);
 
         if (! $family instanceof Family) {
             return json_encode(['error' => 'User is not associated with a family.'], JSON_THROW_ON_ERROR);
@@ -46,6 +43,10 @@ class GetExpenseSummary implements Tool
 
         $startDate = $this->stringFromRequest($request['start_date'] ?? null, now()->startOfMonth()->toDateString());
         $endDate = $this->stringFromRequest($request['end_date'] ?? null, now()->endOfMonth()->toDateString());
+
+        Validator::make(['start_date' => $startDate, 'end_date' => $endDate], [
+            'start_date' => ['required', 'date_format:Y-m-d'], 'end_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:start_date'],
+        ])->validate();
 
         $baseQuery = Expense::query()
             ->where('family_id', $family->id)
@@ -69,6 +70,10 @@ class GetExpenseSummary implements Tool
         ])->toArray();
 
         return json_encode([
+            'as_of' => now()->toIso8601String(),
+            'currency' => $family->currency,
+            'source_url' => route('family.activity', ['current_family' => $family->slug, 'start_date' => $startDate, 'end_date' => $endDate, 'type' => 'expense']),
+            'entries_truncated' => $totalCount > $expenses->count(),
             'period' => "{$startDate} to {$endDate}",
             'total_amount' => $totalAmount,
             'expense_count' => $totalCount,

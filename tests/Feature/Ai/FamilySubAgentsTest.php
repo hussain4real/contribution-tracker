@@ -18,6 +18,7 @@ use App\Ai\Tools\GetContributionSummary;
 use App\Ai\Tools\GetExpenseSummary;
 use App\Ai\Tools\GetFundBalance;
 use App\Ai\Tools\GetMemberOverview;
+use App\Ai\Tools\GetMyOutstanding;
 use App\Ai\Tools\RecordExpense;
 use App\Ai\Tools\RecordFundAdjustment;
 use App\Ai\Tools\RecordPayment;
@@ -115,7 +116,7 @@ it('defines tool metadata, instructions, and underlying tools', function (
         'contribution_analysis',
         'contribution expectations',
         ['contribution analysis specialist', 'collection rates', 'data gaps'],
-        [GetContributionSummary::class],
+        [GetContributionSummary::class, GetMyOutstanding::class],
     ],
     'expense analysis' => [
         ExpenseAnalysisAgent::class,
@@ -142,28 +143,28 @@ it('defines tool metadata, instructions, and underlying tools', function (
         PaymentRecordingAgent::class,
         'payment_recording',
         'family member payments',
-        ['payment recording specialist', 'Confirm-first rule', 'member name and amount'],
+        ['payment recording specialist', 'Financial tools only prepare drafts', 'member name and amount'],
         [RecordPayment::class],
     ],
     'expense recording' => [
         ExpenseRecordingAgent::class,
         'expense_recording',
         'family expenses',
-        ['expense recording specialist', 'Confirm-first rule', 'amount and description'],
+        ['expense recording specialist', 'Financial tools only prepare drafts', 'amount and description'],
         [RecordExpense::class],
     ],
     'fund adjustment recording' => [
         FundAdjustmentRecordingAgent::class,
         'fund_adjustment_recording',
         'fund adjustments',
-        ['fund adjustment recording specialist', 'Confirm-first rule', 'donations, corrections, interest earned'],
+        ['fund adjustment recording specialist', 'Financial tools only prepare drafts', 'donations, corrections, interest earned'],
         [RecordFundAdjustment::class],
     ],
     'contribution generation' => [
         ContributionGenerationAgent::class,
         'contribution_generation',
         'monthly contribution records',
-        ['contribution generation specialist', 'Confirm-first rule', 'creates expected contribution entries'],
+        ['contribution generation specialist', 'Financial tools only prepare drafts', 'creates expected contribution entries'],
         [GenerateContributions::class],
     ],
     'invitation management' => [
@@ -208,7 +209,7 @@ it('can delegate a confirm-first operation request through the Laravel sub-agent
     ]));
 
     expect($tool->name())->toBe('payment_recording')
-        ->and($tool->description())->toContain('confirm-first workflow')
+        ->and($tool->description())->toContain('human review in FamilyFund')
         ->and($result)->toBe('Preview ready: record payment after confirmation.');
 
     PaymentRecordingAgent::assertPrompted(

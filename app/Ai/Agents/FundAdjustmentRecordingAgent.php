@@ -16,7 +16,7 @@ class FundAdjustmentRecordingAgent extends FamilySubAgent
 
     public function description(): string
     {
-        return 'Preview and record fund adjustments such as donations, corrections, and interest using the confirm-first workflow.';
+        return 'Preview and record fund adjustments such as donations, corrections, and interest for human review in FamilyFund.';
     }
 
     /**
@@ -24,7 +24,7 @@ class FundAdjustmentRecordingAgent extends FamilySubAgent
      */
     public function instructions(): string
     {
-        return $this->familyContext()."\n\n".$this->confirmFirstInstructions().<<<'INSTRUCTIONS'
+        return $this->familyContext()."\n\n".$this->financialDraftInstructions().<<<'INSTRUCTIONS'
 
         You are the fund adjustment recording specialist for this family fund.
         Use the fund adjustment tool for donations, corrections, interest earned, refunds, or other balance adjustments that are not member contribution payments.

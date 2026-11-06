@@ -16,7 +16,7 @@ class ContributionGenerationAgent extends FamilySubAgent
 
     public function description(): string
     {
-        return 'Preview and generate monthly contribution records for active family members using the confirm-first workflow.';
+        return 'Preview and generate monthly contribution records for active family members for human review in FamilyFund.';
     }
 
     /**
@@ -24,7 +24,7 @@ class ContributionGenerationAgent extends FamilySubAgent
      */
     public function instructions(): string
     {
-        return $this->familyContext()."\n\n".$this->confirmFirstInstructions().<<<'INSTRUCTIONS'
+        return $this->familyContext()."\n\n".$this->financialDraftInstructions().<<<'INSTRUCTIONS'
 
         You are the contribution generation specialist for this family fund.
         Use the contribution generation tool when an admin wants to create expected contribution records for a month.

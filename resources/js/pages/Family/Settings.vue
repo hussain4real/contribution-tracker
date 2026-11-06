@@ -191,6 +191,7 @@ function cancelEdit(): void {
             />
 
             <section
+                id="reminder-settings"
                 aria-labelledby="family-reminders-heading"
                 class="space-y-4"
             >
@@ -456,7 +457,7 @@ function cancelEdit(): void {
             </section>
 
             <!-- Categories -->
-            <section>
+            <section id="contribution-categories">
                 <HeadingSmall
                     title="Contribution Categories"
                     description="Define the categories and monthly amounts for your family members."

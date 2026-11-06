@@ -14,7 +14,14 @@ interface Page<T> {
     next_page_url: string | null;
 }
 const props = defineProps<{
-    overview: FinancialOverview;
+    overview: FinancialOverview | null;
+    rangeSummary: {
+        start_date: string;
+        end_date: string;
+        received: number;
+        expenses: number;
+        adjustments: number;
+    } | null;
     entries: Page<{
         id: number;
         kind: string;
@@ -29,7 +36,10 @@ const props = defineProps<{
         reason: string | null;
         date: string;
     }>;
-    filters: { period: string; type: string; search: string };
+    filters: { type: string; search: string } & (
+        | { mode: 'month'; period: string }
+        | { mode: 'range'; start_date: string; end_date: string }
+    );
 }>();
 const filters = ref({ ...props.filters });
 const loading = ref(false);
@@ -58,7 +68,7 @@ function search() {
                 class="flex flex-wrap items-end gap-3"
                 @submit.prevent="search"
             >
-                <label class="grid gap-1"
+                <label v-if="filters.mode === 'month'" class="grid gap-1"
                     >Month
                     <input
                         v-model="filters.period"
@@ -67,6 +77,28 @@ function search() {
                         class="min-h-11 rounded-md border bg-background px-3"
                     />
                 </label>
+                <template v-else>
+                    <label class="grid gap-1"
+                        >From<input
+                            v-model="filters.start_date"
+                            type="date"
+                            required
+                            class="min-h-11 rounded-md border bg-background px-3"
+                    /></label>
+                    <label class="grid gap-1"
+                        >Through<input
+                            v-model="filters.end_date"
+                            type="date"
+                            :min="filters.start_date"
+                            required
+                            class="min-h-11 rounded-md border bg-background px-3"
+                    /></label>
+                    <Link
+                        :href="index()"
+                        class="inline-flex min-h-11 items-center text-sm underline"
+                        >Monthly view</Link
+                    >
+                </template>
                 <label class="grid gap-1"
                     >Entries
                     <select
@@ -109,7 +141,68 @@ function search() {
             >
                 {{ $page.props.errors.type }}
             </p>
-            <FinancialOverviewCard :overview="overview" />
+            <p
+                v-if="
+                    $page.props.errors.start_date || $page.props.errors.end_date
+                "
+                role="alert"
+                class="text-destructive"
+            >
+                {{
+                    $page.props.errors.start_date || $page.props.errors.end_date
+                }}
+            </p>
+            <FinancialOverviewCard v-if="overview" :overview="overview" />
+            <section
+                v-if="rangeSummary"
+                class="space-y-3 rounded-xl border p-5"
+                aria-label="Date range totals"
+            >
+                <h2 class="font-semibold">
+                    {{ rangeSummary.start_date }} through
+                    {{ rangeSummary.end_date }}
+                </h2>
+                <p class="text-sm text-muted-foreground">
+                    All effective movements in this date range, excluding
+                    reversed entries.
+                </p>
+                <dl class="grid grid-cols-2 gap-4 md:grid-cols-4">
+                    <div>
+                        <dt class="text-sm text-muted-foreground">Received</dt>
+                        <dd class="font-semibold">
+                            {{ formatCurrency(rangeSummary.received) }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-sm text-muted-foreground">Expenses</dt>
+                        <dd class="font-semibold">
+                            {{ formatCurrency(rangeSummary.expenses) }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-sm text-muted-foreground">
+                            Adjustments
+                        </dt>
+                        <dd class="font-semibold">
+                            {{ formatCurrency(rangeSummary.adjustments) }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-sm text-muted-foreground">
+                            Net movement
+                        </dt>
+                        <dd class="font-semibold">
+                            {{
+                                formatCurrency(
+                                    rangeSummary.received +
+                                        rangeSummary.adjustments -
+                                        rangeSummary.expenses,
+                                )
+                            }}
+                        </dd>
+                    </div>
+                </dl>
+            </section>
             <section aria-labelledby="entries-heading" :aria-busy="loading">
                 <h2 id="entries-heading" class="mb-3 text-lg font-semibold">
                     Posted transactions

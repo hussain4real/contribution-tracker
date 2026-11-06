@@ -11,6 +11,7 @@ export interface Permissions {
     manage_members: boolean;
     record_payments: boolean;
     view_financial_transactions: boolean;
+    view_family_totals: boolean;
     generate_reports: boolean;
 }
 

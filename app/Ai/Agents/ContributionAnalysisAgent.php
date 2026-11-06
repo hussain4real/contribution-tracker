@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Ai\Agents;
 
 use App\Ai\Tools\GetContributionSummary;
+use App\Ai\Tools\GetMyOutstanding;
 use Laravel\Ai\Contracts\Tool;
 
 class ContributionAnalysisAgent extends FamilySubAgent
@@ -28,6 +29,7 @@ class ContributionAnalysisAgent extends FamilySubAgent
 
         You are the contribution analysis specialist for this family fund.
         Use contribution summary data before answering questions about expected contributions, paid amounts, outstanding balances, collection rates, overdue members, or contribution trends.
+        For the user's own outstanding contributions, use GetMyOutstanding across all years unless they specify a period.
         When the delegated task does not specify a period, use the current year and current month from the context above.
         Keep answers concise, include relevant totals, and mention data gaps instead of guessing.
         INSTRUCTIONS;
@@ -42,6 +44,7 @@ class ContributionAnalysisAgent extends FamilySubAgent
     {
         return [
             new GetContributionSummary($this->user),
+            new GetMyOutstanding($this->user),
         ];
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Enums\AiActionKind;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentSource;
 use App\Http\Requests\StorePaymentRequest;
@@ -13,6 +14,7 @@ use App\Models\Payment;
 use App\Models\PaymentBatch;
 use App\Models\PaymentReceiptDelivery;
 use App\Models\User;
+use App\Services\AiActionDrafts;
 use App\Services\PaymentAllocationPreview;
 use App\Services\PaymentAllocationService;
 use App\Support\CurrencyFormatter;
@@ -104,11 +106,13 @@ class PaymentController extends Controller
     /**
      * Show the form for recording a new payment for a member.
      */
-    public function create(User $member): Response
+    public function create(Request $request, User $member): Response
     {
         $this->authorize('create', Payment::class);
         $family = $this->currentFamilyFor($this->authUser());
         $membership = $this->membershipForMember($member, $family);
+        $draft = app(AiActionDrafts::class)->read($request, $this->authUser(), $family, AiActionKind::Payment);
+        abort_if($draft !== null && $draft['values']['member_id'] !== $member->id, 403);
         $currency = $family->currency;
 
         // Get member's pending (incomplete) contributions
@@ -150,7 +154,8 @@ class PaymentController extends Controller
                 'value' => $method->value,
                 'label' => $method->label(),
             ]),
-            'idempotencyKey' => (string) Str::uuid(),
+            'aiDraft' => $draft['values'] ?? null,
+            'idempotencyKey' => $draft['key'] ?? (string) Str::uuid(),
         ]);
     }
 
