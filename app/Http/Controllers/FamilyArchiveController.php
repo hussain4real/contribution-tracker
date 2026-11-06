@@ -61,6 +61,7 @@ class FamilyArchiveController extends Controller
             'contributions.allPayments',
             'paymentBatches.allocations',
             'expenses.documents',
+            'goals',
             'expenseRequests.approvals',
             'expenseRequests.documents',
             'fundAdjustments',

@@ -1,6 +1,8 @@
 import { index as aiIndex } from '@/actions/App/Http/Controllers/AiChatController';
 import { my as myContributions } from '@/actions/App/Http/Controllers/ContributionController';
 import { index as expensesIndex } from '@/actions/App/Http/Controllers/ExpenseController';
+import { index as goalsIndex } from '@/actions/App/Http/Controllers/FamilyGoalController';
+import { index as onboardingIndex } from '@/actions/App/Http/Controllers/FamilyOnboardingController';
 import { edit as familySettings } from '@/actions/App/Http/Controllers/FamilySettingsController';
 import { index as fundAdjustmentsIndex } from '@/actions/App/Http/Controllers/FundAdjustmentController';
 import { index as invitationsIndex } from '@/actions/App/Http/Controllers/InvitationController';
@@ -12,7 +14,7 @@ import { index as reconciliationIndex } from '@/actions/App/Http/Controllers/Rec
 import { index as reportsIndex } from '@/actions/App/Http/Controllers/ReportController';
 import { index as subscriptionIndex } from '@/actions/App/Http/Controllers/SubscriptionController';
 import { index as whatsappInboxIndex } from '@/actions/App/Http/Controllers/WhatsAppInboxController';
-import { urlIsActive } from '@/lib/utils';
+import { toUrl, urlIsActive } from '@/lib/utils';
 import { changelog, dashboard } from '@/routes';
 import { edit as editProfile } from '@/routes/profile';
 import type { NavItem } from '@/types';
@@ -34,6 +36,7 @@ import {
     Settings,
     Shield,
     Sparkles,
+    Target,
     User,
     Users,
     Wallet,
@@ -121,6 +124,17 @@ export function useAppNavigation() {
                 section: 'main',
             },
             paymentItem.value,
+            ...(page.props.auth?.can?.view_family_totals
+                ? [
+                      {
+                          title: 'Goals',
+                          href: goalsIndex(),
+                          icon: Target,
+                          component: 'Family/Goals',
+                          section: 'main' as const,
+                      },
+                  ]
+                : []),
             {
                 title: 'Notifications',
                 href: notificationsIndex(),
@@ -221,6 +235,13 @@ export function useAppNavigation() {
 
         if (isAdmin) {
             items.push({
+                title: 'Get started',
+                href: onboardingIndex(),
+                icon: Rocket,
+                component: 'Family/Onboarding',
+                section: 'Family Admin',
+            });
+            items.push({
                 title: 'Family Settings',
                 href: familySettings(),
                 icon: Settings,
@@ -289,31 +310,36 @@ export function useAppNavigation() {
         paymentItem.value,
     ]);
 
-    const moreGroups = computed<NavigationGroup[]>(() => [
-        {
-            items: [
-                primaryItems.value.find(
-                    (item) => item.title === 'Notifications',
-                ),
-                ...primaryItems.value.slice(5),
-                {
-                    title: 'Profile',
-                    href: editProfile(),
-                    icon: User,
-                    component: 'settings/Profile',
-                    section: 'Account',
-                },
-            ].filter(Boolean) as NavItem[],
-        },
-        {
-            label: 'Family Admin',
-            items: adminItems.value,
-        },
-        {
-            label: 'Super Admin',
-            items: platformItems.value,
-        },
-    ]);
+    const moreGroups = computed<NavigationGroup[]>(() => {
+        const tabUrls = new Set(
+            mobileTabs.value.map((item) => toUrl(item.href)),
+        );
+        const overflow = primaryItems.value.filter(
+            (item) => !tabUrls.has(toUrl(item.href)),
+        );
+
+        return [
+            {
+                items: [
+                    ...overflow.filter(
+                        (item) => item.badge === 'notifications',
+                    ),
+                    ...overflow.filter(
+                        (item) => item.badge !== 'notifications',
+                    ),
+                    {
+                        title: 'Profile',
+                        href: editProfile(),
+                        icon: User,
+                        component: 'settings/Profile',
+                        section: 'Account',
+                    },
+                ],
+            },
+            { label: 'Family Admin', items: adminItems.value },
+            { label: 'Super Admin', items: platformItems.value },
+        ];
+    });
 
     return {
         primaryItems,

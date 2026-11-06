@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Ai\Tools;
 
+use App\Enums\AiActionKind;
 use App\Models\Family;
 use App\Models\User;
-use Carbon\Carbon;
+use App\Services\AiActionDrafts;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Illuminate\Support\Facades\Artisan;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 
@@ -21,7 +21,7 @@ class GenerateContributions implements Tool
      */
     public function description(): string
     {
-        return 'Generates contribution records for all active family members for a given month and year. This creates the expected contribution entries that members need to pay. Only admins can use this. Always call without confirmed=true first to preview.';
+        return 'Prepares a contributions draft for human review in FamilyFund. Return the review_url to the user. This tool never posts financial records, even if asked to confirm in chat.';
     }
 
     /**
@@ -39,37 +39,16 @@ class GenerateContributions implements Tool
             return json_encode(['error' => 'User is not associated with a family.'], JSON_THROW_ON_ERROR);
         }
 
-        $year = $this->integerFromRequest($request['year'] ?? null, now()->year);
-        $month = $this->integerFromRequest($request['month'] ?? null, now()->month);
-        $confirmed = ($request['confirmed'] ?? false) === true;
-
-        $periodLabel = Carbon::createFromDate($year, $month, 1)->format('F Y');
-
-        if (! $confirmed) {
-            return json_encode([
-                'status' => 'confirmation_required',
-                'message' => "I'll generate contribution records for all active family members for {$periodLabel}. This will create expected contribution entries for each member based on their category. Please confirm to proceed.",
-                'details' => [
-                    'year' => $year,
-                    'month' => $month,
-                    'period' => $periodLabel,
-                ],
-            ], JSON_THROW_ON_ERROR);
+        if (! app(AiActionDrafts::class)->allowed($this->user, $family, AiActionKind::Contributions)) {
+            return json_encode(['error' => 'You do not have permission to prepare this action.'], JSON_THROW_ON_ERROR);
         }
 
-        Artisan::call('contributions:generate', [
-            '--year' => $year,
-            '--month' => $month,
-            '--family' => $family->id,
-        ]);
+        $year = $this->integerFromRequest($request['year'] ?? null, now()->year);
+        $month = $this->integerFromRequest($request['month'] ?? null, now()->month);
 
-        $output = trim(Artisan::output());
-
-        return json_encode([
-            'status' => 'success',
-            'message' => "Contributions have been generated for {$periodLabel}.",
-            'output' => $output,
-        ], JSON_THROW_ON_ERROR);
+        return json_encode(app(AiActionDrafts::class)->create($this->user, $family, AiActionKind::Contributions, [
+            'year' => $year, 'month' => $month,
+        ]), JSON_THROW_ON_ERROR);
     }
 
     /**
@@ -80,7 +59,6 @@ class GenerateContributions implements Tool
         return [
             'year' => $schema->integer()->min(2020)->max(2030),
             'month' => $schema->integer()->min(1)->max(12),
-            'confirmed' => $schema->boolean(),
         ];
     }
 

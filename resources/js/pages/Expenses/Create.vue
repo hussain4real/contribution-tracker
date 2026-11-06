@@ -15,6 +15,7 @@ import { ref } from 'vue';
 const props = defineProps<{
     idempotencyKey: string;
     idempotencyScope: string;
+    aiDraft: { amount: number; description: string; spent_at: string } | null;
 }>();
 const {
     requestKey,
@@ -43,9 +44,11 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-const amount = ref<string>('');
-const description = ref<string>('');
-const spentAt = ref<string>(new Date().toISOString().split('T')[0]);
+const amount = ref<string>(props.aiDraft?.amount.toString() ?? '');
+const description = ref<string>(props.aiDraft?.description ?? '');
+const spentAt = ref<string>(
+    props.aiDraft?.spent_at ?? new Date().toISOString().split('T')[0],
+);
 const { currency } = useCurrencyFormatter();
 </script>
 
@@ -54,6 +57,15 @@ const { currency } = useCurrencyFormatter();
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="mx-auto w-full max-w-2xl space-y-6 p-4">
+            <p
+                v-if="aiDraft"
+                role="status"
+                class="rounded-lg border bg-muted p-3 text-sm"
+            >
+                AI draft — review these details before recording. Nothing has
+                been recorded yet. To record another entry afterward, start from
+                the list.
+            </p>
             <HeadingSmall
                 title="Record Expense"
                 description="Record an expense from the family fund."
@@ -64,7 +76,11 @@ const { currency } = useCurrencyFormatter();
                 :options="expenseOptions"
                 :on-before="begin"
                 @error="rejected"
-                @success="renew"
+                @success="
+                    () => {
+                        if (!aiDraft) renew();
+                    }
+                "
                 class="space-y-6"
                 #default="{
                     errors,

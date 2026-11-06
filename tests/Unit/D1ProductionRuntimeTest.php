@@ -7,18 +7,24 @@ use App\Enums\TransactionType;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\ExpenseDocumentController;
 use App\Http\Controllers\ExpenseRequestController;
+use App\Http\Controllers\FamilyGoalController;
 use App\Http\Controllers\FinancialGovernanceSettingsController;
 use App\Http\Controllers\FundAdjustmentController;
+use App\Http\Requests\ArchiveFamilyGoalRequest;
 use App\Http\Requests\StoreExpenseApprovalRequest;
 use App\Http\Requests\StoreExpenseDocumentRequest;
 use App\Http\Requests\StoreExpenseRequest;
+use App\Http\Requests\StoreFamilyGoalRequest;
 use App\Http\Requests\StoreFundAdjustmentRequest;
+use App\Http\Requests\UpdateFamilyGoalRequest;
 use App\Http\Requests\UpdateFinancialGovernanceRequest;
 use App\Jobs\ProcessWhatsAppWebhook;
 use App\Models\Contribution;
+use App\Models\Expense;
 use App\Models\ExpenseDocument;
 use App\Models\ExpenseRequest;
 use App\Models\Family;
+use App\Models\FamilyGoal;
 use App\Models\FamilyMembership;
 use App\Models\Payment;
 use App\Models\PaystackTransaction;
@@ -26,6 +32,7 @@ use App\Models\PlatformPlan;
 use App\Models\User;
 use App\Notifications\ContributionReminderNotification;
 use App\Services\ExpenseGovernance;
+use App\Services\FamilyGoalProgress;
 use App\Services\PaymentAllocationPreview;
 use App\Services\PaymentAllocationService;
 use App\Services\PaystackContributionSettlementService;
@@ -290,6 +297,32 @@ it('records approval settings requests decisions payments and private documents 
         ->and($document->ready)->toBeTrue()
         ->and(Family::query()->findOrFail($family->id)->member_financial_visibility)->toBe('personal')
         ->and(app(ExpenseDocumentController::class)->download($document)->getStatusCode())->toBe(200);
+});
+
+it('creates traces edits and archives visual goals through the production D1 adapter', function (): void {
+    config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
+    DB::purge('sqlite');
+    $this->artisan('migrate', ['--database' => 'sqlite', '--force' => true, '--no-interaction' => true])->assertSuccessful();
+    $family = Family::factory()->create();
+    $owner = User::factory()->admin()->create(['family_id' => $family->id]);
+    Expense::factory()->recordedBy($owner)->create(['amount' => 250, 'spent_at' => today()]);
+    $pdo = DB::connection('sqlite')->getPdo();
+    connectProductionRuntimeFixture($pdo);
+    app('url')->defaults(['current_family' => $family->slug]);
+    $this->actingAs($owner);
+    $data = ['name' => 'D1 visual target', 'measure' => 'net_savings', 'target_amount' => 1000,
+        'starts_on' => today()->toDateString(), 'deadline' => now()->endOfMonth()->toDateString(), 'idempotency_key' => (string) Str::uuid()];
+    $controller = app(FamilyGoalController::class);
+    $controller->store(StoreFamilyGoalRequest::create('/', 'POST', $data));
+    $controller->store(StoreFamilyGoalRequest::create('/', 'POST', $data));
+    $goal = FamilyGoal::sole();
+    $progress = app(FamilyGoalProgress::class);
+    expect($progress->present($progress->query($family)->sole(), $family, true)['progress'])->toBe(-250)
+        ->and(productionPaymentSqlValue($pdo, 'select count(*) from family_goals'))->toBe(1)
+        ->and(productionPaymentSqlValue($pdo, "select count(*) from audit_events where action='family.goal_created'"))->toBe(1);
+    $controller->update(UpdateFamilyGoalRequest::create('/', 'PUT', [...$data, 'target_amount' => 2000]), $goal);
+    $controller->archive(ArchiveFamilyGoalRequest::create('/', 'PATCH', ['archived' => true]), $goal);
+    expect($goal->fresh()?->target_amount)->toBe(2000)->and($goal->fresh()?->archived_at)->not->toBeNull();
 });
 
 it('settles charged contributions and provider fees once through the production runtime with approvals enabled', function (): void {

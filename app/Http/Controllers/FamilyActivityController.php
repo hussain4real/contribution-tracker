@@ -24,6 +24,11 @@ class FamilyActivityController extends Controller
         $period = $request->string('period')->toString() ?: now()->format('Y-m');
         $start = Carbon::parse($period.'-01')->startOfDay();
         $end = $start->copy()->addMonth()->toDateString();
+        $range = $request->filled('start_date');
+        if ($range) {
+            $start = Carbon::parse($request->string('start_date')->toString())->startOfDay();
+            $end = Carbon::parse($request->string('end_date')->toString())->addDay()->toDateString();
+        }
         $type = $request->string('type')->toString() ?: 'all';
         $search = $request->string('search')->toString();
         $payments = $ledger->paymentsForFamily($family->id)
@@ -35,7 +40,7 @@ class FamilyActivityController extends Controller
         $adjustments = $ledger->adjustmentsForFamily($family->id)
             ->where('recorded_at', '>=', $start->toDateString())->where('recorded_at', '<', $end)
             ->selectRaw("id, 'adjustment' as kind, recorded_at as date, amount, description");
-        $records = DB::query()->fromSub($payments->toBase()->unionAll($expenses->toBase())->unionAll($adjustments->toBase()), 'entries')
+        $records = DB::query()->fromSub((clone $payments)->toBase()->unionAll($expenses->toBase())->unionAll($adjustments->toBase()), 'entries')
             ->when($type !== 'all', fn ($query) => $query->where('kind', $type))
             ->when($search !== '', fn ($query) => $query->where('description', 'like', '%'.$search.'%'))
             ->orderByDesc('date')->orderBy('kind')->orderByDesc('id')
@@ -53,11 +58,24 @@ class FamilyActivityController extends Controller
                     && is_string($event->after['reason'] ?? null) ? $event->after['reason'] : null,
             ]);
 
+        $rangeSummary = null;
+        if ($range) {
+            $rangeSummary = [
+                'start_date' => $start->toDateString(), 'end_date' => $request->string('end_date')->toString(),
+                'received' => (int) (clone $payments)->sum('amount'),
+                'expenses' => (int) (clone $expenses)->sum('amount'),
+                'adjustments' => (int) (clone $adjustments)->sum('amount'),
+            ];
+        }
+
         return Inertia::render('Family/Activity', [
-            'overview' => $overview->forMonth($family->id, $start),
+            'overview' => $range ? null : $overview->forMonth($family->id, $start),
+            'rangeSummary' => $rangeSummary,
             'entries' => $records,
             'events' => $events,
-            'filters' => ['period' => $start->format('Y-m'), 'type' => $type, 'search' => $search],
+            'filters' => $range
+                ? ['mode' => 'range', 'start_date' => $start->toDateString(), 'end_date' => $request->string('end_date')->toString(), 'type' => $type, 'search' => $search]
+                : ['mode' => 'month', 'period' => $start->format('Y-m'), 'type' => $type, 'search' => $search],
         ]);
     }
 }

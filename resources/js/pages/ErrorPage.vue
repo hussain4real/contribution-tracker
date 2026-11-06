@@ -27,6 +27,13 @@ const errorConfig = computed(() => {
             icon: '🔍',
             accent: 'blue',
         },
+        410: {
+            title: 'Draft Expired',
+            description:
+                'This AI draft is no longer available. Return to the assistant to prepare a fresh draft, then review its details before submitting.',
+            icon: '⌛',
+            accent: 'amber',
+        },
         500: {
             title: 'Something Went Wrong',
             description:

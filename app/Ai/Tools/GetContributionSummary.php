@@ -30,18 +30,16 @@ class GetContributionSummary implements Tool
      */
     public function handle(Request $request): string
     {
-        $family = $this->user->currentFamily ?? $this->user->family;
-
-        if ($family instanceof Family) {
-            $family = Family::query()->find($family->id);
-        }
+        $family = app(FamilyFinancialVisibility::class)->activeFamily($this->user);
 
         if (! $family instanceof Family) {
             return json_encode(['error' => 'User is not associated with a family.'], JSON_THROW_ON_ERROR);
         }
 
-        $year = $this->integerFromRequest($request['year'] ?? null, now()->year);
-        $month = $this->nullableIntegerFromRequest($request['month'] ?? null);
+        $validated = $request->validate(['year' => ['sometimes', 'integer', 'between:2020,2030'], 'month' => ['sometimes', 'integer', 'between:1,12']]);
+        $input = new \Illuminate\Http\Request($validated);
+        $year = $input->filled('year') ? $input->integer('year') : now()->year;
+        $month = $input->filled('month') ? $input->integer('month') : null;
 
         $query = Contribution::query()
             ->where('family_id', $family->id)
@@ -66,9 +64,9 @@ class GetContributionSummary implements Tool
         $totalPaid = (int) $contributions->sum(
             fn (Contribution $contribution): int => (int) $contribution->payments->sum(fn (Payment $payment): int => $payment->amount)
         );
-        $outstanding = $totalExpected - $totalPaid;
+        $outstanding = (int) $contributions->sum(fn (Contribution $contribution): int => max(0, $contribution->balance));
 
-        $visibleContributions = $this->user->canViewAllMembers() ? $contributions : $contributions->where('user_id', $this->user->id);
+        $visibleContributions = app(FamilyFinancialVisibility::class)->officer($this->user, $family) ? $contributions : $contributions->where('user_id', $this->user->id);
         $memberBreakdown = $visibleContributions->groupBy('user_id')->map(function ($userContributions): array {
             $firstContribution = $userContributions->first();
             $user = $firstContribution instanceof Contribution ? $firstContribution->user : null;
@@ -83,16 +81,22 @@ class GetContributionSummary implements Tool
                     : 'Unknown',
                 'expected' => $expected,
                 'paid' => $paid,
-                'outstanding' => $expected - $paid,
+                'outstanding' => (int) $userContributions->sum(fn (Contribution $contribution): int => max(0, $contribution->balance)),
                 'months_covered' => $userContributions->count(),
             ];
         })->values();
 
         $period = $month
-            ? now()->setYear($year)->setMonth($month)->format('F Y')
+            ? now()->startOfMonth()->setYear($year)->setMonth($month)->format('F Y')
             : "Year {$year}";
 
         return json_encode([
+            'as_of' => now()->toIso8601String(),
+            'currency' => $family->currency,
+            'scope' => app(FamilyFinancialVisibility::class)->totals($this->user, $family) ? 'family' : 'personal',
+            'source_url' => app(FamilyFinancialVisibility::class)->officer($this->user, $family)
+                ? route('contributions.index', ['current_family' => $family->slug, 'date_from' => sprintf('%04d-%02d-01', $year, $month ?? 1), 'date_to' => now()->startOfMonth()->setYear($year)->setMonth($month ?? 12)->endOfMonth()->toDateString()])
+                : route('contributions.my', ['current_family' => $family->slug]),
             'period' => $period,
             'total_expected' => $totalExpected,
             'total_paid' => $totalPaid,
@@ -112,15 +116,5 @@ class GetContributionSummary implements Tool
             'year' => $schema->integer()->min(2020)->max(2030),
             'month' => $schema->integer()->min(1)->max(12),
         ];
-    }
-
-    private function integerFromRequest(mixed $value, int $default): int
-    {
-        return is_numeric($value) ? (int) $value : $default;
-    }
-
-    private function nullableIntegerFromRequest(mixed $value): ?int
-    {
-        return is_numeric($value) ? (int) $value : null;
     }
 }

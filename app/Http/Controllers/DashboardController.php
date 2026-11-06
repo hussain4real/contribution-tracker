@@ -12,6 +12,7 @@ use App\Models\Payment;
 use App\Models\User;
 use App\Services\FamilyFinancialOverview;
 use App\Services\FamilyFinancialVisibility;
+use App\Services\FamilyOnboarding;
 use App\Support\EffectiveLedger;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -93,6 +94,11 @@ class DashboardController extends Controller
                 $props['family_aggregate'] = $this->calculateFamilyAggregate($currentMonthContributions);
             }
             $props['personal'] = $this->getPersonalStatus($user, $family, $currentYear, $currentMonth);
+        }
+
+        if ($user->isAdmin()) {
+            $guide = app(FamilyOnboarding::class)->forFamily($family);
+            $props['onboarding'] = ['completed' => $guide['completed'], 'total' => $guide['total']];
         }
 
         return Inertia::render('Dashboard/Index', $props);

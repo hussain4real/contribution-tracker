@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Channels\WhatsAppChannel;
+use App\Enums\AiActionKind;
 use App\Enums\PaymentStatus;
 use App\Http\Requests\ContributionRegisterRequest;
 use App\Models\Contribution;
@@ -16,6 +17,7 @@ use App\Models\PaymentBatch;
 use App\Models\PlatformPlan;
 use App\Models\User;
 use App\Notifications\ContributionReminderNotification;
+use App\Services\AiActionDrafts;
 use App\Services\FamilyContributionReviewService;
 use App\Services\PaystackService;
 use App\Support\PlatformPlanCatalog;
@@ -43,8 +45,10 @@ class ContributionController extends Controller
         abort_unless($family instanceof Family, 403);
 
         $filters = $request->filters();
+        $draft = app(AiActionDrafts::class)->read($request, $user, $family, AiActionKind::Contributions);
 
         return Inertia::render('Contributions/Index', [
+            'aiDraft' => $draft['values'] ?? null,
             'contributions' => $reviewService->register($family, $filters),
             'filters' => $filters,
             'summary' => Inertia::defer(fn (): array => $reviewService->registerSummary($family, $filters)),
