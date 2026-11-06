@@ -142,7 +142,6 @@ function reverseAdjustment(): void {
 function resetForm(): void {
     if (isAiDraft) {
         confirmed();
-        router.visit(index().url);
         return;
     }
     renew();
@@ -212,7 +211,10 @@ function resetForm(): void {
 
                 <Form
                     :action="store()"
-                    :options="adjustmentOptions"
+                    :options="{
+                        ...adjustmentOptions,
+                        preserveState: isAiDraft ? 'errors' : true,
+                    }"
                     :on-before="begin"
                     @error="rejected"
                     class="mt-4 space-y-4"

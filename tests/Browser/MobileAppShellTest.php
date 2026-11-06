@@ -42,6 +42,7 @@ describe('Mobile app shell', function () {
     it('shows role-aware mobile tabs and the more sheet', function () {
         $page = visit('/login')->on()->iPhone15Pro();
 
+        $page->script("localStorage.setItem('familyfunds_floating_ai_position', JSON.stringify({x: 10000, y: 10000}))");
         $page->fill('email', 'admin@test.com')
             ->fill('password', 'password')
             ->click('Log in')
@@ -56,6 +57,17 @@ describe('Mobile app shell', function () {
                 'aria-current',
                 'page',
             )
+            ->assertScript(<<<'JS'
+                () => {
+                    const nav = document.querySelector('nav[aria-label="Mobile navigation"]');
+                    const launcher = document.querySelector('button[aria-label="Open AI assistant"]');
+                    const more = nav?.querySelector('button');
+                    if (!launcher || !more) return false;
+                    const rect = more.getBoundingClientRect();
+                    const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+                    return more.contains(hit) && launcher.getBoundingClientRect().bottom <= nav.getBoundingClientRect().top;
+                }
+            JS)
             ->click('More')
             ->assertSee('Admin User')
             ->assertSee('admin@test.com')

@@ -51,6 +51,11 @@ function clampPosition(next: Position): Position {
         return next;
     }
 
+    const navigationHeight =
+        document
+            .querySelector('nav[aria-label="Mobile navigation"]')
+            ?.getBoundingClientRect().height ?? 0;
+
     return {
         x: Math.min(
             Math.max(VIEWPORT_MARGIN, next.x),
@@ -58,7 +63,10 @@ function clampPosition(next: Position): Position {
         ),
         y: Math.min(
             Math.max(VIEWPORT_MARGIN, next.y),
-            window.innerHeight - BUTTON_SIZE - VIEWPORT_MARGIN,
+            window.innerHeight -
+                navigationHeight -
+                BUTTON_SIZE -
+                VIEWPORT_MARGIN,
         ),
     };
 }
