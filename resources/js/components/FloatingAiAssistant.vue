@@ -63,7 +63,10 @@ function clampPosition(next: Position): Position {
         ),
         y: Math.min(
             Math.max(VIEWPORT_MARGIN, next.y),
-            window.innerHeight - navigationHeight - BUTTON_SIZE - VIEWPORT_MARGIN,
+            window.innerHeight -
+                navigationHeight -
+                BUTTON_SIZE -
+                VIEWPORT_MARGIN,
         ),
     };
 }
