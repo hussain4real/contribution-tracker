@@ -57,6 +57,7 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+const isAiDraft = props.aiDraft !== null;
 const {
     requestKey,
     unconfirmed,
@@ -65,6 +66,7 @@ const {
     options: adjustmentOptions,
     begin,
     rejected,
+    confirmed,
     renew,
     startNew,
 } = useFinancialRequestKey(
@@ -138,6 +140,11 @@ function reverseAdjustment(): void {
 }
 
 function resetForm(): void {
+    if (isAiDraft) {
+        confirmed();
+        router.visit(index().url);
+        return;
+    }
     renew();
     amount.value = '';
     description.value = '';

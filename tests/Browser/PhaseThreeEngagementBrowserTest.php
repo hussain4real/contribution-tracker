@@ -6,6 +6,7 @@ use App\Enums\AiActionKind;
 use App\Models\Contribution;
 use App\Models\Expense;
 use App\Models\FamilyGoal;
+use App\Models\FundAdjustment;
 use App\Models\Payment;
 use App\Models\PaymentBatch;
 use App\Services\AiActionDrafts;
@@ -59,6 +60,26 @@ it('prefills an AI expense draft and records it only after a human submits the f
     expect(Expense::count())->toBe(1);
     $page->navigate($draft['review_url'])->click('button[type="submit"]')->assertSee('Human reviewed AI draft');
     expect(Expense::count())->toBe(1);
+});
+
+it('keeps a recorded AI adjustment draft idempotent when reopened in the same tab', function () {
+    $family = createBrowserFamily();
+    $admin = createBrowserAdmin($family);
+    $page = loginBrowserAs($admin);
+    $draft = app(AiActionDrafts::class)->create($admin, $family, AiActionKind::Adjustment, [
+        'amount' => 750, 'description' => 'Reviewed adjustment draft', 'recorded_at' => today()->toDateString(),
+    ]);
+    $page->navigate($draft['review_url'])->assertSee('AI draft')->assertValue('#amount', '750');
+    expect(FundAdjustment::count())->toBe(0);
+    $page->click('form button[type="submit"]')->assertSee('Reviewed adjustment draft')->assertDontSee('AI draft');
+    expect(FundAdjustment::count())->toBe(1);
+    $page->navigate($draft['review_url'])->assertSee('AI draft')
+        ->assertDontSee('We could not confirm whether the adjustment was recorded.')
+        ->click('form button[type="submit"]')->assertSee('Reviewed adjustment draft')->assertNoJavaScriptErrors();
+    expect(FundAdjustment::count())->toBe(1);
+    $page->click('Record Adjustment')->fill('#amount', '100')->fill('#description', 'Separate manual adjustment')
+        ->click('form button[type="submit"]')->assertSee('Separate manual adjustment')->assertNoJavaScriptErrors();
+    expect(FundAdjustment::count())->toBe(2);
 });
 
 it('opens an AI payment draft at allocation review without posting a receipt', function () {
