@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace App\Ai\Tools;
 
+use App\Enums\AiActionKind;
 use App\Models\Family;
 use App\Models\FamilyMembership;
-use App\Models\Payment;
 use App\Models\User;
-use App\Services\PaymentAllocationService;
-use App\Support\CurrencyFormatter;
+use App\Services\AiActionDrafts;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
@@ -23,7 +22,7 @@ class RecordPayment implements Tool
      */
     public function description(): string
     {
-        return 'Records a payment for a family member. Accepts the member name (or part of it), amount, payment date, optional notes, and optional target year/month. The payment is automatically allocated to the oldest unpaid contribution first. Always call without confirmed=true first to preview.';
+        return 'Prepares a payment draft for human review in FamilyFund. Return the review_url to the user. This tool never posts financial records, even if asked to confirm in chat.';
     }
 
     /**
@@ -41,13 +40,16 @@ class RecordPayment implements Tool
             return json_encode(['error' => 'User is not associated with a family.'], JSON_THROW_ON_ERROR);
         }
 
+        if (! app(AiActionDrafts::class)->allowed($this->user, $family, AiActionKind::Payment)) {
+            return json_encode(['error' => 'You do not have permission to prepare this action.'], JSON_THROW_ON_ERROR);
+        }
+
         $memberName = $this->nullableStringFromRequest($request['member_name'] ?? null);
         $amount = $this->nullableIntegerFromRequest($request['amount'] ?? null);
         $paidAt = $this->stringFromRequest($request['paid_at'] ?? null, now()->toDateString());
         $notes = $this->nullableStringFromRequest($request['notes'] ?? null);
         $targetYear = $this->nullableIntegerFromRequest($request['target_year'] ?? null);
         $targetMonth = $this->nullableIntegerFromRequest($request['target_month'] ?? null);
-        $confirmed = ($request['confirmed'] ?? false) === true;
 
         if (! $memberName) {
             return json_encode(['error' => 'Please provide the member name.'], JSON_THROW_ON_ERROR);
@@ -102,49 +104,15 @@ class RecordPayment implements Tool
             }
         }
 
-        $currency = $family->currency;
-        $formattedAmount = CurrencyFormatter::format($amount, $currency);
-        $targetInfo = ($targetYear !== null && $targetMonth !== null)
-            ? ' for '.now()->startOfMonth()->setYear($targetYear)->setMonth($targetMonth)->format('F Y')
-            : '';
-
-        if (! $confirmed) {
-            return json_encode([
-                'status' => 'confirmation_required',
-                'message' => "I'll record a payment of {$formattedAmount} for {$member->name} on {$paidAt}{$targetInfo}. The payment will be allocated to the oldest unpaid contribution first. Please confirm to proceed.",
-                'details' => [
-                    'member' => $member->name,
-                    'amount' => $amount,
-                    'paid_at' => $paidAt,
-                    'notes' => $notes,
-                    'target_year' => $targetYear,
-                    'target_month' => $targetMonth,
-                ],
-            ], JSON_THROW_ON_ERROR);
-        }
-
-        $allocationService = app(PaymentAllocationService::class);
-
-        $payments = $allocationService->allocate(
-            member: $member,
-            amount: $amount,
-            paidAt: $paidAt,
-            recordedBy: $this->user,
-            notes: $notes,
-            targetYear: $targetYear,
-            targetMonth: $targetMonth,
-            family: $family,
-        );
-
-        $totalAllocated = (int) $payments->sum(fn (Payment $payment): int => $payment->amount);
-        $formattedAllocated = $currency.number_format($totalAllocated, 2);
-
-        return json_encode([
-            'status' => 'success',
-            'message' => "Payment of {$formattedAllocated} recorded for {$member->name}. Allocated across {$payments->count()} contribution(s).",
-            'payments_created' => $payments->count(),
-            'total_allocated' => $totalAllocated,
-        ], JSON_THROW_ON_ERROR);
+        return json_encode(app(AiActionDrafts::class)->create($this->user, $family, AiActionKind::Payment, [
+            'member_id' => $member->id,
+            'member' => $membership->displayName(),
+            'amount' => $amount,
+            'paid_at' => $paidAt,
+            'notes' => $notes,
+            'target_year' => $targetYear,
+            'target_month' => $targetMonth,
+        ]), JSON_THROW_ON_ERROR);
     }
 
     /**
@@ -159,7 +127,6 @@ class RecordPayment implements Tool
             'notes' => $schema->string(),
             'target_year' => $schema->integer()->min(2020)->max(2030),
             'target_month' => $schema->integer()->min(1)->max(12),
-            'confirmed' => $schema->boolean(),
         ];
     }
 

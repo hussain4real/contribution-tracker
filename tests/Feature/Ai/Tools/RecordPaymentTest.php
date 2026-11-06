@@ -88,7 +88,7 @@ test('payment preview displays the selected month at month end', function () {
         ->and($result['message'])->toContain('February 2027');
 });
 
-test('admin can execute payment recording with confirmation', function () {
+test('chat confirmation returns a payment draft without posting', function () {
     Contribution::factory()->forUser($this->payingMember)->currentMonth()->create();
 
     $tool = new RecordPayment($this->admin);
@@ -100,9 +100,9 @@ test('admin can execute payment recording with confirmation', function () {
         'confirmed' => true,
     ])));
 
-    expect($result['status'])->toBe('success')
-        ->and($result['payments_created'])->toBeGreaterThanOrEqual(1)
-        ->and($result['total_allocated'])->toBe(4000);
+    expect($result['status'])->toBe('confirmation_required')
+        ->and($result['review_url'])->toBeString();
+    $this->assertDatabaseCount('payments', 0);
 });
 
 test('member cannot record payments', function () {

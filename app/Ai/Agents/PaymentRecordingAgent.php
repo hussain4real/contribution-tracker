@@ -16,7 +16,7 @@ class PaymentRecordingAgent extends FamilySubAgent
 
     public function description(): string
     {
-        return 'Preview and record family member payments using the required confirm-first workflow.';
+        return 'Preview and record family member payments for human review in FamilyFund.';
     }
 
     /**
@@ -24,7 +24,7 @@ class PaymentRecordingAgent extends FamilySubAgent
      */
     public function instructions(): string
     {
-        return $this->familyContext()."\n\n".$this->confirmFirstInstructions().<<<'INSTRUCTIONS'
+        return $this->familyContext()."\n\n".$this->financialDraftInstructions().<<<'INSTRUCTIONS'
 
         You are the payment recording specialist for this family fund.
         Use the payment recording tool for member payment requests, including advance payments and allocation to unpaid contributions.

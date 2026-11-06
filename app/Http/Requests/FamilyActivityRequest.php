@@ -25,7 +25,9 @@ class FamilyActivityRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'period' => ['sometimes', 'date_format:Y-m'],
+            'period' => ['sometimes', 'date_format:Y-m', 'prohibits:start_date,end_date'],
+            'start_date' => ['required_with:end_date', 'date_format:Y-m-d'],
+            'end_date' => ['required_with:start_date', 'date_format:Y-m-d', 'after_or_equal:start_date'],
             'type' => ['sometimes', 'in:all,payment,expense,adjustment'],
             'search' => ['sometimes', 'nullable', 'string', 'max:100'],
         ];

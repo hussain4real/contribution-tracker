@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Enums\AiActionKind;
 use App\Http\Requests\StoreExpenseRequest;
 use App\Models\Expense;
 use App\Models\ExpenseDocument;
 use App\Models\Family;
+use App\Services\AiActionDrafts;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -59,17 +62,19 @@ class ExpenseController extends Controller
     /**
      * Show the form for creating a new expense.
      */
-    public function create(): Response
+    public function create(Request $request): Response
     {
         $this->authorize('create', Expense::class);
 
         $user = $this->authUser();
         $family = $user->currentFamily ?? $user->family;
         abort_unless($family !== null, 403);
+        $draft = app(AiActionDrafts::class)->read($request, $user, $family, AiActionKind::Expense);
 
         return Inertia::render('Expenses/Create', [
-            'idempotencyKey' => (string) Str::uuid(),
-            'idempotencyScope' => "expense-{$family->id}-{$user->id}",
+            'aiDraft' => $draft['values'] ?? null,
+            'idempotencyKey' => $draft['key'] ?? (string) Str::uuid(),
+            'idempotencyScope' => "expense-{$family->id}-{$user->id}".($draft ? "-{$draft['key']}" : ''),
         ]);
     }
 

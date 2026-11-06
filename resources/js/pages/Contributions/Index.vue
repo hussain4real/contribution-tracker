@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { index } from '@/actions/App/Http/Controllers/ContributionController';
+import {
+    generate,
+    index,
+} from '@/actions/App/Http/Controllers/ContributionController';
 import { index as reportsIndex } from '@/actions/App/Http/Controllers/ReportController';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useCurrencyFormatter } from '@/lib/currency';
 import { type BreadcrumbItem } from '@/types';
-import { Deferred, Head, Link, router } from '@inertiajs/vue3';
+import { Deferred, Form, Head, Link, router } from '@inertiajs/vue3';
 import { ClipboardList, Download, Filter, Search } from '@lucide/vue';
 import { reactive } from 'vue';
 
@@ -46,6 +49,7 @@ interface Summary {
 }
 
 interface Props {
+    aiDraft: { year: number; month: number } | null;
     contributions: Paginator;
     filters: Record<string, string | number | null>;
     summary?: Summary;
@@ -119,6 +123,36 @@ function statusClass(status: string): string {
                 </Button>
             </div>
 
+            <Form
+                v-if="aiDraft"
+                :action="generate()"
+                class="space-y-3 rounded-xl border bg-card p-4"
+                #default="{ processing, errors }"
+            >
+                <h2 class="font-semibold">Review AI contribution draft</h2>
+                <p class="text-sm text-muted-foreground">
+                    Generate expected contributions for {{ aiDraft.year }}-{{
+                        String(aiDraft.month).padStart(2, '0')
+                    }}
+                    using current member categories. This does not record a
+                    payment. Existing contributions will be kept.
+                </p>
+                <input type="hidden" name="year" :value="aiDraft.year" />
+                <input type="hidden" name="month" :value="aiDraft.month" />
+                <p
+                    v-for="(error, field) in errors"
+                    :key="field"
+                    role="alert"
+                    class="text-sm text-destructive"
+                >
+                    {{ error }}
+                </p>
+                <Button type="submit" :disabled="processing">{{
+                    processing
+                        ? 'Generating…'
+                        : 'Confirm contribution generation'
+                }}</Button>
+            </Form>
             <Deferred data="summary">
                 <template #fallback>
                     <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

@@ -30,11 +30,7 @@ class GetFundBalance implements Tool
      */
     public function handle(Request $request): string
     {
-        $family = $this->user->currentFamily ?? $this->user->family;
-
-        if ($family instanceof Family) {
-            $family = Family::query()->find($family->id);
-        }
+        $family = app(FamilyFinancialVisibility::class)->activeFamily($this->user);
 
         if (! $family instanceof Family) {
             return json_encode(['error' => 'User is not associated with a family.'], JSON_THROW_ON_ERROR);
@@ -56,6 +52,9 @@ class GetFundBalance implements Tool
 
         $balance = $totalPayments + $totalAdjustments - $totalExpenses;
         $result = [
+            'as_of' => now()->toIso8601String(),
+            'period' => 'All recorded effective entries, including future-dated entries',
+            'source_url' => route('dashboard', ['current_family' => $family->slug]),
             'fund_balance' => $balance,
             'currency' => $family->currency,
         ];

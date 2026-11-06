@@ -9,6 +9,7 @@ use App\Models\Family;
 use App\Models\FamilyMembership;
 use App\Models\Payment;
 use App\Models\User;
+use App\Services\FamilyFinancialVisibility;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
@@ -30,7 +31,7 @@ class GetMemberOverview implements Tool
      */
     public function handle(Request $request): string
     {
-        $family = $this->user->currentFamily ?? $this->user->family;
+        $family = app(FamilyFinancialVisibility::class)->activeFamily($this->user);
 
         if (! $family instanceof Family) {
             return json_encode(['error' => 'User is not associated with a family.'], JSON_THROW_ON_ERROR);
@@ -42,7 +43,7 @@ class GetMemberOverview implements Tool
             ->join('users', 'users.id', '=', 'family_members.user_id')
             ->orderBy('users.name')
             ->select('family_members.*')
-            ->when(! $this->user->canViewAllMembers(), fn ($query) => $query->where('family_members.user_id', $this->user->id))
+            ->when(! app(FamilyFinancialVisibility::class)->officer($this->user, $family), fn ($query) => $query->where('family_members.user_id', $this->user->id))
             ->get();
 
         $currentContributions = Contribution::query()
@@ -71,6 +72,9 @@ class GetMemberOverview implements Tool
         })->toArray();
 
         return json_encode([
+            'as_of' => now()->toIso8601String(),
+            'currency' => $family->currency,
+            'source_url' => app(FamilyFinancialVisibility::class)->officer($this->user, $family) ? route('members.index', ['current_family' => $family->slug]) : route('contributions.my', ['current_family' => $family->slug]),
             'total_members' => $memberships->count(),
             'active_paying_members' => $memberships->filter(fn (FamilyMembership $membership): bool => $membership->monthlyAmount() !== null)->count(),
             'current_period' => now()->format('F Y'),

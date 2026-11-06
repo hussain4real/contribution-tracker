@@ -7,6 +7,7 @@ use App\Ai\Tools\GetContributionSummary;
 use App\Ai\Tools\GetExpenseSummary;
 use App\Ai\Tools\GetFundBalance;
 use App\Ai\Tools\GetMemberOverview;
+use App\Ai\Tools\GetMyOutstanding;
 use App\Ai\Tools\RecordExpense;
 use App\Ai\Tools\RecordFundAdjustment;
 use App\Ai\Tools\RecordPayment;
@@ -27,13 +28,14 @@ it('exposes descriptions and json schemas for all ai tools', function (string $t
     expect((string) $tool->description())->not->toBeEmpty()
         ->and(array_keys($schema))->toBe($expectedSchemaKeys);
 })->with([
-    'generate contributions' => [GenerateContributions::class, ['year', 'month', 'confirmed']],
+    'generate contributions' => [GenerateContributions::class, ['year', 'month']],
     'get contribution summary' => [GetContributionSummary::class, ['year', 'month']],
     'get expense summary' => [GetExpenseSummary::class, ['start_date', 'end_date']],
+    'get my outstanding' => [GetMyOutstanding::class, ['year', 'month']],
     'get fund balance' => [GetFundBalance::class, ['include_breakdown']],
     'get member overview' => [GetMemberOverview::class, []],
-    'record expense' => [RecordExpense::class, ['amount', 'description', 'spent_at', 'confirmed']],
-    'record fund adjustment' => [RecordFundAdjustment::class, ['amount', 'description', 'recorded_at', 'confirmed']],
-    'record payment' => [RecordPayment::class, ['member_name', 'amount', 'paid_at', 'notes', 'target_year', 'target_month', 'confirmed']],
+    'record expense' => [RecordExpense::class, ['amount', 'description', 'spent_at']],
+    'record fund adjustment' => [RecordFundAdjustment::class, ['amount', 'description', 'recorded_at']],
+    'record payment' => [RecordPayment::class, ['member_name', 'amount', 'paid_at', 'notes', 'target_year', 'target_month']],
     'send invitation' => [SendInvitation::class, ['delivery_method', 'email', 'whatsapp_phone', 'role', 'category', 'confirmed']],
 ]);

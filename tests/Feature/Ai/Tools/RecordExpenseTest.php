@@ -30,7 +30,7 @@ test('admin can preview expense recording', function () {
     $this->assertDatabaseMissing('expenses', ['description' => 'Generator fuel']);
 });
 
-test('admin can execute expense recording with confirmation', function () {
+test('admin can prepare a draft despite chat confirmation for expense recording with confirmation', function () {
     $tool = new RecordExpense($this->admin);
 
     $result = decodeToolResult($tool->handle(new Request([
@@ -40,10 +40,10 @@ test('admin can execute expense recording with confirmation', function () {
         'confirmed' => true,
     ])));
 
-    expect($result['status'])->toBe('success')
-        ->and($result['expense_id'])->toBeInt();
+    expect($result['status'])->toBe('confirmation_required')
+        ->and($result['review_url'])->toBeString();
 
-    $this->assertDatabaseHas('expenses', [
+    $this->assertDatabaseMissing('expenses', [
         'family_id' => $this->family->id,
         'amount' => 5000,
         'description' => 'Generator fuel',
@@ -51,7 +51,7 @@ test('admin can execute expense recording with confirmation', function () {
     ]);
 });
 
-test('financial secretary can record expenses', function () {
+test('financial secretary can draft expenses', function () {
     $tool = new RecordExpense($this->financialSecretary);
 
     $result = decodeToolResult($tool->handle(new Request([
@@ -61,9 +61,9 @@ test('financial secretary can record expenses', function () {
         'confirmed' => true,
     ])));
 
-    expect($result['status'])->toBe('success');
+    expect($result['status'])->toBe('confirmation_required');
 
-    $this->assertDatabaseHas('expenses', [
+    $this->assertDatabaseMissing('expenses', [
         'family_id' => $this->family->id,
         'amount' => 3000,
         'recorded_by' => $this->financialSecretary->id,

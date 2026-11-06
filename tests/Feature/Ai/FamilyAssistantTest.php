@@ -76,7 +76,7 @@ it('builds instructions with elevated role capabilities and family currency', fu
         ->toContain('the "Smith Family" family contribution tracking group')
         ->toContain('You are speaking with Ada (role: admin)')
         ->toContain('contribution_analysis, expense_analysis, fund_balance, and member_status')
-        ->toContain('delegate the same exact action details again WITH confirmed=true')
+        ->toContain('Chat confirmation never posts these records')
         ->toContain('Can record expenses for the family')
         ->toContain('Can generate monthly contribution records for all members')
         ->toContain('All monetary values are in NGN')
@@ -165,4 +165,13 @@ it('can be faked with the Laravel AI testing API', function () {
         fn (AgentPrompt $prompt): bool => $prompt->contains('current family balance')
             && $prompt->agent instanceof FamilyAssistant,
     );
+});
+
+it('grounds coordinator and specialist instructions in the selected workspace', function () {
+    $primary = Family::factory()->create(['name' => 'Primary family', 'currency' => 'NGN']);
+    $selected = Family::factory()->create(['name' => 'Selected family', 'currency' => 'QAR']);
+    $user = User::factory()->admin()->create(['family_id' => $primary->id, 'current_family_id' => $selected->id]);
+    $user->families()->attach($selected->id, ['role' => 'member']);
+    expect((string) (new FamilyAssistant($user))->instructions())->toContain('Selected family')->toContain('QAR')->not->toContain('Primary family');
+    expect((new ContributionAnalysisAgent($user))->instructions())->toContain('Selected family')->toContain('role: member');
 });

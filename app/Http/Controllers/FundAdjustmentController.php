@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Enums\AiActionKind;
 use App\Http\Requests\StoreFundAdjustmentRequest;
 use App\Models\Family;
 use App\Models\FundAdjustment;
+use App\Services\AiActionDrafts;
 use App\Support\CurrencyFormatter;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -20,7 +23,7 @@ class FundAdjustmentController extends Controller
     /**
      * Display a listing of all fund adjustments with a form to create new ones.
      */
-    public function index(): Response
+    public function index(Request $request): Response
     {
         $this->authorize('viewAny', FundAdjustment::class);
 
@@ -28,6 +31,7 @@ class FundAdjustmentController extends Controller
         $family = $user->currentFamily ?? $user->family;
 
         abort_unless($family !== null, 403);
+        $draft = app(AiActionDrafts::class)->read($request, $user, $family, AiActionKind::Adjustment);
 
         $adjustments = FundAdjustment::query()
             ->where('family_id', $family->id)
@@ -50,8 +54,9 @@ class FundAdjustmentController extends Controller
         return Inertia::render('FundAdjustments/Index', [
             'adjustments' => $adjustments,
             'can_create' => $user->canRecordPayments(),
-            'idempotencyKey' => (string) Str::uuid(),
-            'idempotencyScope' => "adjustment-{$family->id}-{$user->id}",
+            'aiDraft' => $draft['values'] ?? null,
+            'idempotencyKey' => $draft['key'] ?? (string) Str::uuid(),
+            'idempotencyScope' => "adjustment-{$family->id}-{$user->id}".($draft ? "-{$draft['key']}" : ''),
         ]);
     }
 
