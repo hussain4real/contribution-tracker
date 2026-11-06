@@ -77,8 +77,10 @@ it('keeps a recorded AI adjustment draft idempotent when reopened in the same ta
         ->assertDontSee('We could not confirm whether the adjustment was recorded.')
         ->click('form button[type="submit"]')->assertSee('Reviewed adjustment draft')->assertNoJavaScriptErrors();
     expect(FundAdjustment::count())->toBe(1);
-    $page->click('Record Adjustment')->fill('#amount', '100')->fill('#description', 'Separate manual adjustment')
-        ->click('form button[type="submit"]')->assertSee('Separate manual adjustment')->assertNoJavaScriptErrors();
+    $page->click('Record Adjustment');
+    fillBrowserFieldWithoutChange($page, '#amount', '100');
+    fillBrowserFieldWithoutChange($page, '#description', 'Separate manual adjustment');
+    $page->click('form button[type="submit"]')->assertSee('Separate manual adjustment')->assertNoJavaScriptErrors();
     expect(FundAdjustment::count())->toBe(2);
 });
 
