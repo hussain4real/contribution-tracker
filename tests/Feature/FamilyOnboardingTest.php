@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use App\Actions\ReversePaymentBatch;
+use App\Enums\Role;
+use App\Mail\FamilyInvitationMail;
 use App\Models\Contribution;
 use App\Models\Family;
 use App\Models\FamilyCategory;
@@ -12,7 +14,66 @@ use App\Models\PaymentBatch;
 use App\Models\User;
 use App\Services\FamilyOnboarding;
 use App\Services\PaymentAllocationService;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\URL;
 use Inertia\Testing\AssertableInertia as Assert;
+
+it('takes a new family from registration through an accepted invitation without posting money', function () {
+    Mail::fake();
+    $this->post(route('register.store'), [
+        'family_name' => 'Onboarding test family',
+        'name' => 'Onboarding owner',
+        'email' => 'owner@example.test',
+        'password' => 'password',
+        'password_confirmation' => 'password',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    $owner = User::sole();
+    $family = Family::sole();
+    $verifyOwner = URL::temporarySignedRoute('verification.verify', now()->addHour(), [
+        'id' => $owner->id, 'hash' => sha1($owner->email),
+    ]);
+    $this->get($verifyOwner)->assertRedirect();
+    $setupUrl = route('family.onboarding', ['current_family' => $family->slug]);
+    $this->get($setupUrl)->assertInertia(fn (Assert $page) => $page->where('guide.completed', 2));
+
+    $this->post(route('family.invitations.store', ['current_family' => $family->slug]), [
+        'email' => 'member@example.test',
+        'role' => Role::Member->value,
+        'family_category_id' => $family->categories()->where('slug', 'employed')->sole()->id,
+    ])->assertRedirect()->assertSessionHasNoErrors();
+    $invitation = FamilyInvitation::sole();
+    $acceptUrl = route('invitations.accept', $invitation->token);
+    Mail::assertQueued(FamilyInvitationMail::class, fn (FamilyInvitationMail $mail) => $mail->hasTo('member@example.test') && $mail->acceptUrl === $acceptUrl);
+    $this->get($setupUrl)->assertInertia(fn (Assert $page) => $page->where('guide.completed', 3));
+
+    Auth::logout();
+    $this->get($acceptUrl)->assertInertia(fn (Assert $page) => $page
+        ->component('auth/AcceptInvitation')->where('invitation.family_name', $family->name));
+    $this->post(route('register.store'), [
+        'name' => 'Onboarding member',
+        'email' => 'member@example.test',
+        'password' => 'password',
+        'password_confirmation' => 'password',
+        'invitation_token' => $invitation->token,
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    $member = User::where('email', 'member@example.test')->sole();
+    expect($member->membershipForFamily($family)?->role)->toBe(Role::Member)
+        ->and($invitation->refresh()->accepted_at)->not->toBeNull()
+        ->and(PaymentBatch::count())->toBe(0)
+        ->and(Payment::count())->toBe(0);
+    $verifyMember = URL::temporarySignedRoute('verification.verify', now()->addHour(), [
+        'id' => $member->id, 'hash' => sha1($member->email),
+    ]);
+    $this->get($verifyMember)->assertRedirect();
+    $this->get(route('contributions.my', ['current_family' => $family->slug]))
+        ->assertInertia(fn (Assert $page) => $page->component('Contributions/My'));
+    $this->get($setupUrl)->assertForbidden();
+    $this->actingAs($owner->refresh())->get($setupUrl)->assertInertia(fn (Assert $page) => $page
+        ->where('guide.completed', 3)->where('guide.steps.3.completed', false));
+});
 
 it('shows resumable family setup without inserting example members or money', function () {
     $family = Family::factory()->create(['bank_name' => null, 'account_name' => null, 'account_number' => null]);
