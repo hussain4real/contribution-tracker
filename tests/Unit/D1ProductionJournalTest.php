@@ -77,14 +77,15 @@ it('commits a thousand-row update under the native single-batch limit without dr
 
 it('rolls back every mutation if one original row changed after the snapshot', function (): void {
     $pdo = productionJournalDatabase();
-    $rows = [['id' => 1, 'amount' => 10, 'code' => 'first'], ['id' => 2, 'amount' => 20, 'code' => 'second']];
+    $rows = [['id' => 1, 'amount' => 10, 'code' => 'first'], ['id' => 2, 'amount' => 20, 'code' => null]];
     foreach ($rows as $row) {
         $pdo->prepare('insert into ledger values(?,?,?)')->execute(array_values($row));
     }
     $plan = D1RuntimeJournal::plan(array_map(fn (array $row): array => productionJournalEntry('update', [...$row, 'amount' => 99]), $rows), ['ledger' => $rows], $pdo);
-    $pdo->exec('update ledger set amount=55 where id=2');
+    $pdo->exec("update ledger set code='changed' where id=2");
     expect(fn () => executeProductionJournal($pdo, $plan))->toThrow(PDOException::class)
-        ->and(productionJournalQuery($pdo, 'select sum(amount) from ledger')->fetchColumn())->toBe(65);
+        ->and(productionJournalQuery($pdo, 'select sum(amount) from ledger')->fetchColumn())->toBe(30)
+        ->and(productionJournalQuery($pdo, 'select code from ledger where id=2')->fetchColumn())->toBe('changed');
 });
 
 it('preserves sequential unique-value changes and repeated writes to the same identity', function (): void {

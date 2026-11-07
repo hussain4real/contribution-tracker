@@ -60,7 +60,10 @@ final class D1RuntimeJournal
         $queries = [];
         foreach ($guards as $table => $rows) {
             foreach (array_chunk($rows, 100) as $chunk) {
-                $checks = implode(' and ', array_map(fn (string $column): string => 't.'.self::identifier($column).' is '.self::extract('j.value', $column), array_keys($chunk[0])));
+                $columns = array_keys($chunk[0]);
+                $liveValues = implode(',', array_map(fn (string $column): string => 't.'.self::identifier($column), $columns));
+                $snapshotValues = implode(',', array_map(fn (string $column): string => self::extract('j.value', $column), $columns));
+                $checks = '('.$liveValues.') is ('.$snapshotValues.')';
                 $queries[] = ['sql' => 'insert into d1_staging_assertions values (?,not exists(select 1 from json_each(?) j where not exists(select 1 from '.self::identifier($table).' t where '.$checks.')))', 'params' => [(string) Str::uuid(), json_encode($chunk, JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION)]];
             }
         }
