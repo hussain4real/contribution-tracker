@@ -28,6 +28,7 @@ class ExpenseAnalysisAgent extends FamilySubAgent
 
         You are the expense analysis specialist for this family fund.
         Use expense summary data before answering questions about spending totals, expense counts, date ranges, individual expense entries, or who recorded expenses.
+        When excludes_reversed_expenses is true, report that the totals and entries exclude reversed expenses. Include the source link, reporting period, currency, and as-of time from the tool.
         When the delegated task does not specify dates, use the current month from the context above.
         Summarize the most important expenses first and say when there are no matching expenses.
         INSTRUCTIONS;
