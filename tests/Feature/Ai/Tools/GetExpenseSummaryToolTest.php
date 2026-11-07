@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Ai\Tools\GetExpenseSummary;
 use App\Models\Expense;
 use App\Models\Family;
+use App\Models\FinancialReversal;
 use App\Models\User;
 use Laravel\Ai\Tools\Request;
 
@@ -67,6 +68,33 @@ it('returns zero values when no expenses exist', function () {
         ->toHaveKey('total_amount', 0)
         ->toHaveKey('expense_count', 0)
         ->and($result['expenses'])->toBeEmpty();
+});
+
+it('states that the total and entries exclude reversed expenses', function () {
+    $effective = Expense::factory()->create([
+        'family_id' => $this->family->id,
+        'amount' => 5000,
+        'spent_at' => now(),
+    ]);
+    $reversed = Expense::factory()->create([
+        'family_id' => $this->family->id,
+        'amount' => 3000,
+        'spent_at' => now(),
+    ]);
+    FinancialReversal::factory()->create([
+        'family_id' => $this->family->id,
+        'reversible_type' => Expense::MORPH_TYPE,
+        'reversible_id' => $reversed->id,
+        'reversed_by' => $this->user->id,
+    ]);
+
+    $result = decodeToolResult((new GetExpenseSummary($this->user))->handle(new Request));
+
+    expect($result)->toHaveKey('excludes_reversed_expenses', true)
+        ->toHaveKey('total_amount', 5000)
+        ->toHaveKey('expense_count', 1)
+        ->and($result['expenses'])->toHaveCount(1)
+        ->and(firstResultArray($result, 'expenses')['description'])->toBe($effective->description);
 });
 
 it('includes expenses throughout the final day of the requested date range', function (bool $useDefaultRange) {
