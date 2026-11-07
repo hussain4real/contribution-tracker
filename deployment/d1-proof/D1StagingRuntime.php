@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace FamilyFunds\D1Staging;
 
+use App\Models\User;
 use Closure;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -384,7 +385,7 @@ final class D1StagingRuntime
             }
         } finally {
             DB::purge('d1-staging-snapshot');
-            $this->restoreProductionAlias();
+            $this->restoreRuntimeAlias();
         }
         if ($error !== null) {
             throw $error;
@@ -480,6 +481,11 @@ final class D1StagingRuntime
         }
         if (str_contains($ddl, '"family_id"')) {
             return ' where family_id='.$familyId;
+        }
+        if (in_array($table, ['agent_conversations', 'agent_conversation_messages'], true) && str_contains($ddl, '"participant_id"')) {
+            $participantType = str_replace("'", "''", (new User)->getMorphClass());
+
+            return " where participant_type='".$participantType."' and participant_id in (".$users.')';
         }
 
         return match ($table) {
@@ -624,15 +630,13 @@ final class D1StagingRuntime
             DB::setDefaultConnection($default);
             config([D1RuntimeProfile::key('planning') => false]);
             DB::purge('d1-staging-snapshot');
-            $this->restoreProductionAlias();
+            $this->restoreRuntimeAlias();
         }
     }
 
-    private function restoreProductionAlias(): void
+    private function restoreRuntimeAlias(): void
     {
-        if (D1RuntimeProfile::production()) {
-            config(['database.connections.d1-staging-snapshot' => ['driver' => 'd1']]);
-        }
+        config(['database.connections.d1-staging-snapshot' => ['driver' => D1RuntimeProfile::connection()]]);
     }
 
     /** @param D1Row $row */

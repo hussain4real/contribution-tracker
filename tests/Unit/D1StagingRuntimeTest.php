@@ -28,6 +28,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Tests\TestCase;
 
 pest()->extend(TestCase::class);
@@ -314,6 +315,45 @@ it('isolates a family snapshot and reserves globally distinct identifiers', func
     expect(count(array_unique($ids)))->toBe(2)
         ->and(stagingSqlValue($pdo, 'select count(*) from contributions'))->toBe(4)
         ->and(stagingSqlValue($pdo, 'select count(*) from d1_staging_leases'))->toBe(0);
+});
+
+it('streams with fresh staging data after the request snapshot closes', function (): void {
+    $pdo = stagingSqlFixture();
+    $response = (new D1StagingRuntime)->run(function (): StreamedResponse {
+        $family = Family::findOrFail(1);
+
+        return new StreamedResponse(function () use ($family): void {
+            echo $family->refresh()->name;
+        });
+    }, 1);
+    $pdo->exec("update families set name='Current family name' where id=1");
+
+    ob_start();
+    try {
+        $response->sendContent();
+    } finally {
+        $body = ob_get_clean();
+    }
+
+    expect($body)->toBe('Current family name');
+});
+
+it('includes SDK conversation history for users in the family snapshot', function (): void {
+    $pdo = stagingSqlFixture();
+    $pdo->exec('create table "family_members" ("id" integer primary key, "family_id" integer, "user_id" integer)');
+    $pdo->exec('insert into family_members values (1,1,10),(2,2,20)');
+    foreach (['agent_conversations', 'agent_conversation_messages'] as $table) {
+        $pdo->exec('create table "'.$table.'" ("id" text primary key, "user_id" integer, "participant_type" text, "participant_id" integer)');
+        $insert = $pdo->prepare('insert into "'.$table.'" values (?, ?, ?, ?)');
+        $insert->execute(['current-user', null, (new User)->getMorphClass(), 10]);
+        $insert->execute(['other-family', null, (new User)->getMorphClass(), 20]);
+        $insert->execute(['non-user', null, 'other-type', 10]);
+    }
+
+    (new D1StagingRuntime)->run(function (): void {
+        expect(DB::table('agent_conversations')->pluck('id')->all())->toBe(['current-user'])
+            ->and(DB::table('agent_conversation_messages')->pluck('id')->all())->toBe(['current-user']);
+    }, 1, 10);
 });
 
 it('fences an expired owner without deleting its replacement lease', function (): void {
