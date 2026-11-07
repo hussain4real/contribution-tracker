@@ -8,6 +8,7 @@ use App\Models\Expense;
 use App\Models\Family;
 use App\Models\User;
 use App\Services\FamilyFinancialVisibility;
+use App\Support\EffectiveLedger;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Validator;
@@ -48,10 +49,9 @@ class GetExpenseSummary implements Tool
             'start_date' => ['required', 'date_format:Y-m-d'], 'end_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:start_date'],
         ])->validate();
 
-        $baseQuery = Expense::query()
-            ->where('family_id', $family->id)
-            ->effective()
-            ->spentBetween(Carbon::parse($startDate)->startOfDay(), Carbon::parse($endDate)->endOfDay());
+        $baseQuery = app(EffectiveLedger::class)->expensesForFamily($family->id)
+            ->where('spent_at', '>=', $startDate)
+            ->where('spent_at', '<', Carbon::parse($endDate)->addDay()->toDateString());
 
         $totalAmount = (clone $baseQuery)->sum('amount');
         $totalCount = (clone $baseQuery)->count();
