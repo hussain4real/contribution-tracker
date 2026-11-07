@@ -7,6 +7,7 @@ use App\Models\Expense;
 use App\Models\Family;
 use App\Models\FinancialReversal;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Laravel\Ai\Tools\Request;
 
 beforeEach(function () {
@@ -97,8 +98,15 @@ it('states that the total and entries exclude reversed expenses', function () {
         ->and(firstResultArray($result, 'expenses')['description'])->toBe($effective->description);
 });
 
-it('includes expenses throughout the final day of the requested date range', function (bool $useDefaultRange) {
+it('includes date-only expenses on the first day and timestamps on the final day', function (bool $useDefaultRange) {
     $this->travelTo(now()->setDate(2026, 9, 30)->setTime(12, 0));
+
+    $firstDay = Expense::factory()->create([
+        'family_id' => $this->family->id,
+        'amount' => 1000,
+        'spent_at' => '2026-09-01',
+    ]);
+    DB::table('expenses')->where('id', $firstDay->id)->update(['spent_at' => '2026-09-01']);
 
     Expense::factory()->create([
         'family_id' => $this->family->id,
@@ -117,8 +125,8 @@ it('includes expenses throughout the final day of the requested date range', fun
     ]);
     $result = decodeToolResult((new GetExpenseSummary($this->user))->handle($request));
 
-    expect($result['total_amount'])->toBe(5000)
-        ->and($result['expense_count'])->toBe(1);
+    expect($result['total_amount'])->toBe(6000)
+        ->and($result['expense_count'])->toBe(2);
 })->with(['default current month' => true, 'explicit date range' => false]);
 
 it('does not include expenses from other families', function () {
