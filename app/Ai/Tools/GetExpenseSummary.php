@@ -23,7 +23,7 @@ class GetExpenseSummary implements Tool
      */
     public function description(): string
     {
-        return 'Retrieves expense summary data for the family. Can filter by date range (start_date and end_date in Y-m-d format). Returns total expenses, expense count, and individual expense entries.';
+        return 'Retrieves family expense totals, counts, and entries excluding reversed expenses. Can filter by expense date (start_date and end_date in Y-m-d format).';
     }
 
     /**
@@ -75,6 +75,7 @@ class GetExpenseSummary implements Tool
             'source_url' => route('family.activity', ['current_family' => $family->slug, 'start_date' => $startDate, 'end_date' => $endDate, 'type' => 'expense']),
             'entries_truncated' => $totalCount > $expenses->count(),
             'period' => "{$startDate} to {$endDate}",
+            'excludes_reversed_expenses' => true,
             'total_amount' => $totalAmount,
             'expense_count' => $totalCount,
             'expenses' => $expenseList,

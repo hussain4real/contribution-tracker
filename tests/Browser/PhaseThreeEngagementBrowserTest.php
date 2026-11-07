@@ -47,7 +47,7 @@ it('creates edits traces and archives a visual goal on a narrow screen', functio
     expect(FamilyGoal::sole()->archived_at)->toBeNull()->and(Payment::count())->toBe(0)->and(Expense::count())->toBe(1);
 });
 
-it('prefills an AI expense draft and records it only after a human submits the form', function () {
+it('records an AI expense draft after human review and reverses it without deleting the audit entry', function () {
     $family = createBrowserFamily();
     $admin = createBrowserAdmin($family);
     $page = loginBrowserAs($admin);
@@ -60,6 +60,12 @@ it('prefills an AI expense draft and records it only after a human submits the f
     expect(Expense::count())->toBe(1);
     $page->navigate($draft['review_url'])->click('button[type="submit"]')->assertSee('Human reviewed AI draft');
     expect(Expense::count())->toBe(1);
+    $page->resize(390, 844)->click('button:text-is("Reverse")')->assertSee('Reverse expense')
+        ->fill('#expense-reversal-reason', 'Synthetic draft verification')
+        ->click('button:text-is("Reverse expense")')->assertSee('Synthetic draft verification')
+        ->assertNoJavaScriptErrors();
+    expect(Expense::sole()->isReversed())->toBeTrue()
+        ->and(Expense::query()->effective()->count())->toBe(0);
 });
 
 it('keeps a recorded AI adjustment draft idempotent when reopened in the same tab', function () {
