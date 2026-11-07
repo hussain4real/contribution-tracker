@@ -30,6 +30,40 @@ beforeEach(function (): void {
     ]);
 });
 
+it('admits the configured staging OpenAI Responses endpoint only', function (string $database, string $provider, ?string $key, string $baseUrl, bool $allowed): void {
+    config([
+        'd1-staging.enabled' => true,
+        'd1-staging.url' => 'https://d1-staging.example.invalid',
+        'd1-staging.database' => $database,
+        'd1-staging.r2.bucket' => '',
+        'd1-staging.webhooks.enabled' => false,
+        'ai.agent.provider' => $provider,
+        'ai.providers.openai.key' => $key,
+        'ai.providers.openai.url' => $baseUrl,
+    ]);
+    Http::fake([]);
+    (new D1StagingServiceProvider($this->app))->boot();
+
+    $post = fn (string $url) => Http::setHandler(new MockHandler([new HttpResponse(200, [], '{}')]))->post($url, []);
+    $responses = 'https://api.openai.com/v1/responses';
+
+    if ($allowed) {
+        expect($post($responses)->successful())->toBeTrue();
+    } else {
+        expect(fn () => $post($responses))->toThrow(StrayRequestException::class);
+    }
+
+    foreach (['https://api.openai.com/v1/files', 'https://api.openai.com.example.invalid/v1/responses'] as $url) {
+        expect(fn () => $post($url))->toThrow(StrayRequestException::class);
+    }
+})->with([
+    'configured staging provider' => ['familyfunds-d1-web-staging', 'openai', 'fixture-key', 'https://api.openai.com/v1', true],
+    'unconfigured key' => ['familyfunds-d1-web-staging', 'openai', null, 'https://api.openai.com/v1', false],
+    'custom provider URL' => ['familyfunds-d1-web-staging', 'openai', 'fixture-key', 'https://example.invalid/v1', false],
+    'other provider' => ['familyfunds-d1-web-staging', 'gemini', 'fixture-key', 'https://api.openai.com/v1', false],
+    'scale lab' => ['familyfunds-d1-scale-lab', 'openai', 'fixture-key', 'https://api.openai.com/v1', false],
+]);
+
 it('keeps D1 reachable when the test payment verification endpoint is enabled', function (): void {
     config([
         'd1-staging.enabled' => true,
