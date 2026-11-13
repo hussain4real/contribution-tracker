@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Models\ExpenseCategory;
 use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreExpenseRequest extends FormRequest
 {
@@ -27,7 +29,10 @@ class StoreExpenseRequest extends FormRequest
      */
     public function rules(): array
     {
+        $user = $this->user();
+
         return [
+            'expense_category_id' => ['nullable', 'integer', Rule::exists(ExpenseCategory::class, 'id')->where('family_id', $user instanceof User ? ($user->current_family_id ?? $user->family_id) : null)],
             'amount' => ['required', 'integer', 'min:1'],
             'description' => ['required', 'string', 'max:1000'],
             'spent_at' => ['required', 'date'],

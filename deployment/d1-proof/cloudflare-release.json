@@ -27,7 +27,7 @@
         "entry": "production-hostname-redirects.mjs"
       }
     ],
-    "accepted_migrations_sha256": "d546f5d73336e1c2d2794c7b06573d30f25c531e4da01dd953e453e48318edc3"
+    "accepted_migrations_sha256": "66d79c040058b62ee710beed13bc58883c962d84a52afc8c0b6919303b86ef6b"
   },
   "staging": {
     "branch": "cloudflare-staging",
@@ -53,6 +53,6 @@
         "accepted_previous_sha256": "9d10234fc4c30e0cea77e9714c4a0adf12920d95f67aec3f4fc47f3f226538ca"
       }
     ],
-    "accepted_migrations_sha256": "d546f5d73336e1c2d2794c7b06573d30f25c531e4da01dd953e453e48318edc3"
+    "accepted_migrations_sha256": "66d79c040058b62ee710beed13bc58883c962d84a52afc8c0b6919303b86ef6b"
   }
 }

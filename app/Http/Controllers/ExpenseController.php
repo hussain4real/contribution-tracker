@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Enums\AiActionKind;
 use App\Http\Requests\StoreExpenseRequest;
 use App\Models\Expense;
+use App\Models\ExpenseCategory;
 use App\Models\ExpenseDocument;
 use App\Models\Family;
 use App\Services\AiActionDrafts;
@@ -23,7 +24,7 @@ class ExpenseController extends Controller
     /**
      * Display a listing of all expenses.
      */
-    public function index(): Response
+    public function index(Request $request): Response
     {
         $this->authorize('viewAny', Expense::class);
 
@@ -34,7 +35,8 @@ class ExpenseController extends Controller
 
         $expenses = Expense::query()
             ->where('family_id', $family->id)
-            ->with(['recorder', 'reversal', 'documents'])
+            ->when($request->filled('entry'), fn ($query) => $query->whereKey($request->integer('entry')))
+            ->with(['recorder', 'reversal', 'documents', 'category'])
             ->latestFirst()
             ->latest('id')
             ->paginate(20)
@@ -45,6 +47,7 @@ class ExpenseController extends Controller
                 'can_upload' => $user->canRecordPayments(),
                 'amount' => $expense->amount,
                 'description' => $expense->description,
+                'category' => $expense->category->name ?? 'Uncategorized',
                 'spent_at' => $expense->spent_at->toDateString(),
                 'recorded_by' => $expense->recorder?->name,
                 'created_at' => $expense->created_at?->toDateString(),
@@ -73,6 +76,7 @@ class ExpenseController extends Controller
 
         return Inertia::render('Expenses/Create', [
             'aiDraft' => $draft['values'] ?? null,
+            'categories' => ExpenseCategory::query()->where('family_id', $family->id)->orderBy('name')->get(['id', 'name']),
             'idempotencyKey' => $draft['key'] ?? (string) Str::uuid(),
             'idempotencyScope' => "expense-{$family->id}-{$user->id}".($draft ? "-{$draft['key']}" : ''),
         ]);
@@ -94,6 +98,7 @@ class ExpenseController extends Controller
             $existing = Expense::query()->where('family_id', $family->id)->where('idempotency_key', $key)->first();
             if ($existing instanceof Expense) {
                 if ($existing->recorded_by !== $user->id || $existing->amount !== $request->integer('amount')
+                    || $existing->expense_category_id !== ($request->filled('expense_category_id') ? $request->integer('expense_category_id') : null)
                     || $existing->description !== $request->string('description')->toString()
                     || $existing->spent_at->toDateString() !== $request->date('spent_at')?->toDateString()) {
                     throw ValidationException::withMessages(['idempotency_key' => 'This request was already used for a different expense. Check the expense list before starting a new expense.']);
@@ -104,6 +109,7 @@ class ExpenseController extends Controller
 
             Expense::create([
                 'family_id' => $family->id,
+                'expense_category_id' => $request->filled('expense_category_id') ? $request->integer('expense_category_id') : null,
                 'amount' => $request->integer('amount'),
                 'description' => $request->string('description')->toString(),
                 'spent_at' => $request->string('spent_at')->toString(),

@@ -12,6 +12,7 @@ use App\Http\Controllers\ContributionReminderDeliveryRetryController;
 use App\Http\Controllers\ContributionWebPushReminderController;
 use App\Http\Controllers\ContributionWhatsAppReminderController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ExpenseBudgetController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\ExpenseDocumentController;
 use App\Http\Controllers\ExpenseRequestController;
@@ -230,6 +231,12 @@ Route::prefix('{current_family}')
         Route::post('subscription/subscribe', [SubscriptionController::class, 'subscribe'])->name('subscription.subscribe');
         Route::get('subscription/callback', [SubscriptionController::class, 'callback'])->name('subscription.callback');
         Route::post('subscription/cancel', [SubscriptionController::class, 'cancel'])->name('subscription.cancel');
+
+        Route::get('expense-budgets', [ExpenseBudgetController::class, 'index'])->name('expense-budgets.index');
+        Route::get('expense-budgets/details', [ExpenseBudgetController::class, 'details'])->name('expense-budgets.details');
+        Route::get('expense-budgets/preview', [ExpenseBudgetController::class, 'preview'])->name('expense-budgets.preview');
+        Route::post('expense-budgets', [ExpenseBudgetController::class, 'store'])->name('expense-budgets.store');
+        Route::post('expense-categories', [ExpenseBudgetController::class, 'storeCategory'])->name('expense-categories.store');
 
         // Expenses
         Route::post('expense-documents', [ExpenseDocumentController::class, 'store'])->name('expense-documents.store');

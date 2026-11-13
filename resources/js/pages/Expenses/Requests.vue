@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { index as budgets } from '@/actions/App/Http/Controllers/ExpenseBudgetController';
 import { index as expenses } from '@/actions/App/Http/Controllers/ExpenseController';
 import {
     decide,
@@ -6,6 +7,10 @@ import {
     pay,
     store,
 } from '@/actions/App/Http/Controllers/ExpenseRequestController';
+import ExpenseBudgetNotice, {
+    type BudgetAdvisory,
+} from '@/components/ExpenseBudgetNotice.vue';
+import ExpenseBudgetPreview from '@/components/ExpenseBudgetPreview.vue';
 import ExpenseDocuments from '@/components/ExpenseDocuments.vue';
 import { useFinancialRequestKey } from '@/composables/useFinancialRequestKey';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -13,6 +18,8 @@ import { useCurrencyFormatter } from '@/lib/currency';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 interface ExpenseRequest {
+    category: string;
+    budget_advisory: BudgetAdvisory | null;
     id: number;
     amount: number;
     description: string;
@@ -34,6 +41,7 @@ const props = defineProps<{
         prev_page_url: string | null;
         next_page_url: string | null;
     };
+    categories: { id: number; name: string }[];
     can_submit: boolean;
     idempotencyKey: string;
     idempotencyScope: string;
@@ -45,6 +53,7 @@ const key = useFinancialRequestKey(
     'expense request',
 );
 const form = useForm({
+    expense_category_id: '',
     amount: '',
     description: '',
     spent_at: new Date().toLocaleDateString('en-CA'),
@@ -131,6 +140,11 @@ function recordPayment(request: ExpenseRequest) {
                     >Posted expenses</Link
                 >
             </header>
+            <Link
+                :href="budgets().url"
+                class="inline-flex min-h-11 items-center underline"
+                >Monthly expense budgets</Link
+            >
             <p class="text-muted-foreground">
                 Requests and approvals do not change the balance. Record payment
                 after approval when the money has been spent.
@@ -141,6 +155,21 @@ function recordPayment(request: ExpenseRequest) {
                 @submit.prevent="submit"
             >
                 <h2 class="text-lg font-semibold">Submit an expense request</h2>
+                <label
+                    >Expense category<select
+                        v-model="form.expense_category_id"
+                        class="block min-h-11 w-full rounded-md border bg-background px-3"
+                    >
+                        <option value="">Uncategorized</option>
+                        <option
+                            v-for="category in categories"
+                            :key="category.id"
+                            :value="String(category.id)"
+                        >
+                            {{ category.name }}
+                        </option>
+                    </select></label
+                >
                 <label
                     >Amount<input
                         v-model="form.amount"
@@ -164,6 +193,11 @@ function recordPayment(request: ExpenseRequest) {
                         required
                         class="block min-h-11 rounded-md border bg-background px-3"
                 /></label>
+                <ExpenseBudgetPreview
+                    :category="form.expense_category_id"
+                    :amount="form.amount"
+                    :date="form.spent_at"
+                />
                 <p
                     v-for="message in form.errors"
                     :key="message"
@@ -211,6 +245,10 @@ function recordPayment(request: ExpenseRequest) {
                     {{ request.description }} ·
                     {{ formatCurrency(request.amount) }}
                 </h2>
+                <p class="text-sm text-muted-foreground">
+                    {{ request.category }}
+                </p>
+                <ExpenseBudgetNotice :advisory="request.budget_advisory" />
                 <p>
                     {{ request.requester }} · {{ request.spent_at }} ·
                     {{ request.status
