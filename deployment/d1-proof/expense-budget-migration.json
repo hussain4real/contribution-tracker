@@ -80,5 +80,98 @@
     "CREATE TRIGGER \"d1_read_revision_expense_categories_update\" after update on \"expense_categories\" begin update d1_staging_read_revision set revision=revision+1 where id=1; end",
     "CREATE TRIGGER \"d1_read_revision_expense_budgets_update\" after update on \"expense_budgets\" begin update d1_staging_read_revision set revision=revision+1 where id=1; end"
   ],
-  "rehearsal_cleanup": "pending"
+  "rehearsal_cleanup": {
+    "deleted": true,
+    "database": "1eddb3e5-d953-48f8-8a19-0e96c8d53857",
+    "at": "2026-11-13 06:29:49 UTC"
+  },
+  "live_releases": {
+    "staging": {
+      "pr": 332,
+      "head": "ad11bc699e304a696beab619932e4f3745d9a888",
+      "merge": "c384819b8676a5b246d501e23d4e0b07f0527922",
+      "run": 43375728653,
+      "bookmark": "00000152-00000000-00005122-e0cd6cebf8d68b12252b7dd8d929b98e",
+      "migration": {
+        "success": true,
+        "allStatementsPassed": true,
+        "ledgerAndDependentsPreserved": true,
+        "foreignKeyViolations": 0,
+        "quickCheck": [
+          {
+            "quick_check": "ok"
+          }
+        ],
+        "triggerCount": 141,
+        "migration": [
+          {
+            "migration": "2026_11_13_034236_create_expense_budgets_and_categories",
+            "batch": 17
+          }
+        ]
+      },
+      "existingGuardDefinitionsPreserved": true,
+      "ci": {
+        "passed": 1999,
+        "skipped": 40,
+        "assertions": 14705,
+        "coverage": 100
+      },
+      "deployment": {
+        "runtime_revision": "github-c384819b8676",
+        "image": "registry.cloudflare.com/40344948b73fa9da3008958fdc3faf12/familyfunds-d1-staging@sha256:8c2dff9b4e1747394d4568d1dfd5a7410548c1e586dfb9b2c1f9d442f5916937",
+        "native_image_verified": true,
+        "laravel_login_verified": true
+      }
+    },
+    "production": {
+      "pr": 331,
+      "head": "b27d003fcf9d996086d0ffe9703837d7d706b7ae",
+      "ci": {
+        "passed": 1977,
+        "skipped": 40,
+        "assertions": 14623,
+        "coverage": 100
+      },
+      "merge": "418f3103e3c79ddd706f4a6d4f802062ebd67ef3",
+      "bookmark": "0000010a-00000585-00005122-fda83968a140bf4e9c589edd5ab445d5",
+      "migration": {
+        "success": true,
+        "allStatementsPassed": true,
+        "ledgerAndDependentsPreserved": true,
+        "foreignKeyViolations": 0,
+        "quickCheck": [
+          {
+            "quick_check": "ok"
+          }
+        ],
+        "triggerCount": 288,
+        "migration": [
+          {
+            "migration": "2026_11_13_034236_create_expense_budgets_and_categories",
+            "batch": 18
+          }
+        ]
+      },
+      "existingGuardDefinitionsPreserved": true,
+      "run": 43377276134,
+      "deployment": {
+        "runtime_revision": "github-418f3103e3c7",
+        "image": "registry.cloudflare.com/40344948b73fa9da3008958fdc3faf12/familyfunds-production@sha256:a5cb8f6f0fd0cf8bdde2e3ec0ead06ef5e9e6b4dc9604c6ec4861c8c56c2e957",
+        "native_image_verified": true,
+        "laravel_login_verified": true
+      },
+      "hosted_read_checks": {
+        "family": "FF322 Hosted Acceptance Test",
+        "month": "2026-11",
+        "budget_page": true,
+        "actual_drilldown": true,
+        "committed_drilldown": true,
+        "actual": 0,
+        "committed": 0,
+        "browser_errors": 0,
+        "write_journeys_tested": false
+      }
+    }
+  }
 }
