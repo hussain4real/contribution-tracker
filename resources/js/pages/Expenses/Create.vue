@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { index, store } from '@/actions/App/Http/Controllers/ExpenseController';
+import ExpenseBudgetPreview from '@/components/ExpenseBudgetPreview.vue';
 import HeadingSmall from '@/components/HeadingSmall.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,7 @@ import { Form, Head } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
 const props = defineProps<{
+    categories: { id: number; name: string }[];
     idempotencyKey: string;
     idempotencyScope: string;
     aiDraft: { amount: number; description: string; spent_at: string } | null;
@@ -44,6 +46,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
+const expenseCategory = ref('');
 const amount = ref<string>(props.aiDraft?.amount.toString() ?? '');
 const description = ref<string>(props.aiDraft?.description ?? '');
 const spentAt = ref<string>(
@@ -111,6 +114,25 @@ const { currency } = useCurrencyFormatter();
                         >Start a new expense</Button
                     >
                 </div>
+                <div class="grid gap-2">
+                    <Label for="expense-category">Expense category</Label>
+                    <select
+                        id="expense-category"
+                        v-model="expenseCategory"
+                        name="expense_category_id"
+                        class="min-h-11 w-full rounded-md border bg-background px-3"
+                    >
+                        <option value="">Uncategorized</option>
+                        <option
+                            v-for="category in categories"
+                            :key="category.id"
+                            :value="String(category.id)"
+                        >
+                            {{ category.name }}
+                        </option>
+                    </select>
+                    <InputError :message="errors.expense_category_id" />
+                </div>
                 <!-- Amount Field -->
                 <div class="grid gap-2">
                     <Label for="amount">Amount ({{ currency }})</Label>
@@ -157,6 +179,11 @@ const { currency } = useCurrencyFormatter();
                     <InputError :message="errors.spent_at" />
                 </div>
 
+                <ExpenseBudgetPreview
+                    :category="expenseCategory"
+                    :amount="amount"
+                    :date="spentAt"
+                />
                 <!-- Submit Button -->
                 <div class="flex items-center gap-4">
                     <Button

@@ -14,6 +14,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
+ * @property int|null $expense_category_id
+ * @property-read ExpenseCategory|null $category
  * @property int $id
  * @property int $family_id
  * @property int|null $requested_by
@@ -33,9 +35,15 @@ class ExpenseRequest extends Model
     /** @use HasFactory<ExpenseRequestFactory> */
     use HasFactory;
 
-    protected $fillable = ['family_id', 'requested_by', 'amount', 'description', 'spent_at', 'status', 'required_approvals', 'idempotency_key'];
+    protected $fillable = ['expense_category_id', 'family_id', 'requested_by', 'amount', 'description', 'spent_at', 'status', 'required_approvals', 'idempotency_key'];
 
     protected $attributes = ['status' => 'submitted'];
+
+    /** @return BelongsTo<ExpenseCategory, $this> */
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(ExpenseCategory::class, 'expense_category_id');
+    }
 
     /** @return array<string,string> */
     protected function casts(): array

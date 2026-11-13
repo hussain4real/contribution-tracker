@@ -84,6 +84,7 @@ class ExpenseGovernance
         $request = ExpenseRequest::query()->where('family_id', $family->id)
             ->lockForUpdate()->find($expense->expense_request_id);
         if (! $request instanceof ExpenseRequest || ! in_array($request->status, ['submitted', 'approved'], true)
+            || $request->expense_category_id !== $expense->expense_category_id
             || $request->amount !== $expense->amount || $request->description !== $expense->description
             || $request->spent_at->toDateString() !== $expense->spent_at->toDateString()
             || $this->approvedCount($request) < $this->requiredForRequest($family, $request)
@@ -138,6 +139,7 @@ class ExpenseGovernance
             }
             $expense = Expense::query()->create([
                 'family_id' => $locked->family_id, 'expense_request_id' => $locked->id,
+                'expense_category_id' => $locked->expense_category_id,
                 'amount' => $locked->amount, 'description' => $locked->description,
                 'spent_at' => $locked->spent_at, 'recorded_by' => $actor->id,
                 'idempotency_key' => $locked->idempotency_key,
