@@ -1,0 +1,84 @@
+{
+  "date": "2026-11-13",
+  "migration": "2026_11_13_034236_create_expense_budgets_and_categories",
+  "source_schema_only": true,
+  "source_production_database": "8f0d0867-281a-48c3-8b2e-0d867529622c",
+  "staging_database": "f96058f1-0aa3-42f3-9ee2-f796554d6ef4",
+  "rehearsal_database": "1eddb3e5-d953-48f8-8a19-0e96c8d53857",
+  "synthetic_records_only": true,
+  "source_schema": {
+    "tables": 61,
+    "indexes": 124,
+    "triggers": 276
+  },
+  "migration_fingerprint": "66d79c040058b62ee710beed13bc58883c962d84a52afc8c0b6919303b86ef6b",
+  "checks": {
+    "forced_failure_atomic_rollback": true,
+    "up": true,
+    "down_preserved_rows_and_dependents": true,
+    "reapply": true,
+    "unique_monthly_category": true,
+    "foreign_keys": true,
+    "category_delete_restricted": true,
+    "existing_triggers_preserved": 276,
+    "production_new_guards": 12,
+    "cache_revision_advanced": 2,
+    "cutover_first_write_recorded": true,
+    "quick_check": "ok",
+    "foreign_key_violations": 0,
+    "bookmark_restore_verified": true,
+    "actual_committed_before": [
+      125,
+      250
+    ],
+    "actual_committed_after_posting": [
+      375,
+      0
+    ],
+    "actual_committed_after_reversal": [
+      125,
+      0
+    ]
+  },
+  "up": [
+    "create table \"expense_categories\" (\"id\" integer primary key autoincrement not null, \"family_id\" integer not null, \"name\" varchar not null, \"created_at\" datetime, \"updated_at\" datetime, foreign key(\"family_id\") references \"families\"(\"id\") on delete restrict)",
+    "create unique index \"expense_categories_family_id_name_unique\" on \"expense_categories\" (\"family_id\", \"name\")",
+    "create table \"expense_budgets\" (\"id\" integer primary key autoincrement not null, \"family_id\" integer not null, \"expense_category_id\" integer not null, \"month\" date not null, \"amount\" integer not null, \"created_at\" datetime, \"updated_at\" datetime, foreign key(\"family_id\") references \"families\"(\"id\") on delete restrict, foreign key(\"expense_category_id\") references \"expense_categories\"(\"id\") on delete restrict)",
+    "create unique index \"expense_budgets_family_id_expense_category_id_month_unique\" on \"expense_budgets\" (\"family_id\", \"expense_category_id\", \"month\")",
+    "ALTER TABLE \"expenses\" ADD COLUMN \"expense_category_id\" INTEGER REFERENCES \"expense_categories\"(\"id\") ON DELETE RESTRICT",
+    "create index \"expenses_family_id_spent_at_expense_category_id_index\" on \"expenses\" (\"family_id\", \"spent_at\", \"expense_category_id\")",
+    "ALTER TABLE \"expense_requests\" ADD COLUMN \"expense_category_id\" INTEGER REFERENCES \"expense_categories\"(\"id\") ON DELETE RESTRICT",
+    "create index \"expense_requests_family_id_spent_at_expense_category_id_index\" on \"expense_requests\" (\"family_id\", \"spent_at\", \"expense_category_id\")"
+  ],
+  "down": [
+    "drop index \"expenses_family_id_spent_at_expense_category_id_index\"",
+    "alter table \"expenses\" drop column \"expense_category_id\"",
+    "drop index \"expense_requests_family_id_spent_at_expense_category_id_index\"",
+    "alter table \"expense_requests\" drop column \"expense_category_id\"",
+    "drop table if exists \"expense_budgets\"",
+    "drop table if exists \"expense_categories\""
+  ],
+  "production_guards": [
+    "CREATE TRIGGER \"d1_cutover_expense_categories_delete\" after delete on \"expense_categories\" begin update d1_runtime_health set checked_at=unixepoch(),details=json_set(details,'$.phase','written','$.first_table','expense_categories','$.first_operation','delete','$.first_write_utc',strftime('%Y-%m-%dT%H:%M:%fZ','now')) where name='cutover-write-boundary' and status='healthy' and json_extract(details,'$.phase')='armed'; end;",
+    "CREATE TRIGGER \"d1_cutover_expense_budgets_delete\" after delete on \"expense_budgets\" begin update d1_runtime_health set checked_at=unixepoch(),details=json_set(details,'$.phase','written','$.first_table','expense_budgets','$.first_operation','delete','$.first_write_utc',strftime('%Y-%m-%dT%H:%M:%fZ','now')) where name='cutover-write-boundary' and status='healthy' and json_extract(details,'$.phase')='armed'; end;",
+    "CREATE TRIGGER \"d1_cutover_expense_categories_insert\" after insert on \"expense_categories\" begin update d1_runtime_health set checked_at=unixepoch(),details=json_set(details,'$.phase','written','$.first_table','expense_categories','$.first_operation','insert','$.first_write_utc',strftime('%Y-%m-%dT%H:%M:%fZ','now')) where name='cutover-write-boundary' and status='healthy' and json_extract(details,'$.phase')='armed'; end;",
+    "CREATE TRIGGER \"d1_cutover_expense_budgets_insert\" after insert on \"expense_budgets\" begin update d1_runtime_health set checked_at=unixepoch(),details=json_set(details,'$.phase','written','$.first_table','expense_budgets','$.first_operation','insert','$.first_write_utc',strftime('%Y-%m-%dT%H:%M:%fZ','now')) where name='cutover-write-boundary' and status='healthy' and json_extract(details,'$.phase')='armed'; end;",
+    "CREATE TRIGGER \"d1_cutover_expense_categories_update\" after update on \"expense_categories\" begin update d1_runtime_health set checked_at=unixepoch(),details=json_set(details,'$.phase','written','$.first_table','expense_categories','$.first_operation','update','$.first_write_utc',strftime('%Y-%m-%dT%H:%M:%fZ','now')) where name='cutover-write-boundary' and status='healthy' and json_extract(details,'$.phase')='armed'; end;",
+    "CREATE TRIGGER \"d1_cutover_expense_budgets_update\" after update on \"expense_budgets\" begin update d1_runtime_health set checked_at=unixepoch(),details=json_set(details,'$.phase','written','$.first_table','expense_budgets','$.first_operation','update','$.first_write_utc',strftime('%Y-%m-%dT%H:%M:%fZ','now')) where name='cutover-write-boundary' and status='healthy' and json_extract(details,'$.phase')='armed'; end;",
+    "CREATE TRIGGER \"d1_read_revision_expense_categories_delete\" after delete on \"expense_categories\" begin update d1_staging_read_revision set revision=revision+1 where id=1; end;",
+    "CREATE TRIGGER \"d1_read_revision_expense_budgets_delete\" after delete on \"expense_budgets\" begin update d1_staging_read_revision set revision=revision+1 where id=1; end;",
+    "CREATE TRIGGER \"d1_read_revision_expense_categories_insert\" after insert on \"expense_categories\" begin update d1_staging_read_revision set revision=revision+1 where id=1; end;",
+    "CREATE TRIGGER \"d1_read_revision_expense_budgets_insert\" after insert on \"expense_budgets\" begin update d1_staging_read_revision set revision=revision+1 where id=1; end;",
+    "CREATE TRIGGER \"d1_read_revision_expense_categories_update\" after update on \"expense_categories\" begin update d1_staging_read_revision set revision=revision+1 where id=1; end;",
+    "CREATE TRIGGER \"d1_read_revision_expense_budgets_update\" after update on \"expense_budgets\" begin update d1_staging_read_revision set revision=revision+1 where id=1; end;"
+  ],
+  "staging_guards": [
+    "CREATE TRIGGER \"d1_read_revision_expense_categories_delete\" after delete on \"expense_categories\" begin update d1_staging_read_revision set revision=revision+1 where id=1; end",
+    "CREATE TRIGGER \"d1_read_revision_expense_budgets_delete\" after delete on \"expense_budgets\" begin update d1_staging_read_revision set revision=revision+1 where id=1; end",
+    "CREATE TRIGGER \"d1_read_revision_expense_categories_insert\" after insert on \"expense_categories\" begin update d1_staging_read_revision set revision=revision+1 where id=1; end",
+    "CREATE TRIGGER \"d1_read_revision_expense_budgets_insert\" after insert on \"expense_budgets\" begin update d1_staging_read_revision set revision=revision+1 where id=1; end",
+    "CREATE TRIGGER \"d1_read_revision_expense_categories_update\" after update on \"expense_categories\" begin update d1_staging_read_revision set revision=revision+1 where id=1; end",
+    "CREATE TRIGGER \"d1_read_revision_expense_budgets_update\" after update on \"expense_budgets\" begin update d1_staging_read_revision set revision=revision+1 where id=1; end"
+  ],
+  "rehearsal_cleanup": "pending"
+}

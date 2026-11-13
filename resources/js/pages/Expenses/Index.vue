@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { index as budgets } from '@/actions/App/Http/Controllers/ExpenseBudgetController';
 import {
     create as createExpense,
     index,
@@ -30,6 +31,7 @@ interface ExpenseItem {
     id: number;
     amount: number;
     description: string;
+    category: string;
     spent_at: string;
     recorded_by: string | null;
     created_at: string;
@@ -144,6 +146,7 @@ function reverseExpense(): void {
             >
                 <summary class="cursor-pointer py-2">
                     Documents for {{ expense.description }} ·
+                    {{ expense.category }} ·
                     {{ formatDate(expense.spent_at) }}
                 </summary>
                 <ExpenseDocuments
@@ -153,6 +156,12 @@ function reverseExpense(): void {
                 />
             </details>
 
+            <Link
+                v-if="can_create"
+                :href="budgets().url"
+                class="inline-flex min-h-11 items-center underline"
+                >Monthly expense budgets</Link
+            >
             <!-- Expenses Table -->
             <div
                 class="rounded-xl border border-sidebar-border/70 bg-white dark:border-sidebar-border dark:bg-neutral-900"
@@ -178,7 +187,8 @@ function reverseExpense(): void {
                                 <p
                                     class="font-medium text-neutral-900 dark:text-neutral-100"
                                 >
-                                    {{ expense.description }}
+                                    {{ expense.description }} ·
+                                    {{ expense.category }}
                                 </p>
                                 <p class="mt-1 text-xs text-muted-foreground">
                                     {{ formatDate(expense.spent_at) }}
@@ -267,7 +277,8 @@ function reverseExpense(): void {
                                 <td
                                     class="max-w-[120px] truncate px-4 py-4 text-neutral-700 sm:max-w-xs sm:px-6 dark:text-neutral-300"
                                 >
-                                    {{ expense.description }}
+                                    {{ expense.description }} ·
+                                    {{ expense.category }}
                                     <span
                                         v-if="expense.is_reversed"
                                         class="ml-2 text-xs font-medium text-amber-600"

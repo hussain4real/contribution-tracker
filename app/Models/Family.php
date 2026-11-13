@@ -304,6 +304,18 @@ class Family extends Model
         return $this->hasMany(PaymentBatch::class);
     }
 
+    /** @return HasMany<ExpenseCategory, $this> */
+    public function expenseCategories(): HasMany
+    {
+        return $this->hasMany(ExpenseCategory::class);
+    }
+
+    /** @return HasMany<ExpenseBudget, $this> */
+    public function expenseBudgets(): HasMany
+    {
+        return $this->hasMany(ExpenseBudget::class);
+    }
+
     /** @return HasMany<ExpenseRequest, $this> */
     public function expenseRequests(): HasMany
     {

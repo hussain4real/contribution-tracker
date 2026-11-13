@@ -20,6 +20,8 @@ use LogicException;
 /**
  * @property int|null $expense_request_id
  * @property-read Collection<int, ExpenseDocument> $documents
+ * @property int|null $expense_category_id
+ * @property-read ExpenseCategory|null $category
  * @property int $id
  * @property int $family_id
  * @property int $amount
@@ -75,7 +77,14 @@ class Expense extends Model
         'recorded_by',
         'idempotency_key',
         'expense_request_id',
+        'expense_category_id',
     ];
+
+    /** @return BelongsTo<ExpenseCategory, $this> */
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(ExpenseCategory::class, 'expense_category_id');
+    }
 
     /**
      * Get the attributes that should be cast.
