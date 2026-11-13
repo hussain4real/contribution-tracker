@@ -31,6 +31,7 @@ class CorrectExpense
         ): Expense {
             $replacement = Expense::query()->create([
                 'family_id' => $original->family_id,
+                'expense_category_id' => $original->expense_category_id,
                 'amount' => $amount,
                 'description' => $description,
                 'spent_at' => $spentAt,
