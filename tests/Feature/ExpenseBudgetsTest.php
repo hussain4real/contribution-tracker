@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Testing\AssertableJsonString;
+use Illuminate\Validation\ValidationException;
 use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
@@ -94,6 +95,8 @@ it('saves one monthly category limit with audit history and no ledger movement',
     $this->actingAs($this->owner)->post(route('expense-budgets.store'), $payload)->assertRedirect();
     $this->post(route('expense-budgets.store'), $payload)->assertRedirect();
     expect(ExpenseBudget::count())->toBe(1)->and($this->budget->refresh()->amount)->toBe(2500)
+        ->and($this->budget->family->is($this->family))->toBeTrue()
+        ->and($this->category->family->is($this->family))->toBeTrue()
         ->and(AuditEvent::where('action', 'expense_budget.saved')->count())->toBe(1)
         ->and(app(EffectiveLedger::class)->balance($this->family->id))->toBe(0);
     $this->post(route('expense-budgets.store'), [...$payload, 'month' => '2026-12', 'amount' => 0])->assertRedirect();
@@ -203,6 +206,32 @@ it('provides an advisory without blocking over-budget posting and binds replay t
     expect(Expense::count())->toBe(1);
     $foreign = ExpenseCategory::factory()->create();
     $this->postJson(route('expenses.store'), [...$payload, 'expense_category_id' => $foreign->id, 'idempotency_key' => (string) Str::uuid()])->assertUnprocessable();
+});
+
+it('keeps request advisories independent and leaves categories without a limit unwarned', function () {
+    $unbudgeted = ExpenseCategory::factory()->create(['family_id' => $this->family->id, 'name' => 'Travel']);
+    foreach ([$this->category->id, $this->category->id, $unbudgeted->id] as $categoryId) {
+        ExpenseRequest::factory()->create([
+            'family_id' => $this->family->id, 'expense_category_id' => $categoryId,
+            'requested_by' => $this->officer->id, 'amount' => 1500,
+            'required_approvals' => 1, 'status' => 'submitted', 'spent_at' => '2026-11-13',
+        ]);
+    }
+
+    $this->actingAs($this->owner)->get(route('expense-requests.index'))->assertInertia(fn (Assert $page) => $page
+        ->where('requests.data.0.budget_advisory', null)
+        ->where('requests.data.1.budget_advisory.projected', 1500)
+        ->where('requests.data.2.budget_advisory.projected', 1500)
+        ->where('requests.data.1.budget_advisory.over_by', 500));
+});
+
+it('rejects another family category when an expense is posted outside the HTTP form', function () {
+    $foreign = ExpenseCategory::factory()->create();
+    expect(fn () => Expense::factory()->create([
+        'family_id' => $this->family->id, 'recorded_by' => $this->owner->id,
+        'expense_category_id' => $foreign->id,
+    ]))->toThrow(ValidationException::class, 'Select an expense category belonging to this family.');
+    expect(Expense::count())->toBe(0);
 });
 
 it('removes budgets and categories during authorized family retention purge', function () {
