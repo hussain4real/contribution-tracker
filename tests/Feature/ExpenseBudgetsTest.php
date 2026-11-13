@@ -95,8 +95,8 @@ it('saves one monthly category limit with audit history and no ledger movement',
     $this->actingAs($this->owner)->post(route('expense-budgets.store'), $payload)->assertRedirect();
     $this->post(route('expense-budgets.store'), $payload)->assertRedirect();
     expect(ExpenseBudget::count())->toBe(1)->and($this->budget->refresh()->amount)->toBe(2500)
-        ->and($this->budget->family->is($this->family))->toBeTrue()
-        ->and($this->category->family->is($this->family))->toBeTrue()
+        ->and($this->budget->family?->is($this->family))->toBeTrue()
+        ->and($this->category->family?->is($this->family))->toBeTrue()
         ->and(AuditEvent::where('action', 'expense_budget.saved')->count())->toBe(1)
         ->and(app(EffectiveLedger::class)->balance($this->family->id))->toBe(0);
     $this->post(route('expense-budgets.store'), [...$payload, 'month' => '2026-12', 'amount' => 0])->assertRedirect();
