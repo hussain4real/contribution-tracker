@@ -122,10 +122,14 @@ final class D1StagingServiceProvider extends ServiceProvider
         Http::preventStrayRequests();
         $allowedRequests = [$url.'/*'];
         if (config('d1-staging.database') === 'familyfunds-d1-web-staging'
-            && config('ai.agent.provider') === 'openai'
             && config('ai.providers.openai.url') === 'https://api.openai.com/v1'
             && filled(config('ai.providers.openai.key'))) {
-            $allowedRequests[] = 'https://api.openai.com/v1/responses';
+            if (config('ai.agent.provider') === 'openai') {
+                $allowedRequests[] = 'https://api.openai.com/v1/responses';
+            }
+            if (config('ai.default_for_transcription') === 'openai') {
+                $allowedRequests[] = 'https://api.openai.com/v1/audio/transcriptions';
+            }
         }
         if (config('d1-staging.webhooks.enabled')) {
             $paystack = config('d1-staging.webhooks.paystack_test_key');
