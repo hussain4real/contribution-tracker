@@ -265,6 +265,9 @@ def publish(target, directory):
         rollback_container = {**container, 'images': {'base': previous_image}} if container and target == 'production' else container
         old_body, old_mime = multipart(previous_entry, previous_sources, bindings, rollback_container)
         updated = [dict(binding) for binding in bindings]
+        if worker['worker'] == CONFIG[target]['worker']:
+            updated = [binding for binding in updated if binding['name'] != 'OPENAI_TRANSCRIPTION_MODEL']
+            updated.append({'name': 'OPENAI_TRANSCRIPTION_MODEL', 'type': 'plain_text', 'text': CONFIG['openai_transcription_model']})
         for binding in updated:
             if worker['worker'] == CONFIG[target]['worker'] and binding['name'] in ['RUNTIME_REVISION', 'CONTAINER_IMAGE']:
                 binding['text'] = name if binding['name'] == 'RUNTIME_REVISION' else image

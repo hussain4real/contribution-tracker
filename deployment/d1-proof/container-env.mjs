@@ -60,6 +60,10 @@ export function containerEnvironment(bindings) {
         if (!extra || typeof extra !== 'object' || Array.isArray(extra) || Object.keys(extra).some(key => !allowed.has(key))) throw new Error('Unexpected AI environment field');
         Object.assign(result, extra);
     }
+    if (bindings.OPENAI_TRANSCRIPTION_MODEL !== undefined) {
+        result.AI_TRANSCRIPTION_PROVIDER = 'openai';
+        result.OPENAI_TRANSCRIPTION_MODEL = bindings.OPENAI_TRANSCRIPTION_MODEL;
+    }
     for (const [name, value] of Object.entries(result)) {
         if (!/^[A-Z_][A-Z0-9_]*$/.test(name) || typeof value !== 'string' || value.includes('\0') || encoder.encode(value).length > 16000) throw new Error('Invalid container environment variable');
     }
