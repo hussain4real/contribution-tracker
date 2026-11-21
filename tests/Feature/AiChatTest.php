@@ -8,8 +8,10 @@ use App\Models\Family;
 use App\Models\PlatformPlan;
 use App\Models\User;
 use App\Support\PlatformPlanCatalog;
+use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
 use Laravel\Ai\Prompts\TranscriptionPrompt;
@@ -711,25 +713,39 @@ test('the transcribe endpoint rejects non-audio files', function () {
         ->assertJsonValidationErrors(['audio']);
 });
 
-test('the transcribe endpoint returns transcribed text', function () {
-    config(['ai.providers.openai.key' => 'openai-key']);
+test('the transcribe endpoint uploads audio to GPT-Transcribe and returns the transcript', function () {
+    config([
+        'ai.providers.openai.key' => 'openai-key',
+        'ai.providers.openai.url' => 'https://api.openai.com/v1',
+    ]);
 
     $user = User::factory()->create();
 
-    Transcription::fake(['Hello Suleiman, how are you?']);
+    Http::preventStrayRequests();
+    Http::fake([
+        'https://api.openai.com/v1/audio/transcriptions' => Http::response([
+            'text' => 'Hello Suleiman, how are you?',
+            'languages' => [['code' => 'en']],
+        ]),
+    ]);
 
     $this->actingAs($user)
         ->postJson(route('ai.transcribe'), [
             'audio' => UploadedFile::fake()->createWithContent('recording.webm', str_repeat('audio', 20_480))->mimeType('audio/webm'),
         ])
         ->assertSuccessful()
+        ->assertHeader('X-FamilyFunds-Transcription-Model', 'gpt-transcribe')
         ->assertJson(['text' => 'Hello Suleiman, how are you?']);
 
-    Transcription::assertGenerated(fn (TranscriptionPrompt $prompt) => $prompt->provider instanceof OpenAiProvider
-        && $prompt->model === 'gpt-4o-mini-transcribe'
-        && $prompt->audio->mimeType() === 'audio/webm'
-        && $prompt->language === 'en'
-        && ! $prompt->isDiarized());
+    Http::assertSent(function (ClientRequest $request): bool {
+        $fields = collect($request->data())->pluck('contents', 'name');
+
+        return $request->method() === 'POST'
+            && $request->hasFile('file', null, 'audio.webm')
+            && $fields->get('model') === 'gpt-transcribe'
+            && $fields->get('response_format') === 'json'
+            && ! $fields->has('language');
+    });
 });
 
 test('the transcribe endpoint uses Gemini when it is the only configured provider', function () {
@@ -749,7 +765,7 @@ test('the transcribe endpoint uses Gemini when it is the only configured provide
     Transcription::assertGenerated(fn (TranscriptionPrompt $prompt) => $prompt->provider instanceof GeminiProvider
         && $prompt->model === 'gemini-3.5-flash'
         && $prompt->audio->mimeType() === 'audio/webm'
-        && $prompt->language === 'en'
+        && $prompt->language === null
         && ! $prompt->isDiarized());
 });
 
@@ -774,7 +790,7 @@ test('the transcribe endpoint respects Gemini as the configured default provider
     Transcription::assertGenerated(fn (TranscriptionPrompt $prompt) => $prompt->provider instanceof GeminiProvider
         && $prompt->model === 'gemini-3.5-flash'
         && $prompt->audio->mimeType() === 'audio/webm'
-        && $prompt->language === 'en'
+        && $prompt->language === null
         && ! $prompt->isDiarized());
 });
 
