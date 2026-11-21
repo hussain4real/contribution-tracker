@@ -247,6 +247,13 @@ test('only staging images configure the private FPM status listener and block it
     assert.ok(packagedAssets.some(asset => asset.path.endsWith('/staging-fpm-status.php')));
 });
 
+test('staging and production buffer request uploads in the Nginx runtime directory', () => {
+    for (const config of ['container-nginx-staging.conf', 'container-nginx.conf']) {
+        const source = readFileSync(new URL(`./${config}`, import.meta.url), 'utf8');
+        assert.match(source, /^\s*client_body_temp_path \/run\/nginx\/client-body;$/m, config);
+    }
+});
+
 test('staging queue startup can be disabled without affecting the production default', () => {
     const entrypoint = readFileSync(new URL('./container-slim-entrypoint.sh', import.meta.url), 'utf8')
         .replace('set -eu', 'set -eu\nphp() { :; }')
