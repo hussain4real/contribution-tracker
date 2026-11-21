@@ -395,6 +395,9 @@ def publish(target, directory):
         updated = [dict(binding) for binding in bindings]
         if target == 'staging' and worker['worker'] == CONFIG['staging']['worker'] and not any(binding['name'] == 'STAGING_SQL_GATEWAY' for binding in updated):
             updated.append({'name': 'STAGING_SQL_GATEWAY', 'type': 'service', 'service': 'familyfunds-d1-staging-sql'})
+        if worker['worker'] == CONFIG[target]['worker']:
+            updated = [binding for binding in updated if binding['name'] != 'OPENAI_TRANSCRIPTION_MODEL']
+            updated.append({'name': 'OPENAI_TRANSCRIPTION_MODEL', 'type': 'plain_text', 'text': CONFIG['openai_transcription_model']})
         for binding in updated:
             if worker['worker'] == CONFIG[target]['worker'] and binding['name'] in ['RUNTIME_REVISION', 'CONTAINER_IMAGE']:
                 binding['text'] = name if binding['name'] == 'RUNTIME_REVISION' else image

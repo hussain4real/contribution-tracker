@@ -134,7 +134,7 @@ return [
             'url' => env('OPENAI_URL', 'https://api.openai.com/v1'),
             'models' => [
                 'transcription' => [
-                    'default' => env('OPENAI_TRANSCRIPTION_MODEL', 'gpt-4o-mini-transcribe'),
+                    'default' => env('OPENAI_TRANSCRIPTION_MODEL', 'gpt-transcribe'),
                 ],
             ],
         ],
