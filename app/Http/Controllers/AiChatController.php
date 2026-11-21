@@ -176,7 +176,6 @@ class AiChatController extends Controller
         }
 
         $response = Transcription::of($audio)
-            ->language('en')
             ->timeout(30)
             ->generate($providers ?: null);
         $text = trim($response->text);
@@ -202,7 +201,8 @@ class AiChatController extends Controller
             ], 422);
         }
 
-        return response()->json(['text' => $text]);
+        return response()->json(['text' => $text])
+            ->header('X-FamilyFunds-Transcription-Model', $response->meta->model ?? '');
     }
 
     /**

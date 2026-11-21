@@ -1,6 +1,7 @@
 {
   "account_id": "40344948b73fa9da3008958fdc3faf12",
   "compatibility_date": "2026-10-27",
+  "openai_transcription_model": "gpt-transcribe",
   "production": {
     "branch": "main",
     "worker": "familyfunds-production-managed",

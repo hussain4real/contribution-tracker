@@ -71,6 +71,19 @@ test('environment-specific AI secrets replace the provider without changing othe
         AI_ENV: JSON.stringify({OPENAI_API_KEY: 'new-key'})}).OPENAI_API_KEY, 'new-key');
 });
 
+test('the hosted transcription model takes precedence over earlier settings', () => {
+    for (const environment of ['d1-staging', 'production']) {
+        const config = containerEnvironment({
+            CONTAINER_ENV: JSON.stringify({APP_ENV: environment, OPENAI_TRANSCRIPTION_MODEL: 'gpt-4o-mini-transcribe'}),
+            AI_ENV: JSON.stringify({OPENAI_API_KEY: 'fixture-key', AI_TRANSCRIPTION_PROVIDER: 'gemini'}),
+            OPENAI_TRANSCRIPTION_MODEL: 'gpt-transcribe',
+        });
+        assert.equal(config.AI_TRANSCRIPTION_PROVIDER, 'openai');
+        assert.equal(config.OPENAI_TRANSCRIPTION_MODEL, 'gpt-transcribe');
+        assert.equal(config.OPENAI_API_KEY, 'fixture-key');
+    }
+});
+
 test('AI secrets reject malformed values and changes to unrelated application configuration', () => {
     for (const value of [false, 'x'.repeat(4097), '[]', 'null', '{',
         ...[{APP_KEY: 'forbidden'}, {SQL_GATEWAY_TOKEN: 'forbidden'}, {GITHUB_RELEASES_TOKEN: 'forbidden'},
