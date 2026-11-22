@@ -28,7 +28,7 @@
         "entry": "production-hostname-redirects.mjs"
       }
     ],
-    "accepted_migrations_sha256": "66d79c040058b62ee710beed13bc58883c962d84a52afc8c0b6919303b86ef6b"
+    "accepted_migrations_sha256": "00d40eaddc8ea187ae415f0a05b9add23848dc77148105e6ceaa02243685ea10"
   },
   "staging": {
     "branch": "cloudflare-staging",
@@ -41,6 +41,6 @@
     "dockerfile": "Dockerfile.slim",
     "url": "https://d1-staging.familyfunds.app",
     "companions": [],
-    "accepted_migrations_sha256": "66d79c040058b62ee710beed13bc58883c962d84a52afc8c0b6919303b86ef6b"
+    "accepted_migrations_sha256": "00d40eaddc8ea187ae415f0a05b9add23848dc77148105e6ceaa02243685ea10"
   }
 }

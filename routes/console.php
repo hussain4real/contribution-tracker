@@ -25,6 +25,11 @@ Schedule::command('reports:dispatch-scheduled')
     ->withoutOverlapping()
     ->onOneServer();
 
+Schedule::command('expenses:generate-drafts')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->onOneServer();
+
 Schedule::command('families:purge-archived')
     ->dailyAt('01:30')
     ->withoutOverlapping()

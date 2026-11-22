@@ -53,6 +53,7 @@ class PurgeArchivedFamily implements ShouldBeUnique, ShouldQueue
             DB::table('payment_batches')->where('family_id', $family->id)->delete();
             DB::table('expenses')->where('family_id', $family->id)->delete();
             DB::table('expense_requests')->where('family_id', $family->id)->delete();
+            DB::table('expense_templates')->where('family_id', $family->id)->delete();
             DB::table('expense_budgets')->where('family_id', $family->id)->delete();
             DB::table('expense_categories')->where('family_id', $family->id)->delete();
             DB::table('users')->where('family_id', $family->id)->update(['family_id' => null]);

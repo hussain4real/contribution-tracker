@@ -91,10 +91,14 @@ export default {
         const backup = await createBackup(env, backupSlot(actual));
         console.log(JSON.stringify({event: "staging_backup", ...backup}));
         const tasks = calendarTasks(at, families);
+        const minute = new Date(Math.floor(actual.getTime() / 300000) * 300000).toISOString();
         const reports = await env.DB.prepare("select count(*) as due from report_schedules where family_id=43 and name like 'D1-SCHEDULE-UAT-%' and is_active=1 and next_run_at<=datetime('now')").first();
         if (Number(reports?.due) > 0) {
-            const minute = new Date(Math.floor(actual.getTime() / 300000) * 300000).toISOString();
             tasks.push({id: `reports:${minute}`, kind: "reports", family_id: 43, at: minute});
+        }
+        const drafts = await env.DB.prepare("select count(*) as due from expense_templates where family_id=? and next_run_on<=?").bind(families.family, actual.toISOString().slice(0, 10)).first();
+        if (Number(drafts?.due) > 0) {
+            tasks.push({id: `expense-drafts:${minute}`, kind: "expense-drafts", family_id: families.family, at: minute});
         }
         await env.DB.batch(tasks.map(task => env.DB.prepare("insert into d1_staging_schedule_outbox(id,kind,family_id,due_at) values(?,?,?,?) on conflict(id) do nothing").bind(task.id, task.kind, task.family_id, task.at)));
         const pending = (await env.DB.prepare("select id,kind,family_id,due_at as at from d1_staging_schedule_outbox where completed_at is null and (dispatched_at is null or dispatched_at<unixepoch()-300) order by due_at,id limit 20").all()).results;
@@ -110,7 +114,7 @@ export default {
             try {
                 const task = message.body;
                 const expected = task?.kind === "purge" ? families.purge : task?.kind === "reports" ? 43 : families.family;
-                if (!["generate", "remind25", "remind28", "purge", "reports", "retry-notifications"].includes(task?.kind) || task.family_id !== expected) throw new Error("Invalid staging task scope");
+                if (!["generate", "remind25", "remind28", "purge", "reports", "expense-drafts", "retry-notifications"].includes(task?.kind) || task.family_id !== expected) throw new Error("Invalid staging task scope");
                 const stored = await env.DB.prepare("select kind,family_id,due_at,completed_at from d1_staging_schedule_outbox where id=?").bind(task.id).first();
                 if (!stored || stored.kind !== task.kind || stored.family_id !== task.family_id || stored.due_at !== task.at) throw new Error("Unrecognized staging task");
                 if (stored.completed_at === null) {

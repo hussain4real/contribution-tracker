@@ -99,6 +99,28 @@ class ExpenseGovernance
             && $actor->membershipForFamilyId($request->family_id)?->role->canRecordPayments() === true, 403);
     }
 
+    public function submitDraft(ExpenseRequest $request, User $actor): void
+    {
+        $this->authorizeOfficer($request, $actor);
+        abort_unless($request->expense_template_id !== null, 404);
+        DB::transaction(function () use ($request, $actor): void {
+            $family = Family::query()->lockForUpdate()->findOrFail($request->family_id);
+            abort_unless($this->supportsApprovals($family), 403);
+            $locked = ExpenseRequest::query()->lockForUpdate()->findOrFail($request->id);
+            if ($locked->status !== 'draft') {
+                return;
+            }
+
+            $required = $this->requiredApprovals($family, $locked->amount);
+            $locked->update([
+                'requested_by' => $actor->id,
+                'status' => $required === 0 ? 'approved' : 'submitted',
+                'required_approvals' => $required,
+            ]);
+            app(AuditEventRecorder::class)->record($locked, 'expense_request.submitted', $family->id, $actor->id);
+        }, 3);
+    }
+
     public function decide(ExpenseRequest $request, User $actor, string $decision, ?string $reason): void
     {
         $this->authorizeOfficer($request, $actor);

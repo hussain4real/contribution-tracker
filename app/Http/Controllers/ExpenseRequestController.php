@@ -38,22 +38,25 @@ class ExpenseRequestController extends Controller
     {
         $family = $this->officerFamily();
         $user = $this->authUser();
+        $canSubmit = $governance->supportsApprovals($family);
         $requests = ExpenseRequest::query()->where('family_id', $family->id)
             ->when($httpRequest->filled('entry'), fn ($query) => $query->whereKey($httpRequest->integer('entry')))
             ->with(['requester:id,name', 'approvals.user:id,name', 'expense.reversal', 'documents', 'category'])
-            ->latest('id')->paginate(20)->through(function (ExpenseRequest $request) use ($family, $user, $governance, $spending): array {
-                $required = $governance->requiredForRequest($family, $request);
+            ->latest('id')->paginate(20)->through(function (ExpenseRequest $request) use ($family, $user, $governance, $spending, $canSubmit): array {
+                $draft = $request->status === 'draft';
+                $required = $draft ? 0 : $governance->requiredForRequest($family, $request);
                 $approved = $request->approvals->where('decision', 'approved')->where('user_id', '!=', $request->requested_by)->count();
                 $open = in_array($request->status, ['submitted', 'approved'], true) && $request->expense === null;
 
                 return [
                     'id' => $request->id, 'amount' => $request->amount, 'description' => $request->description,
-                    'spent_at' => $request->spent_at->toDateString(), 'requester' => $request->requester->name ?? 'Former member',
+                    'spent_at' => $request->spent_at->toDateString(), 'requester' => $draft ? 'Recurring template' : ($request->requester->name ?? 'Former member'),
                     'status' => $open ? ($approved >= $required ? 'approved' : 'submitted') : $request->status, 'required' => $required, 'approved' => $approved,
                     'can_decide' => $open && $request->requested_by !== $user->id && ! $request->approvals->contains('user_id', $user->id),
                     'can_pay' => $open && $approved >= $required,
+                    'can_submit_draft' => $draft && $canSubmit,
                     'category' => $request->category->name ?? 'Uncategorized',
-                    'budget_advisory' => $open ? $spending->advisory($family, $request->expense_category_id, $request->spent_at->format('Y-m'), $request->amount, $approved >= $required) : null,
+                    'budget_advisory' => $open || $draft ? $spending->advisory($family, $request->expense_category_id, $request->spent_at->format('Y-m'), $request->amount, $open && $approved >= $required) : null,
                     'expense_id' => $request->expense?->id,
                     'is_reversed' => $request->expense?->isReversed() ?? false,
                     'decisions' => $request->approvals->map(fn ($decision): array => [
@@ -67,11 +70,20 @@ class ExpenseRequestController extends Controller
 
         return Inertia::render('Expenses/Requests', [
             'requests' => $requests,
-            'can_submit' => $governance->supportsApprovals($family),
+            'can_submit' => $canSubmit,
+            'can_manage_templates' => $canSubmit && $user->isAdmin(),
             'categories' => ExpenseCategory::query()->where('family_id', $family->id)->orderBy('name')->get(['id', 'name']),
             'idempotencyKey' => (string) Str::uuid(),
             'idempotencyScope' => "expense-request-{$family->id}-{$user->id}",
         ]);
+    }
+
+    public function submitDraft(ExpenseRequest $expenseRequest, ExpenseGovernance $governance): RedirectResponse
+    {
+        $this->officerFamily($expenseRequest->family_id);
+        $governance->submitDraft($expenseRequest, $this->authUser());
+
+        return back()->with('success', 'Expense draft submitted for review.');
     }
 
     public function store(StoreExpenseRequest $request, ExpenseGovernance $governance): RedirectResponse

@@ -343,7 +343,7 @@ export class FamilyFundsWebStagingContainer extends DurableObject {
     async scheduledProof(kind, familyId, at) {
         const families = JSON.parse(this.env.STAGING_SCHEDULE_FAMILIES ?? "{}");
         const expected = kind === "purge" ? families.purge : kind === "reports" ? 43 : families.family;
-        if (!["generate", "remind25", "remind28", "purge", "reports", "retry-notifications"].includes(kind)
+        if (!["generate", "remind25", "remind28", "purge", "reports", "expense-drafts", "retry-notifications"].includes(kind)
             || !Number.isSafeInteger(familyId) || familyId !== expected || typeof at !== "string"
             || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(at) || !Number.isFinite(Date.parse(at)) || Date.parse(at) > Date.now()) {
             throw new Error("Invalid isolated maintenance operation");
