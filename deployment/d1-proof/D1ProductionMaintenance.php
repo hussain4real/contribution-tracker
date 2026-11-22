@@ -158,7 +158,7 @@ final class D1ProductionMaintenance
         $family = $task['family_id'] ?? null;
         $cursor = $task['cursor'] ?? null;
         if (! is_int($family) || $family < 0 || ! is_int($cursor) || $cursor < 0
-            || ! in_array($task['kind'], ['generate', 'remind25', 'remind28', 'purge', 'reports', 'drain', 'backup-sync', 'monitor'], true)
+            || ! in_array($task['kind'], ['generate', 'remind25', 'remind28', 'purge', 'reports', 'expense-drafts', 'drain', 'backup-sync', 'monitor'], true)
             || ! preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/D', $task['at'])) {
             throw new RuntimeException('Invalid production maintenance scope.');
         }
@@ -214,6 +214,9 @@ final class D1ProductionMaintenance
             } elseif ($task['kind'] === 'generate') {
                 $command = 'contributions:generate';
                 $arguments += ['--family' => $family, '--year' => (int) $at->format('Y'), '--month' => (int) $at->format('n')];
+            } elseif ($task['kind'] === 'expense-drafts') {
+                $command = 'expenses:generate-drafts';
+                $arguments += ['--family' => $family, '--date' => $at->format('Y-m-d')];
             } else {
                 $command = $task['kind'] === 'purge' ? 'families:purge-archived' : 'reports:dispatch-scheduled';
             }

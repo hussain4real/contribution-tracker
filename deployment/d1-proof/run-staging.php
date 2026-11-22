@@ -194,7 +194,7 @@ if ($operation === 'install') {
     $kind = $argv[4] ?? '';
     $familyId = filter_var($argv[5] ?? null, FILTER_VALIDATE_INT);
     $at = $argv[6] ?? '';
-    if ($target !== 'web' || ! in_array($kind, ['generate', 'remind25', 'remind28', 'purge', 'reports', 'retry-notifications'], true)
+    if ($target !== 'web' || ! in_array($kind, ['generate', 'remind25', 'remind28', 'purge', 'reports', 'expense-drafts', 'retry-notifications'], true)
         || ! is_int($familyId) || $familyId < 1 || ! preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/D', $at)
         || Carbon::parse($at)->isFuture()) {
         throw new RuntimeException('Invalid isolated maintenance operation.');
@@ -248,9 +248,12 @@ if ($operation === 'install') {
                     }
                     $command = match ($kind) {
                         'generate' => 'contributions:generate', 'remind25', 'remind28' => 'contributions:remind', 'purge' => 'families:purge-archived',
+                        'expense-drafts' => 'expenses:generate-drafts',
                     };
                     if ($kind === 'generate') {
                         $arguments += ['--family' => $familyId, '--year' => now()->year, '--month' => now()->month];
+                    } elseif ($kind === 'expense-drafts') {
+                        $arguments += ['--family' => $familyId, '--date' => now('UTC')->toDateString()];
                     } elseif (str_starts_with($kind, 'remind')) {
                         $arguments += ['--day' => $kind === 'remind25' ? 25 : 28];
                     }
