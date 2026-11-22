@@ -6,7 +6,9 @@ import {
     index,
     pay,
     store,
+    submitDraft,
 } from '@/actions/App/Http/Controllers/ExpenseRequestController';
+import { index as expenseTemplates } from '@/actions/App/Http/Controllers/ExpenseTemplateController';
 import ExpenseBudgetNotice, {
     type BudgetAdvisory,
 } from '@/components/ExpenseBudgetNotice.vue';
@@ -30,6 +32,7 @@ interface ExpenseRequest {
     approved: number;
     can_decide: boolean;
     can_pay: boolean;
+    can_submit_draft: boolean;
     expense_id: number | null;
     is_reversed: boolean;
     decisions: { by: string; decision: string; reason: string | null }[];
@@ -43,6 +46,7 @@ const props = defineProps<{
     };
     categories: { id: number; name: string }[];
     can_submit: boolean;
+    can_manage_templates: boolean;
     idempotencyKey: string;
     idempotencyScope: string;
 }>();
@@ -75,28 +79,26 @@ function submit() {
         },
     });
 }
+function requestAction(url: string, data: Record<string, string | null> = {}) {
+    router.post(url, data, {
+        preserveScroll: true,
+        onStart: () => {
+            processing.value = true;
+            error.value = '';
+        },
+        onError: (errors) => {
+            error.value = Object.values(errors).join(' ');
+        },
+        onFinish: () => {
+            processing.value = false;
+        },
+    });
+}
 function decision(request: ExpenseRequest, value: 'approved' | 'rejected') {
-    router.post(
-        decide({ expense_request: request.id }).url,
-        {
-            decision: value,
-            reason:
-                value === 'rejected' ? (reasons.value[request.id] ?? '') : null,
-        },
-        {
-            preserveScroll: true,
-            onStart: () => {
-                processing.value = true;
-                error.value = '';
-            },
-            onError: (errors) => {
-                error.value = Object.values(errors).join(' ');
-            },
-            onFinish: () => {
-                processing.value = false;
-            },
-        },
-    );
+    requestAction(decide({ expense_request: request.id }).url, {
+        decision: value,
+        reason: value === 'rejected' ? (reasons.value[request.id] ?? '') : null,
+    });
 }
 function recordPayment(request: ExpenseRequest) {
     if (
@@ -107,23 +109,7 @@ function recordPayment(request: ExpenseRequest) {
         )
     )
         return;
-    router.post(
-        pay({ expense_request: request.id }).url,
-        {},
-        {
-            preserveScroll: true,
-            onStart: () => {
-                processing.value = true;
-                error.value = '';
-            },
-            onError: (errors) => {
-                error.value = Object.values(errors).join(' ');
-            },
-            onFinish: () => {
-                processing.value = false;
-            },
-        },
-    );
+    requestAction(pay({ expense_request: request.id }).url);
 }
 </script>
 <template>
@@ -140,11 +126,19 @@ function recordPayment(request: ExpenseRequest) {
                     >Posted expenses</Link
                 >
             </header>
-            <Link
-                :href="budgets().url"
-                class="inline-flex min-h-11 items-center underline"
-                >Monthly expense budgets</Link
-            >
+            <nav class="flex flex-wrap gap-x-4" aria-label="Expense tools">
+                <Link
+                    :href="budgets().url"
+                    class="inline-flex min-h-11 items-center underline"
+                    >Monthly expense budgets</Link
+                >
+                <Link
+                    v-if="can_manage_templates"
+                    :href="expenseTemplates().url"
+                    class="inline-flex min-h-11 items-center underline"
+                    >Recurring expense templates</Link
+                >
+            </nav>
             <p class="text-muted-foreground">
                 Requests and approvals do not change the balance. Record payment
                 after approval when the money has been spent.
@@ -254,10 +248,24 @@ function recordPayment(request: ExpenseRequest) {
                     {{ request.status
                     }}{{ request.is_reversed ? ' · Payment reversed' : '' }}
                 </p>
-                <p>
+                <p v-if="request.status !== 'draft'">
                     {{ request.approved }} of {{ request.required }} independent
                     approvals
                 </p>
+                <button
+                    v-if="request.can_submit_draft"
+                    type="button"
+                    class="min-h-11 rounded-md border px-4"
+                    :disabled="processing"
+                    :aria-label="`Submit expense draft ${request.id}`"
+                    @click="
+                        requestAction(
+                            submitDraft({ expense_request: request.id }).url,
+                        )
+                    "
+                >
+                    Submit draft
+                </button>
                 <ul>
                     <li v-for="(entry, i) in request.decisions" :key="i">
                         {{ entry.by }} · {{ entry.decision

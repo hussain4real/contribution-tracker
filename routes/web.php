@@ -17,6 +17,7 @@ use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\ExpenseDocumentController;
 use App\Http\Controllers\ExpenseRequestController;
 use App\Http\Controllers\ExpenseReversalController;
+use App\Http\Controllers\ExpenseTemplateController;
 use App\Http\Controllers\FamilyActivityController;
 use App\Http\Controllers\FamilyArchiveController;
 use App\Http\Controllers\FamilyGoalController;
@@ -243,8 +244,13 @@ Route::prefix('{current_family}')
         Route::get('expense-documents/{expense_document}/download', [ExpenseDocumentController::class, 'download'])->name('expense-documents.download');
         Route::get('expense-requests', [ExpenseRequestController::class, 'index'])->name('expense-requests.index');
         Route::post('expense-requests', [ExpenseRequestController::class, 'store'])->name('expense-requests.store');
+        Route::post('expense-requests/{expense_request}/submit', [ExpenseRequestController::class, 'submitDraft'])->name('expense-requests.submit');
         Route::post('expense-requests/{expense_request}/decision', [ExpenseRequestController::class, 'decide'])->name('expense-requests.decide');
         Route::post('expense-requests/{expense_request}/pay', [ExpenseRequestController::class, 'pay'])->name('expense-requests.pay');
+        Route::get('expense-templates', [ExpenseTemplateController::class, 'index'])->name('expense-templates.index');
+        Route::post('expense-templates', [ExpenseTemplateController::class, 'store'])->name('expense-templates.store');
+        Route::post('expense-templates/{expense_template}/pause', [ExpenseTemplateController::class, 'pause'])->name('expense-templates.pause');
+        Route::post('expense-templates/{expense_template}/resume', [ExpenseTemplateController::class, 'resume'])->name('expense-templates.resume');
         Route::put('financial-governance', [FinancialGovernanceSettingsController::class, 'update'])->name('financial-governance.update');
 
         Route::get('expenses', [ExpenseController::class, 'index'])->name('expenses.index');

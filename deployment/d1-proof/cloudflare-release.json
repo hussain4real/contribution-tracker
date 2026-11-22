@@ -28,7 +28,7 @@
         "entry": "production-hostname-redirects.mjs"
       }
     ],
-    "accepted_migrations_sha256": "66d79c040058b62ee710beed13bc58883c962d84a52afc8c0b6919303b86ef6b"
+    "accepted_migrations_sha256": "00d40eaddc8ea187ae415f0a05b9add23848dc77148105e6ceaa02243685ea10"
   },
   "staging": {
     "branch": "cloudflare-staging",
@@ -51,9 +51,9 @@
         "worker": "familyfunds-d1-maintenance-staging",
         "entry": "maintenance-worker.mjs",
         "content_only": true,
-        "accepted_previous_sha256": "9d10234fc4c30e0cea77e9714c4a0adf12920d95f67aec3f4fc47f3f226538ca"
+        "accepted_previous_sha256": "59fcb3c40cfb06d9c2ad65fb8c1bb8cef20f2fab90efc315537933d7c64d69f1"
       }
     ],
-    "accepted_migrations_sha256": "66d79c040058b62ee710beed13bc58883c962d84a52afc8c0b6919303b86ef6b"
+    "accepted_migrations_sha256": "00d40eaddc8ea187ae415f0a05b9add23848dc77148105e6ceaa02243685ea10"
   }
 }

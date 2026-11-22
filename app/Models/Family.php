@@ -316,6 +316,12 @@ class Family extends Model
         return $this->hasMany(ExpenseBudget::class);
     }
 
+    /** @return HasMany<ExpenseTemplate, $this> */
+    public function expenseTemplates(): HasMany
+    {
+        return $this->hasMany(ExpenseTemplate::class);
+    }
+
     /** @return HasMany<ExpenseRequest, $this> */
     public function expenseRequests(): HasMany
     {

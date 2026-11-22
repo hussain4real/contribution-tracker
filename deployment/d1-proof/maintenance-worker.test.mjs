@@ -91,6 +91,26 @@ test("a failed queue send leaves the durable outbox eligible for retry", async (
     assert.equal(updates.length, 0);
 });
 
+test("recurring drafts are queued only for the synthetic maintenance family", async () => {
+    const {env} = backupFixture();
+    env.STAGING_FILES.head = async () => true;
+    const tasks = [];
+    env.DB.prepare = sql => ({
+        bind(...params) {
+            if (sql.includes("expense_templates")) assert.deepEqual(params, [50, "2026-10-26"]);
+            if (sql.startsWith("insert into d1_staging_schedule_outbox")) tasks.push(params);
+            return this;
+        },
+        first: async () => ({due: sql.includes("expense_templates") ? 1 : 0}),
+        all: async () => ({results: []}),
+    });
+    env.DB.batch = async () => [];
+    await handler.scheduled({scheduledTime: Date.parse("2026-10-26T06:00:00Z")}, env);
+    assert.deepEqual(tasks.filter(row => row[1] === "expense-drafts"), [
+        ["expense-drafts:2026-10-26T06:00:00.000Z", "expense-drafts", 50, "2026-10-26T06:00:00.000Z"],
+    ]);
+});
+
 test("the consumer retries failed native execution and skips completed duplicates", async () => {
     const task = {id: "generate:2026-09", kind: "generate", family_id: 50, at: "2026-09-01T00:00:00.000Z"};
     for (const completed of [false, true]) {

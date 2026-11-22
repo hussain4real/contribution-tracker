@@ -15,6 +15,8 @@ use Illuminate\Support\Carbon;
 
 /**
  * @property int|null $expense_category_id
+ * @property int|null $expense_template_id
+ * @property string|null $template_month
  * @property-read ExpenseCategory|null $category
  * @property int $id
  * @property int $family_id
@@ -35,7 +37,7 @@ class ExpenseRequest extends Model
     /** @use HasFactory<ExpenseRequestFactory> */
     use HasFactory;
 
-    protected $fillable = ['expense_category_id', 'family_id', 'requested_by', 'amount', 'description', 'spent_at', 'status', 'required_approvals', 'idempotency_key'];
+    protected $fillable = ['expense_category_id', 'expense_template_id', 'template_month', 'family_id', 'requested_by', 'amount', 'description', 'spent_at', 'status', 'required_approvals', 'idempotency_key'];
 
     protected $attributes = ['status' => 'submitted'];
 
