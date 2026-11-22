@@ -7,6 +7,7 @@ use App\Enums\TransactionType;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\ExpenseDocumentController;
 use App\Http\Controllers\ExpenseRequestController;
+use App\Http\Controllers\ExpenseTemplateController;
 use App\Http\Controllers\FamilyGoalController;
 use App\Http\Controllers\FinancialGovernanceSettingsController;
 use App\Http\Controllers\FundAdjustmentController;
@@ -14,6 +15,7 @@ use App\Http\Requests\ArchiveFamilyGoalRequest;
 use App\Http\Requests\StoreExpenseApprovalRequest;
 use App\Http\Requests\StoreExpenseDocumentRequest;
 use App\Http\Requests\StoreExpenseRequest;
+use App\Http\Requests\StoreExpenseTemplateRequest;
 use App\Http\Requests\StoreFamilyGoalRequest;
 use App\Http\Requests\StoreFundAdjustmentRequest;
 use App\Http\Requests\UpdateFamilyGoalRequest;
@@ -23,6 +25,7 @@ use App\Models\Contribution;
 use App\Models\Expense;
 use App\Models\ExpenseDocument;
 use App\Models\ExpenseRequest;
+use App\Models\ExpenseTemplate;
 use App\Models\Family;
 use App\Models\FamilyGoal;
 use App\Models\FamilyMembership;
@@ -297,6 +300,50 @@ it('records approval settings requests decisions payments and private documents 
         ->and($document->ready)->toBeTrue()
         ->and(Family::query()->findOrFail($family->id)->member_financial_visibility)->toBe('personal')
         ->and(app(ExpenseDocumentController::class)->download($document)->getStatusCode())->toBe(200);
+});
+
+it('schedules pauses and submits a recurring expense draft through the production D1 adapter', function (): void {
+    config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
+    DB::purge('sqlite');
+    $this->artisan('migrate', ['--database' => 'sqlite', '--force' => true, '--no-interaction' => true])->assertSuccessful();
+    $plan = PlatformPlan::query()->firstOrCreate(['slug' => 'organization'], ['name' => 'Organization', 'price' => 10000, 'features' => [], 'is_active' => true]);
+    $family = Family::factory()->create([
+        'platform_plan_id' => $plan->id, 'subscription_status' => 'active',
+        'expense_approval_settings' => ['enabled' => true, 'threshold' => 1000, 'approvers' => 1],
+    ]);
+    $owner = User::factory()->admin()->create(['family_id' => $family->id]);
+    $officer = User::factory()->financialSecretary()->create(['family_id' => $family->id]);
+    $pdo = DB::connection('sqlite')->getPdo();
+    connectProductionRuntimeFixture($pdo);
+    $this->actingAs($owner);
+
+    $today = now('UTC');
+    $input = StoreExpenseTemplateRequest::create('/', 'POST', [
+        'idempotency_key' => (string) Str::uuid(), 'amount' => 1500, 'description' => 'Synthetic internet', 'day_of_month' => $today->day,
+    ]);
+    $controller = app(ExpenseTemplateController::class);
+    $controller->store($input);
+    $controller->store($input);
+    $template = ExpenseTemplate::sole();
+    $controller->pause($template);
+    $this->artisan('expenses:generate-drafts', ['--family' => $family->id])->assertSuccessful();
+    expect(ExpenseRequest::count())->toBe(0);
+
+    $controller->resume($template);
+    $this->artisan('expenses:generate-drafts', ['--family' => $family->id])->assertSuccessful();
+    $this->artisan('expenses:generate-drafts', ['--family' => $family->id])->assertSuccessful();
+    $draft = ExpenseRequest::sole();
+    expect($draft->status)->toBe('draft')->and($draft->expense_template_id)->toBe($template->id);
+
+    $this->actingAs($officer);
+    $requests = app(ExpenseRequestController::class);
+    $requests->submitDraft($draft, app(ExpenseGovernance::class));
+    $requests->submitDraft($draft, app(ExpenseGovernance::class));
+    expect($draft->refresh()->status)->toBe('submitted')
+        ->and($draft->requested_by)->toBe($officer->id)
+        ->and($draft->required_approvals)->toBe(1)
+        ->and(productionPaymentSqlValue($pdo, "select count(*) from audit_events where action='expense_request.submitted'"))->toBe(1)
+        ->and(Expense::count())->toBe(0);
 });
 
 it('creates traces edits and archives visual goals through the production D1 adapter', function (): void {

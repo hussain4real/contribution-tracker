@@ -125,7 +125,9 @@ async function nativeSqlFixture() {
     const {DatabaseSync} = await import('node:sqlite');
     const sqlite = new DatabaseSync(':memory:');
     sqlite.exec(`
-        create table families(id integer primary key, archived_at text,legal_hold_at text,purge_after text,reminder_settings text);
+        create table families(id integer primary key, archived_at text,legal_hold_at text,purge_after text,reminder_settings text,suspended_at text,platform_plan_id integer,subscription_status text,current_period_end text);
+        create table platform_plans(id integer primary key,slug text);
+        create table expense_templates(id integer primary key,family_id integer,next_run_on text);
         create table report_schedules(id integer primary key,family_id integer,is_active integer,next_run_at text);
         create table jobs(id integer primary key,available_at integer,reserved_at integer);
         create table failed_jobs(id integer primary key);
@@ -151,6 +153,27 @@ async function nativeSqlFixture() {
     };
     return {sqlite, env, queued, controller: {scheduledTime: new Date('2026-10-26T12:00:00Z').getTime()}};
 }
+
+test('the scheduled SQL queues one draft task per eligible family and slot', async () => {
+    const f = await nativeSqlFixture();
+    try {
+        f.sqlite.exec(`
+            insert into platform_plans values(1,'organization'),(2,'growth');
+            insert into families(id,platform_plan_id,subscription_status,current_period_end,suspended_at) values
+                (1,1,'active',null,null),(2,1,'active',null,null),(3,2,'active',null,null),
+                (4,1,'active','2026-10-25 00:00:00',null),(5,1,'active',null,'2026-10-25 00:00:00'),
+                (6,1,'active',null,null);
+            insert into expense_templates values
+                (1,1,'2026-10-26'),(2,1,'2026-10-26'),(3,2,null),(4,3,'2026-10-26'),
+                (5,4,'2026-10-26'),(6,5,'2026-10-26'),(7,6,'2026-10-27');
+        `);
+        await handler.scheduled(f.controller, f.env);
+        await handler.scheduled(f.controller, f.env);
+        const drafts = f.sqlite.prepare("select id,family_id from d1_runtime_schedule_outbox where kind='expense-drafts'").all();
+        assert.deepEqual(drafts.map(row => ({...row})), [{id: 'expense-drafts:2026-10-26T12:00:00.000Z:1', family_id: 1}]);
+        assert.equal(f.queued.filter(task => task.id.startsWith('expense-drafts:')).length, 1);
+    } finally { f.sqlite.close(); }
+});
 
 test('the real scheduled SQL catches up more than fifty families without waking PHP or duplicating tasks', async () => {
     const f = await nativeSqlFixture();

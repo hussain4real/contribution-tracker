@@ -6,7 +6,7 @@ Make it easier for members to understand and pay their contributions, and for fa
 
 ## Delivery and verification status — November 21, 2026
 
-| Area | Deployed and verified | Outstanding |
+| Area | Delivery and verification | Outstanding |
 | --- | --- | --- |
 | Phase 0 | The owner reviewed the synthetic member and officer journeys, screen-reader flow, reminder setup and slow-network journeys. Production platform-to-family navigation and session restoration were exercised. Timed browser tasks passed in the local demo, and the owner reported unaided completion of both browser tasks in production. The live production image passed the 20-user dashboard test with a 2.13 s p95 and zero failures in 100 requests. Production telemetry showed zero confirmed write timeouts across 16 synthetic financial write requests. | Collect timed browser attempts and participant counts by role. Measure write-timeout frequency with a real production cohort and recovery time once a confirmed timeout can be linked to its retry or commit. Review the baseline after more real use and agree numerical targets. |
 | Phase 1 | Member contribution and receipt views, payment review, reminder settings, delivery visibility and retry safeguards were released. A staging Paystack test checkout produced a receipt that was checked and reversed. The owner confirmed the production contribution view. The November 12 production refresh again found zero real contribution checkouts and zero real receipts eligible for delivery measurement. [Release #315](https://github.com/hussain4real/contribution-tracker/pull/315) | Measure completion and delivery with a qualifying production cohort. Confirm recovery when a real provider failure occurs. |
@@ -14,6 +14,7 @@ Make it easier for members to understand and pay their contributions, and for fa
 | Phase 3 | Goals, setup and AI drafts were deployed to both environments. Production checks covered goal calculations and lifecycle, setup preview and resume, member permissions, and draft review handoffs. Production also passed new-family registration and email verification, invitation acceptance by new and existing accounts, first collection with checklist and receipt verification, reviewed expense draft replay and reversal, and AI expense totals before posting, after posting and after reversal. [Production #318](https://github.com/hussain4real/contribution-tracker/pull/318) · [Staging #319](https://github.com/hussain4real/contribution-tracker/pull/319) | The listed production acceptance checks are complete. |
 | Follow-up UX fixes | Mobile More and the AI launcher were retested on staging and production. Production Stop Impersonating restored the owner and opened the platform dashboard. The adjustment form transition was also corrected and covered by CI. [Staging #320](https://github.com/hussain4real/contribution-tracker/pull/320) · [Production #321](https://github.com/hussain4real/contribution-tracker/pull/321) | The impersonation check is covered locally and in production. Staging isolation restricts the platform administration routes used by this journey. |
 | Expense budgets extension | Monthly category limits, actual and committed spending, advisory warnings and drill-downs are deployed to staging and production. Native D1 migration/recovery rehearsal, CI and live runtime checks passed. Production FF322 verified category and budget creation, month isolation, advisory warnings, spending drill-downs, the move from committed to actual when a request was paid, and audited reversals. The original Free plan and Member role were restored. [Production #331](https://github.com/hussain4real/contribution-tracker/pull/331) · [Staging #332](https://github.com/hussain4real/contribution-tracker/pull/332) | Production budget acceptance is complete. |
+| Recurring expense templates | Monthly scheduling, pause and resume, and draft review passed local tests. The migration and recovery rehearsal passed on native D1. CI and deployment are tracked in [Production #340](https://github.com/hussain4real/contribution-tracker/pull/340) and [Staging #341](https://github.com/hussain4real/contribution-tracker/pull/341). | Verify the hosted scheduler and review flow. |
 
 The marked November 6 production test goal was archived and the owner session was restored. The November 7 follow-up exercised the synthetic ledger entries described below.
 
@@ -277,6 +278,23 @@ On November 21, the approved request posted once as expense #277430284. The Actu
 | Both test expenses reversed | ₦0.00 | ₦0.00 | ₦1.00 |
 
 Production recorded reversal #277692419 for direct expense #248496140 and reversal #277741571 for request expense #277430284. The original entries are available for audit. The final request status was Paid, and the family had ₦0 in effective expenses. FF322 returned to its original Free plan and approval settings, and the synthetic Financial Secretary returned to Member. The platform administrator session was restored. Browser task timings and real payment and delivery measurements remain pending elsewhere in this plan.
+
+## Recurring expense templates — November 21, 2026
+
+- Organization family admins can save a monthly template with a description, amount, optional expense category and day of the month. The scheduler uses UTC and chooses the last day in shorter months.
+- The scheduler creates one expense request draft per template per month. Pausing preserves existing drafts. Resuming starts from the next eligible date and skips dates that passed during the pause.
+- Officers see the existing category budget advisory before submitting a draft. Submission assigns the officer as requester and applies the family's approval policy. Drafts stay out of spending totals until the existing rules qualify them as committed or a payment is posted.
+- Template creation, pause, resume, draft generation and submission are audited. Family archive exports and retention cleanup include templates.
+
+**Local verification.** The 36 expense template, governance and budget tests passed with 520 assertions. They covered duplicate prevention, interruption recovery, month boundaries, permissions, advisories, independent approval and spending totals. The SQLite migration applied, rolled back and reapplied while preserving existing requests, approval references and an existing trigger. Chromium verified the admin and officer flow at a mobile viewport. The 27 maintenance Worker tests passed, including dispatch and staging fixture scope. PHPStan, TypeScript, targeted ESLint and client and server builds passed.
+
+The full local Pest suite passed with 1,985 passing tests, 40 skips, 14,815 assertions and 100% line coverage.
+
+**Native D1 verification — November 22.** A disposable database used the production schema and synthetic records. The affected staging table definitions matched. A forced failure rolled back the full batch. Apply, rollback and reapply preserved the original request, its approval and all 288 existing triggers. Native D1 enforced the template key, one draft per month and the restricted foreign keys. The new triggers advanced the read revision and recorded the first write. The database passed `quick_check` with zero foreign-key violations. Restoring the pre-migration bookmark recovered the original records and schema. The rehearsal database was deleted after verification.
+
+The production D1 connection test covered template creation, pause, resume, draft generation, and repeated submission. Each operation uses a single transaction attempt. Duplicate protection uses the template key and the monthly draft constraint.
+
+**Hosted verification pending.** Staging maintenance cron is disabled. Verify scheduled generation and retry behavior with a controlled run in the staging maintenance fixture, then verify draft review and the approval-to-payment transition in a hosted test family.
 
 ## Cross-cutting UX and delivery
 

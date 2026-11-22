@@ -63,6 +63,7 @@ class FamilyArchiveController extends Controller
             'expenses.documents',
             'expenseCategories',
             'expenseBudgets',
+            'expenseTemplates',
             'goals',
             'expenseRequests.approvals',
             'expenseRequests.documents',

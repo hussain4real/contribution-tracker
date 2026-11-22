@@ -135,6 +135,10 @@ export default {
         const reportSlot = new Date(Math.floor(at.getTime() / 300000) * 300000).toISOString();
         const reports = (await env.DB.prepare("select distinct family_id from report_schedules where is_active=1 and next_run_at<=datetime('now') order by family_id limit 50").all()).results;
         for (const family of reports) tasks.push({id: `reports:${reportSlot}:${family.family_id}`, kind: "reports", family_id: family.family_id, at: reportSlot});
+        const draftFamilies = (await env.DB.prepare(
+            "select distinct t.family_id from expense_templates t join families f on f.id=t.family_id join platform_plans p on p.id=f.platform_plan_id where t.next_run_on<=? and f.archived_at is null and f.suspended_at is null and f.subscription_status='active' and p.slug='organization' and (f.current_period_end is null or datetime(f.current_period_end)>datetime(?)) order by t.family_id limit 50"
+        ).bind(at.toISOString().slice(0, 10), at.toISOString()).all()).results;
+        for (const family of draftFamilies) tasks.push({id: `expense-drafts:${reportSlot}:${family.family_id}`, kind: "expense-drafts", family_id: family.family_id, at: reportSlot});
         const jobs = await env.DB.prepare("select count(*) as count from jobs where available_at<=unixepoch() and (reserved_at is null or reserved_at<=unixepoch()-90)").first();
         if (Number(jobs?.count) > 0) tasks.push({id: `drain:${minute}`, kind: "drain", family_id: 0, at: minute});
         const failed = await env.DB.prepare("select count(*) as count from failed_jobs").first();

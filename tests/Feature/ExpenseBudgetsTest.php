@@ -11,6 +11,7 @@ use App\Models\ExpenseApproval;
 use App\Models\ExpenseBudget;
 use App\Models\ExpenseCategory;
 use App\Models\ExpenseRequest;
+use App\Models\ExpenseTemplate;
 use App\Models\Family;
 use App\Models\PlatformPlan;
 use App\Models\User;
@@ -236,20 +237,24 @@ it('rejects another family category when an expense is posted outside the HTTP f
 
 it('removes budgets and categories during authorized family retention purge', function () {
     Storage::fake('local');
-    ExpenseRequest::factory()->create(['family_id' => $this->family->id, 'expense_category_id' => $this->category->id]);
+    $template = ExpenseTemplate::factory()->create(['family_id' => $this->family->id, 'expense_category_id' => $this->category->id]);
+    ExpenseRequest::factory()->create(['family_id' => $this->family->id, 'expense_category_id' => $this->category->id, 'expense_template_id' => $template->id, 'template_month' => '2026-11-01']);
     $this->family->update(['archived_at' => now()->subDays(40), 'purge_after' => now()->subDay()]);
     (new PurgeArchivedFamily($this->family->id))->handle();
-    expect(Family::find($this->family->id))->toBeNull()->and(ExpenseBudget::count())->toBe(0)->and(ExpenseCategory::count())->toBe(0);
+    expect(Family::find($this->family->id))->toBeNull()->and(ExpenseBudget::count())->toBe(0)
+        ->and(ExpenseCategory::count())->toBe(0)->and(ExpenseTemplate::count())->toBe(0);
 });
 
 it('retains budget and category information in a family archive export', function () {
     $this->family->update(['created_by' => $this->owner->id]);
+    $template = ExpenseTemplate::factory()->create(['family_id' => $this->family->id, 'expense_category_id' => $this->category->id]);
     $this->actingAs($this->owner);
     $response = $this->get(route('family.archive.export', ['current_family' => $this->family->slug]));
     $response->assertOk();
     $data = new AssertableJsonString($response->streamedContent());
     $data->assertPath('family.expense_categories.0.name', 'Welfare');
     $data->assertPath('family.expense_budgets.0.amount', 1000);
+    $data->assertPath('family.expense_templates.0.id', $template->id);
 });
 
 it('does not count self approvals but retains independent approvals for a removed requester', function () {
