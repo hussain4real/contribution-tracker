@@ -57,7 +57,7 @@ class RecurringExpenseDrafts
             $locked->update(['next_run_on' => $this->dateInMonth($locked->day_of_month, $date->startOfMonth()->addMonth())->toDateString()]);
 
             return $draft->wasRecentlyCreated;
-        }, 3);
+        });
     }
 
     private function dateInMonth(int $day, CarbonImmutable $month): CarbonImmutable

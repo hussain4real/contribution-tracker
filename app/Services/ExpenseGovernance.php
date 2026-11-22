@@ -118,7 +118,7 @@ class ExpenseGovernance
                 'required_approvals' => $required,
             ]);
             app(AuditEventRecorder::class)->record($locked, 'expense_request.submitted', $family->id, $actor->id);
-        }, 3);
+        });
     }
 
     public function decide(ExpenseRequest $request, User $actor, string $decision, ?string $reason): void
