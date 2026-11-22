@@ -71,7 +71,7 @@ class ExpenseTemplateController extends Controller
             if ($template->wasRecentlyCreated) {
                 $this->audit->record($template, 'expense_template.created', $family->id, after: $attributes);
             }
-        }, 3);
+        });
 
         return back()->with('success', 'Monthly expense template saved.');
     }
@@ -108,7 +108,7 @@ class ExpenseTemplateController extends Controller
             }
             $locked->update(['next_run_on' => $next]);
             $this->audit->record($locked, $active ? 'expense_template.resumed' : 'expense_template.paused', $family->id, after: ['next_run_on' => $next]);
-        }, 3);
+        });
 
         return back()->with('success', $active ? 'Expense template resumed.' : 'Expense template paused.');
     }
