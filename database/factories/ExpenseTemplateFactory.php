@@ -12,7 +12,6 @@ use Illuminate\Support\Str;
 /** @extends Factory<ExpenseTemplate> */
 class ExpenseTemplateFactory extends Factory
 {
-    /** @return array<string, mixed> */
     public function definition(): array
     {
         return [
