@@ -70,6 +70,21 @@ test("production refuses test credentials, test events and tampered signatures",
     assert.equal(f.objects.size, 0);
 });
 
+test("live Paystack credentials authenticate new events through intake and relay", async () => {
+    const f = fixture();
+    f.env.PRODUCTION_CUTOVER_STAGE = 'live';
+    const key = 'sk_live_current_fixture';
+    f.env.PAYSTACK_LIVE_KEYS = JSON.stringify({secret_key: key, public_key: 'pk_live_current_fixture'});
+    assert.equal((await receiveProductionWebhook(request(f.config), f.env)).status, 403);
+    assert.equal((await receiveProductionWebhook(request({...f.config, paystack_secret: key}), f.env)).status, 202);
+
+    let acknowledged = false;
+    const message = {body: f.queued[0], ack: () => { acknowledged = true; }, retry: () => assert.fail('Valid signature should relay')};
+    await relayProductionWebhooks({messages: [message]}, f.env);
+    assert.equal(acknowledged, true);
+    assert.equal(f.forwarded(), 1);
+});
+
 test("production Meta accepts inbound and status recipients within the approved production account scope", async () => {
     const f = fixture();
     const payload = {object: "whatsapp_business_account", entry: [{id: f.config.meta_waba, changes: [{field: "messages", value: {metadata: {phone_number_id: f.config.meta_phone}, messages: [{from: "recipient-one"}], statuses: [{recipient_id: "recipient-two"}]}}]}]};

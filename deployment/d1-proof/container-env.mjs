@@ -1,5 +1,25 @@
 const encoder = new TextEncoder();
 
+export function livePaystackKeys(bindings) {
+    const raw = bindings.PAYSTACK_LIVE_KEYS;
+    if (raw === undefined) return null;
+    if (bindings.PRODUCTION_CUTOVER_STAGE !== 'live' || typeof raw !== 'string' || encoder.encode(raw).length > 4096) {
+        throw new Error('Invalid live Paystack configuration');
+    }
+    let keys;
+    try {
+        keys = JSON.parse(raw);
+    } catch {
+        throw new Error('Invalid live Paystack configuration');
+    }
+    if (!keys || Array.isArray(keys) || typeof keys !== 'object' || Object.keys(keys).length !== 2
+        || typeof keys.secret_key !== 'string' || !/^sk_live_[a-zA-Z0-9_-]+$/.test(keys.secret_key)
+        || typeof keys.public_key !== 'string' || !/^pk_live_[a-zA-Z0-9_-]+$/.test(keys.public_key)) {
+        throw new Error('Invalid live Paystack configuration');
+    }
+    return keys;
+}
+
 export function containerEnvironment(bindings) {
     let json;
     if (bindings.CONTAINER_ENV_PARTS === undefined) {
@@ -35,6 +55,14 @@ export function containerEnvironment(bindings) {
             NIGHTWATCH_ENABLED: stage === 'live' ? 'true' : 'false',
             QUEUE_WORKER_ENABLED: 'false', D1_CANDIDATE_BANK_LOOKUP_TEST_KEY: '',
             MAIL_MAILER: 'cloudflare', BACKUP_GOOGLE_DRIVE_ENABLED: 'false', BACKUP_RCLONE_ENABLED: 'false',
+        });
+    }
+    const paystack = livePaystackKeys(bindings);
+    if (paystack) {
+        Object.assign(result, {
+            PAYSTACK_SECRET_KEY: paystack.secret_key,
+            PAYSTACK_PUBLIC_KEY: paystack.public_key,
+            PAYSTACK_WEBHOOK_SECRET: paystack.secret_key,
         });
     }
     if (bindings.MIGRATION_AUTH_ORIGIN !== undefined) {

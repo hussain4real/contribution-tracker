@@ -1,4 +1,5 @@
 import {timingSafeEqual} from "node:crypto";
+import {livePaystackKeys} from "./container-env.mjs";
 import {getProductionContainer} from './production-container-target.mjs';
 
 const encoder = new TextEncoder();
@@ -13,6 +14,8 @@ export function productionWebhookConfig(env) {
     if (env.WEBHOOKS_ENABLED !== "true") return null;
     if (env.DATABASE_NAME !== "familyfunds-production") throw new Error("Wrong production webhook database");
     const config = JSON.parse(env.WEBHOOK_SECRETS ?? "{}");
+    const paystack = livePaystackKeys(env);
+    if (paystack) config.paystack_secret = paystack.secret_key;
     if (!config.paystack_secret?.startsWith("sk_live_") || config.meta_app_id !== "26405719292393073"
         || !config.meta_app_secret || !config.meta_waba || !config.meta_phone || !config.meta_verify_token) {
         throw new Error("Production webhook credentials are incomplete");

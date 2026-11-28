@@ -1,3 +1,5 @@
+import {createHash} from "node:crypto";
+import {livePaystackKeys} from "./container-env.mjs";
 import handler, {FamilyFundsProductionContainer} from './production-worker.mjs';
 export {ProductionDatabaseOutbound} from './production-worker.mjs';
 
@@ -38,11 +40,15 @@ export class FamilyFundsManagedProductionContainer extends FamilyFundsProduction
     }
 
     async waitForReady() {
+        const paystack = livePaystackKeys(this.env);
+        const generation = paystack
+            ? MANAGED_RELEASE + ':' + createHash('sha256').update(paystack.secret_key).update(':').update(paystack.public_key).digest('hex')
+            : MANAGED_RELEASE;
         const previous = await this.ctx.storage.get('managed-runtime-generation');
-        if (previous !== MANAGED_RELEASE) {
+        if (previous !== generation) {
             if (this.ctx.container.running) await this.ctx.container.destroy();
             this.ready = false;
-            await this.ctx.storage.put('managed-runtime-generation', MANAGED_RELEASE);
+            await this.ctx.storage.put('managed-runtime-generation', generation);
         }
         await this.configureOutbound();
         await super.waitForReady();
@@ -66,7 +72,7 @@ export class FamilyFundsManagedProductionContainer extends FamilyFundsProduction
     async runtime() {
         const actual = await super.runtime();
         return {...actual, managed: {release: MANAGED_RELEASE, stage: MANAGED_STAGE,
-            stored_generation: await this.ctx.storage.get('managed-runtime-generation') ?? null,
+            stored_generation: (await this.ctx.storage.get('managed-runtime-generation'))?.split(':', 1)[0] ?? null,
             configuration_matches: actual.running ? matchesConfiguration(actual) : null}};
     }
 
