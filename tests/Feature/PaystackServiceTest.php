@@ -201,6 +201,20 @@ it('rejects an invalid webhook signature', function () {
     expect($service->verifyWebhookSignature($payload, 'invalid_signature'))->toBeFalse();
 });
 
+it('rejects a timestamped webhook signature with an oversized header or duplicate timestamps', function (): void {
+    config(['services.paystack.webhook_signing_secret' => 'whsec_fixture']);
+
+    $service = app(PaystackService::class);
+    $payload = '{"event":"charge.success"}';
+    $timestamp = now()->getTimestamp();
+    $digest = hash_hmac('sha512', $timestamp.'.'.$payload, 'whsec_fixture');
+    $header = "t={$timestamp},v1=whk_fixture:{$digest}";
+
+    expect($service->verifyWebhookSignature($payload, '', $header))->toBeTrue()
+        ->and($service->verifyWebhookSignature($payload, '', $header.','.str_repeat('x', 4096)))->toBeFalse()
+        ->and($service->verifyWebhookSignature($payload, '', $header.",t={$timestamp}"))->toBeFalse();
+});
+
 it('throws on API error response', function () {
     Http::fake([
         'api.paystack.co/transaction/initialize' => Http::response([
