@@ -1,5 +1,26 @@
 const encoder = new TextEncoder();
 
+export function livePaystackCredentials(bindings) {
+    const raw = bindings.PAYSTACK_LIVE_CREDENTIALS;
+    if (raw === undefined) return null;
+    if (bindings.PRODUCTION_CUTOVER_STAGE !== 'live' || typeof raw !== 'string' || encoder.encode(raw).length > 4096) {
+        throw new Error('Invalid live Paystack configuration');
+    }
+    let keys;
+    try {
+        keys = JSON.parse(raw);
+    } catch {
+        throw new Error('Invalid live Paystack configuration');
+    }
+    if (!keys || Array.isArray(keys) || typeof keys !== 'object' || Object.keys(keys).length !== 3
+        || typeof keys.api_key !== 'string' || !/^rk_live_[a-zA-Z0-9_-]+$/.test(keys.api_key)
+        || typeof keys.public_key !== 'string' || !/^pk_live_[a-zA-Z0-9_-]+$/.test(keys.public_key)
+        || typeof keys.webhook_signing_secret !== 'string' || !/^whsec_[a-zA-Z0-9_-]+$/.test(keys.webhook_signing_secret)) {
+        throw new Error('Invalid live Paystack configuration');
+    }
+    return {api_key: keys.api_key, public_key: keys.public_key, webhook_signing_secret: keys.webhook_signing_secret};
+}
+
 export function containerEnvironment(bindings) {
     let json;
     if (bindings.CONTAINER_ENV_PARTS === undefined) {
@@ -35,6 +56,14 @@ export function containerEnvironment(bindings) {
             NIGHTWATCH_ENABLED: stage === 'live' ? 'true' : 'false',
             QUEUE_WORKER_ENABLED: 'false', D1_CANDIDATE_BANK_LOOKUP_TEST_KEY: '',
             MAIL_MAILER: 'cloudflare', BACKUP_GOOGLE_DRIVE_ENABLED: 'false', BACKUP_RCLONE_ENABLED: 'false',
+        });
+    }
+    const paystack = livePaystackCredentials(bindings);
+    if (paystack) {
+        Object.assign(result, {
+            PAYSTACK_SECRET_KEY: paystack.api_key,
+            PAYSTACK_PUBLIC_KEY: paystack.public_key,
+            PAYSTACK_WEBHOOK_SIGNING_SECRET: paystack.webhook_signing_secret,
         });
     }
     if (bindings.MIGRATION_AUTH_ORIGIN !== undefined) {

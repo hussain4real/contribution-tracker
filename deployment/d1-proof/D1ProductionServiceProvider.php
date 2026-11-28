@@ -38,8 +38,10 @@ final class D1ProductionServiceProvider extends ServiceProvider
         $token = Config::string('d1-production.token');
         $database = Config::string('d1-production.database');
         D1RuntimeProfile::assertTarget($database, $url, $token);
+        $legacyPaystackSecret = config('services.paystack.webhook_secret');
+        $hasLegacyPaystackSecret = is_string($legacyPaystackSecret) && str_starts_with($legacyPaystackSecret, 'sk_live_');
         if (config('d1-production.webhooks_enabled')
-            && (! str_starts_with(Config::string('services.paystack.webhook_secret'), 'sk_live_')
+            && ((! $hasLegacyPaystackSecret && ! str_starts_with(Config::string('services.paystack.webhook_signing_secret'), 'whsec_'))
                 || preg_match('/^[a-f0-9]{32}$/iD', Config::string('services.whatsapp.app_secret')) !== 1)) {
             throw new LogicException('Production webhooks require both production signing credentials.');
         }
@@ -59,14 +61,14 @@ final class D1ProductionServiceProvider extends ServiceProvider
             'cache.default' => 'd1', 'cache.stores.d1' => ['driver' => 'd1'],
             'inertia.ssr.enabled' => false,
             'webpush.database_connection' => null,
-            'nightwatch.redact_headers' => [...Config::array('nightwatch.redact_headers'), 'X-FamilyFunds-Preview', 'X-FamilyFunds-Relay'],
+            'nightwatch.redact_headers' => [...Config::array('nightwatch.redact_headers'), 'X-FamilyFunds-Preview', 'X-FamilyFunds-Relay', 'Paystack-Signature', 'X-Paystack-Signature'],
         ]);
         $this->app->extend(RateLimiter::class, fn (RateLimiter $limiter): D1RuntimeRateLimiter => new D1RuntimeRateLimiter($this->app->make('cache')->store('d1'), $limiter));
         if (! config('d1-production.delivery_enabled')) {
             config(['mail.default' => 'array']);
         } elseif (config('mail.default') !== 'cloudflare'
             || strlen(Config::string('services.cloudflare.token')) < 32
-            || ! str_starts_with(Config::string('services.paystack.secret_key'), 'sk_live_')) {
+            || preg_match('/^(?:rk|sk)_live_[a-zA-Z0-9_-]+$/D', Config::string('services.paystack.secret_key')) !== 1) {
             throw new LogicException('Production delivery requires the reviewed mail transport and live payment credentials.');
         }
     }

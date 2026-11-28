@@ -147,8 +147,19 @@ class PaystackService
     /**
      * Verify a webhook signature.
      */
-    public function verifyWebhookSignature(string $payload, string $signature): bool
+    public function verifyWebhookSignature(string $payload, string $signature, ?string $timestampedSignature = null, bool $authenticatedRelay = false): bool
     {
+        $signingSecret = config('services.paystack.webhook_signing_secret');
+        if (is_string($signingSecret) && $signingSecret !== '') {
+            if ($timestampedSignature !== null) {
+                return $this->verifyTimestampedWebhookSignature($payload, $timestampedSignature, $signingSecret, $authenticatedRelay);
+            }
+
+            if (! $authenticatedRelay) {
+                return false;
+            }
+        }
+
         $webhookSecret = config('services.paystack.webhook_secret');
 
         if (! is_string($webhookSecret) || $webhookSecret === '') {
@@ -160,6 +171,41 @@ class PaystackService
         $computed = hash_hmac('sha512', $payload, $webhookSecret);
 
         return hash_equals($computed, $signature);
+    }
+
+    private function verifyTimestampedWebhookSignature(string $payload, string $signature, string $signingSecret, bool $authenticatedRelay): bool
+    {
+        if (strlen($signature) > 4096) {
+            return false;
+        }
+
+        $timestamp = null;
+        $digests = [];
+        foreach (explode(',', $signature) as $value) {
+            $part = trim($value);
+            if (str_starts_with($part, 't=')) {
+                if ($timestamp !== null || preg_match('/^t=([0-9]{10})$/D', $part, $matches) !== 1) {
+                    return false;
+                }
+
+                $timestamp = $matches[1];
+            } elseif (preg_match('/^v1=whk_[a-zA-Z0-9_-]+:([a-fA-F0-9]{128})$/D', $part, $matches) === 1) {
+                $digests[] = strtolower($matches[1]);
+            }
+        }
+
+        if ($timestamp === null || (! $authenticatedRelay && abs(now()->getTimestamp() - (int) $timestamp) > 300)) {
+            return false;
+        }
+
+        $computed = hash_hmac('sha512', $timestamp.'.'.$payload, $signingSecret);
+        foreach ($digests as $digest) {
+            if (hash_equals($computed, $digest)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

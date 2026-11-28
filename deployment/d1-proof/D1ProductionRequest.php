@@ -29,6 +29,7 @@ final class D1ProductionRequest
         if ($request->is('webhooks/*')) {
             $token = Config::string('d1-production.relay_token');
             abort_unless(config('d1-production.webhooks_enabled') && strlen($token) >= 32 && hash_equals($token, (string) $request->header('X-FamilyFunds-Relay')), 403);
+            $request->attributes->set('d1_authenticated_webhook_relay', true);
         }
         if (($request->isMethod('GET') || $request->isMethod('HEAD')) && $request->getPathInfo() === EndpointResolver::scriptPath(minified: true)) {
             return $next($request);

@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import {runInNewContext} from 'node:vm';
+import {livePaystackCredentials} from './container-env.mjs';
 
 const privateFlags = {TRAFFIC_ENABLED: 'false', BUSINESS_WRITES_ENABLED: 'false', WEBHOOKS_ENABLED: 'false'};
 
@@ -17,16 +19,16 @@ test('the managed candidate selects only its pinned image and the reviewed resou
     assert.throws(() => instance.startupOptions(env));
 });
 
-function managedClass(base) {
-    const source = readFileSync(new URL('./production-managed-worker.mjs', import.meta.url), 'utf8').replace(/^import .*;\n/gm, '').replace(/^export \{.*;\n/gm, '').replace('export class ', 'class ').replace(/export default \{[\s\S]*$/, '');
-    return {Container: runInNewContext(source + '\nFamilyFundsManagedProductionContainer', {FamilyFundsProductionContainer: base, Response}),
+function managedClass(base, entry = './production-managed-worker.mjs') {
+    const source = readFileSync(new URL(entry, import.meta.url), 'utf8').replace(/^import .*;\n/gm, '').replace(/^export \{.*;\n/gm, '').replace('export class ', 'class ').replace(/export default \{[\s\S]*$/, '');
+    return {Container: runInNewContext(source + '\nFamilyFundsManagedProductionContainer', {FamilyFundsProductionContainer: base, Response, createHash, livePaystackCredentials}),
         release: source.match(/const MANAGED_RELEASE = '([^']+)'/)[1], image: source.match(/const MANAGED_IMAGE = '([^']+)'/)[1]};
 }
 
-function expectedRuntime(image) {
+function expectedRuntime(image, live = false) {
     return {running: true, image, production: {app_url: 'https://familyfunds.app', passkey_rp_id: 'familyfunds.app',
-        passkey_origins: ['https://familyfunds.app'], production_enabled: true, database_driver: 'd1', migration_checks: true,
-        delivery_enabled: false, webhooks_enabled: false, nightwatch_enabled: false, mail_transport: 'array',
+        passkey_origins: ['https://familyfunds.app'], production_enabled: true, database_driver: 'd1', migration_checks: !live,
+        delivery_enabled: live, webhooks_enabled: live, nightwatch_enabled: live, mail_transport: live ? 'cloudflare' : 'array',
         queue_worker_enabled: false, queue_worker_processes: 0, offsite_file_present: false, drive_sync_enabled: false}};
 }
 
@@ -95,4 +97,35 @@ test('stale cached live configuration is rejected and the VM is stopped instead 
     assert.equal(instance.configurationAttested, false);
     assert.equal(destroyed, true);
     assert.throws(() => new Container({}, {RUNTIME_REVISION: release, PRODUCTION_CUTOVER_STAGE: 'live'}), /release mismatch/);
+});
+
+test('live Paystack credential changes restart the deployed container under the same release', async () => {
+    const {Container, release, image} = managedClass(class {
+        constructor(ctx, env) { this.ctx = ctx; this.env = env; }
+        async waitForReady() { this.ctx.container.running = true; this.ready = true; }
+        async runtime() { return expectedRuntime(image, true); }
+    }, './cloudflare-production-entry.mjs');
+
+    let generation = release;
+    let restarts = 0;
+    const ctx = {
+        container: {running: true, async destroy() { this.running = false; restarts++; }},
+        storage: {async get() { return generation; }, async put(_key, value) { generation = value; }},
+    };
+
+    for (const [api_key, webhook_signing_secret, expectedRestarts] of [
+        ['rk_live_first', 'whsec_first', 1], ['rk_live_first', 'whsec_first', 1],
+        ['rk_live_second', 'whsec_first', 2], ['rk_live_second', 'whsec_second', 3],
+    ]) {
+        const env = {RUNTIME_REVISION: release, PRODUCTION_CUTOVER_STAGE: 'live',
+            TRAFFIC_ENABLED: 'true', BUSINESS_WRITES_ENABLED: 'true', WEBHOOKS_ENABLED: 'true',
+            PAYSTACK_LIVE_CREDENTIALS: JSON.stringify({api_key, public_key: 'pk_live_fixture', webhook_signing_secret})};
+        const container = new Container(ctx, env);
+        container.configureOutbound = async () => {};
+        await container.waitForReady();
+        assert.equal(restarts, expectedRestarts);
+        assert.equal(container.ready, true);
+        assert.equal((await container.runtime()).managed.stored_generation, release);
+        assert.ok(!generation.includes(api_key) && !generation.includes(webhook_signing_secret));
+    }
 });

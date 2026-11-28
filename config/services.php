@@ -63,6 +63,7 @@ return [
         'secret_key' => env('PAYSTACK_SECRET_KEY'),
         'public_key' => env('PAYSTACK_PUBLIC_KEY'),
         'webhook_secret' => env('PAYSTACK_WEBHOOK_SECRET'),
+        'webhook_signing_secret' => env('PAYSTACK_WEBHOOK_SIGNING_SECRET', ''),
         'base_url' => env('PAYSTACK_BASE_URL', 'https://api.paystack.co'),
         'fee_policy' => env('PAYSTACK_FEE_POLICY', 'payer_pays'),
         'local_fee_basis_points' => (int) env('PAYSTACK_LOCAL_FEE_BASIS_POINTS', 150),
