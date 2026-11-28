@@ -3,7 +3,7 @@ import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import {runInNewContext} from 'node:vm';
-import {livePaystackKeys} from './container-env.mjs';
+import {livePaystackCredentials} from './container-env.mjs';
 
 const privateFlags = {TRAFFIC_ENABLED: 'false', BUSINESS_WRITES_ENABLED: 'false', WEBHOOKS_ENABLED: 'false'};
 
@@ -21,7 +21,7 @@ test('the managed candidate selects only its pinned image and the reviewed resou
 
 function managedClass(base, entry = './production-managed-worker.mjs') {
     const source = readFileSync(new URL(entry, import.meta.url), 'utf8').replace(/^import .*;\n/gm, '').replace(/^export \{.*;\n/gm, '').replace('export class ', 'class ').replace(/export default \{[\s\S]*$/, '');
-    return {Container: runInNewContext(source + '\nFamilyFundsManagedProductionContainer', {FamilyFundsProductionContainer: base, Response, createHash, livePaystackKeys}),
+    return {Container: runInNewContext(source + '\nFamilyFundsManagedProductionContainer', {FamilyFundsProductionContainer: base, Response, createHash, livePaystackCredentials}),
         release: source.match(/const MANAGED_RELEASE = '([^']+)'/)[1], image: source.match(/const MANAGED_IMAGE = '([^']+)'/)[1]};
 }
 
@@ -113,16 +113,19 @@ test('live Paystack credential changes restart the deployed container under the 
         storage: {async get() { return generation; }, async put(_key, value) { generation = value; }},
     };
 
-    for (const [secret_key, expectedRestarts] of [['sk_live_first', 1], ['sk_live_first', 1], ['sk_live_second', 2]]) {
+    for (const [api_key, webhook_signing_secret, expectedRestarts] of [
+        ['rk_live_first', 'whsec_first', 1], ['rk_live_first', 'whsec_first', 1],
+        ['rk_live_second', 'whsec_first', 2], ['rk_live_second', 'whsec_second', 3],
+    ]) {
         const env = {RUNTIME_REVISION: release, PRODUCTION_CUTOVER_STAGE: 'live',
             TRAFFIC_ENABLED: 'true', BUSINESS_WRITES_ENABLED: 'true', WEBHOOKS_ENABLED: 'true',
-            PAYSTACK_LIVE_KEYS: JSON.stringify({secret_key, public_key: 'pk_live_fixture'})};
+            PAYSTACK_LIVE_CREDENTIALS: JSON.stringify({api_key, public_key: 'pk_live_fixture', webhook_signing_secret})};
         const container = new Container(ctx, env);
         container.configureOutbound = async () => {};
         await container.waitForReady();
         assert.equal(restarts, expectedRestarts);
         assert.equal(container.ready, true);
         assert.equal((await container.runtime()).managed.stored_generation, release);
-        assert.ok(!generation.includes(secret_key));
+        assert.ok(!generation.includes(api_key) && !generation.includes(webhook_signing_secret));
     }
 });

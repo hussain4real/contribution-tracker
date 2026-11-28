@@ -1,9 +1,10 @@
 import {timingSafeEqual} from "node:crypto";
-import {livePaystackKeys} from "./container-env.mjs";
+import {livePaystackCredentials} from "./container-env.mjs";
 import {getProductionContainer} from './production-container-target.mjs';
 
 const encoder = new TextEncoder();
 const MAX_BYTES = 2_000_000;
+const SIGNATURE_TOLERANCE_SECONDS = 300;
 
 function equal(left, right) {
     const a = encoder.encode(left), b = encoder.encode(right);
@@ -14,24 +15,67 @@ export function productionWebhookConfig(env) {
     if (env.WEBHOOKS_ENABLED !== "true") return null;
     if (env.DATABASE_NAME !== "familyfunds-production") throw new Error("Wrong production webhook database");
     const config = JSON.parse(env.WEBHOOK_SECRETS ?? "{}");
-    const paystack = livePaystackKeys(env);
-    if (paystack) config.paystack_secret = paystack.secret_key;
-    if (!config.paystack_secret?.startsWith("sk_live_") || config.meta_app_id !== "26405719292393073"
+    const paystack = livePaystackCredentials(env);
+    if (paystack) config.paystack_signing_secret = paystack.webhook_signing_secret;
+    if ((!config.paystack_signing_secret && !config.paystack_secret?.startsWith("sk_live_")) || config.meta_app_id !== "26405719292393073"
         || !config.meta_app_secret || !config.meta_waba || !config.meta_phone || !config.meta_verify_token) {
         throw new Error("Production webhook credentials are incomplete");
     }
     return config;
 }
 
-export async function verifyProductionWebhook(record, config) {
+function timestampedPaystackSignature(signature) {
+    if (signature.length > 4096) return null;
+    let timestamp;
+    const digests = [];
+    for (const value of signature.split(",")) {
+        const part = value.trim();
+        if (part.startsWith("t=")) {
+            if (timestamp !== undefined || !/^t=[0-9]{10}$/.test(part)) return null;
+            timestamp = part.slice(2);
+        } else {
+            const match = /^v1=whk_[a-zA-Z0-9_-]+:([a-fA-F0-9]{128})$/.exec(part);
+            if (match) digests.push(match[1]);
+        }
+    }
+    return timestamp !== undefined && digests.length > 0 ? {timestamp, digests} : null;
+}
+
+function signatureHeader(record) {
+    if (record.provider === "whatsapp") return "X-Hub-Signature-256";
+    return record.timestamped === true ? "Paystack-Signature" : "X-Paystack-Signature";
+}
+
+export async function verifyProductionWebhook(record, config, checkFreshness = true) {
     if (!record || !["paystack", "whatsapp"].includes(record.provider) || typeof record.raw !== "string"
         || encoder.encode(record.raw).length > MAX_BYTES || typeof record.signature !== "string") return false;
     const meta = record.provider === "whatsapp";
-    const hex = meta ? record.signature.replace(/^sha256=/, "") : record.signature;
-    if (!(meta ? /^[a-f0-9]{64}$/i : /^[a-f0-9]{128}$/i).test(hex) || (meta && !record.signature.startsWith("sha256="))) return false;
-    const key = await crypto.subtle.importKey("raw", encoder.encode(meta ? config.meta_app_secret : config.paystack_secret), {name: "HMAC", hash: meta ? "SHA-256" : "SHA-512"}, false, ["verify"]);
-    const signature = Uint8Array.from(hex.match(/../g), pair => parseInt(pair, 16));
-    if (!await crypto.subtle.verify("HMAC", key, signature, encoder.encode(record.raw))) return false;
+    let secret = meta ? config.meta_app_secret : config.paystack_secret;
+    let data = record.raw;
+    let digests;
+    if (!meta && record.timestamped === true) {
+        const signature = timestampedPaystackSignature(record.signature);
+        if (!signature || (checkFreshness && Math.abs(Math.floor(Date.now() / 1000) - Number(signature.timestamp)) > SIGNATURE_TOLERANCE_SECONDS)) return false;
+        secret = config.paystack_signing_secret;
+        data = signature.timestamp + "." + data;
+        digests = signature.digests;
+    } else {
+        const hex = meta ? record.signature.replace(/^sha256=/, "") : record.signature;
+        if (!(meta ? /^[a-f0-9]{64}$/i : /^[a-f0-9]{128}$/i).test(hex) || (meta && !record.signature.startsWith("sha256="))) return false;
+        digests = [hex];
+    }
+    if (typeof secret !== "string" || secret === "") return false;
+    const key = await crypto.subtle.importKey("raw", encoder.encode(secret), {name: "HMAC", hash: meta ? "SHA-256" : "SHA-512"}, false, ["verify"]);
+    const bytes = encoder.encode(data);
+    let verified = false;
+    for (const digest of digests) {
+        const signature = Uint8Array.from(digest.match(/../g), pair => parseInt(pair, 16));
+        if (await crypto.subtle.verify("HMAC", key, signature, bytes)) {
+            verified = true;
+            break;
+        }
+    }
+    if (!verified) return false;
     try {
         const payload = JSON.parse(record.raw);
         if (!meta) return typeof payload.event === "string" && payload.event.length <= 128 && payload.data !== null
@@ -75,7 +119,9 @@ export async function receiveProductionWebhook(request, env) {
     let raw;
     try { raw = new TextDecoder("utf-8", {fatal: true}).decode(bytes); }
     catch { return new Response("Invalid encoding", {status: 400}); }
-    const record = {provider, raw, signature: request.headers.get(provider === "paystack" ? "X-Paystack-Signature" : "X-Hub-Signature-256") ?? ""};
+    const timestamped = provider === "paystack" && Boolean(config.paystack_signing_secret);
+    const header = signatureHeader({provider, timestamped});
+    const record = {provider, raw, timestamped, signature: request.headers.get(header) ?? ""};
     if (!await verifyProductionWebhook(record, config)) return new Response("Forbidden", {status: 403});
     const digest = await hash(raw);
     const id = `${provider}:${digest}`;
@@ -86,7 +132,7 @@ export async function receiveProductionWebhook(request, env) {
         await env.DB.prepare("insert into d1_runtime_webhook_inbox(id,object_key,created_at) values(?,?,unixepoch()) on conflict(id) do nothing").bind(id, key).run();
         await env.WEBHOOK_QUEUE.send({id, provider, key, sha256: digest}, {contentType: "json"});
     }
-    return Response.json({message: "Accepted"}, {status: provider === "paystack" ? 202 : 200, headers: {"Cache-Control": "no-store"}});
+    return Response.json({message: "Accepted"}, {status: provider === "paystack" && !timestamped ? 202 : 200, headers: {"Cache-Control": "no-store"}});
 }
 
 export async function relayProductionWebhooks(batch, env) {
@@ -103,10 +149,10 @@ export async function relayProductionWebhooks(batch, env) {
                 const object = await env.FILES.get(ref.key);
                 if (!object || object.size > 16_000_000) throw new Error("Webhook body unavailable");
                 const record = JSON.parse(await object.text());
-                if (record.provider !== ref.provider || !await verifyProductionWebhook(record, config) || await hash(record.raw) !== ref.sha256) throw new Error("Webhook integrity check failed");
+                if (record.provider !== ref.provider || !await verifyProductionWebhook(record, config, false) || await hash(record.raw) !== ref.sha256) throw new Error("Webhook integrity check failed");
                 if (typeof env.RELAY_TOKEN !== "string" || env.RELAY_TOKEN.length < 32) throw new Error("Missing production relay token");
                 const headers = {"Content-Type": "application/json", "X-FamilyFunds-Relay": env.RELAY_TOKEN};
-                headers[ref.provider === "paystack" ? "X-Paystack-Signature" : "X-Hub-Signature-256"] = record.signature;
+                headers[signatureHeader(record)] = record.signature;
                 const response = await getProductionContainer(env).fetch(new Request(`https://familyfunds.app/webhooks/${ref.provider}`, {method: "POST", body: record.raw, headers}));
                 await response.body?.cancel();
                 if (![200, 202].includes(response.status)) throw new Error("Application has not durably accepted the webhook");

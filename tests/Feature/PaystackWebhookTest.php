@@ -43,6 +43,24 @@ it('rejects webhooks with invalid signature', function () {
     ])->assertForbidden();
 });
 
+it('verifies timestamped Paystack webhooks with a separate signing secret', function (): void {
+    config(['services.paystack.secret_key' => 'rk_test_fixture', 'services.paystack.webhook_signing_secret' => 'whsec_fixture']);
+    $payload = ['event' => 'charge.success', 'data' => ['reference' => 'fixture']];
+    $body = encodeJsonPayload($payload);
+    $header = function (int $timestamp, string $secret) use ($body): string {
+        return 't='.$timestamp.',v1=whk_fixture:'.hash_hmac('sha512', $timestamp.'.'.$body, $secret);
+    };
+    $now = now()->getTimestamp();
+    foreach ([$header($now - 301, 'whsec_fixture'), $header($now, 'rk_test_fixture')] as $signature) {
+        $this->postJson(route('webhooks.paystack'), $payload, ['Paystack-Signature' => $signature])->assertForbidden();
+    }
+    $this->postJson(route('webhooks.paystack'), $payload, ['X-Paystack-Signature' => signPayload($body)])->assertForbidden();
+    Queue::assertNothingPushed();
+
+    $this->postJson(route('webhooks.paystack'), $payload, ['Paystack-Signature' => $header($now, 'whsec_fixture')])->assertAccepted();
+    Queue::assertPushed(ProcessPaystackWebhook::class);
+});
+
 it('executes queued Paystack webhooks with a bounded retry schedule', function () {
     $payload = [
         'event' => 'charge.success',

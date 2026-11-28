@@ -11,6 +11,7 @@ use App\Http\Controllers\ExpenseTemplateController;
 use App\Http\Controllers\FamilyGoalController;
 use App\Http\Controllers\FinancialGovernanceSettingsController;
 use App\Http\Controllers\FundAdjustmentController;
+use App\Http\Controllers\PaystackWebhookController;
 use App\Http\Requests\ArchiveFamilyGoalRequest;
 use App\Http\Requests\StoreExpenseApprovalRequest;
 use App\Http\Requests\StoreExpenseDocumentRequest;
@@ -20,6 +21,7 @@ use App\Http\Requests\StoreFamilyGoalRequest;
 use App\Http\Requests\StoreFundAdjustmentRequest;
 use App\Http\Requests\UpdateFamilyGoalRequest;
 use App\Http\Requests\UpdateFinancialGovernanceRequest;
+use App\Jobs\ProcessPaystackWebhook;
 use App\Jobs\ProcessWhatsAppWebhook;
 use App\Models\Contribution;
 use App\Models\Expense;
@@ -61,6 +63,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Session\EncryptedStore;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -432,6 +435,22 @@ it('limits approved live provider inspection to bank and sender reads', function
         ->and(fn () => Http::get('https://graph.facebook.com/v23.0/123456789?fields=access_token'))->toThrow(LogicException::class);
 });
 
+it('boots production delivery with restricted API access and independent signing credentials', function (): void {
+    config([
+        'd1-production.delivery_enabled' => true,
+        'd1-production.webhooks_enabled' => true,
+        'mail.default' => 'cloudflare',
+        'services.cloudflare.token' => str_repeat('t', 32),
+        'services.paystack.secret_key' => 'rk_live_fixture',
+        'services.paystack.webhook_secret' => null,
+        'services.paystack.webhook_signing_secret' => 'whsec_fixture',
+        'services.whatsapp.app_secret' => str_repeat('a', 32),
+    ]);
+    (new D1ProductionServiceProvider($this->app))->register();
+    expect(config('mail.default'))->toBe('cloudflare')
+        ->and(config('nightwatch.redact_headers'))->toContain('Paystack-Signature', 'X-Paystack-Signature');
+});
+
 it('refuses read-only live provider checks outside the migration mirror', function (): void {
     config(['d1-production.provider_read_only_checks' => true, 'd1-production.migration_checks' => false]);
     expect(fn () => (new D1ProductionServiceProvider($this->app))->register())->toThrow(LogicException::class, 'isolated migration mirror');
@@ -611,6 +630,26 @@ it('puts platform OAuth and MCP request work inside the transaction planner', fu
 
 it('refuses webhook forwarding without its separate production relay credential', function (): void {
     expect(fn () => app(D1ProductionRequest::class)->handle(Request::create('/webhooks/paystack', 'POST'), fn () => response('unexpected')))->toThrow(HttpException::class);
+});
+
+it('rechecks a delayed Paystack signature after authenticating the worker relay', function (): void {
+    config(['d1-production.webhooks_enabled' => true, 'services.paystack.webhook_signing_secret' => 'whsec_fixture']);
+    Queue::fake();
+    $body = encodeJsonPayload(['event' => 'charge.success', 'data' => ['reference' => 'fixture']]);
+    $timestamp = now()->getTimestamp() - 3600;
+    $signature = 't='.$timestamp.',v1=whk_fixture:'.hash_hmac('sha512', $timestamp.'.'.$body, 'whsec_fixture');
+    $middleware = app(D1ProductionRequest::class);
+    $controller = app(PaystackWebhookController::class);
+    $request = Request::create('/webhooks/paystack', 'POST', server: [
+        'CONTENT_TYPE' => 'application/json',
+        'HTTP_PAYSTACK_SIGNATURE' => $signature,
+    ], content: $body);
+    expect(fn () => $middleware->handle($request, $controller->handle(...)))->toThrow(HttpException::class);
+    Queue::assertNothingPushed();
+
+    $request->headers->set('X-FamilyFunds-Relay', str_repeat('r', 40));
+    expect($middleware->handle($request, $controller->handle(...))->getStatusCode())->toBe(202);
+    Queue::assertPushed(ProcessPaystackWebhook::class);
 });
 
 it('serves only the installed Livewire JavaScript path without leasing the ledger or reserving identifiers', function (): void {

@@ -106,22 +106,24 @@ test('cutover stages preserve credentials and separate inspection from live deli
     }
 });
 
-test('live Paystack keys replace the bundled checkout and signing keys together', () => {
+test('live Paystack configuration separates restricted API access from webhook verification', () => {
     const base = {APP_ENV: 'production', D1_PRODUCTION_ENABLED: 'true', D1_STAGING_ENABLED: 'false',
         D1_DATABASE: 'familyfunds-production', PAYSTACK_SECRET_KEY: 'sk_live_previous',
         PAYSTACK_PUBLIC_KEY: 'pk_live_previous', PAYSTACK_WEBHOOK_SECRET: 'sk_live_previous'};
-    const keys = {secret_key: 'sk_live_current', public_key: 'pk_live_current'};
+    const keys = {api_key: 'rk_live_current', public_key: 'pk_live_current', webhook_signing_secret: 'whsec_current'};
     const bindings = {CONTAINER_ENV: JSON.stringify(base), PRODUCTION_CUTOVER_STAGE: 'live',
-        PAYSTACK_LIVE_KEYS: JSON.stringify(keys)};
+        PAYSTACK_LIVE_CREDENTIALS: JSON.stringify(keys)};
     const env = containerEnvironment(bindings);
-    assert.equal(env.PAYSTACK_SECRET_KEY, keys.secret_key);
+    assert.equal(env.PAYSTACK_SECRET_KEY, keys.api_key);
     assert.equal(env.PAYSTACK_PUBLIC_KEY, keys.public_key);
-    assert.equal(env.PAYSTACK_WEBHOOK_SECRET, keys.secret_key);
-    assert.equal(Object.hasOwn(env, 'PAYSTACK_LIVE_KEYS'), false);
+    assert.equal(env.PAYSTACK_WEBHOOK_SIGNING_SECRET, keys.webhook_signing_secret);
+    assert.equal(env.PAYSTACK_WEBHOOK_SECRET, base.PAYSTACK_WEBHOOK_SECRET);
+    assert.equal(Object.hasOwn(env, 'PAYSTACK_LIVE_CREDENTIALS'), false);
 
     assert.throws(() => containerEnvironment({...bindings, PRODUCTION_CUTOVER_STAGE: 'read-only'}));
-    for (const invalid of [{...keys, secret_key: 'sk_test_fixture'}, {...keys, public_key: 'pk_test_fixture'},
-        {...keys, APP_KEY: 'forbidden'}, {secret_key: keys.secret_key}]) {
-        assert.throws(() => containerEnvironment({...bindings, PAYSTACK_LIVE_KEYS: JSON.stringify(invalid)}));
+    for (const invalid of [{...keys, api_key: 'sk_live_forbidden'}, {...keys, api_key: 'rk_test_forbidden'},
+        {...keys, public_key: 'pk_test_fixture'}, {...keys, webhook_signing_secret: keys.api_key},
+        {...keys, APP_KEY: 'forbidden'}, {api_key: keys.api_key, public_key: keys.public_key}]) {
+        assert.throws(() => containerEnvironment({...bindings, PAYSTACK_LIVE_CREDENTIALS: JSON.stringify(invalid)}));
     }
 });

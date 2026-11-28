@@ -76,6 +76,24 @@ it('verifies a transaction', function () {
         ->and($data['amount'] ?? null)->toBe(400000);
 });
 
+it('uses the restricted API key for checkout initialization and verification', function (): void {
+    config(['services.paystack.secret_key' => 'rk_test_fixture', 'services.paystack.webhook_signing_secret' => 'whsec_fixture']);
+    Http::fake([
+        'api.paystack.co/transaction/initialize' => Http::response(['status' => true]),
+        'api.paystack.co/transaction/verify/TXN_FIXTURE' => Http::response(['status' => true]),
+    ]);
+
+    $paystack = app(PaystackService::class);
+    $paystack->initializeTransaction(['email' => 'test@example.com', 'amount' => 400000]);
+    $paystack->verifyTransaction('TXN_FIXTURE');
+
+    Http::assertSentCount(2);
+    foreach (['/initialize', '/verify/TXN_FIXTURE'] as $path) {
+        Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), $path)
+            && $request->hasHeader('Authorization', 'Bearer rk_test_fixture'));
+    }
+});
+
 it('creates a subaccount', function () {
     Http::fake([
         'api.paystack.co/subaccount' => Http::response([

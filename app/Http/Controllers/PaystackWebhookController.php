@@ -18,8 +18,10 @@ class PaystackWebhookController extends Controller
     {
         $payload = $request->getContent();
         $signature = $request->header('X-Paystack-Signature', '');
+        $timestampedSignature = $request->header('Paystack-Signature');
+        $authenticatedRelay = $request->attributes->get('d1_authenticated_webhook_relay') === true;
 
-        if (! $this->paystack->verifyWebhookSignature($payload, $signature)) {
+        if (! $this->paystack->verifyWebhookSignature($payload, $signature, $timestampedSignature, $authenticatedRelay)) {
             Log::warning('Paystack webhook rejected an invalid signature.');
 
             return response()->json(['message' => 'Invalid signature'], 403);

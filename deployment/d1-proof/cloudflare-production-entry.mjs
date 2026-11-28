@@ -1,5 +1,5 @@
 import {createHash} from "node:crypto";
-import {livePaystackKeys} from "./container-env.mjs";
+import {livePaystackCredentials} from "./container-env.mjs";
 import handler, {FamilyFundsProductionContainer} from './production-worker.mjs';
 export {ProductionDatabaseOutbound} from './production-worker.mjs';
 
@@ -40,9 +40,9 @@ export class FamilyFundsManagedProductionContainer extends FamilyFundsProduction
     }
 
     async waitForReady() {
-        const paystack = livePaystackKeys(this.env);
+        const paystack = livePaystackCredentials(this.env);
         const generation = paystack
-            ? MANAGED_RELEASE + ':' + createHash('sha256').update(paystack.secret_key).update(':').update(paystack.public_key).digest('hex')
+            ? MANAGED_RELEASE + ':' + createHash('sha256').update(JSON.stringify(paystack)).digest('hex')
             : MANAGED_RELEASE;
         const previous = await this.ctx.storage.get('managed-runtime-generation');
         if (previous !== generation) {
